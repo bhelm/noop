@@ -31,6 +31,53 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  linux-strand-analytics:
+    runs-on: ubuntu-24.04
+    env:
+      SQLITE_SNAPSHOT_DIR: ${{ github.workspace }}/.ci/sqlite-snapshot
+    steps:
+      - name: Checkout
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+
+      - name: Log Swift version
+        run: swift --version
+
+      - name: Restore snapshot SQLite
+        id: sqlite-cache
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: ${{ env.SQLITE_SNAPSHOT_DIR }}
+          # r1 = build recipe revision: bump when the gcc flags below change, so a cached
+          # artifact can never outlive the recipe that built it.
+          key: sqlite-snapshot-3.53.4-r1-${{ runner.os }}-${{ runner.arch }}-b1dd5d74
+
+      - name: Build snapshot SQLite
+        if: steps.sqlite-cache.outputs.cache-hit != 'true'
+        env:
+          SQLITE_AMALGAMATION_SHA256: b1dd5d74ec7f29055a6684fa06fb3c2f6821c87dd38f9a458dfd2e8a1db28189
+        run: |
+          archive="$RUNNER_TEMP/sqlite-amalgamation-3530400.zip"
+          source="$RUNNER_TEMP/sqlite3.c"
+          curl --fail --location --proto '=https' --tlsv1.2 \
+            https://sqlite.org/2026/sqlite-amalgamation-3530400.zip \
+            --output "$archive"
+          unzip -p "$archive" sqlite-amalgamation-3530400/sqlite3.c > "$source"
+          echo "$SQLITE_AMALGAMATION_SHA256  $source" | sha256sum --check --strict
+          mkdir -p "$SQLITE_SNAPSHOT_DIR"
+          gcc -shared -fPIC -DSQLITE_ENABLE_SNAPSHOT=1 "$source" \
+            -o "$SQLITE_SNAPSHOT_DIR/libsqlite3.so.0"
+          ln -s libsqlite3.so.0 "$SQLITE_SNAPSHOT_DIR/libsqlite3.so"
+
+      - name: Build StrandAnalytics
+        run: swift build -Xlinker "-L${SQLITE_SNAPSHOT_DIR}"
+        working-directory: Packages/StrandAnalytics
+
+      - name: Test StrandAnalytics
+        env:
+          LD_LIBRARY_PATH: ${{ env.SQLITE_SNAPSHOT_DIR }}
+        run: swift test -Xlinker "-L${SQLITE_SNAPSHOT_DIR}"
+        working-directory: Packages/StrandAnalytics
+
   test:
     runs-on: macos-15
     strategy:
