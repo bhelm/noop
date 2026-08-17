@@ -25,17 +25,25 @@ Do not replace a system library.
 
 Ubuntu's SQLite does not expose the `sqlite3_snapshot_*` symbols required by GRDB. Download a
 versioned SQLite amalgamation from sqlite.org, verify its SHA-256 checksum, and build a private
-shared library:
+shared library. The concrete recipe for 3.53.4 (the version the CI job pins — its `sqlite3.c`
+hash lives next to the download step in `.github/workflows/swift-packages.yml`):
 
 ```sh
 SQLITE_SNAPSHOT_DIR="$HOME/sqlite-snapshot"
 mkdir -p "$SQLITE_SNAPSHOT_DIR"
-unzip sqlite-amalgamation-<version>.zip
+curl --fail --location --proto '=https' --tlsv1.2 \
+  https://sqlite.org/2026/sqlite-amalgamation-3530400.zip -O
+unzip sqlite-amalgamation-3530400.zip
+echo "b1dd5d74ec7f29055a6684fa06fb3c2f6821c87dd38f9a458dfd2e8a1db28189  sqlite-amalgamation-3530400/sqlite3.c" \
+  | sha256sum --check --strict
 gcc -shared -fPIC -DSQLITE_ENABLE_SNAPSHOT=1 \
-  sqlite-amalgamation-<version>/sqlite3.c \
+  sqlite-amalgamation-3530400/sqlite3.c \
   -o "$SQLITE_SNAPSHOT_DIR/libsqlite3.so.0"
 ln -s libsqlite3.so.0 "$SQLITE_SNAPSHOT_DIR/libsqlite3.so"
 ```
+
+For a different amalgamation version, take the download URL and the `sqlite3.c` checksum from
+sqlite.org's download page and substitute both.
 
 **Do not install this library in `/usr/local/lib`, `/usr/lib`, or another system library path.**
 Doing so can override the distribution SQLite for every host process. Keep it in its own directory
