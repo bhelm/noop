@@ -47,7 +47,9 @@ jobs:
         uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         with:
           path: ${{ env.SQLITE_SNAPSHOT_DIR }}
-          key: sqlite-snapshot-3.53.4-${{ runner.os }}-${{ runner.arch }}-b1dd5d74
+          # r1 = build recipe revision: bump when the gcc flags below change, so a cached
+          # artifact can never outlive the recipe that built it.
+          key: sqlite-snapshot-3.53.4-r1-${{ runner.os }}-${{ runner.arch }}-b1dd5d74
 
       - name: Build snapshot SQLite
         if: steps.sqlite-cache.outputs.cache-hit != 'true'
