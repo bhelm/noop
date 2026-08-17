@@ -177,6 +177,14 @@ public enum BackupSettings {
     }
 
     private static func isBoolean(_ n: NSNumber) -> Bool {
+#if canImport(Darwin)
         CFGetTypeID(n) == CFBooleanGetTypeID()
+#else
+        // corelibs-Foundation has no CFBoolean type id; "c" is the objCType its own
+        // JSONSerialization boxes booleans with. Caveat: an NSNumber built directly from an
+        // Int8 shares that code and would be refused too — JSON decoding never produces one,
+        // so the whitelist semantics stay intact on the (test-only) Linux path.
+        String(cString: n.objCType) == "c"
+#endif
     }
 }
