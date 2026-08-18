@@ -1152,7 +1152,13 @@ def _function_executions(
         named = [
             item
             for item in source.methods
-            if item.name == declaration.name
+            if (
+                item.name == declaration.name
+                or (
+                    item.name.startswith(f"{declaration.name}$")
+                    and not item.name.startswith(f"{declaration.name}$default")
+                )
+            )
             and (item.arity is None or item.arity == declaration.arity)
         ]
     candidates = [

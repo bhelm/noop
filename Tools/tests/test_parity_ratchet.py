@@ -432,6 +432,34 @@ func constrained<T>()
         self.assertEqual(1, len(errors), errors)
         self.assertIn("no kotlin function coverage record", errors[0])
 
+    def test_kotlin_internal_function_accepts_jacoco_module_suffix(self) -> None:
+        swift_source = self.write("Sources/Pilot/Internal.swift", "func target(_ value: Int) -> Int { value }\n")
+        kotlin_source = self.write(
+            "src/main/java/pilot/Internal.kt", "internal fun target(value: Int): Int = value\n"
+        )
+        swift_lcov = self.write(
+            "internal.lcov",
+            f"SF:{swift_source}\nFN:1,target\nFNDA:1,target\nDA:1,1\nend_of_record\n",
+        )
+        jacoco = self.write(
+            "internal.xml",
+            """<report><package name="pilot">
+<class name="pilot/InternalKt" sourcefilename="Internal.kt">
+<method name="target$app_fullDebug" desc="(I)I" line="1"><counter type="METHOD" missed="0" covered="1"/></method>
+</class><sourcefile name="Internal.kt"><line nr="1" mi="0" ci="1"/></sourcefile>
+</package></report>""",
+        )
+        declarations = {
+            "swift": parity_ratchet.lex_file(self.root, swift_source, "swift"),
+            "kotlin": parity_ratchet.lex_file(self.root, kotlin_source, "kotlin"),
+        }
+        self.assertEqual(
+            [],
+            parity_ratchet.coverage_errors(
+                declarations, {"target/1"}, swift_lcov=swift_lcov, kotlin_jacoco=jacoco
+            ),
+        )
+
     def test_line_coverage_fallback_is_announced(self) -> None:
         swift_source = self.write("Sources/Pilot/Fallback.swift", "func target() -> Int { 1 }\n")
         kotlin_source = self.write("src/main/java/pilot/Fallback.kt", "fun target(): Int = 1\n")
@@ -1116,10 +1144,20 @@ func constrained<T>()
             "StrainScorer.tanakaHRmax/1",
             "StrainScorer.zoneWeight/3",
         }
-        expected = legacy | added | qualified_strain | strain
+        recovery = {
+            "RecoveryScorer.parasympatheticSaturation/2",
+            "RecoveryScorer.restingHR/3",
+            "RecoveryScorer.recoveryIndexSlope/3",
+            "RecoveryScorer.band/1",
+            "RecoveryScorer.zScore/3",
+            "RecoveryScorer.recovery/12",
+            "RecoveryScorer.logisticScore/1",
+            "RecoveryScorer.recovery/11",
+        }
+        expected = legacy | added | qualified_strain | strain | recovery
         self.assertEqual(19, len(legacy))
         self.assertEqual(21, len(legacy | added))
-        self.assertEqual(35, len(expected))
+        self.assertEqual(43, len(expected))
         self.assertEqual(expected, registered)
         self.assertIn("StrainScorer.trimpToStrain/2", registered)
         self.assertNotIn("trimpToStrain", registered)

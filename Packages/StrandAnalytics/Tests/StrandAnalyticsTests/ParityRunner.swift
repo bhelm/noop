@@ -39,17 +39,43 @@ final class ParityRunner: XCTestCase {
         let useDefaults: Bool
     }
 
+    private struct BaselineInput: Decodable {
+        let mean: Double?
+        let baseline: Double?
+        let spread: Double
+        let nValid: Int?
+        let nightsSinceUpdate: Int?
+        let status: String?
+    }
+
     private struct Arguments: Decodable {
         let age: Double?
         let ageInt: Int?
         let b: Double?
         let bpm: Double?
         let characterizeZones: Bool?
+        let characterizeRecoveryConstants: Bool?
         let collapsed: Double?
         let contiguous: [Bool]?
         let coverage: Double?
         let denominator: Double?
+        let compositeZ: Double?
         let fraction: Double?
+        let hrv: Double?
+        let hrvBaseline: BaselineInput?
+        let hrvZ: Double?
+        let rhr: Double?
+        let rhrZ: Double?
+        let rhrBaseline: BaselineInput?
+        let resp: Double?
+        let respBaseline: BaselineInput?
+        let sleepPerf: Double?
+        let skinTempDev: Double?
+        let hrvBaselineUsable: Bool?
+        let recoveryIndexSlope: Double?
+        let effortBaseline: BaselineInput?
+        let priorDayEffort: Double?
+        let useDefaults: Bool?
         let history: HistoryInput?
         let hr: [HRInput]?
         let halfWindowSec: Int?
@@ -72,9 +98,15 @@ final class ParityRunner: XCTestCase {
         let trimp: Double?
         let durations: [Double]?
         let live: Double?
+        let mean: Double?
+        let score: Double?
+        let spread: Double?
+        let start: Int?
+        let end: Int?
         let stored: Double?
         let strainCalls: [StrainCallInput]?
         let values: [Double]?
+        let value: Double?
         let verdict: String?
         let windowEnd: Int?
         let windowSec: Int?
@@ -383,6 +415,127 @@ final class ParityRunner: XCTestCase {
                 values.append(["rmssd": point.rmssd, "ts": String(point.ts)])
             }
             result["value"] = values
+        case "RecoveryScorer.parasympatheticSaturation/2":
+            guard record.comparison == "epsilon", let hrvZ = record.args.hrvZ else {
+                throw RunnerError.invalidInput("invalid parasympatheticSaturation case \(record.id)")
+            }
+            let value = RecoveryScorer.parasympatheticSaturation(hrvZ: hrvZ, rhrZ: record.args.rhrZ)
+            var encoded: [String: Any] = [
+                "active": value.active,
+                "dampFraction": try finite(value.dampFraction, record: record),
+                "easedHrvZ": try finite(value.easedHrvZ, record: record),
+            ]
+            if record.args.characterizeRecoveryConstants == true {
+                encoded["constants"] = recoveryConstants()
+            }
+            result["value"] = encoded
+        case "RecoveryScorer.restingHR/3":
+            guard record.comparison == "exact", let input = record.args.hr,
+                  let start = record.args.start, let end = record.args.end else {
+                throw RunnerError.invalidInput("invalid restingHR case \(record.id)")
+            }
+            result["valueBits"] = RecoveryScorer.restingHR(
+                hrSamples(input), start: start, end: end
+            ) ?? NSNull()
+        case "RecoveryScorer.recoveryIndexSlope/3":
+            guard record.comparison == "epsilon", let input = record.args.hr,
+                  let start = record.args.start, let end = record.args.end else {
+                throw RunnerError.invalidInput("invalid recoveryIndexSlope case \(record.id)")
+            }
+            result["value"] = try finiteOrNull(
+                RecoveryScorer.recoveryIndexSlope(hrSamples(input), start: start, end: end),
+                record: record
+            )
+        case "RecoveryScorer.band/1":
+            guard record.comparison == "exact", let score = record.args.score else {
+                throw RunnerError.invalidInput("invalid recovery band case \(record.id)")
+            }
+            var value = RecoveryScorer.band(score)
+            if negativeSide == "swift", record.id == "recovery_negative_band_probe" {
+                value += "-mutant"
+                result["negativeSide"] = "swift"
+            }
+            result["valueBits"] = ["text": value]
+        case "RecoveryScorer.zScore/3":
+            guard record.comparison == "epsilon", let value = record.args.value,
+                  let mean = record.args.mean, let spread = record.args.spread else {
+                throw RunnerError.invalidInput("invalid recovery zScore case \(record.id)")
+            }
+            result["value"] = try finite(
+                RecoveryScorer.zScore(value, mean: mean, spread: spread), record: record
+            )
+        case "RecoveryScorer.recovery/12":
+            guard record.comparison == "exact", let hrv = record.args.hrv,
+                  let rhr = record.args.rhr, let useDefaults = record.args.useDefaults else {
+                throw RunnerError.invalidInput("invalid driver recovery case \(record.id)")
+            }
+            let value: Double?
+            if useDefaults {
+                value = RecoveryScorer.recovery(
+                    hrv: hrv, rhr: rhr, resp: record.args.resp,
+                    hrvBaseline: try driverBaseline(record.args.hrvBaseline, record: record),
+                    rhrBaseline: try driverBaseline(record.args.rhrBaseline, record: record),
+                    respBaseline: try driverBaseline(record.args.respBaseline, record: record),
+                    sleepPerf: record.args.sleepPerf
+                )
+            } else {
+                guard let usable = record.effectiveArgs.hrvBaselineUsable else {
+                    throw RunnerError.invalidInput("missing effective driver recovery defaults \(record.id)")
+                }
+                value = RecoveryScorer.recovery(
+                    hrv: hrv, rhr: rhr, resp: record.effectiveArgs.resp,
+                    hrvBaseline: try driverBaseline(record.effectiveArgs.hrvBaseline, record: record),
+                    rhrBaseline: try driverBaseline(record.effectiveArgs.rhrBaseline, record: record),
+                    respBaseline: try driverBaseline(record.effectiveArgs.respBaseline, record: record),
+                    sleepPerf: record.effectiveArgs.sleepPerf,
+                    skinTempDev: record.effectiveArgs.skinTempDev,
+                    hrvBaselineUsable: usable,
+                    recoveryIndexSlope: record.effectiveArgs.recoveryIndexSlope,
+                    effortBaseline: try driverBaseline(record.effectiveArgs.effortBaseline, record: record),
+                    priorDayEffort: record.effectiveArgs.priorDayEffort
+                )
+            }
+            result["valueBits"] = value.map(exactBit) ?? NSNull()
+        case "RecoveryScorer.logisticScore/1":
+            guard record.comparison == "epsilon", let compositeZ = record.args.compositeZ else {
+                throw RunnerError.invalidInput("invalid logisticScore case \(record.id)")
+            }
+            var value = RecoveryScorer.logisticScore(compositeZ: compositeZ)
+            if negativeSide == "swift", record.id == "recovery_negative_logistic_probe" {
+                value += 1e-6
+                result["negativeSide"] = "swift"
+            }
+            result["value"] = try finite(value, record: record)
+        case "RecoveryScorer.recovery/11":
+            guard record.comparison == "exact", let hrv = record.args.hrv,
+                  let rhr = record.args.rhr, let hrvInput = record.args.hrvBaseline,
+                  let useDefaults = record.args.useDefaults else {
+                throw RunnerError.invalidInput("invalid baseline-state recovery case \(record.id)")
+            }
+            let hrvBaseline = try baselineState(hrvInput, record: record)
+            let value: Double?
+            if useDefaults {
+                value = RecoveryScorer.recovery(
+                    hrv: hrv, rhr: rhr, resp: record.args.resp,
+                    hrvBaseline: hrvBaseline,
+                    rhrBaseline: try baselineStateOptional(record.args.rhrBaseline, record: record),
+                    respBaseline: try baselineStateOptional(record.args.respBaseline, record: record),
+                    sleepPerf: record.args.sleepPerf
+                )
+            } else {
+                value = RecoveryScorer.recovery(
+                    hrv: hrv, rhr: rhr, resp: record.effectiveArgs.resp,
+                    hrvBaseline: hrvBaseline,
+                    rhrBaseline: try baselineStateOptional(record.effectiveArgs.rhrBaseline, record: record),
+                    respBaseline: try baselineStateOptional(record.effectiveArgs.respBaseline, record: record),
+                    sleepPerf: record.effectiveArgs.sleepPerf,
+                    skinTempDev: record.effectiveArgs.skinTempDev,
+                    recoveryIndexSlope: record.effectiveArgs.recoveryIndexSlope,
+                    effortBaseline: try baselineStateOptional(record.effectiveArgs.effortBaseline, record: record),
+                    priorDayEffort: record.effectiveArgs.priorDayEffort
+                )
+            }
+            result["valueBits"] = value.map(exactBit) ?? NSNull()
         case "StrainScorer.trimpToStrain/2":
             guard record.comparison == "exact", let trimp = record.args.trimp else {
                 throw RunnerError.invalidInput("invalid trimpToStrain case \(record.id)")
@@ -572,6 +725,59 @@ final class ParityRunner: XCTestCase {
 
     private func exactBit(_ value: Double) -> String {
         String(format: "%016llx", value.bitPattern)
+    }
+
+    private func recoveryConstants() -> [String: Any] {
+        [
+            "bandRedMax": exactBit(RecoveryScorer.bandRedMax),
+            "bandYellowMax": exactBit(RecoveryScorer.bandYellowMax),
+            "logisticK": exactBit(RecoveryScorer.logisticK),
+            "logisticZ0": exactBit(RecoveryScorer.logisticZ0),
+            "populationMean": exactBit(RecoveryScorer.populationMean),
+            "recoveryIndexMinBins": RecoveryScorer.recoveryIndexMinBins,
+            "recoveryIndexScaleBpmPerHr": exactBit(RecoveryScorer.recoveryIndexScaleBpmPerHr),
+            "restingHRMinBinSamples": RecoveryScorer.restingHRMinBinSamples,
+            "restingHRMinPlausibleBpm": exactBit(RecoveryScorer.restingHRMinPlausibleBpm),
+            "restingHRWindowS": RecoveryScorer.restingHRWindowS,
+            "satEnterZ": exactBit(RecoveryScorer.satEnterZ),
+            "satFullZ": exactBit(RecoveryScorer.satFullZ),
+            "satMaxDampFraction": exactBit(RecoveryScorer.satMaxDampFraction),
+            "skinTempScale": exactBit(RecoveryScorer.skinTempScaleC),
+            "sleepPerfCenter": exactBit(RecoveryScorer.sleepPerfCenter),
+            "sleepPerfScale": exactBit(RecoveryScorer.sleepPerfScale),
+            "wActivityBalance": exactBit(RecoveryScorer.wActivityBalance),
+            "wHRV": exactBit(RecoveryScorer.wHRV),
+            "wRHR": exactBit(RecoveryScorer.wRHR),
+            "wRecoveryIndex": exactBit(RecoveryScorer.wRecoveryIndex),
+            "wResp": exactBit(RecoveryScorer.wResp),
+            "wSkinTemp": exactBit(RecoveryScorer.wSkinTemp),
+            "wSleep": exactBit(RecoveryScorer.wSleep),
+        ]
+    }
+
+    private func driverBaseline(_ input: BaselineInput?, record: InputRecord) throws -> RecoveryScorer.DriverBaseline? {
+        guard let input else { return nil }
+        guard let mean = input.mean else {
+            throw RunnerError.invalidInput("invalid driver baseline \(record.id)")
+        }
+        return RecoveryScorer.DriverBaseline(mean: mean, spread: input.spread)
+    }
+
+    private func baselineStateOptional(_ input: BaselineInput?, record: InputRecord) throws -> BaselineState? {
+        guard let input else { return nil }
+        return try baselineState(input, record: record)
+    }
+
+    private func baselineState(_ input: BaselineInput, record: InputRecord) throws -> BaselineState {
+        guard let baseline = input.baseline, let nValid = input.nValid,
+              let nights = input.nightsSinceUpdate, let rawStatus = input.status,
+              let status = BaselineStatus(rawValue: rawStatus) else {
+            throw RunnerError.invalidInput("invalid baseline state \(record.id)")
+        }
+        return BaselineState(
+            baseline: baseline, spread: input.spread, nValid: nValid,
+            nightsSinceUpdate: nights, status: status
+        )
     }
 
     private func hrSamples(_ input: [HRInput]) -> [HRSample] {

@@ -177,6 +177,59 @@ class ParityDiffTests(unittest.TestCase):
                 len([case for case in selected if case["source"].startswith("seeded:")]), 2, function
             )
 
+    def test_pilot_generates_boundaries_and_two_seeded_cases_for_every_recovery_core_function(self):
+        cases = parity_diff.generate_cases("pilot", "fixed-nonce")
+        functions = {
+            "RecoveryScorer.parasympatheticSaturation/2",
+            "RecoveryScorer.restingHR/3",
+            "RecoveryScorer.recoveryIndexSlope/3",
+            "RecoveryScorer.band/1",
+            "RecoveryScorer.zScore/3",
+            "RecoveryScorer.recovery/12",
+            "RecoveryScorer.logisticScore/1",
+            "RecoveryScorer.recovery/11",
+        }
+        for function in functions:
+            selected = [case for case in cases if case["function"] == function]
+            self.assertTrue(any(case["source"] == "curated:recovery.json" for case in selected), function)
+            self.assertGreaterEqual(
+                len([case for case in selected if case["source"].startswith("seeded:")]), 2, function
+            )
+        constants = next(case for case in cases if case["id"] == "recovery_saturation_full_and_constants")
+        self.assertTrue(constants["effectiveArgs"]["characterizeRecoveryConstants"])
+
+    def test_recovery_payloads_fail_closed_before_native_dispatch(self):
+        int64_max = (1 << 63) - 1
+        malformed = [
+            {"function": "RecoveryScorer.restingHR/3", "args": {"hr": [], "start": 2, "end": 1}},
+            {"function": "RecoveryScorer.recoveryIndexSlope/3", "args": {"hr": [], "start": 0, "end": int64_max}},
+            {"function": "RecoveryScorer.restingHR/3", "args": {"hr": [{"ts": int64_max + 1, "bpm": 60}], "start": 0, "end": 300}},
+            {"function": "RecoveryScorer.zScore/3", "args": {"value": 1.0, "mean": 1.0, "spread": 0.0}},
+            {"function": "RecoveryScorer.recovery/12", "args": {"hrv": 50.0, "rhr": 60.0, "hrvBaseline": {"mean": 50.0, "spread": -1.0}, "useDefaults": True}},
+            {"function": "RecoveryScorer.recovery/12", "args": {"hrv": 50.0, "rhr": 60.0, "hrvBaseline": {"mean": 50.0, "spread": 5.0}, "hrvBaselineUsable": True, "useDefaults": True}},
+            {"function": "RecoveryScorer.recovery/12", "args": {"hrv": 50.0, "rhr": 60.0, "hrvBaseline": {"mean": 50.0, "spread": 5.0}, "skinTempDev": None, "useDefaults": True}},
+            {"function": "RecoveryScorer.recovery/11", "args": {"hrv": 50.0, "rhr": 60.0, "hrvBaseline": {"baseline": 50.0, "spread": 5.0, "nValid": 4, "nightsSinceUpdate": 0, "status": "PROVISIONAL"}, "useDefaults": True}},
+        ]
+        for index, record in enumerate(malformed):
+            record["id"] = f"bad-recovery-{index}"
+            with self.subTest(record=record), self.assertRaises(parity_diff.ParityFormatError):
+                parity_diff._effective_args(record)
+
+    def test_recovery_known_shared_behaviors_are_explicitly_tagged(self):
+        cases = {case["id"]: case for case in parity_diff.generate_cases("pilot", "known-recovery")}
+        self.assertEqual("bhelm/noop#10", cases["recovery_index_sparse_bins"]["knownBehaviorIssue"])
+        self.assertEqual("bhelm/noop#39", cases["recovery_resting_aligned_endpoint"]["knownBehaviorIssue"])
+        self.assertEqual("bhelm/noop#39", cases["recovery_index_aligned_endpoint_gate"]["knownBehaviorIssue"])
+        self.assertEqual("bhelm/noop#40", cases["recovery_driver_missing_hrv_baseline"]["knownBehaviorIssue"])
+
+    def test_recovery_omitted_defaults_and_explicit_controls_are_distinct(self):
+        cases = {case["id"]: case for case in parity_diff.generate_cases("pilot", "defaults")}
+        omitted = cases["recovery_driver_hrv_only_defaults"]
+        explicit = cases["recovery_driver_hrv_only_explicit"]
+        self.assertNotIn("hrvBaselineUsable", omitted["args"])
+        self.assertTrue(omitted["effectiveArgs"]["hrvBaselineUsable"])
+        self.assertTrue(explicit["args"]["hrvBaselineUsable"])
+
     def test_strain_payloads_fail_closed_before_reaching_native_runners(self):
         malformed = [
             {"id": "bad-hr", "function": "StrainScorer.sampleDurationsMinutes/1", "args": {"hr": [{"ts": 1.5, "bpm": 90}]}},

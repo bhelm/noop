@@ -237,14 +237,14 @@
       "rule": "test-only-callsite",
       "path": "Packages/StrandAnalytics/Sources/StrandAnalytics/RecoveryScorer.swift",
       "line": 297,
-      "text": "RecoveryScorer.recoveryIndexSlope/3 has 6 test callsite(s) and no production callsite"
+      "text": "RecoveryScorer.recoveryIndexSlope/3 has 7 test callsite(s) and no production callsite"
     },
     {
       "identity": "test-only-callsite|Packages/StrandAnalytics/Sources/StrandAnalytics/RecoveryScorer.swift::band/1#1",
       "rule": "test-only-callsite",
       "path": "Packages/StrandAnalytics/Sources/StrandAnalytics/RecoveryScorer.swift",
       "line": 334,
-      "text": "RecoveryScorer.band/1 has 7 test callsite(s) and no production callsite"
+      "text": "RecoveryScorer.band/1 has 8 test callsite(s) and no production callsite"
     },
     {
       "identity": "constant-unverifiable|Packages/StrandAnalytics/Sources/StrandAnalytics/RhythmExport.swift::disclaimer|<empty>|android/app/src/main/java/com/noop/analytics/RhythmExport.kt::disclaimer|<empty>",
@@ -321,7 +321,7 @@
       "rule": "test-only-callsite",
       "path": "Packages/StrandAnalytics/Sources/StrandAnalytics/Spo2ReTrace.swift",
       "line": 34,
-      "text": "Spo2ReTrace.f/1 has 9 test callsite(s) and no production callsite"
+      "text": "Spo2ReTrace.f/1 has 8 test callsite(s) and no production callsite"
     },
     {
       "identity": "test-only-callsite|Packages/StrandAnalytics/Sources/StrandAnalytics/SpotHrvReading.swift::compute/2#1",
@@ -335,14 +335,14 @@
       "rule": "test-only-callsite",
       "path": "Packages/StrandAnalytics/Sources/StrandAnalytics/StrainScorer.swift",
       "line": 168,
-      "text": "StrainScorer.sampleDurationMinutes/1 has 1 test callsite(s) and no production callsite"
+      "text": "StrainScorer.sampleDurationMinutes/1 has 2 test callsite(s) and no production callsite"
     },
     {
       "identity": "test-only-callsite|Packages/StrandAnalytics/Sources/StrandAnalytics/StrainScorer.swift::fitStrainDenominator/1#1",
       "rule": "test-only-callsite",
       "path": "Packages/StrandAnalytics/Sources/StrandAnalytics/StrainScorer.swift",
       "line": 237,
-      "text": "StrainScorer.fitStrainDenominator/1 has 2 test callsite(s) and no production callsite"
+      "text": "StrainScorer.fitStrainDenominator/1 has 3 test callsite(s) and no production callsite"
     },
     {
       "identity": "dead-twin-reference|Packages/StrandAnalytics/Sources/StrandAnalytics/UniversalTrace.swift|UniversalTrace.kt",
@@ -1084,7 +1084,7 @@
       "rule": "test-only-callsite",
       "path": "android/app/src/main/java/com/noop/analytics/HrvAnalyzer.kt",
       "line": 265,
-      "text": "HrvAnalyzer.analyze/3 has 1 test callsite(s) and no production callsite"
+      "text": "HrvAnalyzer.analyze/3 has 3 test callsite(s) and no production callsite"
     },
     {
       "identity": "test-only-callsite|android/app/src/main/java/com/noop/analytics/ImportTrace.kt::fileMetaLine/3#1",
@@ -1182,7 +1182,15 @@
       "rule": "test-only-callsite",
       "path": "android/app/src/main/java/com/noop/analytics/RecoveryScorer.kt",
       "line": 353,
-      "text": "RecoveryScorer.recoveryIndexSlope/3 has 6 test callsite(s) and no production callsite"
+      "text": "RecoveryScorer.recoveryIndexSlope/3 has 7 test callsite(s) and no production callsite"
+    },
+    {
+      "identity": "test-only-callsite|android/app/src/main/java/com/noop/analytics/RecoveryScorer.kt::band/1#1",
+      "rule": "test-only-callsite",
+      "path": "android/app/src/main/java/com/noop/analytics/RecoveryScorer.kt",
+      "line": 394,
+      "text": "RecoveryScorer.band/1 has 1 test callsite(s) and no production callsite",
+      "issue": 17
     },
     {
       "identity": "test-only-callsite|android/app/src/main/java/com/noop/analytics/RhythmExport.kt::csv/2#1",
@@ -1322,7 +1330,7 @@
       "rule": "test-only-callsite",
       "path": "android/app/src/main/java/com/noop/analytics/StrainScorer.kt",
       "line": 205,
-      "text": "StrainScorer.sampleDurationMinutes/1 has 1 test callsite(s) and no production callsite"
+      "text": "StrainScorer.sampleDurationMinutes/1 has 2 test callsite(s) and no production callsite"
     },
     {
       "identity": "test-only-callsite|android/app/src/main/java/com/noop/analytics/StrainScorer.kt::fitStrainDenominator/1#1",
