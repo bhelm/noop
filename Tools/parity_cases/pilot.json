@@ -1,0 +1,81 @@
+[
+  {
+    "args": {
+      "minBeatsPerWindow": 8,
+      "rr": [
+        {"rrMs": 800, "ts": 0},
+        {"rrMs": 810, "ts": 1},
+        {"rrMs": 800, "ts": 2},
+        {"rrMs": 810, "ts": 3},
+        {"rrMs": 800, "ts": 4},
+        {"rrMs": 810, "ts": 5},
+        {"rrMs": 800, "ts": 6},
+        {"rrMs": 810, "ts": 7},
+        {"rrMs": 800, "ts": 8}
+      ],
+      "stepSec": 0,
+      "windowSec": 7
+    },
+    "comparison": "epsilon",
+    "function": "rollingRmssd",
+    "id": "rmssd_window_boundary"
+  },
+  {
+    "args": {
+      "minBeatsPerWindow": 3,
+      "rr": [
+        {"rrMs": 800, "ts": 0},
+        {"rrMs": 821, "ts": 2},
+        {"rrMs": 812, "ts": 4},
+        {"rrMs": 783, "ts": 6},
+        {"rrMs": 804, "ts": 8},
+        {"rrMs": 845, "ts": 10},
+        {"rrMs": 1006, "ts": 12},
+        {"rrMs": 847, "ts": 14}
+      ],
+      "stepSec": 0,
+      "windowSec": 5
+    },
+    "comparison": "epsilon",
+    "function": "rollingRmssd",
+    "id": "rmssd_window_cleaning_scope"
+  },
+  {
+    "args": {
+      "minBeatsPerWindow": 3,
+      "rr": [
+        {"rrMs": 700, "ts": 0},
+        {"rrMs": 700, "ts": 2},
+        {"rrMs": 700, "ts": 4},
+        {"rrMs": 700, "ts": 6},
+        {"rrMs": 700, "ts": 8},
+        {"rrMs": 700, "ts": 10},
+        {"rrMs": 900, "ts": 12},
+        {"rrMs": 900, "ts": 14}
+      ],
+      "stepSec": 0,
+      "windowSec": 5
+    },
+    "comparison": "epsilon",
+    "function": "rollingRmssd",
+    "id": "rmssd_value_rematching"
+  },
+  {
+    "args": {"trimp": -5.0},
+    "comparison": "exact",
+    "function": "trimpToStrain",
+    "id": "trimp_non_positive"
+  },
+  {
+    "args": {"trimp": 100.0},
+    "comparison": "exact",
+    "function": "trimpToStrain",
+    "id": "trimp_positive"
+  },
+  {
+    "args": {"denominator": 7201.0, "trimp": 7200.0},
+    "comparison": "exact",
+    "function": "trimpToStrain",
+    "id": "trimp_ceiling"
+  }
+]
