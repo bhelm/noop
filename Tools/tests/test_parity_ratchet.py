@@ -591,6 +591,140 @@ func constrained<T>()
         self.assertEqual({"differential": 0, "platform-test": 0, "exempt": 0}, counts)
         self.assertIn("NOTICE", output.getvalue())
 
+    def test_malformed_registry_key_is_an_explicit_error_not_a_silent_drop(self) -> None:
+        self.write(
+            parity_ratchet.SWIFT_RUNNER,
+            'switch name {\ncase "score/1":\ncase "broken/":\ndefault: break\n}\n',
+        )
+        self.write(
+            parity_ratchet.KOTLIN_RUNNER,
+            'when (name) {\n"score/1" -> run()\n"broken/" -> run()\n}\n',
+        )
+
+        registered, errors = parity_ratchet.registered_differential(self.root)
+
+        self.assertEqual({"score/1"}, registered)
+        self.assertIn("malformed swift differential registry key: 'broken/'", errors)
+        self.assertIn("malformed kotlin differential registry key: 'broken/'", errors)
+
+    def test_arity_registry_resolves_overloads_with_different_arities(self) -> None:
+        swift = self.write(
+            "Sources/Pilot/Engine.swift",
+            "func score(_ value: Int) -> Int { value }\n"
+            "func score(_ left: Int, _ right: Int) -> Int { left + right }\n",
+        )
+        kotlin = self.write(
+            "src/main/java/pilot/Engine.kt",
+            "fun score(value: Int): Int = value\n"
+            "fun score(left: Int, right: Int): Int = left + right\n",
+        )
+        inventories = {
+            "swift": parity_ratchet.lex_file(self.root, swift, "swift"),
+            "kotlin": parity_ratchet.lex_file(self.root, kotlin, "kotlin"),
+        }
+
+        self.assertEqual({"score/1"}, parity_ratchet._resolved_differential(inventories, {"score/1"}))
+        self.assertEqual(set(), parity_ratchet._resolved_differential(inventories, {"score"}))
+        for relative, language in (
+            ("Sources/Pilot/parity-exempt.json", "swift"),
+            ("src/main/java/pilot/parity-exempt.json", "kotlin"),
+        ):
+            exempt = [
+                {"key": item.key, "reason": "unregistered overload", "issue": 17}
+                for item in inventories[language]
+                if item.arity == 2
+            ]
+            self.write(
+                relative,
+                json.dumps(
+                    {"schema_version": 1, "module": "Pilot", "exempt": exempt, "platform-test": []}
+                ),
+            )
+
+        errors, counts, resolved = parity_ratchet._audit_module_pair(
+            self.root,
+            parity_ratchet.ModulePair(
+                "Pilot", self.root / "Sources/Pilot", self.root / "src/main/java/pilot"
+            ),
+            registered={"score/1"},
+        )
+
+        self.assertEqual([], errors)
+        self.assertEqual({"differential": 1, "platform-test": 0, "exempt": 2}, counts)
+        self.assertEqual({"score/1"}, resolved)
+
+    def test_arity_registry_fails_closed_for_same_arity_in_two_types(self) -> None:
+        swift_dir = self.root / "Sources/Pilot"
+        kotlin_dir = self.root / "src/main/java/pilot"
+        swift = self.write(
+            "Sources/Pilot/Engine.swift",
+            "struct First { func score(_ value: Int) -> Int { value } }\n"
+            "struct Second { func score(_ value: Int) -> Int { value } }\n",
+        )
+        kotlin = self.write(
+            "src/main/java/pilot/Engine.kt",
+            "class First { fun score(value: Int): Int = value }\n"
+            "class Second { fun score(value: Int): Int = value }\n",
+        )
+        for directory, source, language in (
+            (swift_dir, swift, "swift"),
+            (kotlin_dir, kotlin, "kotlin"),
+        ):
+            exempt = [
+                {"key": item.key, "reason": "ambiguous fixture", "issue": 17}
+                for item in parity_ratchet.lex_file(self.root, source, language)
+            ]
+            self.write(
+                str(directory.relative_to(self.root) / parity_ratchet.SHARD_NAME),
+                json.dumps(
+                    {"schema_version": 1, "module": "Pilot", "exempt": exempt, "platform-test": []}
+                ),
+            )
+        self.write(parity_ratchet.SWIFT_RUNNER, 'switch name { case "score/1": break; default: break }\n')
+        self.write(parity_ratchet.KOTLIN_RUNNER, 'when (name) { "score/1" -> Unit else -> Unit }\n')
+        pair = parity_ratchet.ModulePair("Pilot", swift_dir, kotlin_dir)
+
+        with mock.patch.object(parity_ratchet, "module_pairs", return_value=[pair]):
+            errors, _counts = parity_ratchet.audit_inventory(self.root)
+
+        self.assertTrue(any("score/1 resolves to swift=2 kotlin=2" in error for error in errors), errors)
+
+    def test_coverage_uses_the_same_arity_qualified_registry_key(self) -> None:
+        swift = self.write(
+            "Sources/Pilot/Engine.swift",
+            "func score(_ value: Int) -> Int { value }\n"
+            "func score(_ left: Int, _ right: Int) -> Int { left + right }\n",
+        )
+        kotlin = self.write(
+            "src/main/java/pilot/Engine.kt",
+            "fun score(value: Int): Int = value\n"
+            "fun score(left: Int, right: Int): Int = left + right\n",
+        )
+        swift_lcov = self.write(
+            "arity.lcov",
+            f"SF:{swift}\nDA:1,1\nDA:2,0\nend_of_record\n",
+        )
+        jacoco = self.write(
+            "arity.xml",
+            "<report><package name=\"pilot\"><sourcefile name=\"Engine.kt\">"
+            "<line nr=\"1\" mi=\"0\" ci=\"1\"/><line nr=\"2\" mi=\"1\" ci=\"0\"/>"
+            "</sourcefile></package></report>",
+        )
+        declarations = {
+            "swift": parity_ratchet.lex_file(self.root, swift, "swift"),
+            "kotlin": parity_ratchet.lex_file(self.root, kotlin, "kotlin"),
+        }
+        with contextlib.redirect_stdout(io.StringIO()):
+            errors = parity_ratchet.coverage_errors(
+                declarations,
+                {"score/2"},
+                swift_lcov=swift_lcov,
+                kotlin_jacoco=jacoco,
+            )
+
+        self.assertEqual(2, len(errors), errors)
+        self.assertTrue(all(":2: registered declaration line was not executed" in error for error in errors))
+
     def write_two_pair_fixture(
         self,
         registered: str = "shared",
@@ -708,8 +842,7 @@ func constrained<T>()
     def test_repository_registry_is_runtime_derived_and_shards_hold_no_differential_list(self) -> None:
         registered, errors = parity_ratchet.registered_differential(REPOSITORY)
         self.assertEqual([], errors)
-        self.assertEqual(
-            {
+        existing_name_only = {
                 "beatAccurateFraction",
                 "beatSpreadIsTrustworthy",
                 "beatValuesAreTrustworthy",
@@ -729,9 +862,9 @@ func constrained<T>()
                 "rrCoverage",
                 "sdnnRaw",
                 "trimpToStrain",
-            },
-            registered,
-        )
+            }
+        self.assertEqual(existing_name_only, {key for key in registered if "/" not in key})
+        self.assertEqual(existing_name_only | {"analyze/3"}, registered)
         for path in (
             REPOSITORY / "Packages/StrandAnalytics/Sources/StrandAnalytics/parity-exempt.json",
             REPOSITORY / "android/app/src/main/java/com/noop/analytics/parity-exempt.json",

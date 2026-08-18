@@ -122,6 +122,7 @@ class ParityDiffTests(unittest.TestCase):
         cases = parity_diff.generate_cases("pilot", "fixed-nonce")
         functions = {case["function"] for case in cases}
         hrv_functions = {
+            "analyze/3",
             "beatAccurateFraction",
             "beatSpreadIsTrustworthy",
             "beatValuesAreTrustworthy",
@@ -148,6 +149,20 @@ class ParityDiffTests(unittest.TestCase):
             self.assertTrue(any(case["source"].startswith("curated:") for case in selected), function)
             self.assertTrue(any(case["source"].startswith("seeded:") for case in selected), function)
         self.assertEqual(cases, parity_diff.generate_cases("pilot", "fixed-nonce"))
+
+    def test_analyze_cases_cover_the_min_beats_boundary_and_two_seeded_inputs(self):
+        cases = parity_diff.generate_cases("pilot", "fixed-nonce")
+        analyze = [case for case in cases if case["function"] == "analyze/3"]
+        curated = [case for case in analyze if case["source"] == "curated:hrv"]
+        seeded = [case for case in analyze if case["source"].startswith("seeded:")]
+
+        self.assertEqual(
+            ["hrv_analyze_min_beats_19", "hrv_analyze_min_beats_20"],
+            [case["id"] for case in curated],
+        )
+        self.assertEqual([19, 20], [len(case["args"]["rr"]) for case in curated])
+        self.assertTrue(all(300 <= beat["rrMs"] <= 2_000 for case in curated for beat in case["args"]["rr"]))
+        self.assertEqual(2, len(seeded))
 
 
 if __name__ == "__main__":

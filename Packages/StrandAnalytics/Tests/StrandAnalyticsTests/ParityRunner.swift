@@ -28,7 +28,9 @@ final class ParityRunner: XCTestCase {
         let trimp: Double?
         let values: [Double]?
         let verdict: String?
+        let windowEnd: Int?
         let windowSec: Int?
+        let windowStart: Int?
     }
 
     private struct InputRecord: Decodable {
@@ -165,6 +167,29 @@ final class ParityRunner: XCTestCase {
             result["value"] = try finiteOrNull(
                 HRVAnalyzer.pnn50GapAware(nn, contiguous), record: record
             )
+        case "analyze/3":
+            guard record.comparison == "epsilon", let inputRR = record.args.rr else {
+                throw RunnerError.invalidInput("invalid analyze/3 case \(record.id)")
+            }
+            let rr = inputRR.map { RRInterval(ts: $0.ts, rrMs: $0.rrMs) }
+            let value: HRVAnalyzer.HRVResult
+            if record.args.windowStart == nil, record.args.windowEnd == nil {
+                value = HRVAnalyzer.analyze(rr)
+            } else {
+                value = HRVAnalyzer.analyze(
+                    rr,
+                    windowStart: record.args.windowStart,
+                    windowEnd: record.args.windowEnd
+                )
+            }
+            result["value"] = [
+                "meanNN": try finiteOrNull(value.meanNN, record: record),
+                "nClean": value.nClean,
+                "nInput": value.nInput,
+                "pnn50": try finiteOrNull(value.pnn50, record: record),
+                "rmssd": try finiteOrNull(value.rmssd, record: record),
+                "sdnn": try finiteOrNull(value.sdnn, record: record),
+            ]
         case "beatSpreadIsTrustworthy":
             guard record.comparison == "exact", let raw = record.args.verdict,
                   let verdict = HRVAnalyzer.RrCoverageVerdict(rawValue: raw) else {

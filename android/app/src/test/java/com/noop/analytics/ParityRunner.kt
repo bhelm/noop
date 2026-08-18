@@ -112,6 +112,35 @@ class ParityRunner {
                     HrvAnalyzer.pnn50GapAware(nn, contiguous), function, caseId,
                 )
             }
+            "analyze/3" -> {
+                require(comparison == "epsilon") { "invalid analyze/3 case $caseId" }
+                val rrJson = args.getJSONArray("rr")
+                val rr = (0 until rrJson.length()).map { index ->
+                    val item = rrJson.getJSONObject(index)
+                    RrInterval(
+                        deviceId = "parity",
+                        ts = item.getLong("ts"),
+                        rrMs = item.getInt("rrMs"),
+                    )
+                }
+                val value = if (!args.has("windowStart") && !args.has("windowEnd")) {
+                    HrvAnalyzer.analyze(rr)
+                } else {
+                    HrvAnalyzer.analyze(
+                        rr,
+                        args.optLong("windowStart").takeIf { args.has("windowStart") },
+                        args.optLong("windowEnd").takeIf { args.has("windowEnd") },
+                    )
+                }
+                result["value"] = sortedMapOf(
+                    "meanNN" to finiteOrNull(value.meanNN, function, caseId),
+                    "nClean" to value.nClean,
+                    "nInput" to value.nInput,
+                    "pnn50" to finiteOrNull(value.pnn50, function, caseId),
+                    "rmssd" to finiteOrNull(value.rmssd, function, caseId),
+                    "sdnn" to finiteOrNull(value.sdnn, function, caseId),
+                )
+            }
             "beatSpreadIsTrustworthy" -> {
                 require(comparison == "exact") { "invalid beatSpreadIsTrustworthy case $caseId" }
                 val raw = args.getString("verdict")
