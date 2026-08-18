@@ -662,6 +662,25 @@ func constrained<T>()
         self.assertTrue(any("registrations disagree" in error for error in errors), errors)
         self.assertTrue(any(swift_key in error and kotlin_key in error for error in errors), errors)
 
+    def test_alias_literal_in_dispatch_normalization_is_not_registered(self) -> None:
+        canonical = "Engine.score/1"
+        self.write(
+            parity_ratchet.SWIFT_RUNNER,
+            'let dispatchFunction = function == "legacyScore" ? "Engine.score/1" : function\n'
+            'switch dispatchFunction { case "Engine.score/1": break; default: break }\n',
+        )
+        self.write(
+            parity_ratchet.KOTLIN_RUNNER,
+            'val dispatchFunction = if (function == "legacyScore") "Engine.score/1" else function\n'
+            'when (dispatchFunction) { "Engine.score/1" -> Unit else -> Unit }\n',
+        )
+
+        registered, errors = parity_ratchet.registered_differential(self.root)
+
+        self.assertEqual([], errors)
+        self.assertEqual({canonical}, registered)
+        self.assertNotIn("legacyScore", registered)
+
     def test_cross_name_registry_fails_closed_when_one_side_does_not_resolve(self) -> None:
         swift = self.write(
             "Sources/Pilot/Engine.swift",
@@ -1073,7 +1092,6 @@ func constrained<T>()
                 "rollingRmssd",
                 "rrCoverage",
                 "sdnnRaw",
-                "trimpToStrain",
             }
         self.assertEqual(existing_name_only, {key for key in registered if "/" not in key})
         legacy = existing_name_only | {"analyze/3"}
@@ -1081,8 +1099,39 @@ func constrained<T>()
             "HRVAnalyzer.analyze/2=HrvAnalyzer.analyzeRaw/2",
             "HRVAnalyzer.median/1=HrvAnalyzer.median/1",
         }
-        self.assertEqual(20, len(legacy))
-        self.assertEqual(legacy | added, registered)
+        qualified_strain = {"StrainScorer.trimpToStrain/2"}
+        strain = {
+            "StrainScorer.banisterTRIMP/5",
+            "StrainScorer.defaultMaxHR/1",
+            "StrainScorer.edwardsTRIMP/4",
+            "StrainScorer.effectiveEffort/2",
+            "StrainScorer.estimateHRmax/2",
+            "StrainScorer.fitStrainDenominator/1",
+            "StrainScorer.pctHRR/3",
+            "StrainScorer.percentile/2",
+            "StrainScorer.sampleDurationMinutes/1",
+            "StrainScorer.sampleDurationsMinutes/1",
+            "StrainScorer.strain/6",
+            "StrainScorer.tanakaHRmax/1",
+            "StrainScorer.zoneWeight/3",
+        }
+        expected = legacy | added | qualified_strain | strain
+        self.assertEqual(19, len(legacy))
+        self.assertEqual(21, len(legacy | added))
+        self.assertEqual(35, len(expected))
+        self.assertEqual(expected, registered)
+        self.assertIn("StrainScorer.trimpToStrain/2", registered)
+        self.assertNotIn("trimpToStrain", registered)
+        pair = next(
+            pair for pair in parity_ratchet.module_pairs(REPOSITORY)
+            if pair.name == "StrandAnalytics<->analytics"
+        )
+        inventories = {
+            "swift": parity_ratchet.lex_tree(REPOSITORY, pair.swift_dir, "swift"),
+            "kotlin": parity_ratchet.lex_tree(REPOSITORY, pair.kotlin_dir, "kotlin"),
+        }
+        for key in registered:
+            self.assertEqual({"swift": 1, "kotlin": 1}, parity_ratchet._differential_match_counts(inventories, key), key)
         for path in (
             REPOSITORY / "Packages/StrandAnalytics/Sources/StrandAnalytics/parity-exempt.json",
             REPOSITORY / "android/app/src/main/java/com/noop/analytics/parity-exempt.json",

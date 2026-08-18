@@ -1,6 +1,7 @@
 package com.noop.analytics
 
 import com.noop.data.RrInterval
+import com.noop.data.HrSample
 import org.json.JSONArray
 import org.json.JSONObject
 import org.junit.Assume
@@ -65,7 +66,12 @@ class ParityRunner {
             "id" to caseId,
             "nonce" to record.getString("nonce"),
         )
-        when (function) {
+        val dispatchFunction = if (function == "trimpToStrain") {
+            "StrainScorer.trimpToStrain/2"
+        } else {
+            function
+        }
+        when (dispatchFunction) {
             "rmssdRaw" -> {
                 require(comparison == "epsilon") { "invalid rmssdRaw case $caseId" }
                 result["value"] = finiteOrNull(HrvAnalyzer.rmssdRaw(doubleList(args, "nn")), function, caseId)
@@ -294,7 +300,7 @@ class ParityRunner {
                     sortedMapOf<String, Any?>("rmssd" to rmssd, "ts" to ts.toString())
                 }
             }
-            "trimpToStrain" -> {
+            "StrainScorer.trimpToStrain/2" -> {
                 require(comparison == "exact") { "invalid trimpToStrain case $caseId" }
                 val trimp = args.getDouble("trimp")
                 val value = if (args.has("denominator")) {
@@ -313,6 +319,176 @@ class ParityRunner {
                 }
                 require(emitted.isFinite()) { "trimpToStrain returned a non-finite value for $caseId" }
                 result["valueBits"] = java.lang.Long.toHexString(emitted.toRawBits()).padStart(16, '0')
+            }
+            "StrainScorer.tanakaHRmax/1" -> {
+                require(comparison == "epsilon") { "invalid tanakaHRmax case $caseId" }
+                result["value"] = finite(StrainScorer.tanakaHRmax(args.getDouble("age")), function, caseId)
+            }
+            "StrainScorer.defaultMaxHR/1" -> {
+                require(comparison == "exact") { "invalid defaultMaxHR case $caseId" }
+                val effectiveAge = effective.getInt("ageInt")
+                val value = if (args.has("ageInt")) {
+                    StrainScorer.defaultMaxHR(args.getInt("ageInt"))
+                } else {
+                    StrainScorer.defaultMaxHR()
+                }
+                require(value == 220 - effectiveAge) { "defaultMaxHR effective args disagree for $caseId" }
+                result["valueBits"] = value
+            }
+            "StrainScorer.percentile/2" -> {
+                require(comparison == "epsilon") { "invalid percentile case $caseId" }
+                result["value"] = finite(
+                    StrainScorer.percentile(doubleList(args, "values"), args.getDouble("pct")),
+                    function,
+                    caseId,
+                )
+            }
+            "StrainScorer.estimateHRmax/2" -> {
+                require(comparison == "epsilon") { "invalid estimateHRmax case $caseId" }
+                val history = expandedHistory(args.getJSONObject("history"))
+                val value = StrainScorer.estimateHRmax(
+                    history,
+                    args.optDouble("age").takeIf { args.has("age") },
+                )
+                result["value"] = sortedMapOf(
+                    "hrmax" to finite(value.first, function, caseId),
+                    "source" to value.second,
+                )
+            }
+            "StrainScorer.pctHRR/3" -> {
+                require(comparison == "epsilon") { "invalid pctHRR case $caseId" }
+                result["value"] = finite(
+                    StrainScorer.pctHRR(
+                        args.getDouble("bpm"), args.getDouble("restingHR"), args.getDouble("hrReserve"),
+                    ),
+                    function,
+                    caseId,
+                )
+            }
+            "StrainScorer.zoneWeight/3" -> {
+                require(comparison == "exact") { "invalid zoneWeight case $caseId" }
+                val weight = StrainScorer.zoneWeight(
+                    args.getDouble("bpm"), args.getDouble("restingHR"), args.getDouble("hrReserve"),
+                )
+                result["valueBits"] = if (args.optBoolean("characterizeZones", false)) {
+                    sortedMapOf<String, Any?>(
+                        "weight" to weight,
+                        "zones" to StrainScorer.edwardsZones.map { (threshold, zoneWeight) ->
+                            sortedMapOf<String, Any?>(
+                                "threshold" to java.lang.Long.toHexString(threshold.toRawBits()).padStart(16, '0'),
+                                "weight" to zoneWeight,
+                            )
+                        },
+                    )
+                } else {
+                    weight
+                }
+            }
+            "StrainScorer.effectiveEffort/2" -> {
+                require(comparison == "exact") { "invalid effectiveEffort case $caseId" }
+                val value = StrainScorer.effectiveEffort(
+                    args.optDouble("live").takeIf { args.has("live") },
+                    args.optDouble("stored").takeIf { args.has("stored") },
+                )
+                result["valueBits"] = value?.let(::exactBit)
+            }
+            "StrainScorer.sampleDurationMinutes/1" -> {
+                require(comparison == "epsilon") { "invalid sampleDurationMinutes case $caseId" }
+                result["value"] = finite(
+                    StrainScorer.sampleDurationMinutes(hrSamples(args)), function, caseId,
+                )
+            }
+            "StrainScorer.sampleDurationsMinutes/1" -> {
+                require(comparison == "epsilon") { "invalid sampleDurationsMinutes case $caseId" }
+                result["value"] = StrainScorer.sampleDurationsMinutes(hrSamples(args)).map {
+                    finite(it, function, caseId)
+                }
+            }
+            "StrainScorer.edwardsTRIMP/4" -> {
+                require(comparison == "epsilon") { "invalid edwardsTRIMP case $caseId" }
+                val hr = hrSamples(args)
+                val durations = doubleList(args, "durations")
+                require(hr.size == durations.size) { "invalid edwardsTRIMP case $caseId" }
+                result["value"] = finite(
+                    StrainScorer.edwardsTRIMP(
+                        hr, args.getDouble("restingHR"), args.getDouble("hrReserve"), durations,
+                    ),
+                    function,
+                    caseId,
+                )
+            }
+            "StrainScorer.banisterTRIMP/5" -> {
+                require(comparison == "epsilon") { "invalid banisterTRIMP case $caseId" }
+                val hr = hrSamples(args)
+                val durations = doubleList(args, "durations")
+                require(hr.size == durations.size) { "invalid banisterTRIMP case $caseId" }
+                result["value"] = finite(
+                    StrainScorer.banisterTRIMP(
+                        hr, args.getDouble("restingHR"), args.getDouble("hrReserve"),
+                        durations, args.getDouble("b"),
+                    ),
+                    function,
+                    caseId,
+                )
+            }
+            "StrainScorer.fitStrainDenominator/1" -> {
+                require(comparison == "epsilon") { "invalid fitStrainDenominator case $caseId" }
+                val rawPairs = args.getJSONArray("pairs")
+                val pairs = (0 until rawPairs.length()).map { index ->
+                    val pair = rawPairs.getJSONArray(index)
+                    require(pair.length() == 2) { "invalid fitStrainDenominator case $caseId" }
+                    pair.getDouble(0) to pair.getDouble(1)
+                }
+                try {
+                    result["value"] = finite(
+                        StrainScorer.fitStrainDenominator(pairs), function, caseId,
+                    )
+                } catch (error: StrainScorer.StrainException) {
+                    result["error"] = when (error.error) {
+                        StrainScorer.StrainError.TOO_FEW_PAIRS -> "tooFewPairs"
+                        StrainScorer.StrainError.DEGENERATE -> "degenerate"
+                    }
+                }
+            }
+            "StrainScorer.strain/6" -> {
+                require(comparison == "exact") { "invalid strain case $caseId" }
+                val calls = args.getJSONArray("strainCalls")
+                val effectiveCalls = effective.getJSONArray("strainCalls")
+                require(calls.length() == effectiveCalls.length()) { "invalid strain case $caseId" }
+                val encoded = (0 until calls.length()).map { index ->
+                    val call = calls.getJSONObject(index)
+                    val effectiveCall = effectiveCalls.getJSONObject(index)
+                    val hr = expandedHRSeries(call.getJSONObject("series"))
+                    val value = if (call.getBoolean("useDefaults")) {
+                        StrainScorer.strain(hr)
+                    } else {
+                        val methodRaw = effectiveCall.getString("method")
+                        val method = if (methodRaw == "edwards") {
+                            StrainScorer.Method.EDWARDS
+                        } else if (methodRaw == "banister") {
+                            StrainScorer.Method.BANISTER
+                        } else {
+                            error("invalid strain method $caseId")
+                        }
+                        StrainScorer.strain(
+                            hr = hr,
+                            maxHR = effectiveCall.getDouble("maxHR"),
+                            restingHR = effectiveCall.getDouble("restingHR"),
+                            method = method,
+                            sex = effectiveCall.getString("sex"),
+                            denominator = effectiveCall.getDouble("denominator"),
+                        )
+                    }
+                    value?.also {
+                        require(it.isFinite()) { "strain returned non-finite for $caseId" }
+                    }?.let(::exactBit)
+                }
+                if (effective.getBoolean("replayFirstAtEnd")) {
+                    require(encoded.first() == encoded.last()) {
+                        "strain A→B→A replay changed result for $caseId"
+                    }
+                }
+                result["valueBits"] = encoded
             }
             else -> error("unsupported parity function $function")
         }
@@ -343,6 +519,49 @@ class ParityRunner {
 
     private fun exactBits(values: List<Double>): List<String> =
         values.map { java.lang.Long.toHexString(it.toRawBits()).padStart(16, '0') }
+
+    private fun exactBit(value: Double): String =
+        java.lang.Long.toHexString(value.toRawBits()).padStart(16, '0')
+
+    private fun hrSamples(args: JSONObject): List<HrSample> {
+        val rows = args.getJSONArray("hr")
+        return (0 until rows.length()).map { index ->
+            val row = rows.getJSONObject(index)
+            HrSample(deviceId = "parity", ts = row.getLong("ts"), bpm = row.getInt("bpm"))
+        }
+    }
+
+    private fun expandedHistory(input: JSONObject): List<Double> {
+        val count = input.getInt("count")
+        require(count >= 0) { "history.count must be non-negative" }
+        if (count == 0) return emptyList()
+        val low = input.getDouble("low")
+        val high = input.getDouble("high")
+        if (count == 1) return listOf(high)
+        return (0 until count).map { index ->
+            low + index.toDouble() * (high - low) / (count - 1).toDouble()
+        }
+    }
+
+    private fun expandedHRSeries(input: JSONObject): List<HrSample> {
+        val count = input.getInt("count")
+        if (count <= 0) return emptyList()
+        val start = input.getLong("startTs")
+        val step = input.getLong("stepSec")
+        val bpm = input.getInt("bpm")
+        val alternate = input.optInt("alternateBpm").takeIf { input.has("alternateBpm") } ?: bpm
+        return (0 until count).map { index ->
+            HrSample(
+                deviceId = "parity",
+                ts = if (index == count - 1 && input.has("finalTs")) {
+                    input.getLong("finalTs")
+                } else {
+                    start + index.toLong() * step
+                },
+                bpm = if (index % 2 == 0) bpm else alternate,
+            )
+        }
+    }
 
     private fun finite(value: Double, function: String, caseId: String): Double {
         require(value.isFinite()) { "$function returned a non-finite value for $caseId" }

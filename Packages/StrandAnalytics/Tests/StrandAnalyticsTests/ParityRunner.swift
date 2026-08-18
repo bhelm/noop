@@ -9,18 +9,60 @@ final class ParityRunner: XCTestCase {
         let ts: Int
     }
 
+    private struct HRInput: Decodable {
+        let ts: Int
+        let bpm: Int
+    }
+
+    private struct HistoryInput: Decodable {
+        let count: Int
+        let low: Double
+        let high: Double
+    }
+
+    private struct HRSeriesInput: Decodable {
+        let alternateBpm: Int?
+        let bpm: Int
+        let count: Int
+        let finalTs: Int?
+        let startTs: Int
+        let stepSec: Int
+    }
+
+    private struct StrainCallInput: Decodable {
+        let denominator: Double?
+        let maxHR: Double?
+        let method: String?
+        let restingHR: Double?
+        let series: HRSeriesInput
+        let sex: String?
+        let useDefaults: Bool
+    }
+
     private struct Arguments: Decodable {
+        let age: Double?
+        let ageInt: Int?
+        let b: Double?
+        let bpm: Double?
+        let characterizeZones: Bool?
         let collapsed: Double?
         let contiguous: [Bool]?
         let coverage: Double?
         let denominator: Double?
         let fraction: Double?
+        let history: HistoryInput?
+        let hr: [HRInput]?
         let halfWindowSec: Int?
         let maxRowsPerSecond: Int?
         let maxRejectedFraction: Double?
         let minBeatsPerWindow: Int?
         let nn: [Double]?
+        let pairs: [[Double]]?
+        let pct: Double?
         let rawRR: [Double]?
+        let replayFirstAtEnd: Bool?
+        let restingHR: Double?
+        let hrReserve: Double?
         let rr: [RRInput]?
         let rrMs: [Double]?
         let rrTolMs: Double?
@@ -28,6 +70,10 @@ final class ParityRunner: XCTestCase {
         let stepSec: Int?
         let tsSec: [Int]?
         let trimp: Double?
+        let durations: [Double]?
+        let live: Double?
+        let stored: Double?
+        let strainCalls: [StrainCallInput]?
         let values: [Double]?
         let verdict: String?
         let windowEnd: Int?
@@ -117,7 +163,10 @@ final class ParityRunner: XCTestCase {
             "id": record.id,
             "nonce": record.nonce,
         ]
-        switch record.function {
+        let dispatchFunction = record.function == "trimpToStrain"
+            ? "StrainScorer.trimpToStrain/2"
+            : record.function
+        switch dispatchFunction {
         case "rmssdRaw":
             guard record.comparison == "epsilon", let nn = record.args.nn else {
                 throw RunnerError.invalidInput("invalid rmssdRaw case \(record.id)")
@@ -334,7 +383,7 @@ final class ParityRunner: XCTestCase {
                 values.append(["rmssd": point.rmssd, "ts": String(point.ts)])
             }
             result["value"] = values
-        case "trimpToStrain":
+        case "StrainScorer.trimpToStrain/2":
             guard record.comparison == "exact", let trimp = record.args.trimp else {
                 throw RunnerError.invalidInput("invalid trimpToStrain case \(record.id)")
             }
@@ -353,6 +402,164 @@ final class ParityRunner: XCTestCase {
                 throw RunnerError.nonFinite("trimpToStrain returned a non-finite value for \(record.id)")
             }
             result["valueBits"] = String(format: "%016llx", emitted.bitPattern)
+        case "StrainScorer.tanakaHRmax/1":
+            guard record.comparison == "epsilon", let age = record.args.age else {
+                throw RunnerError.invalidInput("invalid tanakaHRmax case \(record.id)")
+            }
+            result["value"] = try finite(StrainScorer.tanakaHRmax(age: age), record: record)
+        case "StrainScorer.defaultMaxHR/1":
+            guard record.comparison == "exact", let effectiveAge = record.effectiveArgs.ageInt else {
+                throw RunnerError.invalidInput("invalid defaultMaxHR case \(record.id)")
+            }
+            let value = record.args.ageInt.map { StrainScorer.defaultMaxHR(age: $0) }
+                ?? StrainScorer.defaultMaxHR()
+            guard value == 220 - effectiveAge else {
+                throw RunnerError.invalidInput("defaultMaxHR effective args disagree for \(record.id)")
+            }
+            result["valueBits"] = value
+        case "StrainScorer.percentile/2":
+            guard record.comparison == "epsilon", let values = record.args.values,
+                  let pct = record.args.pct else {
+                throw RunnerError.invalidInput("invalid percentile case \(record.id)")
+            }
+            result["value"] = try finite(StrainScorer.percentile(values, pct), record: record)
+        case "StrainScorer.estimateHRmax/2":
+            guard record.comparison == "epsilon", let history = record.args.history,
+                  history.count >= 0 else {
+                throw RunnerError.invalidInput("invalid estimateHRmax case \(record.id)")
+            }
+            let values = expandedHistory(history)
+            let value = StrainScorer.estimateHRmax(values, age: record.args.age)
+            result["value"] = [
+                "hrmax": try finite(value.0, record: record),
+                "source": value.1,
+            ]
+        case "StrainScorer.pctHRR/3":
+            guard record.comparison == "epsilon", let bpm = record.args.bpm,
+                  let resting = record.args.restingHR, let reserve = record.args.hrReserve else {
+                throw RunnerError.invalidInput("invalid pctHRR case \(record.id)")
+            }
+            result["value"] = try finite(
+                StrainScorer.pctHRR(bpm, restingHR: resting, hrReserve: reserve), record: record
+            )
+        case "StrainScorer.zoneWeight/3":
+            guard record.comparison == "exact", let bpm = record.args.bpm,
+                  let resting = record.args.restingHR, let reserve = record.args.hrReserve else {
+                throw RunnerError.invalidInput("invalid zoneWeight case \(record.id)")
+            }
+            let weight = StrainScorer.zoneWeight(bpm, restingHR: resting, hrReserve: reserve)
+            if record.args.characterizeZones == true {
+                result["valueBits"] = [
+                    "weight": weight,
+                    "zones": StrainScorer.edwardsZones.map {
+                        ["threshold": exactBit($0.threshold), "weight": $0.weight] as [String: Any]
+                    },
+                ] as [String: Any]
+            } else {
+                result["valueBits"] = weight
+            }
+        case "StrainScorer.effectiveEffort/2":
+            guard record.comparison == "exact" else {
+                throw RunnerError.invalidInput("invalid effectiveEffort case \(record.id)")
+            }
+            let value = StrainScorer.effectiveEffort(live: record.args.live, stored: record.args.stored)
+            result["valueBits"] = value.map(exactBit) ?? NSNull()
+        case "StrainScorer.sampleDurationMinutes/1":
+            guard record.comparison == "epsilon", let input = record.args.hr else {
+                throw RunnerError.invalidInput("invalid sampleDurationMinutes case \(record.id)")
+            }
+            result["value"] = try finite(
+                StrainScorer.sampleDurationMinutes(hrSamples(input)), record: record
+            )
+        case "StrainScorer.sampleDurationsMinutes/1":
+            guard record.comparison == "epsilon", let input = record.args.hr else {
+                throw RunnerError.invalidInput("invalid sampleDurationsMinutes case \(record.id)")
+            }
+            result["value"] = try StrainScorer.sampleDurationsMinutes(hrSamples(input)).map {
+                try finite($0, record: record)
+            }
+        case "StrainScorer.edwardsTRIMP/4":
+            guard record.comparison == "epsilon", let input = record.args.hr,
+                  let resting = record.args.restingHR, let reserve = record.args.hrReserve,
+                  let durations = record.args.durations, durations.count == input.count else {
+                throw RunnerError.invalidInput("invalid edwardsTRIMP case \(record.id)")
+            }
+            result["value"] = try finite(
+                StrainScorer.edwardsTRIMP(
+                    hrSamples(input), restingHR: resting, hrReserve: reserve, durations: durations
+                ), record: record
+            )
+        case "StrainScorer.banisterTRIMP/5":
+            guard record.comparison == "epsilon", let input = record.args.hr,
+                  let resting = record.args.restingHR, let reserve = record.args.hrReserve,
+                  let durations = record.args.durations, durations.count == input.count,
+                  let b = record.args.b else {
+                throw RunnerError.invalidInput("invalid banisterTRIMP case \(record.id)")
+            }
+            result["value"] = try finite(
+                StrainScorer.banisterTRIMP(
+                    hrSamples(input), restingHR: resting, hrReserve: reserve,
+                    durations: durations, b: b
+                ), record: record
+            )
+        case "StrainScorer.fitStrainDenominator/1":
+            guard record.comparison == "epsilon", let rawPairs = record.args.pairs,
+                  rawPairs.allSatisfy({ $0.count == 2 }) else {
+                throw RunnerError.invalidInput("invalid fitStrainDenominator case \(record.id)")
+            }
+            do {
+                let value = try StrainScorer.fitStrainDenominator(
+                    rawPairs.map { (trimp: $0[0], strain: $0[1]) }
+                )
+                result["value"] = try finite(value, record: record)
+            } catch let error as StrainScorer.StrainError {
+                result["error"] = error == .tooFewPairs ? "tooFewPairs" : "degenerate"
+            }
+        case "StrainScorer.strain/6":
+            guard record.comparison == "exact", let calls = record.args.strainCalls,
+                  let effectiveCalls = record.effectiveArgs.strainCalls,
+                  calls.count == effectiveCalls.count,
+                  let replay = record.effectiveArgs.replayFirstAtEnd else {
+                throw RunnerError.invalidInput("invalid strain case \(record.id)")
+            }
+            var encoded: [String?] = []
+            for (call, effective) in zip(calls, effectiveCalls) {
+                let hr = expandedHRSeries(call.series)
+                let value: Double?
+                if call.useDefaults {
+                    value = StrainScorer.strain(hr)
+                } else {
+                    guard let maxHR = effective.maxHR, let resting = effective.restingHR,
+                          let methodRaw = effective.method, let sex = effective.sex,
+                          let denominator = effective.denominator else {
+                        throw RunnerError.invalidInput("invalid explicit strain controls \(record.id)")
+                    }
+                    let method: StrainScorer.Method
+                    if methodRaw == "edwards" {
+                        method = .edwards
+                    } else if methodRaw == "banister" {
+                        method = .banister
+                    } else {
+                        throw RunnerError.invalidInput("invalid strain method \(record.id)")
+                    }
+                    value = StrainScorer.strain(
+                        hr, maxHR: maxHR, restingHR: resting, method: method,
+                        sex: sex, denominator: denominator
+                    )
+                }
+                if let value {
+                    guard value.isFinite else {
+                        throw RunnerError.nonFinite("strain returned non-finite for \(record.id)")
+                    }
+                    encoded.append(exactBit(value))
+                } else {
+                    encoded.append(nil)
+                }
+            }
+            if replay, encoded.first != encoded.last {
+                throw RunnerError.invalidInput("strain A→B→A replay changed result for \(record.id)")
+            }
+            result["valueBits"] = encoded.map { value -> Any in value ?? NSNull() }
         default:
             throw RunnerError.invalidInput("unsupported parity function \(record.function)")
         }
@@ -361,6 +568,34 @@ final class ParityRunner: XCTestCase {
 
     private func exactBits(_ values: [Double]) -> [String] {
         values.map { String(format: "%016llx", $0.bitPattern) }
+    }
+
+    private func exactBit(_ value: Double) -> String {
+        String(format: "%016llx", value.bitPattern)
+    }
+
+    private func hrSamples(_ input: [HRInput]) -> [HRSample] {
+        input.map { HRSample(ts: $0.ts, bpm: $0.bpm) }
+    }
+
+    private func expandedHistory(_ input: HistoryInput) -> [Double] {
+        guard input.count > 0 else { return [] }
+        guard input.count > 1 else { return [input.high] }
+        return (0..<input.count).map { index in
+            input.low + Double(index) * (input.high - input.low) / Double(input.count - 1)
+        }
+    }
+
+    private func expandedHRSeries(_ input: HRSeriesInput) -> [HRSample] {
+        guard input.count > 0 else { return [] }
+        return (0..<input.count).map { index in
+            HRSample(
+                ts: index == input.count - 1
+                    ? (input.finalTs ?? input.startTs + index * input.stepSec)
+                    : input.startTs + index * input.stepSec,
+                bpm: index.isMultiple(of: 2) ? input.bpm : (input.alternateBpm ?? input.bpm)
+            )
+        }
     }
 
     private func finite(_ value: Double, record: InputRecord) throws -> Double {

@@ -1325,6 +1325,14 @@
       "text": "StrainScorer.sampleDurationMinutes/1 has 1 test callsite(s) and no production callsite"
     },
     {
+      "identity": "test-only-callsite|android/app/src/main/java/com/noop/analytics/StrainScorer.kt::fitStrainDenominator/1#1",
+      "rule": "test-only-callsite",
+      "path": "android/app/src/main/java/com/noop/analytics/StrainScorer.kt",
+      "line": 286,
+      "text": "StrainScorer.fitStrainDenominator/1 has 1 test callsite(s) and no production callsite",
+      "issue": 17
+    },
+    {
       "identity": "test-only-callsite|android/app/src/main/java/com/noop/analytics/StressIndex.kt::stressIndexRaw/1#1",
       "rule": "test-only-callsite",
       "path": "android/app/src/main/java/com/noop/analytics/StressIndex.kt",
