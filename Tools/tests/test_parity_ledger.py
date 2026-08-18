@@ -247,6 +247,83 @@ fun production() = Alpha.collide(1, 2)
         self.assertIn("Map.extensionOnly/1", texts)
         self.assertNotIn("Alpha.collide/1", texts)
 
+    def test_call_omitting_defaults_counts_as_production_callsite(self) -> None:
+        self.kotlin.write_text(
+            """object Roller { fun roll(rr: Int, windowSec: Int = 90, stepSec: Int = 0) = rr + windowSec + stepSec }
+fun production() = Roller.roll(1)
+"""
+        )
+        test_path = self.root / "android/app/src/test/java/com/noop/analytics/RollTest.kt"
+        test_path.parent.mkdir(parents=True)
+        test_path.write_text("fun testIt() { Roller.roll(1, 2, 3) }\n")
+        texts = "\n".join(
+            item.text for item in self.findings() if item.rule == "test-only-callsite"
+        )
+        self.assertNotIn("Roller.roll/3", texts)
+
+    def test_unqualified_same_file_call_counts_despite_sibling_owner(self) -> None:
+        self.kotlin.write_text(
+            """object Verdict { fun verdict(value: Int) = value
+    fun production() = verdict(1) }
+"""
+        )
+        sibling = self.kotlin.parent / "Sibling.kt"
+        sibling.write_text("object Sibling { fun verdict(first: Int, second: Int) = first + second }\n")
+        test_path = self.root / "android/app/src/test/java/com/noop/analytics/VerdictTest.kt"
+        test_path.parent.mkdir(parents=True)
+        test_path.write_text("fun testIt() { Verdict.verdict(1); Sibling.verdict(1, 2) }\n")
+        texts = "\n".join(
+            item.text for item in self.findings() if item.rule == "test-only-callsite"
+        )
+        self.assertNotIn("Verdict.verdict/1", texts)
+        self.assertIn("Sibling.verdict/2", texts)
+
+    def test_exact_arity_match_wins_over_relaxed_overload(self) -> None:
+        self.kotlin.write_text(
+            """object Over { fun pick(value: Int) = value
+    fun pick(value: Int, extra: Int = 0) = value + extra }
+fun production() = Over.pick(1)
+"""
+        )
+        test_path = self.root / "android/app/src/test/java/com/noop/analytics/OverTest.kt"
+        test_path.parent.mkdir(parents=True)
+        test_path.write_text("fun testIt() { Over.pick(1, 2) }\n")
+        texts = "\n".join(
+            item.text for item in self.findings() if item.rule == "test-only-callsite"
+        )
+        self.assertIn("Over.pick/2", texts)
+
+    def test_lowercase_instance_receiver_resolves_like_unqualified(self) -> None:
+        self.kotlin.write_text(
+            """object Burst { fun codesWithTimes(first: Int, second: Int, extra: Int = 0) = first + second + extra }
+object Assembler { val burst = Burst
+    fun production(): Int { return burst.codesWithTimes(1, 2) } }
+"""
+        )
+        test_path = self.root / "android/app/src/test/java/com/noop/analytics/BurstTest.kt"
+        test_path.parent.mkdir(parents=True)
+        test_path.write_text("fun testIt() { Burst.codesWithTimes(1, 2, 3) }\n")
+        texts = "\n".join(
+            item.text for item in self.findings() if item.rule == "test-only-callsite"
+        )
+        self.assertNotIn("Burst.codesWithTimes/3", texts)
+
+    def test_same_file_resolution_prefers_the_lexical_owner(self) -> None:
+        self.kotlin.write_text(
+            """object First { fun add(value: Int) = value
+    fun production() = add(1) }
+object Second { fun add(value: Int) = value }
+"""
+        )
+        test_path = self.root / "android/app/src/test/java/com/noop/analytics/AddTest.kt"
+        test_path.parent.mkdir(parents=True)
+        test_path.write_text("fun testIt() { Second.add(1) }\n")
+        texts = "\n".join(
+            item.text for item in self.findings() if item.rule == "test-only-callsite"
+        )
+        self.assertNotIn("First.add/1", texts)
+        self.assertIn("Second.add/1", texts)
+
     def test_artificial_duplicate_is_rejected(self) -> None:
         self.write_clean_tree()
         extra = self.swift.with_name("Other.swift")
