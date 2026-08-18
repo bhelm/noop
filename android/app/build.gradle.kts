@@ -1,9 +1,15 @@
 import java.util.Properties
+import org.gradle.testing.jacoco.tasks.JacocoReport
 
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
     id("com.google.devtools.ksp")
+    jacoco
+}
+
+jacoco {
+    toolVersion = "0.8.12"
 }
 
 // Optional release signing. Credentials live in `keystore.properties` (git-ignored, never
@@ -228,6 +234,35 @@ tasks.withType<Test>().configureEach {
     val parityRun = { listOf("PARITY_INPUT", "PARITY_OUTPUT", "PARITY_NEGATIVE_SIDE").any { System.getenv(it) != null } }
     outputs.upToDateWhen { !parityRun() }
     outputs.cacheIf { !parityRun() }
+}
+
+// Declaration-level parity proof.  Keep this report tied to the exact JVM runner task used by
+// Tools/parity_diff.py; parity_ratchet reads the XML and rejects every unexecuted instrumented line
+// inside a registered production declaration.
+val jacocoFullDebugUnitTestReport = tasks.register<JacocoReport>("jacocoFullDebugUnitTestReport") {
+    dependsOn("testFullDebugUnitTest")
+    sourceDirectories.setFrom(files("src/main/java"))
+    classDirectories.setFrom(
+        files(
+            fileTree(layout.buildDirectory.dir("tmp/kotlin-classes/fullDebug")) {
+                exclude("**/BuildConfig.*", "**/R.*", "**/R\$*.class")
+            },
+            fileTree(layout.buildDirectory.dir("intermediates/javac/fullDebug/classes")) {
+                exclude("**/BuildConfig.*", "**/R.*", "**/R\$*.class")
+            },
+        )
+    )
+    executionData.setFrom(layout.buildDirectory.file("jacoco/testFullDebugUnitTest.exec"))
+    reports {
+        xml.required.set(true)
+        xml.outputLocation.set(
+            layout.buildDirectory.file(
+                "reports/jacoco/jacocoFullDebugUnitTestReport/jacocoFullDebugUnitTestReport.xml"
+            )
+        )
+        html.required.set(false)
+        csv.required.set(false)
+    }
 }
 
 // Resolve every external module to the exact version recorded in app/gradle.lockfile. Direct

@@ -1,0 +1,174 @@
+name: Parity Coverage Ratchet
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: read
+
+concurrency:
+  group: parity-ratchet-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  fast:
+    runs-on: ubuntu-24.04
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Checkout full history
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          fetch-depth: 0
+
+      - name: Resolve merge base in the job
+        id: changes
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          EVENT_BEFORE: ${{ github.event.before }}
+          BASE_REF: ${{ github.base_ref }}
+        run: |
+          if [ "$EVENT_NAME" = "pull_request" ]; then
+            MERGE_BASE=$(git merge-base HEAD "origin/${BASE_REF:-main}")
+          elif [ -n "$EVENT_BEFORE" ] && [ "$EVENT_BEFORE" != "0000000000000000000000000000000000000000" ]; then
+            MERGE_BASE="$EVENT_BEFORE"
+          else
+            MERGE_BASE=$(git rev-parse HEAD^)
+          fi
+          echo "MERGE_BASE=$MERGE_BASE" >> "$GITHUB_ENV"
+          echo "Changed paths since $MERGE_BASE:"
+          git diff --name-only "$MERGE_BASE"
+
+      - name: Always-on lexer, ratchet, ledger, and Python tests
+        run: |
+          python3 Tools/parity_ratchet.py ratchet --base "$MERGE_BASE"
+          python3 Tools/parity_ledger.py
+          python3 -m unittest discover -s Tools/tests -v
+
+  coverage:
+    runs-on: ubuntu-24.04
+    env:
+      SQLITE_SNAPSHOT_DIR: ${{ github.workspace }}/.ci/sqlite-snapshot
+    steps:
+      - name: Checkout full history
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          fetch-depth: 0
+
+      - name: Decide from changed paths inside the job
+        id: changes
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          EVENT_BEFORE: ${{ github.event.before }}
+          BASE_REF: ${{ github.base_ref }}
+        run: |
+          if [ "$EVENT_NAME" = "pull_request" ]; then
+            MERGE_BASE=$(git merge-base HEAD "origin/${BASE_REF:-main}")
+          elif [ -n "$EVENT_BEFORE" ] && [ "$EVENT_BEFORE" != "0000000000000000000000000000000000000000" ]; then
+            MERGE_BASE="$EVENT_BEFORE"
+          else
+            MERGE_BASE=$(git rev-parse HEAD^)
+          fi
+          touched=false
+          while IFS= read -r path; do
+            case "$path" in
+              Packages/*/Sources/*.swift|Packages/*/Sources/**/*.swift|\
+              Packages/*/Tests/**/*ParityRunner*|\
+              android/app/src/main/java/com/noop/*.kt|android/app/src/main/java/com/noop/**/*.kt|\
+              android/app/src/test/**|\
+              Tools/parity_*.py|Tools/parity_cases/**|Tools/tests/**|\
+              **/parity-exempt.json|\
+              android/app/build.gradle.kts|android/gradle/verification-metadata.xml|\
+              .github/workflows/parity-ratchet.yml)
+                touched=true
+                ;;
+            esac
+          done < <(git diff --name-only "$MERGE_BASE")
+          echo "twins=$touched" >> "$GITHUB_OUTPUT"
+          if [ "$touched" = true ]; then
+            echo "Twin trees changed; running the coverage proof."
+          else
+            echo "no-op: no Swift/Kotlin twin tree changed since $MERGE_BASE"
+          fi
+
+      - name: Set up Java
+        if: steps.changes.outputs.twins == 'true'
+        uses: actions/setup-java@03ad4de0992f5dab5e18fcb136590ce7c4a0ac95 # v5.6.0
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Gradle
+        if: steps.changes.outputs.twins == 'true'
+        uses: gradle/actions/setup-gradle@0723195856401067f7a2779048b490ace7a47d7c # v5.0.2
+
+      - name: Restore snapshot SQLite
+        if: steps.changes.outputs.twins == 'true'
+        id: sqlite-cache
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: ${{ env.SQLITE_SNAPSHOT_DIR }}
+          key: sqlite-snapshot-3.53.4-r1-${{ runner.os }}-${{ runner.arch }}-b1dd5d74
+
+      - name: Build snapshot SQLite
+        if: steps.changes.outputs.twins == 'true' && steps.sqlite-cache.outputs.cache-hit != 'true'
+        env:
+          SQLITE_AMALGAMATION_SHA256: b1dd5d74ec7f29055a6684fa06fb3c2f6821c87dd38f9a458dfd2e8a1db28189
+        run: |
+          archive="$RUNNER_TEMP/sqlite-amalgamation-3530400.zip"
+          source="$RUNNER_TEMP/sqlite3.c"
+          curl --fail --location --proto '=https' --tlsv1.2 \
+            https://sqlite.org/2026/sqlite-amalgamation-3530400.zip \
+            --output "$archive"
+          unzip -p "$archive" sqlite-amalgamation-3530400/sqlite3.c > "$source"
+          echo "$SQLITE_AMALGAMATION_SHA256  $source" | sha256sum --check --strict
+          mkdir -p "$SQLITE_SNAPSHOT_DIR"
+          gcc -shared -fPIC -DSQLITE_ENABLE_SNAPSHOT=1 "$source" \
+            -o "$SQLITE_SNAPSHOT_DIR/libsqlite3.so.0"
+          ln -s libsqlite3.so.0 "$SQLITE_SNAPSHOT_DIR/libsqlite3.so"
+
+      - name: Generate differential input
+        if: steps.changes.outputs.twins == 'true'
+        run: python3 Tools/parity_diff.py generate --output "$RUNNER_TEMP/parity-input.jsonl"
+
+      - name: Run Swift differential coverage
+        if: steps.changes.outputs.twins == 'true'
+        env:
+          LD_LIBRARY_PATH: ${{ env.SQLITE_SNAPSHOT_DIR }}
+          PARITY_INPUT: ${{ runner.temp }}/parity-input.jsonl
+          PARITY_OUTPUT: ${{ runner.temp }}/parity-swift.jsonl
+        run: |
+          swift test --package-path Packages/StrandAnalytics --enable-code-coverage \
+            --filter ParityRunner -Xlinker "-L${SQLITE_SNAPSHOT_DIR}"
+          /opt/swift/usr/bin/llvm-cov export -format=lcov \
+            -instr-profile=Packages/StrandAnalytics/.build/debug/codecov/default.profdata \
+            Packages/StrandAnalytics/.build/debug/StrandAnalyticsPackageTests.xctest \
+            > "$RUNNER_TEMP/swift.lcov"
+
+      - name: Run Kotlin differential coverage
+        if: steps.changes.outputs.twins == 'true'
+        env:
+          PARITY_INPUT: ${{ runner.temp }}/parity-input.jsonl
+          PARITY_OUTPUT: ${{ runner.temp }}/parity-kotlin.jsonl
+        run: ./android/gradlew -p android :app:testFullDebugUnitTest --tests com.noop.analytics.ParityRunner
+
+      - name: Export Kotlin JaCoCo XML
+        if: steps.changes.outputs.twins == 'true'
+        run: |
+          ./android/gradlew -p android :app:jacocoFullDebugUnitTestReport \
+            -x :app:testFullDebugUnitTest
+
+      - name: Compare outputs and prove source coverage
+        if: steps.changes.outputs.twins == 'true'
+        run: |
+          python3 Tools/parity_diff.py compare \
+            --input "$RUNNER_TEMP/parity-input.jsonl" \
+            --swift "$RUNNER_TEMP/parity-swift.jsonl" \
+            --kotlin "$RUNNER_TEMP/parity-kotlin.jsonl"
+          python3 Tools/parity_ratchet.py verify \
+            --swift-lcov "$RUNNER_TEMP/swift.lcov" \
+            --kotlin-jacoco android/app/build/reports/jacoco/jacocoFullDebugUnitTestReport/jacocoFullDebugUnitTestReport.xml
