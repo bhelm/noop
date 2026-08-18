@@ -2188,11 +2188,6 @@
       "issue": 17
     },
     {
-      "key": "Packages/StrandAnalytics/Sources/StrandAnalytics/HRVAnalyzer.swift::analyze/2[defaults=2]#1",
-      "reason": "Bootstrap debt: no differential or declared platform coverage proof yet.",
-      "issue": 17
-    },
-    {
       "key": "Packages/StrandAnalytics/Sources/StrandAnalytics/HRVAnalyzer.swift::sdnnIndex/2[defaults=2]#1",
       "reason": "Bootstrap debt: no differential or declared platform coverage proof yet.",
       "issue": 17
@@ -2219,11 +2214,6 @@
     },
     {
       "key": "Packages/StrandAnalytics/Sources/StrandAnalytics/HRVAnalyzer.swift::coveragePlausibleCeiling@property-initializer#1",
-      "reason": "Bootstrap debt: no differential or declared platform coverage proof yet.",
-      "issue": 17
-    },
-    {
-      "key": "Packages/StrandAnalytics/Sources/StrandAnalytics/HRVAnalyzer.swift::median/1[defaults=-]#1",
       "reason": "Bootstrap debt: no differential or declared platform coverage proof yet.",
       "issue": 17
     },

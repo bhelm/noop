@@ -607,6 +607,186 @@ func constrained<T>()
         self.assertIn("malformed swift differential registry key: 'broken/'", errors)
         self.assertIn("malformed kotlin differential registry key: 'broken/'", errors)
 
+    def test_malformed_translation_registry_key_is_an_explicit_error(self) -> None:
+        self.write(
+            parity_ratchet.SWIFT_RUNNER,
+            'switch name {\ncase "score/1=raw/1": break\ncase "score/1=broken/": break\n}\n',
+        )
+        self.write(
+            parity_ratchet.KOTLIN_RUNNER,
+            'when (name) {\n"score/1=raw/1" -> Unit\n"score/1=broken/" -> Unit\n}\n',
+        )
+
+        registered, errors = parity_ratchet.registered_differential(self.root)
+
+        self.assertEqual({"score/1=raw/1"}, registered)
+        self.assertIn(
+            "malformed swift differential registry key: 'score/1=broken/'", errors
+        )
+        self.assertIn(
+            "malformed kotlin differential registry key: 'score/1=broken/'", errors
+        )
+
+    def test_cross_name_registry_resolves_each_language_side(self) -> None:
+        swift = self.write(
+            "Sources/Pilot/Engine.swift",
+            "struct Engine { func score(_ value: Int) -> Int { value } }\n",
+        )
+        kotlin = self.write(
+            "src/main/java/pilot/Engine.kt",
+            "class Engine { fun scoreRaw(value: Int): Int = value }\n",
+        )
+        inventories = {
+            "swift": parity_ratchet.lex_file(self.root, swift, "swift"),
+            "kotlin": parity_ratchet.lex_file(self.root, kotlin, "kotlin"),
+        }
+        key = "Engine.score/1=Engine.scoreRaw/1"
+
+        self.assertEqual({key}, parity_ratchet._resolved_differential(inventories, {key}))
+
+    def test_cross_name_dispatchers_must_use_the_same_canonical_label(self) -> None:
+        swift_key = "Engine.score/1=Engine.scoreRaw/1"
+        kotlin_key = "Engine.score/1=Engine.other/1"
+        self.write(
+            parity_ratchet.SWIFT_RUNNER,
+            f'switch name {{ case "{swift_key}": break; default: break }}\n',
+        )
+        self.write(
+            parity_ratchet.KOTLIN_RUNNER,
+            f'when (name) {{ "{kotlin_key}" -> Unit else -> Unit }}\n',
+        )
+
+        registered, errors = parity_ratchet.registered_differential(self.root)
+
+        self.assertEqual(set(), registered)
+        self.assertTrue(any("registrations disagree" in error for error in errors), errors)
+        self.assertTrue(any(swift_key in error and kotlin_key in error for error in errors), errors)
+
+    def test_cross_name_registry_fails_closed_when_one_side_does_not_resolve(self) -> None:
+        swift = self.write(
+            "Sources/Pilot/Engine.swift",
+            "struct Engine { func score(_ value: Int) -> Int { value } }\n",
+        )
+        kotlin = self.write(
+            "src/main/java/pilot/Engine.kt",
+            "class Engine { fun other(value: Int): Int = value }\n",
+        )
+        inventories = {
+            "swift": parity_ratchet.lex_file(self.root, swift, "swift"),
+            "kotlin": parity_ratchet.lex_file(self.root, kotlin, "kotlin"),
+        }
+        key = "Engine.score/1=Engine.scoreRaw/1"
+
+        self.assertEqual(set(), parity_ratchet._resolved_differential(inventories, {key}))
+        self.assertEqual(
+            {"swift": 1, "kotlin": 0},
+            parity_ratchet._differential_match_counts(inventories, key),
+        )
+        for relative, language in (
+            ("Sources/Pilot/parity-exempt.json", "swift"),
+            ("src/main/java/pilot/parity-exempt.json", "kotlin"),
+        ):
+            self.write(
+                relative,
+                json.dumps(
+                    {
+                        "schema_version": 1,
+                        "module": "Pilot",
+                        "exempt": [
+                            {"key": item.key, "reason": "fixture", "issue": 17}
+                            for item in inventories[language]
+                        ],
+                        "platform-test": [],
+                    }
+                ),
+            )
+        errors, _counts, _resolved = parity_ratchet._audit_module_pair(
+            self.root,
+            parity_ratchet.ModulePair(
+                "Pilot", self.root / "Sources/Pilot", self.root / "src/main/java/pilot"
+            ),
+            registered={key},
+        )
+        self.assertTrue(any("swift=1 kotlin=0" in error for error in errors), errors)
+
+    def test_owner_qualified_registry_resolves_name_arity_collision(self) -> None:
+        swift = self.write(
+            "Sources/Pilot/Engine.swift",
+            "struct First { func median(_ values: [Double]) -> Double { 1 } }\n"
+            "struct Second { func median(_ values: [Double]) -> Double { 2 } }\n",
+        )
+        kotlin = self.write(
+            "src/main/java/pilot/Engine.kt",
+            "class First { fun median(values: List<Double>): Double = 1.0 }\n"
+            "class Second { fun median(values: List<Double>): Double = 2.0 }\n",
+        )
+        inventories = {
+            "swift": parity_ratchet.lex_file(self.root, swift, "swift"),
+            "kotlin": parity_ratchet.lex_file(self.root, kotlin, "kotlin"),
+        }
+
+        self.assertEqual(
+            {"First.median/1"},
+            parity_ratchet._resolved_differential(inventories, {"First.median/1"}),
+        )
+        self.assertEqual(set(), parity_ratchet._resolved_differential(inventories, {"median/1"}))
+
+    def test_owner_qualified_registry_fails_closed_when_owner_is_ambiguous(self) -> None:
+        swift_one = self.write(
+            "Sources/Pilot/One.swift",
+            "struct Engine { func score(_ value: Int) -> Int { value } }\n",
+        )
+        swift_two = self.write(
+            "Sources/Pilot/Two.swift",
+            "struct Engine { func score(_ value: Int) -> Int { value } }\n",
+        )
+        kotlin = self.write(
+            "src/main/java/pilot/Engine.kt",
+            "class Engine { fun score(value: Int): Int = value }\n",
+        )
+        inventories = {
+            "swift": [
+                *parity_ratchet.lex_file(self.root, swift_one, "swift"),
+                *parity_ratchet.lex_file(self.root, swift_two, "swift"),
+            ],
+            "kotlin": parity_ratchet.lex_file(self.root, kotlin, "kotlin"),
+        }
+
+        self.assertEqual(
+            {"swift": 2, "kotlin": 1},
+            parity_ratchet._differential_match_counts(inventories, "Engine.score/1"),
+        )
+        self.assertEqual(
+            set(),
+            parity_ratchet._resolved_differential(inventories, {"Engine.score/1"}),
+        )
+        for relative, language in (
+            ("Sources/Pilot/parity-exempt.json", "swift"),
+            ("src/main/java/pilot/parity-exempt.json", "kotlin"),
+        ):
+            self.write(
+                relative,
+                json.dumps(
+                    {
+                        "schema_version": 1,
+                        "module": "Pilot",
+                        "exempt": [
+                            {"key": item.key, "reason": "fixture", "issue": 17}
+                            for item in inventories[language]
+                        ],
+                        "platform-test": [],
+                    }
+                ),
+            )
+        errors, _counts, _resolved = parity_ratchet._audit_module_pair(
+            self.root,
+            parity_ratchet.ModulePair(
+                "Pilot", self.root / "Sources/Pilot", self.root / "src/main/java/pilot"
+            ),
+            registered={"Engine.score/1"},
+        )
+        self.assertTrue(any("swift=2 kotlin=1" in error for error in errors), errors)
+
     def test_arity_registry_resolves_overloads_with_different_arities(self) -> None:
         swift = self.write(
             "Sources/Pilot/Engine.swift",
@@ -731,6 +911,7 @@ func constrained<T>()
         *,
         declaring_pairs: tuple[str, ...] = ("First", "Second"),
         covered_pairs: tuple[str, ...] = ("First", "Second"),
+        owner: str | None = None,
     ) -> tuple[list[parity_ratchet.ModulePair], Path, Path]:
         pairs = []
         swift_records = []
@@ -740,11 +921,23 @@ func constrained<T>()
             kotlin_dir = self.root / f"src/main/java/{name.lower()}"
             swift = self.write(
                 f"Sources/{name}/{name}.swift",
-                f"func shared() -> Int {{ {ordinal} }}\n" if name in declaring_pairs else "",
+                (
+                    f"struct {owner} {{ func shared() -> Int {{ {ordinal} }} }}\n"
+                    if owner is not None
+                    else f"func shared() -> Int {{ {ordinal} }}\n"
+                )
+                if name in declaring_pairs
+                else "",
             )
             self.write(
                 f"src/main/java/{name.lower()}/{name}.kt",
-                f"fun shared(): Int = {ordinal}\n" if name in declaring_pairs else "",
+                (
+                    f"class {owner} {{ fun shared(): Int = {ordinal} }}\n"
+                    if owner is not None
+                    else f"fun shared(): Int = {ordinal}\n"
+                )
+                if name in declaring_pairs
+                else "",
             )
             shard = json.dumps(
                 {"schema_version": 1, "module": name, "exempt": [], "platform-test": []}
@@ -796,6 +989,25 @@ func constrained<T>()
         self.assertEqual(0, ratchet_code)
         self.assertEqual(0, verify_code)
         self.assertEqual(2, output.getvalue().count("differential=1"), output.getvalue())
+
+    def test_owner_qualified_registry_rejects_resolution_in_two_sharp_pairs(self) -> None:
+        key = "Engine.shared/0"
+        pairs, _swift_lcov, _jacoco = self.write_two_pair_fixture(
+            registered=key,
+            owner="Engine",
+        )
+        with mock.patch.object(parity_ratchet, "module_pairs", return_value=pairs):
+            errors, counts = parity_ratchet.audit_inventory(self.root)
+
+        self.assertEqual(1, counts["differential"])
+        self.assertIn(
+            f"owner-qualified swift side {key} resolves to 2 declarations across sharp module pairs",
+            errors,
+        )
+        self.assertIn(
+            f"owner-qualified kotlin side {key} resolves to 2 declarations across sharp module pairs",
+            errors,
+        )
 
     def test_registered_name_resolving_only_in_one_pair_does_not_fail_other_pair(self) -> None:
         pairs, swift_lcov, jacoco = self.write_two_pair_fixture(
@@ -864,7 +1076,13 @@ func constrained<T>()
                 "trimpToStrain",
             }
         self.assertEqual(existing_name_only, {key for key in registered if "/" not in key})
-        self.assertEqual(existing_name_only | {"analyze/3"}, registered)
+        legacy = existing_name_only | {"analyze/3"}
+        added = {
+            "HRVAnalyzer.analyze/2=HrvAnalyzer.analyzeRaw/2",
+            "HRVAnalyzer.median/1=HrvAnalyzer.median/1",
+        }
+        self.assertEqual(20, len(legacy))
+        self.assertEqual(legacy | added, registered)
         for path in (
             REPOSITORY / "Packages/StrandAnalytics/Sources/StrandAnalytics/parity-exempt.json",
             REPOSITORY / "android/app/src/main/java/com/noop/analytics/parity-exempt.json",

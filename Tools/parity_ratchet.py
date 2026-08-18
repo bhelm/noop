@@ -29,8 +29,16 @@ SHARD_NAME = "parity-exempt.json"
 LEDGER_BASELINE = "Tools/parity_ledger_baseline.json"
 SWIFT_RUNNER = "Packages/StrandAnalytics/Tests/StrandAnalyticsTests/ParityRunner.swift"
 KOTLIN_RUNNER = "android/app/src/test/java/com/noop/analytics/ParityRunner.kt"
+_DIFFERENTIAL_SIDE_KEY_PATTERN = (
+    r"(?:[A-Za-z_][A-Za-z0-9_]*\.)?"
+    r"[A-Za-z_][A-Za-z0-9_]*(?:/(?:0|[1-9][0-9]*))?"
+)
 _DIFFERENTIAL_KEY_RE = re.compile(
-    r"^(?P<name>[A-Za-z_][A-Za-z0-9_]*)(?:/(?P<arity>0|[1-9][0-9]*))?$"
+    rf"^{_DIFFERENTIAL_SIDE_KEY_PATTERN}(?:={_DIFFERENTIAL_SIDE_KEY_PATTERN})?$"
+)
+_DIFFERENTIAL_SIDE_KEY_RE = re.compile(
+    r"^(?:(?P<owner>[A-Za-z_][A-Za-z0-9_]*)\.)?"
+    r"(?P<name>[A-Za-z_][A-Za-z0-9_]*)(?:/(?P<arity>0|[1-9][0-9]*))?$"
 )
 
 
@@ -791,18 +799,16 @@ def registered_differential(root: Path) -> tuple[set[str], list[str]]:
         kotlin = (root / KOTLIN_RUNNER).read_text(encoding="utf-8")
     except OSError as exc:
         return set(), [f"cannot read differential runner: {exc}"]
-    key_pattern = r"([A-Za-z_][A-Za-z0-9_]*(?:/(?:0|[1-9][0-9]*))?)"
     # Capture every dispatcher label first, then validate: a malformed key
     # ("analyze/", "foo/x") must be an explicit registry error, not a silent drop.
-    key_re = re.compile(rf"^{key_pattern}$")
     swift_labels = re.findall(r"\bcase\s+\"([^\"\n]+)\"\s*:", swift)
     kotlin_labels = re.findall(r"\"([^\"\n]+)\"\s*->", kotlin)
     for side, labels in (("swift", swift_labels), ("kotlin", kotlin_labels)):
         for label in sorted(set(labels)):
-            if not key_re.fullmatch(label):
+            if not _DIFFERENTIAL_KEY_RE.fullmatch(label):
                 errors.append(f"malformed {side} differential registry key: {label!r}")
-    swift_names = {label for label in swift_labels if key_re.fullmatch(label)}
-    kotlin_names = {label for label in kotlin_labels if key_re.fullmatch(label)}
+    swift_names = {label for label in swift_labels if _DIFFERENTIAL_KEY_RE.fullmatch(label)}
+    kotlin_names = {label for label in kotlin_labels if _DIFFERENTIAL_KEY_RE.fullmatch(label)}
     if swift_names != kotlin_names:
         errors.append(
             "differential runner registrations disagree: "
@@ -815,15 +821,75 @@ def registered_differential(root: Path) -> tuple[set[str], list[str]]:
 
 
 def _differential_match(declaration: Declaration, key: str) -> bool:
-    match = _DIFFERENTIAL_KEY_RE.fullmatch(key)
+    if _DIFFERENTIAL_KEY_RE.fullmatch(key) is None:
+        return False
+    side_key = _differential_side_key(key, declaration.language)
+    match = _DIFFERENTIAL_SIDE_KEY_RE.fullmatch(side_key)
     if match is None:
         return False
     arity = match.group("arity")
+    owner = match.group("owner")
     return (
         declaration.kind == "function"
+        and (owner is None or declaration.owner == owner)
         and declaration.name == match.group("name")
         and (arity is None or declaration.arity == int(arity))
     )
+
+
+def _differential_side_key(key: str, language: str) -> str:
+    sides = key.split("=")
+    return sides[0] if len(sides) == 1 or language == "swift" else sides[1]
+
+
+def _differential_match_counts(
+    inventories: dict[str, list[Declaration]], key: str
+) -> dict[str, int]:
+    return {
+        language: len(
+            [item for item in inventories[language] if _differential_match(item, key)]
+        )
+        for language in ("swift", "kotlin")
+    }
+
+
+def _owner_qualified_resolution_errors(
+    root: Path, pairs: list[ModulePair], registered: set[str]
+) -> list[str]:
+    qualified = [
+        (key, language, _differential_side_key(key, language))
+        for key in sorted(registered)
+        for language in ("swift", "kotlin")
+        if _DIFFERENTIAL_SIDE_KEY_RE.fullmatch(
+            _differential_side_key(key, language)
+        ).group("owner")
+        is not None
+    ]
+    matches = {(key, language): 0 for key, language, _side_key in qualified}
+    for pair in pairs:
+        if not (
+            (pair.swift_dir / SHARD_NAME).exists()
+            and (pair.kotlin_dir / SHARD_NAME).exists()
+        ):
+            continue
+        try:
+            inventories = {
+                "swift": lex_tree(root, pair.swift_dir, "swift"),
+                "kotlin": lex_tree(root, pair.kotlin_dir, "kotlin"),
+            }
+        except RatchetError:
+            # The normal pair audit reports the underlying inventory error.
+            continue
+        for key, language, _side_key in qualified:
+            matches[(key, language)] += len(
+                [item for item in inventories[language] if _differential_match(item, key)]
+            )
+    return [
+        f"owner-qualified {language} side {side_key} resolves to "
+        f"{matches[(key, language)]} declarations across sharp module pairs"
+        for key, language, side_key in qualified
+        if matches[(key, language)] != 1
+    ]
 
 
 def _resolved_differential(
@@ -832,10 +898,7 @@ def _resolved_differential(
     return {
         key
         for key in registered
-        if all(
-            len([item for item in inventories[language] if _differential_match(item, key)]) == 1
-            for language in ("swift", "kotlin")
-        )
+        if _differential_match_counts(inventories, key) == {"swift": 1, "kotlin": 1}
     }
 
 
@@ -877,12 +940,7 @@ def _audit_module_pair(
         registry_errors = []
     errors.extend(registry_errors)
     for key in sorted(registered):
-        matches = {
-            language: len(
-                [item for item in inventories[language] if _differential_match(item, key)]
-            )
-            for language in ("swift", "kotlin")
-        }
+        matches = _differential_match_counts(inventories, key)
         if any(matches.values()) and matches != {"swift": 1, "kotlin": 1}:
             errors.append(
                 f"{pair.name}: differential function {key} resolves to "
@@ -928,7 +986,8 @@ def audit_inventory(root: Path, *, base: str | None = None) -> tuple[list[str], 
     total = {"differential": len(registered), "platform-test": 0, "exempt": 0}
     resolved: set[str] = set()
     base_shards = _base_shards(root, base) if base is not None else None
-    for pair in module_pairs(root):
+    pairs = module_pairs(root)
+    for pair in pairs:
         pair_errors, counts, pair_resolved = _audit_module_pair(
             root,
             pair,
@@ -943,6 +1002,7 @@ def audit_inventory(root: Path, *, base: str | None = None) -> tuple[list[str], 
         errors.append(
             f"differential function {key} does not resolve exactly once in any sharp module pair"
         )
+    errors.extend(_owner_qualified_resolution_errors(root, pairs, registered))
     return errors, total
 
 

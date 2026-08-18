@@ -41,6 +41,8 @@ COLLAPSE_DEFAULT_WINDOW_SEC = 0
 COLLAPSED_COVERAGE_DEFAULT_RR_TOL_MS = 30.0
 DENSEST_DEFAULT_HALF_WINDOW_SEC = 3
 DENSEST_DEFAULT_MAX_ROWS_PER_SECOND = 24
+RAW_ANALYZE_KEY = "HRVAnalyzer.analyze/2=HrvAnalyzer.analyzeRaw/2"
+HRV_MEDIAN_KEY = "HRVAnalyzer.median/1=HrvAnalyzer.median/1"
 EPSILON = 1e-9
 _MASK64 = (1 << 64) - 1
 _BITS_RE = re.compile(r"^[0-9a-f]{16}$")
@@ -323,6 +325,29 @@ def _hrv_curated_cases() -> list[dict[str, Any]]:
             },
         )
 
+    add("hrv_analyze_raw_empty", RAW_ANALYZE_KEY, "epsilon", {"rawRR": []})
+    add(
+        "hrv_analyze_raw_under_min",
+        RAW_ANALYZE_KEY,
+        "epsilon",
+        {"rawRR": [800.0 + (beat % 2) * 10.0 for beat in range(19)]},
+    )
+    add(
+        "hrv_analyze_raw_clean",
+        RAW_ANALYZE_KEY,
+        "epsilon",
+        {"rawRR": [790.0 + (beat % 3) * 10.0 for beat in range(20)]},
+    )
+
+    for label, values in (
+        ("empty", []),
+        ("singleton", [812.0]),
+        ("even", [900.0, 700.0, 800.0, 600.0]),
+        ("odd", [900.0, 700.0, 800.0]),
+        ("duplicates", [850.0, 700.0, 850.0, 900.0, 850.0]),
+    ):
+        add(f"hrv_median_{label}", HRV_MEDIAN_KEY, "exact", {"values": values})
+
     for function in ("rangeFilter", "rejectEctopic", "cleanRR"):
         add(f"hrv_{function}_empty", function, "exact", {"values": []})
     add("hrv_rangeFilter_bounds", "rangeFilter", "exact", {"values": [299.0, 300.0, 2000.0, 2001.0]})
@@ -497,6 +522,25 @@ def _seeded_cases() -> list[dict[str, Any]]:
         )
     verdicts = ["plausible", "underCovered", "sameSecondOverCount"]
     for index in range(2):
+        raw = [float(760 + rng.bounded(81)) for _ in range(20 + index)]
+        records.append(
+            {
+                "args": {"rawRR": raw},
+                "comparison": "epsilon",
+                "function": RAW_ANALYZE_KEY,
+                "id": f"seeded_hrv_analyze_raw_{index:02d}",
+                "source": f"seeded:splitmix64:{GENERATOR_SEED:#018x}",
+            }
+        )
+        records.append(
+            {
+                "args": {"values": raw[: 5 + index]},
+                "comparison": "exact",
+                "function": HRV_MEDIAN_KEY,
+                "id": f"seeded_hrv_median_{index:02d}",
+                "source": f"seeded:splitmix64:{GENERATOR_SEED:#018x}",
+            }
+        )
         records.append(
             {
                 "args": {
@@ -584,6 +628,20 @@ def _effective_args(record: dict[str, Any]) -> dict[str, Any]:
     if function in {"rmssdRaw", "sdnnRaw"}:
         if not isinstance(args.get("nn"), list):
             raise ParityFormatError(f"case {record.get('id')!r} {function} requires args.nn")
+        return dict(args)
+    if function == RAW_ANALYZE_KEY:
+        if not isinstance(args.get("rawRR"), list):
+            raise ParityFormatError(f"case {record.get('id')!r} {function} requires args.rawRR")
+        if "maxRejectedFraction" in args and not isinstance(
+            args["maxRejectedFraction"], (int, float)
+        ):
+            raise ParityFormatError(
+                f"case {record.get('id')!r} {function} requires numeric args.maxRejectedFraction"
+            )
+        return dict(args)
+    if function == HRV_MEDIAN_KEY:
+        if not isinstance(args.get("values"), list):
+            raise ParityFormatError(f"case {record.get('id')!r} {function} requires args.values")
         return dict(args)
     if function == "analyze/3":
         if not isinstance(args.get("rr"), list):

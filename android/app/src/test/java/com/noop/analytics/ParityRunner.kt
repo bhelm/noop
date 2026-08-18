@@ -141,6 +141,29 @@ class ParityRunner {
                     "sdnn" to finiteOrNull(value.sdnn, function, caseId),
                 )
             }
+            "HRVAnalyzer.analyze/2=HrvAnalyzer.analyzeRaw/2" -> {
+                require(comparison == "epsilon") { "invalid raw analyze case $caseId" }
+                val rawRR = doubleList(args, "rawRR")
+                val value = if (args.has("maxRejectedFraction")) {
+                    HrvAnalyzer.analyzeRaw(rawRR, args.getDouble("maxRejectedFraction"))
+                } else {
+                    HrvAnalyzer.analyzeRaw(rawRR)
+                }
+                result["value"] = sortedMapOf(
+                    "meanNN" to finiteOrNull(value.meanNN, function, caseId),
+                    "nClean" to value.nClean,
+                    "nInput" to value.nInput,
+                    "pnn50" to finiteOrNull(value.pnn50, function, caseId),
+                    "rmssd" to finiteOrNull(value.rmssd, function, caseId),
+                    "sdnn" to finiteOrNull(value.sdnn, function, caseId),
+                )
+            }
+            "HRVAnalyzer.median/1=HrvAnalyzer.median/1" -> {
+                require(comparison == "exact") { "invalid HRV median case $caseId" }
+                result["valueBits"] = java.lang.Long.toHexString(
+                    HrvAnalyzer.median(doubleList(args, "values")).toRawBits()
+                ).padStart(16, '0')
+            }
             "beatSpreadIsTrustworthy" -> {
                 require(comparison == "exact") { "invalid beatSpreadIsTrustworthy case $caseId" }
                 val raw = args.getString("verdict")
