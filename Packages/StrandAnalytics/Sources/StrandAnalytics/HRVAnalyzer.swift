@@ -301,7 +301,7 @@ public enum HRVAnalyzer {
     /// window-comparable to a wearable's short SDNN reading (e.g. Apple Watch's ~1-min
     /// `heartRateVariabilitySDNN` samples) and is the value that can be honestly cross-checked against one.
     /// Segments with fewer than `minBeats` clean intervals are skipped; nil when no segment qualifies.
-    /// Pure, deterministic. Kotlin twin: `HrvAnalyzer.sdnnIndex`.
+    /// Pure, deterministic. No Kotlin twin exists yet — Swift-only pending the port decision in #18.
     public static func sdnnIndex(_ rr: [RRInterval], segmentSec: Int = 300) -> Double? {
         guard segmentSec > 0, let first = rr.map(\.ts).min(), let last = rr.map(\.ts).max(),
               last >= first else { return nil }
