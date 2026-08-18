@@ -310,6 +310,19 @@ def _hrv_curated_cases() -> list[dict[str, Any]]:
         add(f"hrv_{function}_singleton", function, "epsilon", {"nn": [800.0]})
         add(f"hrv_{function}_pair", function, "epsilon", {"nn": [800.0, 850.0]})
 
+    for count in (19, 20):
+        add(
+            f"hrv_analyze_min_beats_{count}",
+            "analyze/3",
+            "epsilon",
+            {
+                "rr": [
+                    {"rrMs": 800 + (beat % 2) * 10, "ts": 1_000 + beat}
+                    for beat in range(count)
+                ]
+            },
+        )
+
     for function in ("rangeFilter", "rejectEctopic", "cleanRR"):
         add(f"hrv_{function}_empty", function, "exact", {"values": []})
     add("hrv_rangeFilter_bounds", "rangeFilter", "exact", {"values": [299.0, 300.0, 2000.0, 2001.0]})
@@ -483,6 +496,24 @@ def _seeded_cases() -> list[dict[str, Any]]:
             }
         )
     verdicts = ["plausible", "underCovered", "sameSecondOverCount"]
+    for index in range(2):
+        records.append(
+            {
+                "args": {
+                    "rr": [
+                        {
+                            "rrMs": 780 + rng.bounded(41),
+                            "ts": 30_000 + index * 100 + beat,
+                        }
+                        for beat in range(21 + index)
+                    ]
+                },
+                "comparison": "epsilon",
+                "function": "analyze/3",
+                "id": f"seeded_hrv_analyze_3_{index:02d}",
+                "source": f"seeded:splitmix64:{GENERATOR_SEED:#018x}",
+            }
+        )
     for index in range(3):
         nn = [float(700 + rng.bounded(301)) for _ in range(4 + index)]
         rr = nn[:]
@@ -553,6 +584,15 @@ def _effective_args(record: dict[str, Any]) -> dict[str, Any]:
     if function in {"rmssdRaw", "sdnnRaw"}:
         if not isinstance(args.get("nn"), list):
             raise ParityFormatError(f"case {record.get('id')!r} {function} requires args.nn")
+        return dict(args)
+    if function == "analyze/3":
+        if not isinstance(args.get("rr"), list):
+            raise ParityFormatError(f"case {record.get('id')!r} {function} requires args.rr")
+        for bound in ("windowStart", "windowEnd"):
+            if bound in args and not isinstance(args[bound], int):
+                raise ParityFormatError(
+                    f"case {record.get('id')!r} {function} requires an integer args.{bound}"
+                )
         return dict(args)
     if function in {"rangeFilter", "rejectEctopic", "cleanRR", "cleanRRGapAware"}:
         if not isinstance(args.get("values"), list):

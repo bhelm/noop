@@ -29,6 +29,9 @@ SHARD_NAME = "parity-exempt.json"
 LEDGER_BASELINE = "Tools/parity_ledger_baseline.json"
 SWIFT_RUNNER = "Packages/StrandAnalytics/Tests/StrandAnalyticsTests/ParityRunner.swift"
 KOTLIN_RUNNER = "android/app/src/test/java/com/noop/analytics/ParityRunner.kt"
+_DIFFERENTIAL_KEY_RE = re.compile(
+    r"^(?P<name>[A-Za-z_][A-Za-z0-9_]*)(?:/(?P<arity>0|[1-9][0-9]*))?$"
+)
 
 
 class RatchetError(ValueError):
@@ -788,8 +791,9 @@ def registered_differential(root: Path) -> tuple[set[str], list[str]]:
         kotlin = (root / KOTLIN_RUNNER).read_text(encoding="utf-8")
     except OSError as exc:
         return set(), [f"cannot read differential runner: {exc}"]
-    swift_names = set(re.findall(r"\bcase\s+\"([A-Za-z_][A-Za-z0-9_]*)\"\s*:", swift))
-    kotlin_names = set(re.findall(r"\"([A-Za-z_][A-Za-z0-9_]*)\"\s*->", kotlin))
+    key_pattern = r"([A-Za-z_][A-Za-z0-9_]*(?:/(?:0|[1-9][0-9]*))?)"
+    swift_names = set(re.findall(rf"\bcase\s+\"{key_pattern}\"\s*:", swift))
+    kotlin_names = set(re.findall(rf"\"{key_pattern}\"\s*->", kotlin))
     if swift_names != kotlin_names:
         errors.append(
             "differential runner registrations disagree: "
@@ -801,21 +805,26 @@ def registered_differential(root: Path) -> tuple[set[str], list[str]]:
     return swift_names & kotlin_names, errors
 
 
+def _differential_match(declaration: Declaration, key: str) -> bool:
+    match = _DIFFERENTIAL_KEY_RE.fullmatch(key)
+    if match is None:
+        return False
+    arity = match.group("arity")
+    return (
+        declaration.kind == "function"
+        and declaration.name == match.group("name")
+        and (arity is None or declaration.arity == int(arity))
+    )
+
+
 def _resolved_differential(
     inventories: dict[str, list[Declaration]], registered: set[str]
 ) -> set[str]:
     return {
-        name
-        for name in registered
+        key
+        for key in registered
         if all(
-            len(
-                [
-                    item
-                    for item in inventories[language]
-                    if item.kind == "function" and item.name == name
-                ]
-            )
-            == 1
+            len([item for item in inventories[language] if _differential_match(item, key)]) == 1
             for language in ("swift", "kotlin")
         )
     }
@@ -858,12 +867,24 @@ def _audit_module_pair(
     else:
         registry_errors = []
     errors.extend(registry_errors)
+    for key in sorted(registered):
+        matches = {
+            language: len(
+                [item for item in inventories[language] if _differential_match(item, key)]
+            )
+            for language in ("swift", "kotlin")
+        }
+        if any(matches.values()) and matches != {"swift": 1, "kotlin": 1}:
+            errors.append(
+                f"{pair.name}: differential function {key} resolves to "
+                f"swift={matches['swift']} kotlin={matches['kotlin']} declarations"
+            )
     pair_registered = _resolved_differential(inventories, registered)
     differential_keys: set[str] = set()
     for language, declarations in inventories.items():
-        for name in sorted(pair_registered):
+        for key in sorted(pair_registered):
             match = next(
-                item for item in declarations if item.kind == "function" and item.name == name
+                item for item in declarations if _differential_match(item, key)
             )
             differential_keys.add(match.key)
     counts["differential"] = len(pair_registered)
@@ -909,9 +930,9 @@ def audit_inventory(root: Path, *, base: str | None = None) -> tuple[list[str], 
         resolved.update(pair_resolved)
         for key in ("platform-test", "exempt"):
             total[key] += counts[key]
-    for name in sorted(registered - resolved):
+    for key in sorted(registered - resolved):
         errors.append(
-            f"differential function {name} does not resolve exactly once in any sharp module pair"
+            f"differential function {key} does not resolve exactly once in any sharp module pair"
         )
     return errors, total
 
@@ -1095,17 +1116,17 @@ def coverage_errors(
     errors: list[str] = []
     selected: dict[str, list[Declaration]] = {"swift": [], "kotlin": []}
     groups = differential_groups or [(declarations, differential)]
-    for group_declarations, group_names in groups:
+    for group_declarations, group_keys in groups:
         for language in selected:
-            for name in sorted(group_names):
+            for key in sorted(group_keys):
                 matches = [
                     item
                     for item in group_declarations[language]
-                    if item.kind == "function" and item.name == name
+                    if _differential_match(item, key)
                 ]
                 if len(matches) != 1:
                     errors.append(
-                        f"differential {language} function {name} resolves to {len(matches)} declarations"
+                        f"differential {language} function {key} resolves to {len(matches)} declarations"
                     )
                 else:
                     selected[language].append(matches[0])
