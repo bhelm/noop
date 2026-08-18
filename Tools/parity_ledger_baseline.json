@@ -1,0 +1,1851 @@
+{
+  "schema_version": 2,
+  "findings": [
+    {
+      "identity": "duplicate-implementation|dayString|Packages/NoopLocalAccess/Sources/NoopLocalAccessCore/LocalAccessCore.swift::dayString/1#1",
+      "rule": "duplicate-implementation",
+      "path": "Packages/NoopLocalAccess/Sources/NoopLocalAccessCore/LocalAccessCore.swift",
+      "line": 747,
+      "text": "dayString implementation LocalAccessCore.dayString/1"
+    },
+    {
+      "identity": "test-only-callsite|Packages/OuraProtocol/Sources/OuraProtocol/Commands.swift::syncTime/2#1",
+      "rule": "test-only-callsite",
+      "path": "Packages/OuraProtocol/Sources/OuraProtocol/Commands.swift",
+      "line": 68,
+      "text": "OuraCommands.syncTime/2 has 2 test callsite(s) and no production callsite"
+    },
+    {
+      "identity": "test-only-callsite|Packages/OuraProtocol/Sources/OuraProtocol/Commands.swift::softReset/0#1",
+      "rule": "test-only-callsite",
+      "path": "Packages/OuraProtocol/Sources/OuraProtocol/Commands.swift",
+      "line": 155,
+      "text": "OuraDangerousCommands.softReset/0 has 2 test callsite(s) and no production callsite"
+    },
+    {
+      "identity": "test-only-callsite|Packages/OuraProtocol/Sources/OuraProtocol/Commands.swift::factoryReset/0#1",
+      "rule": "test-only-callsite",
+      "path": "Packages/OuraProtocol/Sources/OuraProtocol/Commands.swift",
+      "line": 160,
+      "text": "OuraDangerousCommands.factoryReset/0 has 1 test callsite(s) and no production callsite"
+    },
+    {
+      "identity": "test-only-callsite|Packages/OuraProtocol/Sources/OuraProtocol/Framing.swift::parseOuterFrame/1#1",
+      "rule": "test-only-callsite",
+      "path": "Packages/OuraProtocol/Sources/OuraProtocol/Framing.swift",
+      "line": 89,
+      "text": "OuraFraming.parseOuterFrame/1 has 7 test callsite(s) and no production callsite"
+    },
+    {
+      "identity": "test-only-callsite|Packages/StrandAnalytics/Sources/StrandAnalytics/ActivityHeatmap.swift::build/3#1",
+      "rule": "test-only-callsite",
+      "path": "Packages/StrandAnalytics/Sources/StrandAnalytics/ActivityHeatmap.swift",
+      "line": 59,
+      "text": "ActivityHeatmap.build/3 has 3 test callsite(s) and no production callsite"
+    },
+    {
+      "identity": "duplicate-implementation|dayString|Packages/StrandAnalytics/Sources/StrandAnalytics/AnalyticsEngine.swift::dayString/1#1",
+      "rule": "duplicate-implementation",
+      "path": "Packages/StrandAnalytics/Sources/StrandAnalytics/AnalyticsEngine.swift",
+      "line": 144,
+      "text": "dayString implementation AnalyticsEngine.dayString/1"
+    },
+    {
+      "identity": "test-only-callsite|Packages/StrandAnalytics/Sources/StrandAnalytics/AnalyticsEngine.swift::dayString/1#1",
+      "rule": "test-only-callsite",
+      "path": "Packages/StrandAnalytics/Sources/StrandAnalytics/AnalyticsEngine.swift",
+      "line": 144,
+      "text": "AnalyticsEngine.dayString/1 has 6 test callsite(s) and no production callsite"
+    },
+    {
+      "identity": "duplicate-implementation|dayString|Packages/StrandAnalytics/Sources/StrandAnalytics/AnalyticsEngine.swift::dayString/2#1",
+      "rule": "duplicate-implementation",
+      "path": "Packages/StrandAnalytics/Sources/StrandAnalytics/AnalyticsEngine.swift",
+      "line": 158,
+      "text": "dayString implementation AnalyticsEngine.dayString/2"
+    },
+    {
+      "identity": "test-only-callsite|Packages/StrandAnalytics/Sources/StrandAnalytics/AnalyticsEngine.swift::daySliceFromNight/7#1",
+      "rule": "test-only-callsite",
+      "path": "Packages/StrandAnalytics/Sources/StrandAnalytics/AnalyticsEngine.swift",
+      "line": 194,
+      "text": "AnalyticsEngine.daySliceFromNight/7 has 1 test callsite(s) and no production callsite"
+    },
+    {
+      "identity": "test-only-callsite|Packages/StrandAnalytics/Sources/StrandAnalytics/AutoWorkoutDetector.swift::motionPoints/1#1",
+      "rule": "test-only-callsite",
+      "path": "Packages/StrandAnalytics/Sources/StrandAnalytics/AutoWorkoutDetector.swift",
+      "line": 93,
+      "text": "AutoWorkoutDetector.motionPoints/1 has 2 test callsite(s) and no production callsite"
+    },
+    {
+      "identity": "test-only-callsite|Packages/StrandAnalytics/Sources/StrandAnalytics/Baselines.swift::freshestCarried/3#1",
+      "rule": "test-only-callsite",
+      "path": "Packages/StrandAnalytics/Sources/StrandAnalytics/Baselines.swift",
+      "line": 119,
+      "text": "Baselines.freshestCarried/3 has 7 test callsite(s) and no production callsite"
+    },
+    {
+      "identity": "test-only-callsite|Packages/StrandAnalytics/Sources/StrandAnalytics/Baselines.swift::hrvBaselineEpoch/1#1",
+      "rule": "test-only-callsite",
+      "path": "Packages/StrandAnalytics/Sources/StrandAnalytics/Baselines.swift",
+      "line": 416,
+      "text": "Baselines.hrvBaselineEpoch/1 has 4 test callsite(s) and no production callsite"
+    },
+    {
+      "identity": "test-only-callsite|Packages/StrandAnalytics/Sources/StrandAnalytics/Baselines.swift::epochDropDiagnostic/2#1",
+      "rule": "test-only-callsite",
+      "path": "Packages/StrandAnalytics/Sources/StrandAnalytics/Baselines.swift",
+      "line": 465,
+      "text": "Baselines.epochDropDiagnostic/2 has 4 test callsite(s) and no production callsite"
+    },
+    {
+      "identity": "test-only-callsite|Packages/StrandAnalytics/Sources/StrandAnalytics/Baselines.swift::deviceEraEpoch/1#1",
+      "rule": "test-only-callsite",
+      "path": "Packages/StrandAnalytics/Sources/StrandAnalytics/Baselines.swift",
+      "line": 534,
+      "text": "Baselines.deviceEraEpoch/1 has 9 test callsite(s) and no production callsite"
+    },
+    {
+      "identity": "test-only-callsite|Packages/StrandAnalytics/Sources/StrandAnalytics/Baselines.swift::rollingMeanSD/3#1",
+      "rule": "test-only-callsite",
+      "path": "Packages/StrandAnalytics/Sources/StrandAnalytics/Baselines.swift",
+      "line": 608,
+      "text": "Baselines.rollingMeanSD/3 has 1 test callsite(s) and no production callsite"
+    },
+    {
+      "identity": "test-only-callsite|Packages/StrandAnalytics/Sources/StrandAnalytics/BatteryEstimator.swift::usableRemainingHours/1#1",
+      "rule": "test-only-callsite",
+      "path": "Packages/StrandAnalytics/Sources/StrandAnalytics/BatteryEstimator.swift",
+      "line": 307,
+      "text": "BatteryEstimator.usableRemainingHours/1 has 3 test callsite(s) and no production callsite"
+    },
+    {
+      "identity": "test-only-callsite|Packages/StrandAnalytics/Sources/StrandAnalytics/BreathPacer.swift::schedule/3#1",
+      "rule": "test-only-callsite",
+      "path": "Packages/StrandAnalytics/Sources/StrandAnalytics/BreathPacer.swift",
+      "line": 77,
+      "text": "BreathPacer.schedule/3 has 3 test callsite(s) and no production callsite"
+    },
+    {
+      "identity": "test-only-callsite|Packages/StrandAnalytics/Sources/StrandAnalytics/BreathPacer.swift::sessionDurationMs/2#1",
+      "rule": "test-only-callsite",
+      "path": "Packages/StrandAnalytics/Sources/StrandAnalytics/BreathPacer.swift",
+      "line": 100,
+      "text": "BreathPacer.sessionDurationMs/2 has 2 test callsite(s) and no production callsite"
+    },
+    {
+      "identity": "test-only-callsite|Packages/StrandAnalytics/Sources/StrandAnalytics/BreathProtocol.swift::schedule/2#1",
+      "rule": "test-only-callsite",
+      "path": "Packages/StrandAnalytics/Sources/StrandAnalytics/BreathProtocol.swift",
+      "line": 110,
+      "text": "BreathProtocolPlayer.schedule/2 has 7 test callsite(s) and no production callsite"
+    },
+    {
+      "identity": "dead-twin-reference|Packages/StrandAnalytics/Sources/StrandAnalytics/CaptureCompleteness.swift|CaptureCompleteness.kt",
+      "rule": "dead-twin-reference",
+      "path": "Packages/StrandAnalytics/Sources/StrandAnalytics/CaptureCompleteness.swift",
+      "line": 18,
+      "text": "Kotlin target CaptureCompleteness.kt does not resolve"
+    },
+    {
+      "identity": "test-only-callsite|Packages/StrandAnalytics/Sources/StrandAnalytics/CaptureCompleteness.swift::anyIncomplete/1#1",
+      "rule": "test-only-callsite",
+      "path": "Packages/StrandAnalytics/Sources/StrandAnalytics/CaptureCompleteness.swift",
+      "line": 141,
+      "text": "CaptureCompleteness.anyIncomplete/1 has 3 test callsite(s) and no production callsite"
+    },
+    {
+      "identity": "dead-twin-reference|Packages/StrandAnalytics/Sources/StrandAnalytics/ChargeDrivers.swift|RecoveryScorer.chargeDrivers",
+      "rule": "dead-twin-reference",
+      "path": "Packages/StrandAnalytics/Sources/StrandAnalytics/ChargeDrivers.swift",
+      "line": 24,
+      "text": "Kotlin target RecoveryScorer.chargeDrivers does not resolve"
+    },
+    {
+      "identity": "dead-twin-reference|Packages/StrandAnalytics/Sources/StrandAnalytics/ChargeDrivers.swift|RecoveryScorer.chargeDrivers",
+      "rule": "dead-twin-reference",
+      "path": "Packages/StrandAnalytics/Sources/StrandAnalytics/ChargeDrivers.swift",
+      "line": 121,
+      "text": "Kotlin target RecoveryScorer.chargeDrivers does not resolve"
+    },
+    {
+      "identity": "test-only-callsite|Packages/StrandAnalytics/Sources/StrandAnalytics/CircadianEngine.swift::estimatePhase/4#1",
+      "rule": "test-only-callsite",
+      "path": "Packages/StrandAnalytics/Sources/StrandAnalytics/CircadianEngine.swift",
+      "line": 176,
+      "text": "CircadianEngine.estimatePhase/4 has 1 test callsite(s) and no production callsite"
+    },
+    {
+      "identity": "test-only-callsite|Packages/StrandAnalytics/Sources/StrandAnalytics/CircadianEngine.swift::planShift/3#1",
+      "rule": "test-only-callsite",
+      "path": "Packages/StrandAnalytics/Sources/StrandAnalytics/CircadianEngine.swift",
+      "line": 260,
+      "text": "CircadianEngine.planShift/3 has 5 test callsite(s) and no production callsite"
+    },
+    {
+      "identity": "test-only-callsite|Packages/StrandAnalytics/Sources/StrandAnalytics/CircadianEngine.swift::clock/1#1",
+      "rule": "test-only-callsite",
+      "path": "Packages/StrandAnalytics/Sources/StrandAnalytics/CircadianEngine.swift",
+      "line": 334,
+      "text": "CircadianEngine.clock/1 has 4 test callsite(s) and no production callsite"
+    },
+    {
+      "identity": "test-only-callsite|Packages/StrandAnalytics/Sources/StrandAnalytics/ComparisonEngine.swift::monthOverMonth/2#1",
+      "rule": "test-only-callsite",
+      "path": "Packages/StrandAnalytics/Sources/StrandAnalytics/ComparisonEngine.swift",
+      "line": 150,
+      "text": "ComparisonEngine.monthOverMonth/2 has 4 test callsite(s) and no production callsite"
+    },
+    {
+      "identity": "constant-unverifiable|Packages/StrandAnalytics/Sources/StrandAnalytics/CyclePhaseEngine.swift::awarenessLine|<empty>|android/app/src/main/java/com/noop/analytics/CyclePhaseEngine.kt::awarenessLine|<empty>",
+      "rule": "constant-unverifiable",
+      "path": "Packages/StrandAnalytics/Sources/StrandAnalytics/CyclePhaseEngine.swift",
+      "line": 121,
+      "text": "cannot fully evaluate awarenessLine=<empty> against Kotlin awarenessLine=<empty> (android/app/src/main/java/com/noop/analytics/CyclePhaseEngine.kt:34)"
+    },
+    {
+      "identity": "test-only-callsite|Packages/StrandAnalytics/Sources/StrandAnalytics/CyclePhaseEngine.swift::shiftDay/2#1",
+      "rule": "test-only-callsite",
+      "path": "Packages/StrandAnalytics/Sources/StrandAnalytics/CyclePhaseEngine.swift",
+      "line": 335,
+      "text": "CyclePhaseEngine.shiftDay/2 has 4 test callsite(s) and no production callsite"
+    },
+    {
+      "identity": "test-only-callsite|Packages/StrandAnalytics/Sources/StrandAnalytics/DoseResponseEngine.swift::estimate/4#1",
+      "rule": "test-only-callsite",
+      "path": "Packages/StrandAnalytics/Sources/StrandAnalytics/DoseResponseEngine.swift",
+      "line": 155,
+      "text": "DoseResponseEngine.estimate/4 has 1 test callsite(s) and no production callsite"
+    },
+    {
+      "identity": "constant-unverifiable|Packages/StrandAnalytics/Sources/StrandAnalytics/EffectRanker.swift::calibratingBelow|BehaviorInsights.minGroupForSignificance|android/app/src/main/java/com/noop/analytics/EffectRanker.kt::calibratingBelow|minGroupForSignificance",
+      "rule": "constant-unverifiable",
+      "path": "Packages/StrandAnalytics/Sources/StrandAnalytics/EffectRanker.swift",
+      "line": 90,
+      "text": "cannot fully evaluate calibratingBelow=BehaviorInsights.minGroupForSignificance against Kotlin calibratingBelow=minGroupForSignificance (android/app/src/main/java/com/noop/analytics/EffectRanker.kt:105)"
+    },
+    {
+      "identity": "test-only-callsite|Packages/StrandAnalytics/Sources/StrandAnalytics/EffectRanker.swift::confidence/1#1",
+      "rule": "test-only-callsite",
+      "path": "Packages/StrandAnalytics/Sources/StrandAnalytics/EffectRanker.swift",
+      "line": 178,
+      "text": "EffectRanker.confidence/1 has 4 test callsite(s) and no production callsite"
+    },
+    {
+      "identity": "test-only-callsite|Packages/StrandAnalytics/Sources/StrandAnalytics/FitnessAgeEngine.swift::bmi/2#1",
+      "rule": "test-only-callsite",
+      "path": "Packages/StrandAnalytics/Sources/StrandAnalytics/FitnessAgeEngine.swift",
+      "line": 54,
+      "text": "FitnessAgeEngine.bmi/2 has 1 test callsite(s) and no production callsite"
+    },
+    {
+      "identity": "test-only-callsite|Packages/StrandAnalytics/Sources/StrandAnalytics/FitnessAgeEngine.swift::physicalActivityIndex/3#1",
+      "rule": "test-only-callsite",
+      "path": "Packages/StrandAnalytics/Sources/StrandAnalytics/FitnessAgeEngine.swift",
+      "line": 80,
+      "text": "FitnessAgeEngine.physicalActivityIndex/3 has 3 test callsite(s) and no production callsite"
+    },
+    {
+      "identity": "test-only-callsite|Packages/StrandAnalytics/Sources/StrandAnalytics/GuidedCaptureProgress.swift::label/1#1",
+      "rule": "test-only-callsite",
+      "path": "Packages/StrandAnalytics/Sources/StrandAnalytics/GuidedCaptureProgress.swift",
+      "line": 21,
+      "text": "GuidedCaptureProgress.label/1 has 4 test callsite(s) and no production callsite"
+    },
+    {
+      "identity": "test-only-callsite|Packages/StrandAnalytics/Sources/StrandAnalytics/GuidedCaptureProgress.swift::gapNudge/0#1",
+      "rule": "test-only-callsite",
+      "path": "Packages/StrandAnalytics/Sources/StrandAnalytics/GuidedCaptureProgress.swift",
+      "line": 29,
+      "text": "GuidedCaptureProgress.gapNudge/0 has 2 test callsite(s) and no production callsite"
+    },
+    {
+      "identity": "dead-twin-reference|Packages/StrandAnalytics/Sources/StrandAnalytics/HRVAnalyzer+Trace.swift|HrvAnalyzer.analyzeTrace",
+      "rule": "dead-twin-reference",
+      "path": "Packages/StrandAnalytics/Sources/StrandAnalytics/HRVAnalyzer+Trace.swift",
+      "line": 22,
+      "text": "Kotlin target HrvAnalyzer.analyzeTrace does not resolve"
+    },
+    {
+      "identity": "test-only-callsite|Packages/StrandAnalytics/Sources/StrandAnalytics/HRVAnalyzer.swift::empty/1#1",
+      "rule": "test-only-callsite",
+      "path": "Packages/StrandAnalytics/Sources/StrandAnalytics/HRVAnalyzer.swift",
+      "line": 82,
+      "text": "HRVResult.empty/1 has 2 test callsite(s) and no production callsite"
+    },
+    {
+      "identity": "dead-twin-reference|Packages/StrandAnalytics/Sources/StrandAnalytics/HRVAnalyzer.swift|HrvAnalyzer.sdnnIndex",
+      "rule": "dead-twin-reference",
+      "path": "Packages/StrandAnalytics/Sources/StrandAnalytics/HRVAnalyzer.swift",
+      "line": 304,
+      "text": "Kotlin target HrvAnalyzer.sdnnIndex does not resolve"
+    },
+    {
+      "identity": "test-only-callsite|Packages/StrandAnalytics/Sources/StrandAnalytics/HRVAnalyzer.swift::rollingRmssd/4#1",
+      "rule": "test-only-callsite",
+      "path": "Packages/StrandAnalytics/Sources/StrandAnalytics/HRVAnalyzer.swift",
+      "line": 349,
+      "text": "HRVAnalyzer.rollingRmssd/4 has 5 test callsite(s) and no production callsite"
+    },
+    {
+      "identity": "constant-unverifiable|Packages/StrandAnalytics/Sources/StrandAnalytics/HRVAnalyzer.swift::coveragePlausibleFloor|1.0 - (coveragePlausibleCeiling - 1.0)|android/app/src/main/java/com/noop/analytics/HrvAnalyzer.kt::COVERAGE_PLAUSIBLE_FLOOR|1.0 - (COVERAGE_PLAUSIBLE_CEILING - 1.0)",
+      "rule": "constant-unverifiable",
+      "path": "Packages/StrandAnalytics/Sources/StrandAnalytics/HRVAnalyzer.swift",
+      "line": 509,
+      "text": "cannot fully evaluate coveragePlausibleFloor=1.0 - (coveragePlausibleCeiling - 1.0) against Kotlin COVERAGE_PLAUSIBLE_FLOOR=1.0 - (COVERAGE_PLAUSIBLE_CEILING - 1.0) (android/app/src/main/java/com/noop/analytics/HrvAnalyzer.kt:365)"
+    },
+    {
+      "identity": "test-only-callsite|Packages/StrandAnalytics/Sources/StrandAnalytics/ImuFeatureExtractor.swift::extract/1#1",
+      "rule": "test-only-callsite",
+      "path": "Packages/StrandAnalytics/Sources/StrandAnalytics/ImuFeatureExtractor.swift",
+      "line": 91,
+      "text": "ImuFeatureExtractor.extract/1 has 1 test callsite(s) and no production callsite"
+    },
+    {
+      "identity": "test-only-callsite|Packages/StrandAnalytics/Sources/StrandAnalytics/LabBookProjection.swift::project/2#1",
+      "rule": "test-only-callsite",
+      "path": "Packages/StrandAnalytics/Sources/StrandAnalytics/LabBookProjection.swift",
+      "line": 123,
+      "text": "LabBookProjection.project/2 has 4 test callsite(s) and no production callsite"
+    },
+    {
+      "identity": "constant-unverifiable|Packages/StrandAnalytics/Sources/StrandAnalytics/RecoveryForecast.swift::defaultNeedHours|AnalyticsEngine.Rest.defaultNeedHours|android/app/src/main/java/com/noop/analytics/RecoveryForecast.kt::defaultNeedHours|RestScorer.defaultSleepNeedHours",
+      "rule": "constant-unverifiable",
+      "path": "Packages/StrandAnalytics/Sources/StrandAnalytics/RecoveryForecast.swift",
+      "line": 125,
+      "text": "cannot fully evaluate defaultNeedHours=AnalyticsEngine.Rest.defaultNeedHours against Kotlin defaultNeedHours=RestScorer.defaultSleepNeedHours (android/app/src/main/java/com/noop/analytics/RecoveryForecast.kt:124)"
+    },
+    {
+      "identity": "dead-twin-reference|Packages/StrandAnalytics/Sources/StrandAnalytics/RecoveryScorer+Trace.swift|RecoveryScorer.recoveryTrace",
+      "rule": "dead-twin-reference",
+      "path": "Packages/StrandAnalytics/Sources/StrandAnalytics/RecoveryScorer+Trace.swift",
+      "line": 23,
+      "text": "Kotlin target RecoveryScorer.recoveryTrace does not resolve"
+    },
+    {
+      "identity": "duplicate-implementation|resting-hr|Packages/StrandAnalytics/Sources/StrandAnalytics/RecoveryScorer.swift::restingHR/3#1",
+      "rule": "duplicate-implementation",
+      "path": "Packages/StrandAnalytics/Sources/StrandAnalytics/RecoveryScorer.swift",
+      "line": 256,
+      "text": "resting-HR path RecoveryScorer.restingHR/3"
+    },
+    {
+      "identity": "test-only-callsite|Packages/StrandAnalytics/Sources/StrandAnalytics/RecoveryScorer.swift::restingHR/3#1",
+      "rule": "test-only-callsite",
+      "path": "Packages/StrandAnalytics/Sources/StrandAnalytics/RecoveryScorer.swift",
+      "line": 256,
+      "text": "RecoveryScorer.restingHR/3 has 5 test callsite(s) and no production callsite"
+    },
+    {
+      "identity": "test-only-callsite|Packages/StrandAnalytics/Sources/StrandAnalytics/RecoveryScorer.swift::recoveryIndexSlope/3#1",
+      "rule": "test-only-callsite",
+      "path": "Packages/StrandAnalytics/Sources/StrandAnalytics/RecoveryScorer.swift",
+      "line": 308,
+      "text": "RecoveryScorer.recoveryIndexSlope/3 has 5 test callsite(s) and no production callsite"
+    },
+    {
+      "identity": "test-only-callsite|Packages/StrandAnalytics/Sources/StrandAnalytics/RecoveryScorer.swift::band/1#1",
+      "rule": "test-only-callsite",
+      "path": "Packages/StrandAnalytics/Sources/StrandAnalytics/RecoveryScorer.swift",
+      "line": 345,
+      "text": "RecoveryScorer.band/1 has 7 test callsite(s) and no production callsite"
+    },
+    {
+      "identity": "test-only-callsite|Packages/StrandAnalytics/Sources/StrandAnalytics/RecoveryScorer.swift::recovery/11#1",
+      "rule": "test-only-callsite",
+      "path": "Packages/StrandAnalytics/Sources/StrandAnalytics/RecoveryScorer.swift",
+      "line": 514,
+      "text": "RecoveryScorer.recovery/11 has 1 test callsite(s) and no production callsite"
+    },
+    {
+      "identity": "constant-unverifiable|Packages/StrandAnalytics/Sources/StrandAnalytics/RhythmExport.swift::disclaimer|<empty>|android/app/src/main/java/com/noop/analytics/RhythmExport.kt::disclaimer|<empty>",
+      "rule": "constant-unverifiable",
+      "path": "Packages/StrandAnalytics/Sources/StrandAnalytics/RhythmExport.swift",
+      "line": 24,
+      "text": "cannot fully evaluate disclaimer=<empty> against Kotlin disclaimer=<empty> (android/app/src/main/java/com/noop/analytics/RhythmExport.kt:26)"
+    },
+    {
+      "identity": "constant-unverifiable|Packages/StrandAnalytics/Sources/StrandAnalytics/RhythmExport.swift::header|<empty>|android/app/src/main/java/com/noop/analytics/RhythmExport.kt::header|<empty>",
+      "rule": "constant-unverifiable",
+      "path": "Packages/StrandAnalytics/Sources/StrandAnalytics/RhythmExport.swift",
+      "line": 31,
+      "text": "cannot fully evaluate header=<empty> against Kotlin header=<empty> (android/app/src/main/java/com/noop/analytics/RhythmExport.kt:33)"
+    },
+    {
+      "identity": "test-only-callsite|Packages/StrandAnalytics/Sources/StrandAnalytics/SkinTempDisplay.swift::kind/1#1",
+      "rule": "test-only-callsite",
+      "path": "Packages/StrandAnalytics/Sources/StrandAnalytics/SkinTempDisplay.swift",
+      "line": 21,
+      "text": "SkinTempDisplay.kind/1 has 6 test callsite(s) and no production callsite"
+    },
+    {
+      "identity": "test-only-callsite|Packages/StrandAnalytics/Sources/StrandAnalytics/SleepDebt.swift::ledger/3#1",
+      "rule": "test-only-callsite",
+      "path": "Packages/StrandAnalytics/Sources/StrandAnalytics/SleepDebt.swift",
+      "line": 103,
+      "text": "SleepDebt.ledger/3 has 1 test callsite(s) and no production callsite"
+    },
+    {
+      "identity": "test-only-callsite|Packages/StrandAnalytics/Sources/StrandAnalytics/SleepDebt.swift::round1/1#1",
+      "rule": "test-only-callsite",
+      "path": "Packages/StrandAnalytics/Sources/StrandAnalytics/SleepDebt.swift",
+      "line": 128,
+      "text": "SleepDebt.round1/1 has 4 test callsite(s) and no production callsite"
+    },
+    {
+      "identity": "test-only-callsite|Packages/StrandAnalytics/Sources/StrandAnalytics/SleepEditGuard.swift::autoCorrectedBed/5#1",
+      "rule": "test-only-callsite",
+      "path": "Packages/StrandAnalytics/Sources/StrandAnalytics/SleepEditGuard.swift",
+      "line": 36,
+      "text": "SleepEditGuard.autoCorrectedBed/5 has 9 test callsite(s) and no production callsite"
+    },
+    {
+      "identity": "test-only-callsite|Packages/StrandAnalytics/Sources/StrandAnalytics/SleepEditGuard.swift::clampedEditWindow/4#1",
+      "rule": "test-only-callsite",
+      "path": "Packages/StrandAnalytics/Sources/StrandAnalytics/SleepEditGuard.swift",
+      "line": 70,
+      "text": "SleepEditGuard.clampedEditWindow/4 has 1 test callsite(s) and no production callsite"
+    },
+    {
+      "identity": "test-only-callsite|Packages/StrandAnalytics/Sources/StrandAnalytics/SleepStageTotals.swift::isOvernightOnset/2#1",
+      "rule": "test-only-callsite",
+      "path": "Packages/StrandAnalytics/Sources/StrandAnalytics/SleepStageTotals.swift",
+      "line": 239,
+      "text": "SleepStageTotals.isOvernightOnset/2 has 1 test callsite(s) and no production callsite"
+    },
+    {
+      "identity": "test-only-callsite|Packages/StrandAnalytics/Sources/StrandAnalytics/SleepStageTotals.swift::bridgeAdjacent/1#1",
+      "rule": "test-only-callsite",
+      "path": "Packages/StrandAnalytics/Sources/StrandAnalytics/SleepStageTotals.swift",
+      "line": 291,
+      "text": "SleepStageTotals.bridgeAdjacent/1 has 2 test callsite(s) and no production callsite"
+    },
+    {
+      "identity": "test-only-callsite|Packages/StrandAnalytics/Sources/StrandAnalytics/SleepStageTotals.swift::mainNightSelectionByStages/4#1",
+      "rule": "test-only-callsite",
+      "path": "Packages/StrandAnalytics/Sources/StrandAnalytics/SleepStageTotals.swift",
+      "line": 738,
+      "text": "SleepStageTotals.mainNightSelectionByStages/4 has 2 test callsite(s) and no production callsite"
+    },
+    {
+      "identity": "test-only-callsite|Packages/StrandAnalytics/Sources/StrandAnalytics/SleepStager+Trace.swift::flipLine/4#1",
+      "rule": "test-only-callsite",
+      "path": "Packages/StrandAnalytics/Sources/StrandAnalytics/SleepStager+Trace.swift",
+      "line": 29,
+      "text": "GateTrace.flipLine/4 has 1 test callsite(s) and no production callsite"
+    },
+    {
+      "identity": "constant-unverifiable|Packages/StrandAnalytics/Sources/StrandAnalytics/SleepStager.swift::hrSleepBandMult|hrSleepBaselineMult|android/app/src/main/java/com/noop/analytics/SleepStager.kt::hrSleepBandMult|hrSleepBaselineMult",
+      "rule": "constant-unverifiable",
+      "path": "Packages/StrandAnalytics/Sources/StrandAnalytics/SleepStager.swift",
+      "line": 220,
+      "text": "cannot fully evaluate hrSleepBandMult=hrSleepBaselineMult against Kotlin hrSleepBandMult=hrSleepBaselineMult (android/app/src/main/java/com/noop/analytics/SleepStager.kt:313)"
+    },
+    {
+      "identity": "test-only-callsite|Packages/StrandAnalytics/Sources/StrandAnalytics/SleepStager.swift::adaptiveOvernightHRBaseline/1#1",
+      "rule": "test-only-callsite",
+      "path": "Packages/StrandAnalytics/Sources/StrandAnalytics/SleepStager.swift",
+      "line": 657,
+      "text": "SleepStager.adaptiveOvernightHRBaseline/1 has 3 test callsite(s) and no production callsite"
+    },
+    {
+      "identity": "test-only-callsite|Packages/StrandAnalytics/Sources/StrandAnalytics/SleepStager.swift::percentile/2#1",
+      "rule": "test-only-callsite",
+      "path": "Packages/StrandAnalytics/Sources/StrandAnalytics/SleepStager.swift",
+      "line": 1899,
+      "text": "SleepStager.percentile/2 has 4 test callsite(s) and no production callsite"
+    },
+    {
+      "identity": "duplicate-implementation|resting-hr|Packages/StrandAnalytics/Sources/StrandAnalytics/SleepStager.swift::sessionRestingHR/3#1",
+      "rule": "duplicate-implementation",
+      "path": "Packages/StrandAnalytics/Sources/StrandAnalytics/SleepStager.swift",
+      "line": 2434,
+      "text": "resting-HR path SleepStager.sessionRestingHR/3"
+    },
+    {
+      "identity": "constant-value-mismatch|Packages/StrandAnalytics/Sources/StrandAnalytics/SleepStagerV2.swift::padLo|number:3.3E+2|android/app/src/main/java/com/noop/analytics/SleepStagerV2.kt::PAD_LO|number:3.6E+2",
+      "rule": "constant-value-mismatch",
+      "path": "Packages/StrandAnalytics/Sources/StrandAnalytics/SleepStagerV2.swift",
+      "line": 78,
+      "text": "padLo=330 differs from Kotlin PAD_LO=360L (android/app/src/main/java/com/noop/analytics/SleepStagerV2.kt:104)"
+    },
+    {
+      "identity": "constant-value-mismatch|Packages/StrandAnalytics/Sources/StrandAnalytics/SleepStagerV2.swift::padHi|number:3.9E+2|android/app/src/main/java/com/noop/analytics/SleepStagerV2.kt::PAD_HI|number:4.2E+2",
+      "rule": "constant-value-mismatch",
+      "path": "Packages/StrandAnalytics/Sources/StrandAnalytics/SleepStagerV2.swift",
+      "line": 79,
+      "text": "padHi=390 differs from Kotlin PAD_HI=420L (android/app/src/main/java/com/noop/analytics/SleepStagerV2.kt:108)"
+    },
+    {
+      "identity": "test-only-callsite|Packages/StrandAnalytics/Sources/StrandAnalytics/Spo2ReTrace.swift::f/1#1",
+      "rule": "test-only-callsite",
+      "path": "Packages/StrandAnalytics/Sources/StrandAnalytics/Spo2ReTrace.swift",
+      "line": 34,
+      "text": "Spo2ReTrace.f/1 has 5 test callsite(s) and no production callsite"
+    },
+    {
+      "identity": "test-only-callsite|Packages/StrandAnalytics/Sources/StrandAnalytics/SpotHrvReading.swift::compute/2#1",
+      "rule": "test-only-callsite",
+      "path": "Packages/StrandAnalytics/Sources/StrandAnalytics/SpotHrvReading.swift",
+      "line": 63,
+      "text": "SpotHrvReading.compute/2 has 1 test callsite(s) and no production callsite"
+    },
+    {
+      "identity": "test-only-callsite|Packages/StrandAnalytics/Sources/StrandAnalytics/StagePercentages.swift::wholePercentages/1#1",
+      "rule": "test-only-callsite",
+      "path": "Packages/StrandAnalytics/Sources/StrandAnalytics/StagePercentages.swift",
+      "line": 16,
+      "text": "StagePercentages.wholePercentages/1 has 1 test callsite(s) and no production callsite"
+    },
+    {
+      "identity": "test-only-callsite|Packages/StrandAnalytics/Sources/StrandAnalytics/StrainScorer.swift::defaultMaxHR/1#1",
+      "rule": "test-only-callsite",
+      "path": "Packages/StrandAnalytics/Sources/StrandAnalytics/StrainScorer.swift",
+      "line": 86,
+      "text": "StrainScorer.defaultMaxHR/1 has 1 test callsite(s) and no production callsite"
+    },
+    {
+      "identity": "test-only-callsite|Packages/StrandAnalytics/Sources/StrandAnalytics/StrainScorer.swift::sampleDurationMinutes/1#1",
+      "rule": "test-only-callsite",
+      "path": "Packages/StrandAnalytics/Sources/StrandAnalytics/StrainScorer.swift",
+      "line": 168,
+      "text": "StrainScorer.sampleDurationMinutes/1 has 1 test callsite(s) and no production callsite"
+    },
+    {
+      "identity": "test-only-callsite|Packages/StrandAnalytics/Sources/StrandAnalytics/StrainScorer.swift::fitStrainDenominator/1#1",
+      "rule": "test-only-callsite",
+      "path": "Packages/StrandAnalytics/Sources/StrandAnalytics/StrainScorer.swift",
+      "line": 237,
+      "text": "StrainScorer.fitStrainDenominator/1 has 1 test callsite(s) and no production callsite"
+    },
+    {
+      "identity": "dead-twin-reference|Packages/StrandAnalytics/Sources/StrandAnalytics/UniversalTrace.swift|UniversalTrace.kt",
+      "rule": "dead-twin-reference",
+      "path": "Packages/StrandAnalytics/Sources/StrandAnalytics/UniversalTrace.swift",
+      "line": 14,
+      "text": "Kotlin target UniversalTrace.kt does not resolve"
+    },
+    {
+      "identity": "test-only-callsite|Packages/StrandAnalytics/Sources/StrandAnalytics/WeeklyDigest.swift::summary/1#1",
+      "rule": "test-only-callsite",
+      "path": "Packages/StrandAnalytics/Sources/StrandAnalytics/WeeklyDigest.swift",
+      "line": 178,
+      "text": "WeeklyDigest.summary/1 has 2 test callsite(s) and no production callsite"
+    },
+    {
+      "identity": "test-only-callsite|Packages/StrandAnalytics/Sources/StrandAnalytics/WorkoutTypeClassifier.swift::extract/8#1",
+      "rule": "test-only-callsite",
+      "path": "Packages/StrandAnalytics/Sources/StrandAnalytics/WorkoutTypeClassifier.swift",
+      "line": 332,
+      "text": "WorkoutTypeFeatureExtractor.extract/8 has 2 test callsite(s) and no production callsite"
+    },
+    {
+      "identity": "constant-unverifiable|Packages/StrandImport/Sources/StrandImport/ActivityFileImporter.swift::maxBytes|128 << 20|android/app/src/main/java/com/noop/ingest/ActivityFileImporter.kt::MAX_BYTES|128L shl 20",
+      "rule": "constant-unverifiable",
+      "path": "Packages/StrandImport/Sources/StrandImport/ActivityFileImporter.swift",
+      "line": 186,
+      "text": "cannot fully evaluate maxBytes=128 << 20 against Kotlin MAX_BYTES=128L shl 20 (android/app/src/main/java/com/noop/ingest/ActivityFileImporter.kt:52)"
+    },
+    {
+      "identity": "test-only-callsite|Packages/StrandImport/Sources/StrandImport/ActivityFileImporter.swift::detectFormat/1#1",
+      "rule": "test-only-callsite",
+      "path": "Packages/StrandImport/Sources/StrandImport/ActivityFileImporter.swift",
+      "line": 210,
+      "text": "ActivityFileImporter.detectFormat/1 has 3 test callsite(s) and no production callsite"
+    },
+    {
+      "identity": "test-only-callsite|Packages/StrandImport/Sources/StrandImport/ImportCoordinator.swift::detectAndImport/1#1",
+      "rule": "test-only-callsite",
+      "path": "Packages/StrandImport/Sources/StrandImport/ImportCoordinator.swift",
+      "line": 102,
+      "text": "ImportCoordinator.detectAndImport/1 has 4 test callsite(s) and no production callsite"
+    },
+    {
+      "identity": "test-only-callsite|Packages/StrandImport/Sources/StrandImport/ImportTrace.swift::firstFailingRowLine/4#1",
+      "rule": "test-only-callsite",
+      "path": "Packages/StrandImport/Sources/StrandImport/ImportTrace.swift",
+      "line": 87,
+      "text": "ImportTrace.firstFailingRowLine/4 has 2 test callsite(s) and no production callsite"
+    },
+    {
+      "identity": "test-only-callsite|Packages/StrandImport/Sources/StrandImport/ImportTrace.swift::failingFileSampleLines/2#1",
+      "rule": "test-only-callsite",
+      "path": "Packages/StrandImport/Sources/StrandImport/ImportTrace.swift",
+      "line": 104,
+      "text": "ImportTrace.failingFileSampleLines/2 has 1 test callsite(s) and no production callsite"
+    },
+    {
+      "identity": "constant-unverifiable|Packages/StrandImport/Sources/StrandImport/LabMarkerCsvImport.swift::maxBytes|32 << 20|android/app/src/main/java/com/noop/ingest/LabMarkerCsvImport.kt::MAX_BYTES|32L shl 20",
+      "rule": "constant-unverifiable",
+      "path": "Packages/StrandImport/Sources/StrandImport/LabMarkerCsvImport.swift",
+      "line": 109,
+      "text": "cannot fully evaluate maxBytes=32 << 20 against Kotlin MAX_BYTES=32L shl 20 (android/app/src/main/java/com/noop/ingest/LabMarkerCsvImport.kt:44)"
+    },
+    {
+      "identity": "test-only-callsite|Packages/StrandImport/Sources/StrandImport/LabMarkerCsvImport.swift::parseTable/2#1",
+      "rule": "test-only-callsite",
+      "path": "Packages/StrandImport/Sources/StrandImport/LabMarkerCsvImport.swift",
+      "line": 132,
+      "text": "LabMarkerCsvImport.parseTable/2 has 1 test callsite(s) and no production callsite"
+    },
+    {
+      "identity": "test-only-callsite|Packages/StrandImport/Sources/StrandImport/LiftingImporter.swift::detectFormat/1#1",
+      "rule": "test-only-callsite",
+      "path": "Packages/StrandImport/Sources/StrandImport/LiftingImporter.swift",
+      "line": 108,
+      "text": "LiftingImporter.detectFormat/1 has 3 test callsite(s) and no production callsite"
+    },
+    {
+      "identity": "constant-ambiguous|maxbytes|Packages/StrandImport/Sources/StrandImport/WearableExportImporter.swift::maxBytes|android/app/src/main/java/com/noop/ingest/LiftingImporter.kt::MAX_BYTES|android/app/src/main/java/com/noop/ingest/NutritionCsvImporter.kt::MAX_BYTES",
+      "rule": "constant-ambiguous",
+      "path": "Packages/StrandImport/Sources/StrandImport/WearableExportImporter.swift",
+      "line": 45,
+      "text": "maxbytes cannot be paired uniquely: Swift [Packages/StrandImport/Sources/StrandImport/WearableExportImporter.swift::maxBytes] vs Kotlin [android/app/src/main/java/com/noop/ingest/LiftingImporter.kt::MAX_BYTES, android/app/src/main/java/com/noop/ingest/NutritionCsvImporter.kt::MAX_BYTES]"
+    },
+    {
+      "identity": "constant-unverifiable|Packages/StrandImport/Sources/StrandImport/WearableExportImporter.swift::maxEntryBytes|256 << 20|android/app/src/main/java/com/noop/ingest/WearableExportImporter.kt::MAX_ENTRY_BYTES|256L shl 20",
+      "rule": "constant-unverifiable",
+      "path": "Packages/StrandImport/Sources/StrandImport/WearableExportImporter.swift",
+      "line": 47,
+      "text": "cannot fully evaluate maxEntryBytes=256 << 20 against Kotlin MAX_ENTRY_BYTES=256L shl 20 (android/app/src/main/java/com/noop/ingest/WearableExportImporter.kt:61)"
+    },
+    {
+      "identity": "test-only-callsite|Packages/StrandImport/Sources/StrandImport/WearableExportImporter.swift::parse/2#1",
+      "rule": "test-only-callsite",
+      "path": "Packages/StrandImport/Sources/StrandImport/WearableExportImporter.swift",
+      "line": 102,
+      "text": "WearableExportImporter.parse/2 has 14 test callsite(s) and no production callsite"
+    },
+    {
+      "identity": "duplicate-implementation|dayString|Packages/StrandImport/Sources/StrandImport/WearableExportImporter.swift::dayString/1#1",
+      "rule": "duplicate-implementation",
+      "path": "Packages/StrandImport/Sources/StrandImport/WearableExportImporter.swift",
+      "line": 324,
+      "text": "dayString implementation WearableExportImporter.dayString/1"
+    },
+    {
+      "identity": "test-only-callsite|Packages/StrandImport/Sources/StrandImport/WhoopCsvExporter.swift::num/1#1",
+      "rule": "test-only-callsite",
+      "path": "Packages/StrandImport/Sources/StrandImport/WhoopCsvExporter.swift",
+      "line": 47,
+      "text": "WhoopCsvExporter.num/1 has 4 test callsite(s) and no production callsite"
+    },
+    {
+      "identity": "test-only-callsite|Packages/StrandImport/Sources/StrandImport/WhoopCsvExporter.swift::num/1#2",
+      "rule": "test-only-callsite",
+      "path": "Packages/StrandImport/Sources/StrandImport/WhoopCsvExporter.swift",
+      "line": 52,
+      "text": "WhoopCsvExporter.num/1 has 4 test callsite(s) and no production callsite"
+    },
+    {
+      "identity": "constant-ambiguous|maxentrybytes|Packages/StrandImport/Sources/StrandImport/WhoopExportImporter.swift::maxEntryBytes|android/app/src/main/java/com/noop/ingest/WhoopCsvImporter.kt::MAX_ENTRY_BYTES|android/app/src/main/java/com/noop/ingest/XiaomiBandImporter.kt::MAX_ENTRY_BYTES",
+      "rule": "constant-ambiguous",
+      "path": "Packages/StrandImport/Sources/StrandImport/WhoopExportImporter.swift",
+      "line": 207,
+      "text": "maxentrybytes cannot be paired uniquely: Swift [Packages/StrandImport/Sources/StrandImport/WhoopExportImporter.swift::maxEntryBytes] vs Kotlin [android/app/src/main/java/com/noop/ingest/WhoopCsvImporter.kt::MAX_ENTRY_BYTES, android/app/src/main/java/com/noop/ingest/XiaomiBandImporter.kt::MAX_ENTRY_BYTES]"
+    },
+    {
+      "identity": "test-only-callsite|Packages/WhoopProtocol/Sources/WhoopProtocol/BadClockDiagnostics.swift::isoDay/1#1",
+      "rule": "test-only-callsite",
+      "path": "Packages/WhoopProtocol/Sources/WhoopProtocol/BadClockDiagnostics.swift",
+      "line": 11,
+      "text": "BadClockDiagnostics.isoDay/1 has 1 test callsite(s) and no production callsite"
+    },
+    {
+      "identity": "test-only-callsite|Packages/WhoopProtocol/Sources/WhoopProtocol/FTMSDecode.swift::decode/2#1",
+      "rule": "test-only-callsite",
+      "path": "Packages/WhoopProtocol/Sources/WhoopProtocol/FTMSDecode.swift",
+      "line": 300,
+      "text": "FTMSDecode.decode/2 has 2 test callsite(s) and no production callsite"
+    },
+    {
+      "identity": "test-only-callsite|Packages/WhoopProtocol/Sources/WhoopProtocol/FeatureFlagProbe.swift::parseStart/3#1",
+      "rule": "test-only-callsite",
+      "path": "Packages/WhoopProtocol/Sources/WhoopProtocol/FeatureFlagProbe.swift",
+      "line": 307,
+      "text": "FeatureFlagProbe.parseStart/3 has 1 test callsite(s) and no production callsite"
+    },
+    {
+      "identity": "test-only-callsite|Packages/WhoopProtocol/Sources/WhoopProtocol/FeatureFlagProbe.swift::parseNext/3#1",
+      "rule": "test-only-callsite",
+      "path": "Packages/WhoopProtocol/Sources/WhoopProtocol/FeatureFlagProbe.swift",
+      "line": 323,
+      "text": "FeatureFlagProbe.parseNext/3 has 3 test callsite(s) and no production callsite"
+    },
+    {
+      "identity": "test-only-callsite|Packages/WhoopProtocol/Sources/WhoopProtocol/FeatureFlagProbe.swift::hex/1#1",
+      "rule": "test-only-callsite",
+      "path": "Packages/WhoopProtocol/Sources/WhoopProtocol/FeatureFlagProbe.swift",
+      "line": 396,
+      "text": "FeatureFlagProbe.hex/1 has 1 test callsite(s) and no production callsite"
+    },
+    {
+      "identity": "test-only-callsite|Packages/WhoopProtocol/Sources/WhoopProtocol/Framing.swift::frameFromPayload/4#1",
+      "rule": "test-only-callsite",
+      "path": "Packages/WhoopProtocol/Sources/WhoopProtocol/Framing.swift",
+      "line": 188,
+      "text": "Framing.frameFromPayload/4 has 8 test callsite(s) and no production callsite"
+    },
+    {
+      "identity": "test-only-callsite|Packages/WhoopProtocol/Sources/WhoopProtocol/HapticPayloads.swift::notificationBuzz/1#1",
+      "rule": "test-only-callsite",
+      "path": "Packages/WhoopProtocol/Sources/WhoopProtocol/HapticPayloads.swift",
+      "line": 32,
+      "text": "MaverickHaptics.notificationBuzz/1 has 2 test callsite(s) and no production callsite"
+    },
+    {
+      "identity": "test-only-callsite|Packages/WhoopProtocol/Sources/WhoopProtocol/Interpreter.swift::whoop5HistoricalAckFrame/2#1",
+      "rule": "test-only-callsite",
+      "path": "Packages/WhoopProtocol/Sources/WhoopProtocol/Interpreter.swift",
+      "line": 782,
+      "text": "Interpreter.whoop5HistoricalAckFrame/2 has 1 test callsite(s) and no production callsite"
+    },
+    {
+      "identity": "test-only-callsite|Packages/WhoopProtocol/Sources/WhoopProtocol/Streams.swift::mg/1#1",
+      "rule": "test-only-callsite",
+      "path": "Packages/WhoopProtocol/Sources/WhoopProtocol/Streams.swift",
+      "line": 633,
+      "text": "DynAccelDiag.mg/1 has 5 test callsite(s) and no production callsite"
+    },
+    {
+      "identity": "test-only-callsite|Packages/WhoopProtocol/Sources/WhoopProtocol/Streams.swift::pct/1#1",
+      "rule": "test-only-callsite",
+      "path": "Packages/WhoopProtocol/Sources/WhoopProtocol/Streams.swift",
+      "line": 636,
+      "text": "DynAccelDiag.pct/1 has 2 test callsite(s) and no production callsite"
+    },
+    {
+      "identity": "test-only-callsite|Packages/WhoopProtocol/Sources/WhoopProtocol/Whoop5Config.swift::enableSequenceFrames/1#1",
+      "rule": "test-only-callsite",
+      "path": "Packages/WhoopProtocol/Sources/WhoopProtocol/Whoop5Config.swift",
+      "line": 110,
+      "text": "Whoop5Config.enableSequenceFrames/1 has 1 test callsite(s) and no production callsite"
+    },
+    {
+      "identity": "test-only-callsite|Packages/WhoopProtocol/Sources/WhoopProtocol/Whoop5Config.swift::disableSequenceFrames/1#1",
+      "rule": "test-only-callsite",
+      "path": "Packages/WhoopProtocol/Sources/WhoopProtocol/Whoop5Config.swift",
+      "line": 219,
+      "text": "Whoop5Config.disableSequenceFrames/1 has 1 test callsite(s) and no production callsite"
+    },
+    {
+      "identity": "test-only-callsite|Packages/WhoopProtocol/Sources/WhoopProtocol/Whoop5Ecg.swift::selectWristPayload/1#1",
+      "rule": "test-only-callsite",
+      "path": "Packages/WhoopProtocol/Sources/WhoopProtocol/Whoop5Ecg.swift",
+      "line": 306,
+      "text": "Whoop5Ecg.selectWristPayload/1 has 2 test callsite(s) and no production callsite"
+    },
+    {
+      "identity": "test-only-callsite|Packages/WhoopProtocol/Sources/WhoopProtocol/Whoop5Ecg.swift::togglePayload/1#1",
+      "rule": "test-only-callsite",
+      "path": "Packages/WhoopProtocol/Sources/WhoopProtocol/Whoop5Ecg.swift",
+      "line": 310,
+      "text": "Whoop5Ecg.togglePayload/1 has 2 test callsite(s) and no production callsite"
+    },
+    {
+      "identity": "test-only-callsite|Packages/WhoopProtocol/Sources/WhoopProtocol/Whoop5Ecg.swift::controlPayload/1#1",
+      "rule": "test-only-callsite",
+      "path": "Packages/WhoopProtocol/Sources/WhoopProtocol/Whoop5Ecg.swift",
+      "line": 314,
+      "text": "Whoop5Ecg.controlPayload/1 has 3 test callsite(s) and no production callsite"
+    },
+    {
+      "identity": "test-only-callsite|Packages/WhoopProtocol/Sources/WhoopProtocol/Whoop5Ecg.swift::selectWristFrame/2#1",
+      "rule": "test-only-callsite",
+      "path": "Packages/WhoopProtocol/Sources/WhoopProtocol/Whoop5Ecg.swift",
+      "line": 325,
+      "text": "Whoop5Ecg.selectWristFrame/2 has 2 test callsite(s) and no production callsite"
+    },
+    {
+      "identity": "test-only-callsite|Packages/WhoopProtocol/Sources/WhoopProtocol/Whoop5Ecg.swift::toggleRealtimeFilteredEcgFrame/2#1",
+      "rule": "test-only-callsite",
+      "path": "Packages/WhoopProtocol/Sources/WhoopProtocol/Whoop5Ecg.swift",
+      "line": 329,
+      "text": "Whoop5Ecg.toggleRealtimeFilteredEcgFrame/2 has 3 test callsite(s) and no production callsite"
+    },
+    {
+      "identity": "test-only-callsite|Packages/WhoopProtocol/Sources/WhoopProtocol/Whoop5Ecg.swift::toggleSaveRawEcgFrame/2#1",
+      "rule": "test-only-callsite",
+      "path": "Packages/WhoopProtocol/Sources/WhoopProtocol/Whoop5Ecg.swift",
+      "line": 333,
+      "text": "Whoop5Ecg.toggleSaveRawEcgFrame/2 has 3 test callsite(s) and no production callsite"
+    },
+    {
+      "identity": "test-only-callsite|Packages/WhoopProtocol/Sources/WhoopProtocol/Whoop5Ecg.swift::mainControlEcgDataGenerationFrame/2#1",
+      "rule": "test-only-callsite",
+      "path": "Packages/WhoopProtocol/Sources/WhoopProtocol/Whoop5Ecg.swift",
+      "line": 337,
+      "text": "Whoop5Ecg.mainControlEcgDataGenerationFrame/2 has 3 test callsite(s) and no production callsite"
+    },
+    {
+      "identity": "test-only-callsite|Packages/WhoopProtocol/Sources/WhoopProtocol/Whoop5EcgProbe.swift::verdict/3#1",
+      "rule": "test-only-callsite",
+      "path": "Packages/WhoopProtocol/Sources/WhoopProtocol/Whoop5EcgProbe.swift",
+      "line": 219,
+      "text": "Whoop5EcgProbe.verdict/3 has 16 test callsite(s) and no production callsite"
+    },
+    {
+      "identity": "test-only-callsite|Packages/WhoopProtocol/Sources/WhoopProtocol/WhoopProtocol.swift::schemaResourceURL/0#1",
+      "rule": "test-only-callsite",
+      "path": "Packages/WhoopProtocol/Sources/WhoopProtocol/WhoopProtocol.swift",
+      "line": 7,
+      "text": "WhoopProtocolInfo.schemaResourceURL/0 has 1 test callsite(s) and no production callsite"
+    },
+    {
+      "identity": "test-only-callsite|Packages/WhoopStore/Sources/WhoopStore/DismissedSleepSpans.swift::isSuppressed/3#1",
+      "rule": "test-only-callsite",
+      "path": "Packages/WhoopStore/Sources/WhoopStore/DismissedSleepSpans.swift",
+      "line": 55,
+      "text": "DismissedSleepSpans.isSuppressed/3 has 8 test callsite(s) and no production callsite"
+    },
+    {
+      "identity": "test-only-callsite|Packages/WhoopStore/Sources/WhoopStore/OuraSleepSessionMapping.swift::token/1#1",
+      "rule": "test-only-callsite",
+      "path": "Packages/WhoopStore/Sources/WhoopStore/OuraSleepSessionMapping.swift",
+      "line": 29,
+      "text": "OuraSleepSessionMapping.token/1 has 4 test callsite(s) and no production callsite"
+    },
+    {
+      "identity": "test-only-callsite|Packages/WhoopStore/Sources/WhoopStore/OuraSleepSessionMapping.swift::session/2#1",
+      "rule": "test-only-callsite",
+      "path": "Packages/WhoopStore/Sources/WhoopStore/OuraSleepSessionMapping.swift",
+      "line": 45,
+      "text": "OuraSleepSessionMapping.session/2 has 87 test callsite(s) and no production callsite"
+    },
+    {
+      "identity": "test-only-callsite|Packages/WhoopStore/Sources/WhoopStore/WhoopLiveCapabilities.swift::encoded/1#1",
+      "rule": "test-only-callsite",
+      "path": "Packages/WhoopStore/Sources/WhoopStore/WhoopLiveCapabilities.swift",
+      "line": 35,
+      "text": "WhoopLiveCapabilities.encoded/1 has 2 test callsite(s) and no production callsite"
+    },
+    {
+      "identity": "test-only-callsite|Packages/WhoopStore/Sources/WhoopStore/WhoopStore.swift::inMemory/0#1",
+      "rule": "test-only-callsite",
+      "path": "Packages/WhoopStore/Sources/WhoopStore/WhoopStore.swift",
+      "line": 145,
+      "text": "WhoopStore.inMemory/0 has 229 test callsite(s) and no production callsite"
+    },
+    {
+      "identity": "duplicate-implementation|dayString|Strand/Data/AppleWatchDevice.swift::dayString/1#1",
+      "rule": "duplicate-implementation",
+      "path": "Strand/Data/AppleWatchDevice.swift",
+      "line": 142,
+      "text": "dayString implementation AppleWatchDevice.dayString/1"
+    },
+    {
+      "identity": "duplicate-implementation|dayString|Strand/Data/Repository.swift::dayString/1#1",
+      "rule": "duplicate-implementation",
+      "path": "Strand/Data/Repository.swift",
+      "line": 2924,
+      "text": "dayString implementation Repository.dayString/1"
+    },
+    {
+      "identity": "duplicate-implementation|dayString|Strand/Data/WhoopImporter.swift::dayString/2#1",
+      "rule": "duplicate-implementation",
+      "path": "Strand/Data/WhoopImporter.swift",
+      "line": 227,
+      "text": "dayString implementation WhoopImporter.dayString/2"
+    },
+    {
+      "identity": "duplicate-implementation|dayString|StrandiOS/Health/HealthKitBridge.swift::dayString/1#1",
+      "rule": "duplicate-implementation",
+      "path": "StrandiOS/Health/HealthKitBridge.swift",
+      "line": 1275,
+      "text": "dayString implementation HealthKitBridge.dayString/1"
+    },
+    {
+      "identity": "test-only-callsite|android/app/src/main/java/com/noop/analytics/ActivityCostEngine.kt::mean/1#1",
+      "rule": "test-only-callsite",
+      "path": "android/app/src/main/java/com/noop/analytics/ActivityCostEngine.kt",
+      "line": 240,
+      "text": "ActivityCostEngine.mean/1 has 2 test callsite(s) and no production callsite"
+    },
+    {
+      "identity": "test-only-callsite|android/app/src/main/java/com/noop/analytics/ActivityHeatmap.kt::build/3#1",
+      "rule": "test-only-callsite",
+      "path": "android/app/src/main/java/com/noop/analytics/ActivityHeatmap.kt",
+      "line": 50,
+      "text": "ActivityHeatmap.build/3 has 3 test callsite(s) and no production callsite"
+    },
+    {
+      "identity": "test-only-callsite|android/app/src/main/java/com/noop/analytics/Analytics.kt::zone/2#1",
+      "rule": "test-only-callsite",
+      "path": "android/app/src/main/java/com/noop/analytics/Analytics.kt",
+      "line": 47,
+      "text": "Zones.zone/2 has 12 test callsite(s) and no production callsite"
+    },
+    {
+      "identity": "duplicate-implementation|dayString|android/app/src/main/java/com/noop/analytics/AnalyticsEngine.kt::dayString/1#1",
+      "rule": "duplicate-implementation",
+      "path": "android/app/src/main/java/com/noop/analytics/AnalyticsEngine.kt",
+      "line": 116,
+      "text": "dayString implementation AnalyticsEngine.dayString/1"
+    },
+    {
+      "identity": "duplicate-implementation|dayString|android/app/src/main/java/com/noop/analytics/AnalyticsEngine.kt::dayString/2#1",
+      "rule": "duplicate-implementation",
+      "path": "android/app/src/main/java/com/noop/analytics/AnalyticsEngine.kt",
+      "line": 130,
+      "text": "dayString implementation AnalyticsEngine.dayString/2"
+    },
+    {
+      "identity": "dead-twin-reference|android/app/src/main/java/com/noop/analytics/AutoWorkoutDetectorTrace.kt|AutoWorkoutDetector.detectedBoutLine",
+      "rule": "dead-twin-reference",
+      "path": "android/app/src/main/java/com/noop/analytics/AutoWorkoutDetectorTrace.kt",
+      "line": 189,
+      "text": "Swift target AutoWorkoutDetector.detectedBoutLine does not resolve"
+    },
+    {
+      "identity": "test-only-callsite|android/app/src/main/java/com/noop/analytics/AutoWorkoutDetectorTrace.kt::lastSessionSummary/1#1",
+      "rule": "test-only-callsite",
+      "path": "android/app/src/main/java/com/noop/analytics/AutoWorkoutDetectorTrace.kt",
+      "line": 212,
+      "text": "WorkoutsReadout.lastSessionSummary/1 has 2 test callsite(s) and no production callsite"
+    },
+    {
+      "identity": "test-only-callsite|android/app/src/main/java/com/noop/analytics/Baselines.kt::deviceEraEpoch/1#1",
+      "rule": "test-only-callsite",
+      "path": "android/app/src/main/java/com/noop/analytics/Baselines.kt",
+      "line": 477,
+      "text": "Baselines.deviceEraEpoch/1 has 10 test callsite(s) and no production callsite"
+    },
+    {
+      "identity": "test-only-callsite|android/app/src/main/java/com/noop/analytics/BreathPacer.kt::schedule/3#1",
+      "rule": "test-only-callsite",
+      "path": "android/app/src/main/java/com/noop/analytics/BreathPacer.kt",
+      "line": 82,
+      "text": "BreathPacer.schedule/3 has 3 test callsite(s) and no production callsite"
+    },
+    {
+      "identity": "test-only-callsite|android/app/src/main/java/com/noop/analytics/BreathPacer.kt::sessionDurationMs/2#1",
+      "rule": "test-only-callsite",
+      "path": "android/app/src/main/java/com/noop/analytics/BreathPacer.kt",
+      "line": 104,
+      "text": "BreathPacer.sessionDurationMs/2 has 2 test callsite(s) and no production callsite"
+    },
+    {
+      "identity": "test-only-callsite|android/app/src/main/java/com/noop/analytics/BreathProtocol.kt::schedule/2#1",
+      "rule": "test-only-callsite",
+      "path": "android/app/src/main/java/com/noop/analytics/BreathProtocol.kt",
+      "line": 58,
+      "text": "BreathProtocolPlayer.schedule/2 has 7 test callsite(s) and no production callsite"
+    },
+    {
+      "identity": "test-only-callsite|android/app/src/main/java/com/noop/analytics/CaffeineDecay.kt::totalRemainingMg/2#1",
+      "rule": "test-only-callsite",
+      "path": "android/app/src/main/java/com/noop/analytics/CaffeineDecay.kt",
+      "line": 35,
+      "text": "CaffeineDecay.totalRemainingMg/2 has 1 test callsite(s) and no production callsite"
+    },
+    {
+      "identity": "test-only-callsite|android/app/src/main/java/com/noop/analytics/CircadianEngine.kt::estimatePhase/4#1",
+      "rule": "test-only-callsite",
+      "path": "android/app/src/main/java/com/noop/analytics/CircadianEngine.kt",
+      "line": 127,
+      "text": "CircadianEngine.estimatePhase/4 has 1 test callsite(s) and no production callsite"
+    },
+    {
+      "identity": "test-only-callsite|android/app/src/main/java/com/noop/analytics/CircadianEngine.kt::planShift/3#1",
+      "rule": "test-only-callsite",
+      "path": "android/app/src/main/java/com/noop/analytics/CircadianEngine.kt",
+      "line": 190,
+      "text": "CircadianEngine.planShift/3 has 5 test callsite(s) and no production callsite"
+    },
+    {
+      "identity": "test-only-callsite|android/app/src/main/java/com/noop/analytics/CircadianEngine.kt::clock/1#1",
+      "rule": "test-only-callsite",
+      "path": "android/app/src/main/java/com/noop/analytics/CircadianEngine.kt",
+      "line": 257,
+      "text": "CircadianEngine.clock/1 has 4 test callsite(s) and no production callsite"
+    },
+    {
+      "identity": "test-only-callsite|android/app/src/main/java/com/noop/analytics/ConnectionReadout.kt::sessionHeldSuffix/1#1",
+      "rule": "test-only-callsite",
+      "path": "android/app/src/main/java/com/noop/analytics/ConnectionReadout.kt",
+      "line": 28,
+      "text": "ConnectionTrace.sessionHeldSuffix/1 has 4 test callsite(s) and no production callsite"
+    },
+    {
+      "identity": "test-only-callsite|android/app/src/main/java/com/noop/analytics/ConnectionReadout.kt::uptimeLabel/2#1",
+      "rule": "test-only-callsite",
+      "path": "android/app/src/main/java/com/noop/analytics/ConnectionReadout.kt",
+      "line": 126,
+      "text": "ConnectionReadout.uptimeLabel/2 has 4 test callsite(s) and no production callsite"
+    },
+    {
+      "identity": "test-only-callsite|android/app/src/main/java/com/noop/analytics/ConnectionReadout.kt::reconnectCount/1#1",
+      "rule": "test-only-callsite",
+      "path": "android/app/src/main/java/com/noop/analytics/ConnectionReadout.kt",
+      "line": 140,
+      "text": "ConnectionReadout.reconnectCount/1 has 2 test callsite(s) and no production callsite"
+    },
+    {
+      "identity": "test-only-callsite|android/app/src/main/java/com/noop/analytics/ConnectionReadout.kt::lastOffloadResult/1#1",
+      "rule": "test-only-callsite",
+      "path": "android/app/src/main/java/com/noop/analytics/ConnectionReadout.kt",
+      "line": 152,
+      "text": "ConnectionReadout.lastOffloadResult/1 has 3 test callsite(s) and no production callsite"
+    },
+    {
+      "identity": "test-only-callsite|android/app/src/main/java/com/noop/analytics/ConnectionReadout.kt::sessionRows/1#1",
+      "rule": "test-only-callsite",
+      "path": "android/app/src/main/java/com/noop/analytics/ConnectionReadout.kt",
+      "line": 167,
+      "text": "ConnectionReadout.sessionRows/1 has 4 test callsite(s) and no production callsite"
+    },
+    {
+      "identity": "test-only-callsite|android/app/src/main/java/com/noop/analytics/ConnectionReadout.kt::clockCorrelatedDevice/1#1",
+      "rule": "test-only-callsite",
+      "path": "android/app/src/main/java/com/noop/analytics/ConnectionReadout.kt",
+      "line": 194,
+      "text": "ConnectionReadout.clockCorrelatedDevice/1 has 2 test callsite(s) and no production callsite"
+    },
+    {
+      "identity": "test-only-callsite|android/app/src/main/java/com/noop/analytics/ConnectionReadout.kt::clockLatchedLabel/2#1",
+      "rule": "test-only-callsite",
+      "path": "android/app/src/main/java/com/noop/analytics/ConnectionReadout.kt",
+      "line": 207,
+      "text": "ConnectionReadout.clockLatchedLabel/2 has 4 test callsite(s) and no production callsite"
+    },
+    {
+      "identity": "test-only-callsite|android/app/src/main/java/com/noop/analytics/ConnectionReadout.kt::rtcWarning/2#1",
+      "rule": "test-only-callsite",
+      "path": "android/app/src/main/java/com/noop/analytics/ConnectionReadout.kt",
+      "line": 217,
+      "text": "ConnectionReadout.rtcWarning/2 has 4 test callsite(s) and no production callsite"
+    },
+    {
+      "identity": "test-only-callsite|android/app/src/main/java/com/noop/analytics/ConnectionReadout.kt::lastFrameLabel/2#1",
+      "rule": "test-only-callsite",
+      "path": "android/app/src/main/java/com/noop/analytics/ConnectionReadout.kt",
+      "line": 228,
+      "text": "ConnectionReadout.lastFrameLabel/2 has 2 test callsite(s) and no production callsite"
+    },
+    {
+      "identity": "test-only-callsite|android/app/src/main/java/com/noop/analytics/CyclePhaseEngine.kt::shiftDay/2#1",
+      "rule": "test-only-callsite",
+      "path": "android/app/src/main/java/com/noop/analytics/CyclePhaseEngine.kt",
+      "line": 238,
+      "text": "CyclePhaseEngine.shiftDay/2 has 6 test callsite(s) and no production callsite"
+    },
+    {
+      "identity": "test-only-callsite|android/app/src/main/java/com/noop/analytics/DisplayTrace.kt::deviceMetricsNow/1#1",
+      "rule": "test-only-callsite",
+      "path": "android/app/src/main/java/com/noop/analytics/DisplayTrace.kt",
+      "line": 108,
+      "text": "DisplayReadout.deviceMetricsNow/1 has 2 test callsite(s) and no production callsite"
+    },
+    {
+      "identity": "test-only-callsite|android/app/src/main/java/com/noop/analytics/DisplayTrace.kt::frameSummaryNow/1#1",
+      "rule": "test-only-callsite",
+      "path": "android/app/src/main/java/com/noop/analytics/DisplayTrace.kt",
+      "line": 121,
+      "text": "DisplayReadout.frameSummaryNow/1 has 2 test callsite(s) and no production callsite"
+    },
+    {
+      "identity": "test-only-callsite|android/app/src/main/java/com/noop/analytics/EffectRanker.kt::confidence/1#1",
+      "rule": "test-only-callsite",
+      "path": "android/app/src/main/java/com/noop/analytics/EffectRanker.kt",
+      "line": 247,
+      "text": "EffectRanker.confidence/1 has 4 test callsite(s) and no production callsite"
+    },
+    {
+      "identity": "test-only-callsite|android/app/src/main/java/com/noop/analytics/FitnessAgeEngine.kt::physicalActivityIndex/3#1",
+      "rule": "test-only-callsite",
+      "path": "android/app/src/main/java/com/noop/analytics/FitnessAgeEngine.kt",
+      "line": 65,
+      "text": "FitnessAgeEngine.physicalActivityIndex/3 has 3 test callsite(s) and no production callsite"
+    },
+    {
+      "identity": "test-only-callsite|android/app/src/main/java/com/noop/analytics/GuidedCaptureProgress.kt::evaluate/3#1",
+      "rule": "test-only-callsite",
+      "path": "android/app/src/main/java/com/noop/analytics/GuidedCaptureProgress.kt",
+      "line": 13,
+      "text": "Complete.evaluate/3 has 4 test callsite(s) and no production callsite"
+    },
+    {
+      "identity": "test-only-callsite|android/app/src/main/java/com/noop/analytics/GuidedCaptureProgress.kt::label/1#1",
+      "rule": "test-only-callsite",
+      "path": "android/app/src/main/java/com/noop/analytics/GuidedCaptureProgress.kt",
+      "line": 16,
+      "text": "Complete.label/1 has 5 test callsite(s) and no production callsite"
+    },
+    {
+      "identity": "test-only-callsite|android/app/src/main/java/com/noop/analytics/GuidedCaptureProgress.kt::gapNudge/0#1",
+      "rule": "test-only-callsite",
+      "path": "android/app/src/main/java/com/noop/analytics/GuidedCaptureProgress.kt",
+      "line": 21,
+      "text": "Complete.gapNudge/0 has 2 test callsite(s) and no production callsite"
+    },
+    {
+      "identity": "test-only-callsite|android/app/src/main/java/com/noop/analytics/HrvAnalyzer.kt::analyze/3#1",
+      "rule": "test-only-callsite",
+      "path": "android/app/src/main/java/com/noop/analytics/HrvAnalyzer.kt",
+      "line": 265,
+      "text": "HrvAnalyzer.analyze/3 has 1 test callsite(s) and no production callsite"
+    },
+    {
+      "identity": "test-only-callsite|android/app/src/main/java/com/noop/analytics/ImportTrace.kt::firstFailingRowLine/4#1",
+      "rule": "test-only-callsite",
+      "path": "android/app/src/main/java/com/noop/analytics/ImportTrace.kt",
+      "line": 74,
+      "text": "ImportTrace.firstFailingRowLine/4 has 1 test callsite(s) and no production callsite"
+    },
+    {
+      "identity": "test-only-callsite|android/app/src/main/java/com/noop/analytics/ImportTrace.kt::lastImportSummary/1#1",
+      "rule": "test-only-callsite",
+      "path": "android/app/src/main/java/com/noop/analytics/ImportTrace.kt",
+      "line": 208,
+      "text": "ImportReadout.lastImportSummary/1 has 2 test callsite(s) and no production callsite"
+    },
+    {
+      "identity": "test-only-callsite|android/app/src/main/java/com/noop/analytics/ImuFeatureExtractor.kt::extract/1#1",
+      "rule": "test-only-callsite",
+      "path": "android/app/src/main/java/com/noop/analytics/ImuFeatureExtractor.kt",
+      "line": 93,
+      "text": "ImuFeatureExtractor.extract/1 has 19 test callsite(s) and no production callsite"
+    },
+    {
+      "identity": "test-only-callsite|android/app/src/main/java/com/noop/analytics/IntelligenceEngine.kt::midnightUtc/1#1",
+      "rule": "test-only-callsite",
+      "path": "android/app/src/main/java/com/noop/analytics/IntelligenceEngine.kt",
+      "line": 2200,
+      "text": "IntelligenceEngine.midnightUtc/1 has 1 test callsite(s) and no production callsite"
+    },
+    {
+      "identity": "test-only-callsite|android/app/src/main/java/com/noop/analytics/IntelligenceEngine.kt::daySourceToken/3#1",
+      "rule": "test-only-callsite",
+      "path": "android/app/src/main/java/com/noop/analytics/IntelligenceEngine.kt",
+      "line": 2234,
+      "text": "IntelligenceEngine.daySourceToken/3 has 4 test callsite(s) and no production callsite"
+    },
+    {
+      "identity": "test-only-callsite|android/app/src/main/java/com/noop/analytics/IntelligenceEngine.kt::sleepStagesLogToken/3#1",
+      "rule": "test-only-callsite",
+      "path": "android/app/src/main/java/com/noop/analytics/IntelligenceEngine.kt",
+      "line": 2252,
+      "text": "IntelligenceEngine.sleepStagesLogToken/3 has 7 test callsite(s) and no production callsite"
+    },
+    {
+      "identity": "test-only-callsite|android/app/src/main/java/com/noop/analytics/LabBookProjection.kt::project/2#1",
+      "rule": "test-only-callsite",
+      "path": "android/app/src/main/java/com/noop/analytics/LabBookProjection.kt",
+      "line": 85,
+      "text": "LabBookProjection.project/2 has 4 test callsite(s) and no production callsite"
+    },
+    {
+      "identity": "test-only-callsite|android/app/src/main/java/com/noop/analytics/NapDetector.kt::isWindowDense/3#1",
+      "rule": "test-only-callsite",
+      "path": "android/app/src/main/java/com/noop/analytics/NapDetector.kt",
+      "line": 112,
+      "text": "NapDetector.isWindowDense/3 has 2 test callsite(s) and no production callsite"
+    },
+    {
+      "identity": "test-only-callsite|android/app/src/main/java/com/noop/analytics/ReadinessEngine.kt::mean/1#1",
+      "rule": "test-only-callsite",
+      "path": "android/app/src/main/java/com/noop/analytics/ReadinessEngine.kt",
+      "line": 421,
+      "text": "ReadinessEngine.mean/1 has 2 test callsite(s) and no production callsite"
+    },
+    {
+      "identity": "test-only-callsite|android/app/src/main/java/com/noop/analytics/ReadinessEngine.kt::sampleSD/1#1",
+      "rule": "test-only-callsite",
+      "path": "android/app/src/main/java/com/noop/analytics/ReadinessEngine.kt",
+      "line": 425,
+      "text": "ReadinessEngine.sampleSD/1 has 2 test callsite(s) and no production callsite"
+    },
+    {
+      "identity": "duplicate-implementation|resting-hr|android/app/src/main/java/com/noop/analytics/RecoveryScorer.kt::restingHR/3#1",
+      "rule": "duplicate-implementation",
+      "path": "android/app/src/main/java/com/noop/analytics/RecoveryScorer.kt",
+      "line": 302,
+      "text": "resting-HR path RecoveryScorer.restingHR/3"
+    },
+    {
+      "identity": "test-only-callsite|android/app/src/main/java/com/noop/analytics/RecoveryScorer.kt::restingHR/3#1",
+      "rule": "test-only-callsite",
+      "path": "android/app/src/main/java/com/noop/analytics/RecoveryScorer.kt",
+      "line": 302,
+      "text": "RecoveryScorer.restingHR/3 has 5 test callsite(s) and no production callsite"
+    },
+    {
+      "identity": "test-only-callsite|android/app/src/main/java/com/noop/analytics/RecoveryScorer.kt::recoveryIndexSlope/3#1",
+      "rule": "test-only-callsite",
+      "path": "android/app/src/main/java/com/noop/analytics/RecoveryScorer.kt",
+      "line": 357,
+      "text": "RecoveryScorer.recoveryIndexSlope/3 has 6 test callsite(s) and no production callsite"
+    },
+    {
+      "identity": "test-only-callsite|android/app/src/main/java/com/noop/analytics/RecoveryScorer.kt::recovery/11#1",
+      "rule": "test-only-callsite",
+      "path": "android/app/src/main/java/com/noop/analytics/RecoveryScorer.kt",
+      "line": 543,
+      "text": "RecoveryScorer.recovery/11 has 1 test callsite(s) and no production callsite"
+    },
+    {
+      "identity": "test-only-callsite|android/app/src/main/java/com/noop/analytics/RhythmExport.kt::csv/2#1",
+      "rule": "test-only-callsite",
+      "path": "android/app/src/main/java/com/noop/analytics/RhythmExport.kt",
+      "line": 39,
+      "text": "RhythmExport.csv/2 has 3 test callsite(s) and no production callsite"
+    },
+    {
+      "identity": "test-only-callsite|android/app/src/main/java/com/noop/analytics/RhythmScreener.kt::screenWindow/1#1",
+      "rule": "test-only-callsite",
+      "path": "android/app/src/main/java/com/noop/analytics/RhythmScreener.kt",
+      "line": 149,
+      "text": "RhythmScreener.screenWindow/1 has 20 test callsite(s) and no production callsite"
+    },
+    {
+      "identity": "test-only-callsite|android/app/src/main/java/com/noop/analytics/RhythmScreener.kt::summarizeNight/1#1",
+      "rule": "test-only-callsite",
+      "path": "android/app/src/main/java/com/noop/analytics/RhythmScreener.kt",
+      "line": 227,
+      "text": "RhythmScreener.summarizeNight/1 has 3 test callsite(s) and no production callsite"
+    },
+    {
+      "identity": "test-only-callsite|android/app/src/main/java/com/noop/analytics/RhythmScreener.kt::nightBeatsAreBanked/2#1",
+      "rule": "test-only-callsite",
+      "path": "android/app/src/main/java/com/noop/analytics/RhythmScreener.kt",
+      "line": 266,
+      "text": "RhythmScreener.nightBeatsAreBanked/2 has 4 test callsite(s) and no production callsite"
+    },
+    {
+      "identity": "test-only-callsite|android/app/src/main/java/com/noop/analytics/RhythmScreener.kt::classifyEmptyState/3#1",
+      "rule": "test-only-callsite",
+      "path": "android/app/src/main/java/com/noop/analytics/RhythmScreener.kt",
+      "line": 290,
+      "text": "RhythmScreener.classifyEmptyState/3 has 6 test callsite(s) and no production callsite"
+    },
+    {
+      "identity": "test-only-callsite|android/app/src/main/java/com/noop/analytics/RouteMath.kt::normalizeToBox/4#1",
+      "rule": "test-only-callsite",
+      "path": "android/app/src/main/java/com/noop/analytics/RouteMath.kt",
+      "line": 83,
+      "text": "RouteMath.normalizeToBox/4 has 1 test callsite(s) and no production callsite"
+    },
+    {
+      "identity": "test-only-callsite|android/app/src/main/java/com/noop/analytics/SleepDebt.kt::ledger/3#1",
+      "rule": "test-only-callsite",
+      "path": "android/app/src/main/java/com/noop/analytics/SleepDebt.kt",
+      "line": 111,
+      "text": "SleepDebt.ledger/3 has 1 test callsite(s) and no production callsite"
+    },
+    {
+      "identity": "test-only-callsite|android/app/src/main/java/com/noop/analytics/SleepDebt.kt::round1/1#1",
+      "rule": "test-only-callsite",
+      "path": "android/app/src/main/java/com/noop/analytics/SleepDebt.kt",
+      "line": 145,
+      "text": "SleepDebt.round1/1 has 4 test callsite(s) and no production callsite"
+    },
+    {
+      "identity": "test-only-callsite|android/app/src/main/java/com/noop/analytics/SleepMark.kt::logLine/0#1",
+      "rule": "test-only-callsite",
+      "path": "android/app/src/main/java/com/noop/analytics/SleepMark.kt",
+      "line": 64,
+      "text": "SleepMark.logLine/0 has 2 test callsite(s) and no production callsite"
+    },
+    {
+      "identity": "test-only-callsite|android/app/src/main/java/com/noop/analytics/SleepMark.kt::fromRow/1#1",
+      "rule": "test-only-callsite",
+      "path": "android/app/src/main/java/com/noop/analytics/SleepMark.kt",
+      "line": 93,
+      "text": "SleepMark.fromRow/1 has 3 test callsite(s) and no production callsite"
+    },
+    {
+      "identity": "test-only-callsite|android/app/src/main/java/com/noop/analytics/SleepReadout.kt::hrDensityPerMinute/1#1",
+      "rule": "test-only-callsite",
+      "path": "android/app/src/main/java/com/noop/analytics/SleepReadout.kt",
+      "line": 11,
+      "text": "SleepReadout.hrDensityPerMinute/1 has 3 test callsite(s) and no production callsite"
+    },
+    {
+      "identity": "test-only-callsite|android/app/src/main/java/com/noop/analytics/SleepReadout.kt::gravityCoverageFraction/2#1",
+      "rule": "test-only-callsite",
+      "path": "android/app/src/main/java/com/noop/analytics/SleepReadout.kt",
+      "line": 21,
+      "text": "SleepReadout.gravityCoverageFraction/2 has 2 test callsite(s) and no production callsite"
+    },
+    {
+      "identity": "test-only-callsite|android/app/src/main/java/com/noop/analytics/SleepReadout.kt::lastGateFired/1#1",
+      "rule": "test-only-callsite",
+      "path": "android/app/src/main/java/com/noop/analytics/SleepReadout.kt",
+      "line": 32,
+      "text": "SleepReadout.lastGateFired/1 has 3 test callsite(s) and no production callsite"
+    },
+    {
+      "identity": "test-only-callsite|android/app/src/main/java/com/noop/analytics/SleepReadout.kt::lastChargeBreakdown/1#1",
+      "rule": "test-only-callsite",
+      "path": "android/app/src/main/java/com/noop/analytics/SleepReadout.kt",
+      "line": 63,
+      "text": "TestReadout.lastChargeBreakdown/1 has 7 test callsite(s) and no production callsite"
+    },
+    {
+      "identity": "test-only-callsite|android/app/src/main/java/com/noop/analytics/SleepReadout.kt::lastHrvComputation/1#1",
+      "rule": "test-only-callsite",
+      "path": "android/app/src/main/java/com/noop/analytics/SleepReadout.kt",
+      "line": 96,
+      "text": "TestReadout.lastHrvComputation/1 has 2 test callsite(s) and no production callsite"
+    },
+    {
+      "identity": "test-only-callsite|android/app/src/main/java/com/noop/analytics/SleepStageTotals.kt::isOvernightOnset/2#1",
+      "rule": "test-only-callsite",
+      "path": "android/app/src/main/java/com/noop/analytics/SleepStageTotals.kt",
+      "line": 183,
+      "text": "SleepStageTotals.isOvernightOnset/2 has 1 test callsite(s) and no production callsite"
+    },
+    {
+      "identity": "test-only-callsite|android/app/src/main/java/com/noop/analytics/SleepStageTotals.kt::bridgeAdjacent/1#1",
+      "rule": "test-only-callsite",
+      "path": "android/app/src/main/java/com/noop/analytics/SleepStageTotals.kt",
+      "line": 234,
+      "text": "SleepStageTotals.bridgeAdjacent/1 has 3 test callsite(s) and no production callsite"
+    },
+    {
+      "identity": "test-only-callsite|android/app/src/main/java/com/noop/analytics/SleepStager.kt::adaptiveOvernightHRBaseline/1#1",
+      "rule": "test-only-callsite",
+      "path": "android/app/src/main/java/com/noop/analytics/SleepStager.kt",
+      "line": 726,
+      "text": "SleepStager.adaptiveOvernightHRBaseline/1 has 3 test callsite(s) and no production callsite"
+    },
+    {
+      "identity": "test-only-callsite|android/app/src/main/java/com/noop/analytics/SleepStager.kt::percentile/2#1",
+      "rule": "test-only-callsite",
+      "path": "android/app/src/main/java/com/noop/analytics/SleepStager.kt",
+      "line": 2062,
+      "text": "SleepStager.percentile/2 has 4 test callsite(s) and no production callsite"
+    },
+    {
+      "identity": "duplicate-implementation|resting-hr|android/app/src/main/java/com/noop/analytics/SleepStager.kt::sessionRestingHR/3#1",
+      "rule": "duplicate-implementation",
+      "path": "android/app/src/main/java/com/noop/analytics/SleepStager.kt",
+      "line": 2648,
+      "text": "resting-HR path SleepStager.sessionRestingHR/3"
+    },
+    {
+      "identity": "test-only-callsite|android/app/src/main/java/com/noop/analytics/SpotHrvReading.kt::compute/2#1",
+      "rule": "test-only-callsite",
+      "path": "android/app/src/main/java/com/noop/analytics/SpotHrvReading.kt",
+      "line": 73,
+      "text": "SpotHrvReading.compute/2 has 1 test callsite(s) and no production callsite"
+    },
+    {
+      "identity": "test-only-callsite|android/app/src/main/java/com/noop/analytics/StepsEstimateEngineTrace.kt::stepsToday/1#1",
+      "rule": "test-only-callsite",
+      "path": "android/app/src/main/java/com/noop/analytics/StepsEstimateEngineTrace.kt",
+      "line": 191,
+      "text": "StepsReadout.stepsToday/1 has 2 test callsite(s) and no production callsite"
+    },
+    {
+      "identity": "test-only-callsite|android/app/src/main/java/com/noop/analytics/StepsEstimateEngineTrace.kt::calibrationState/1#1",
+      "rule": "test-only-callsite",
+      "path": "android/app/src/main/java/com/noop/analytics/StepsEstimateEngineTrace.kt",
+      "line": 205,
+      "text": "StepsReadout.calibrationState/1 has 2 test callsite(s) and no production callsite"
+    },
+    {
+      "identity": "test-only-callsite|android/app/src/main/java/com/noop/analytics/StrainScorer.kt::sampleDurationMinutes/1#1",
+      "rule": "test-only-callsite",
+      "path": "android/app/src/main/java/com/noop/analytics/StrainScorer.kt",
+      "line": 205,
+      "text": "StrainScorer.sampleDurationMinutes/1 has 1 test callsite(s) and no production callsite"
+    },
+    {
+      "identity": "test-only-callsite|android/app/src/main/java/com/noop/analytics/StressIndex.kt::stressIndexRaw/1#1",
+      "rule": "test-only-callsite",
+      "path": "android/app/src/main/java/com/noop/analytics/StressIndex.kt",
+      "line": 46,
+      "text": "StressIndex.stressIndexRaw/1 has 6 test callsite(s) and no production callsite"
+    },
+    {
+      "identity": "test-only-callsite|android/app/src/main/java/com/noop/analytics/WeeklyDigest.kt::summary/1#1",
+      "rule": "test-only-callsite",
+      "path": "android/app/src/main/java/com/noop/analytics/WeeklyDigest.kt",
+      "line": 183,
+      "text": "WeeklyDigest.summary/1 has 2 test callsite(s) and no production callsite"
+    },
+    {
+      "identity": "test-only-callsite|android/app/src/main/java/com/noop/analytics/WorkoutSport.kt::nameFor/1#1",
+      "rule": "test-only-callsite",
+      "path": "android/app/src/main/java/com/noop/analytics/WorkoutSport.kt",
+      "line": 25,
+      "text": "WorkoutSport.nameFor/1 has 1 test callsite(s) and no production callsite"
+    },
+    {
+      "identity": "test-only-callsite|android/app/src/main/java/com/noop/analytics/WorkoutTypeClassifier.kt::extract/8#1",
+      "rule": "test-only-callsite",
+      "path": "android/app/src/main/java/com/noop/analytics/WorkoutTypeClassifier.kt",
+      "line": 376,
+      "text": "WorkoutTypeFeatureExtractor.extract/8 has 2 test callsite(s) and no production callsite"
+    },
+    {
+      "identity": "dead-twin-reference|android/app/src/main/java/com/noop/ble/OuraLiveSource.kt|setAdoptIntent",
+      "rule": "dead-twin-reference",
+      "path": "android/app/src/main/java/com/noop/ble/OuraLiveSource.kt",
+      "line": 230,
+      "text": "Swift target setAdoptIntent does not resolve"
+    },
+    {
+      "identity": "test-only-callsite|android/app/src/main/java/com/noop/data/CycleTrackingStore.kt::todayKey/1#1",
+      "rule": "test-only-callsite",
+      "path": "android/app/src/main/java/com/noop/data/CycleTrackingStore.kt",
+      "line": 53,
+      "text": "CycleTrackingStore.todayKey/1 has 1 test callsite(s) and no production callsite"
+    },
+    {
+      "identity": "test-only-callsite|android/app/src/main/java/com/noop/data/DataBackup.kt::writeBackupZip/3#1",
+      "rule": "test-only-callsite",
+      "path": "android/app/src/main/java/com/noop/data/DataBackup.kt",
+      "line": 464,
+      "text": "DataBackup.writeBackupZip/3 has 1 test callsite(s) and no production callsite"
+    },
+    {
+      "identity": "test-only-callsite|android/app/src/main/java/com/noop/data/MoodStore.kt::todayKey/1#1",
+      "rule": "test-only-callsite",
+      "path": "android/app/src/main/java/com/noop/data/MoodStore.kt",
+      "line": 82,
+      "text": "MoodStore.todayKey/1 has 1 test callsite(s) and no production callsite"
+    },
+    {
+      "identity": "test-only-callsite|android/app/src/main/java/com/noop/data/OuraStreamMapping.kt::streams/2#1",
+      "rule": "test-only-callsite",
+      "path": "android/app/src/main/java/com/noop/data/OuraStreamMapping.kt",
+      "line": 53,
+      "text": "OuraStreamMapping.streams/2 has 19 test callsite(s) and no production callsite"
+    },
+    {
+      "identity": "test-only-callsite|android/app/src/main/java/com/noop/data/WhoopDao.kt::insertRawImu/1#1",
+      "rule": "test-only-callsite",
+      "path": "android/app/src/main/java/com/noop/data/WhoopDao.kt",
+      "line": 129,
+      "text": "WhoopDao.insertRawImu/1 has 2 test callsite(s) and no production callsite"
+    },
+    {
+      "identity": "test-only-callsite|android/app/src/main/java/com/noop/data/WhoopLiveCapabilities.kt::withoutCalibratedSpo2/1#1",
+      "rule": "test-only-callsite",
+      "path": "android/app/src/main/java/com/noop/data/WhoopLiveCapabilities.kt",
+      "line": 39,
+      "text": "WhoopLiveCapabilities.withoutCalibratedSpo2/1 has 1 test callsite(s) and no production callsite"
+    },
+    {
+      "identity": "test-only-callsite|android/app/src/main/java/com/noop/data/WhoopRepository.kt::mg/1#1",
+      "rule": "test-only-callsite",
+      "path": "android/app/src/main/java/com/noop/data/WhoopRepository.kt",
+      "line": 172,
+      "text": "DynAccelDiag.mg/1 has 2 test callsite(s) and no production callsite"
+    },
+    {
+      "identity": "test-only-callsite|android/app/src/main/java/com/noop/data/WhoopRepository.kt::pct/1#1",
+      "rule": "test-only-callsite",
+      "path": "android/app/src/main/java/com/noop/data/WhoopRepository.kt",
+      "line": 175,
+      "text": "DynAccelDiag.pct/1 has 2 test callsite(s) and no production callsite"
+    },
+    {
+      "identity": "test-only-callsite|android/app/src/main/java/com/noop/data/WhoopRepository.kt::hrFingerprint/0#1",
+      "rule": "test-only-callsite",
+      "path": "android/app/src/main/java/com/noop/data/WhoopRepository.kt",
+      "line": 559,
+      "text": "WhoopRepository.hrFingerprint/0 has 4 test callsite(s) and no production callsite"
+    },
+    {
+      "identity": "test-only-callsite|android/app/src/main/java/com/noop/data/WhoopRepository.kt::endDay/1#1",
+      "rule": "test-only-callsite",
+      "path": "android/app/src/main/java/com/noop/data/WhoopRepository.kt",
+      "line": 2402,
+      "text": "WhoopRepository.endDay/1 has 4 test callsite(s) and no production callsite"
+    },
+    {
+      "identity": "test-only-callsite|android/app/src/main/java/com/noop/ingest/ActivityFileImporter.kt::detectFormat/1#1",
+      "rule": "test-only-callsite",
+      "path": "android/app/src/main/java/com/noop/ingest/ActivityFileImporter.kt",
+      "line": 154,
+      "text": "ActivityFileImporter.detectFormat/1 has 3 test callsite(s) and no production callsite"
+    },
+    {
+      "identity": "test-only-callsite|android/app/src/main/java/com/noop/ingest/ActivityFileImporter.kt::parse/2#1",
+      "rule": "test-only-callsite",
+      "path": "android/app/src/main/java/com/noop/ingest/ActivityFileImporter.kt",
+      "line": 261,
+      "text": "ActivityFileImporter.parse/2 has 1 test callsite(s) and no production callsite"
+    },
+    {
+      "identity": "duplicate-implementation|dayString|android/app/src/main/java/com/noop/ingest/ActivityFileImporter.kt::dayString/1#1",
+      "rule": "duplicate-implementation",
+      "path": "android/app/src/main/java/com/noop/ingest/ActivityFileImporter.kt",
+      "line": 571,
+      "text": "dayString implementation ActivityFileImporter.dayString/1"
+    },
+    {
+      "identity": "test-only-callsite|android/app/src/main/java/com/noop/ingest/AppleHealthImporter.kt::parseStreamForTest/1#1",
+      "rule": "test-only-callsite",
+      "path": "android/app/src/main/java/com/noop/ingest/AppleHealthImporter.kt",
+      "line": 527,
+      "text": "AppleHealthImporter.parseStreamForTest/1 has 7 test callsite(s) and no production callsite"
+    },
+    {
+      "identity": "test-only-callsite|android/app/src/main/java/com/noop/ingest/CaptureImporter.kt::parse/1#1",
+      "rule": "test-only-callsite",
+      "path": "android/app/src/main/java/com/noop/ingest/CaptureImporter.kt",
+      "line": 105,
+      "text": "CaptureImporter.parse/1 has 11 test callsite(s) and no production callsite"
+    },
+    {
+      "identity": "test-only-callsite|android/app/src/main/java/com/noop/ingest/CaptureImporter.kt::parse/1#2",
+      "rule": "test-only-callsite",
+      "path": "android/app/src/main/java/com/noop/ingest/CaptureImporter.kt",
+      "line": 117,
+      "text": "CaptureImporter.parse/1 has 11 test callsite(s) and no production callsite"
+    },
+    {
+      "identity": "test-only-callsite|android/app/src/main/java/com/noop/ingest/CaptureImporter.kt::plus/1#1",
+      "rule": "test-only-callsite",
+      "path": "android/app/src/main/java/com/noop/ingest/CaptureImporter.kt",
+      "line": 211,
+      "text": "InsertCounts.plus/1 has 1 test callsite(s) and no production callsite"
+    },
+    {
+      "identity": "test-only-callsite|android/app/src/main/java/com/noop/ingest/CaptureImporter.kt::analyzeWindowDays/4#1",
+      "rule": "test-only-callsite",
+      "path": "android/app/src/main/java/com/noop/ingest/CaptureImporter.kt",
+      "line": 236,
+      "text": "CaptureImporter.analyzeWindowDays/4 has 1 test callsite(s) and no production callsite"
+    },
+    {
+      "identity": "test-only-callsite|android/app/src/main/java/com/noop/ingest/HealthExportPlan.kt::heartRate/6#1",
+      "rule": "test-only-callsite",
+      "path": "android/app/src/main/java/com/noop/ingest/HealthExportPlan.kt",
+      "line": 35,
+      "text": "HealthExportPlan.heartRate/6 has 6 test callsite(s) and no production callsite"
+    },
+    {
+      "identity": "test-only-callsite|android/app/src/main/java/com/noop/ingest/LabMarkerCsvImport.kt::parse/1#1",
+      "rule": "test-only-callsite",
+      "path": "android/app/src/main/java/com/noop/ingest/LabMarkerCsvImport.kt",
+      "line": 198,
+      "text": "LabMarkerCsvImport.parse/1 has 15 test callsite(s) and no production callsite"
+    },
+    {
+      "identity": "test-only-callsite|android/app/src/main/java/com/noop/ingest/LabMarkerCsvImport.kt::parse/1#2",
+      "rule": "test-only-callsite",
+      "path": "android/app/src/main/java/com/noop/ingest/LabMarkerCsvImport.kt",
+      "line": 209,
+      "text": "LabMarkerCsvImport.parse/1 has 15 test callsite(s) and no production callsite"
+    },
+    {
+      "identity": "test-only-callsite|android/app/src/main/java/com/noop/ingest/LabMarkerCsvImport.kt::parse/2#1",
+      "rule": "test-only-callsite",
+      "path": "android/app/src/main/java/com/noop/ingest/LabMarkerCsvImport.kt",
+      "line": 212,
+      "text": "LabMarkerCsvImport.parse/2 has 1 test callsite(s) and no production callsite"
+    },
+    {
+      "identity": "test-only-callsite|android/app/src/main/java/com/noop/ingest/LiftingImporter.kt::detectFormat/1#1",
+      "rule": "test-only-callsite",
+      "path": "android/app/src/main/java/com/noop/ingest/LiftingImporter.kt",
+      "line": 166,
+      "text": "LiftingImporter.detectFormat/1 has 3 test callsite(s) and no production callsite"
+    },
+    {
+      "identity": "test-only-callsite|android/app/src/main/java/com/noop/ingest/NutritionCsvImporter.kt::parse/2#1",
+      "rule": "test-only-callsite",
+      "path": "android/app/src/main/java/com/noop/ingest/NutritionCsvImporter.kt",
+      "line": 199,
+      "text": "NutritionCsvImporter.parse/2 has 1 test callsite(s) and no production callsite"
+    },
+    {
+      "identity": "test-only-callsite|android/app/src/main/java/com/noop/ingest/StreamCap.kt::readCapped/2#1",
+      "rule": "test-only-callsite",
+      "path": "android/app/src/main/java/com/noop/ingest/StreamCap.kt",
+      "line": 35,
+      "text": "InputStream.readCapped/2 has 1 test callsite(s) and no production callsite"
+    },
+    {
+      "identity": "duplicate-implementation|dayString|android/app/src/main/java/com/noop/ingest/WearableExportImporter.kt::dayString/1#1",
+      "rule": "duplicate-implementation",
+      "path": "android/app/src/main/java/com/noop/ingest/WearableExportImporter.kt",
+      "line": 880,
+      "text": "dayString implementation WearableExportImporter.dayString/1"
+    },
+    {
+      "identity": "test-only-callsite|android/app/src/main/java/com/noop/ingest/WhoopBiomarkerExportParser.kt::parse/1#1",
+      "rule": "test-only-callsite",
+      "path": "android/app/src/main/java/com/noop/ingest/WhoopBiomarkerExportParser.kt",
+      "line": 57,
+      "text": "WhoopBiomarkerExportParser.parse/1 has 4 test callsite(s) and no production callsite"
+    },
+    {
+      "identity": "test-only-callsite|android/app/src/main/java/com/noop/ingest/WhoopBiomarkerExportParser.kt::parse/1#2",
+      "rule": "test-only-callsite",
+      "path": "android/app/src/main/java/com/noop/ingest/WhoopBiomarkerExportParser.kt",
+      "line": 69,
+      "text": "WhoopBiomarkerExportParser.parse/1 has 4 test callsite(s) and no production callsite"
+    },
+    {
+      "identity": "test-only-callsite|android/app/src/main/java/com/noop/oura/Commands.kt::syncTime/2#1",
+      "rule": "test-only-callsite",
+      "path": "android/app/src/main/java/com/noop/oura/Commands.kt",
+      "line": 76,
+      "text": "OuraCommands.syncTime/2 has 1 test callsite(s) and no production callsite"
+    },
+    {
+      "identity": "test-only-callsite|android/app/src/main/java/com/noop/oura/Commands.kt::softReset/0#1",
+      "rule": "test-only-callsite",
+      "path": "android/app/src/main/java/com/noop/oura/Commands.kt",
+      "line": 179,
+      "text": "OuraDangerousCommands.softReset/0 has 2 test callsite(s) and no production callsite"
+    },
+    {
+      "identity": "test-only-callsite|android/app/src/main/java/com/noop/oura/Commands.kt::factoryReset/0#1",
+      "rule": "test-only-callsite",
+      "path": "android/app/src/main/java/com/noop/oura/Commands.kt",
+      "line": 183,
+      "text": "OuraDangerousCommands.factoryReset/0 has 1 test callsite(s) and no production callsite"
+    },
+    {
+      "identity": "test-only-callsite|android/app/src/main/java/com/noop/oura/Framing.kt::parseOuterFrame/1#1",
+      "rule": "test-only-callsite",
+      "path": "android/app/src/main/java/com/noop/oura/Framing.kt",
+      "line": 174,
+      "text": "OuraFraming.parseOuterFrame/1 has 6 test callsite(s) and no production callsite"
+    },
+    {
+      "identity": "test-only-callsite|android/app/src/main/java/com/noop/protocol/AlarmPayload.kt::nextWakeEpochMs/4#1",
+      "rule": "test-only-callsite",
+      "path": "android/app/src/main/java/com/noop/protocol/AlarmPayload.kt",
+      "line": 31,
+      "text": "AlarmPayload.nextWakeEpochMs/4 has 6 test callsite(s) and no production callsite"
+    },
+    {
+      "identity": "test-only-callsite|android/app/src/main/java/com/noop/protocol/BadClockDiagnostics.kt::isoDay/1#1",
+      "rule": "test-only-callsite",
+      "path": "android/app/src/main/java/com/noop/protocol/BadClockDiagnostics.kt",
+      "line": 20,
+      "text": "BadClockDiagnostics.isoDay/1 has 1 test callsite(s) and no production callsite"
+    },
+    {
+      "identity": "test-only-callsite|android/app/src/main/java/com/noop/protocol/FeatureFlagProbe.kt::parseStart/3#1",
+      "rule": "test-only-callsite",
+      "path": "android/app/src/main/java/com/noop/protocol/FeatureFlagProbe.kt",
+      "line": 281,
+      "text": "FeatureFlagProbe.parseStart/3 has 1 test callsite(s) and no production callsite"
+    },
+    {
+      "identity": "test-only-callsite|android/app/src/main/java/com/noop/protocol/FeatureFlagProbe.kt::parseNext/3#1",
+      "rule": "test-only-callsite",
+      "path": "android/app/src/main/java/com/noop/protocol/FeatureFlagProbe.kt",
+      "line": 302,
+      "text": "FeatureFlagProbe.parseNext/3 has 3 test callsite(s) and no production callsite"
+    },
+    {
+      "identity": "test-only-callsite|android/app/src/main/java/com/noop/protocol/FeatureFlagProbe.kt::hex/1#1",
+      "rule": "test-only-callsite",
+      "path": "android/app/src/main/java/com/noop/protocol/FeatureFlagProbe.kt",
+      "line": 368,
+      "text": "FeatureFlagProbe.hex/1 has 2 test callsite(s) and no production callsite"
+    },
+    {
+      "identity": "test-only-callsite|android/app/src/main/java/com/noop/protocol/FeatureFlagProbe.kt::hex/1#2",
+      "rule": "test-only-callsite",
+      "path": "android/app/src/main/java/com/noop/protocol/FeatureFlagProbe.kt",
+      "line": 376,
+      "text": "FeatureFlagProbe.hex/1 has 2 test callsite(s) and no production callsite"
+    },
+    {
+      "identity": "test-only-callsite|android/app/src/main/java/com/noop/protocol/Framing.kt::le32/1#1",
+      "rule": "test-only-callsite",
+      "path": "android/app/src/main/java/com/noop/protocol/Framing.kt",
+      "line": 529,
+      "text": "Framing.le32/1 has 3 test callsite(s) and no production callsite"
+    },
+    {
+      "identity": "test-only-callsite|android/app/src/main/java/com/noop/protocol/Streams.kt::fromCode/1#1",
+      "rule": "test-only-callsite",
+      "path": "android/app/src/main/java/com/noop/protocol/Streams.kt",
+      "line": 58,
+      "text": "RrSourceChannel.fromCode/1 has 3 test callsite(s) and no production callsite"
+    },
+    {
+      "identity": "test-only-callsite|android/app/src/main/java/com/noop/protocol/Whoop5Config.kt::disableSequenceFrames/1#1",
+      "rule": "test-only-callsite",
+      "path": "android/app/src/main/java/com/noop/protocol/Whoop5Config.kt",
+      "line": 146,
+      "text": "Whoop5Config.disableSequenceFrames/1 has 1 test callsite(s) and no production callsite"
+    },
+    {
+      "identity": "test-only-callsite|android/app/src/main/java/com/noop/protocol/Whoop5Ecg.kt::selectWristPayload/1#1",
+      "rule": "test-only-callsite",
+      "path": "android/app/src/main/java/com/noop/protocol/Whoop5Ecg.kt",
+      "line": 176,
+      "text": "Whoop5Ecg.selectWristPayload/1 has 2 test callsite(s) and no production callsite"
+    },
+    {
+      "identity": "test-only-callsite|android/app/src/main/java/com/noop/protocol/Whoop5Ecg.kt::togglePayload/1#1",
+      "rule": "test-only-callsite",
+      "path": "android/app/src/main/java/com/noop/protocol/Whoop5Ecg.kt",
+      "line": 178,
+      "text": "Whoop5Ecg.togglePayload/1 has 2 test callsite(s) and no production callsite"
+    },
+    {
+      "identity": "test-only-callsite|android/app/src/main/java/com/noop/protocol/Whoop5Ecg.kt::controlPayload/1#1",
+      "rule": "test-only-callsite",
+      "path": "android/app/src/main/java/com/noop/protocol/Whoop5Ecg.kt",
+      "line": 180,
+      "text": "Whoop5Ecg.controlPayload/1 has 3 test callsite(s) and no production callsite"
+    },
+    {
+      "identity": "test-only-callsite|android/app/src/main/java/com/noop/protocol/Whoop5Ecg.kt::selectWristFrame/2#1",
+      "rule": "test-only-callsite",
+      "path": "android/app/src/main/java/com/noop/protocol/Whoop5Ecg.kt",
+      "line": 192,
+      "text": "Whoop5Ecg.selectWristFrame/2 has 2 test callsite(s) and no production callsite"
+    },
+    {
+      "identity": "test-only-callsite|android/app/src/main/java/com/noop/protocol/Whoop5Ecg.kt::toggleRealtimeFilteredEcgFrame/2#1",
+      "rule": "test-only-callsite",
+      "path": "android/app/src/main/java/com/noop/protocol/Whoop5Ecg.kt",
+      "line": 195,
+      "text": "Whoop5Ecg.toggleRealtimeFilteredEcgFrame/2 has 1 test callsite(s) and no production callsite"
+    },
+    {
+      "identity": "test-only-callsite|android/app/src/main/java/com/noop/protocol/Whoop5Ecg.kt::toggleSaveRawEcgFrame/2#1",
+      "rule": "test-only-callsite",
+      "path": "android/app/src/main/java/com/noop/protocol/Whoop5Ecg.kt",
+      "line": 198,
+      "text": "Whoop5Ecg.toggleSaveRawEcgFrame/2 has 1 test callsite(s) and no production callsite"
+    },
+    {
+      "identity": "test-only-callsite|android/app/src/main/java/com/noop/protocol/Whoop5Ecg.kt::mainControlEcgDataGenerationFrame/2#1",
+      "rule": "test-only-callsite",
+      "path": "android/app/src/main/java/com/noop/protocol/Whoop5Ecg.kt",
+      "line": 201,
+      "text": "Whoop5Ecg.mainControlEcgDataGenerationFrame/2 has 2 test callsite(s) and no production callsite"
+    },
+    {
+      "identity": "test-only-callsite|android/app/src/main/java/com/noop/protocol/Whoop5Ecg.kt::requestsRealtimeData/2#1",
+      "rule": "test-only-callsite",
+      "path": "android/app/src/main/java/com/noop/protocol/Whoop5Ecg.kt",
+      "line": 229,
+      "text": "Whoop5Ecg.requestsRealtimeData/2 has 9 test callsite(s) and no production callsite"
+    },
+    {
+      "identity": "test-only-callsite|android/app/src/main/java/com/noop/protocol/Whoop5EcgProbe.kt::outcome/1#1",
+      "rule": "test-only-callsite",
+      "path": "android/app/src/main/java/com/noop/protocol/Whoop5EcgProbe.kt",
+      "line": 92,
+      "text": "Whoop5EcgProbe.outcome/1 has 6 test callsite(s) and no production callsite"
+    },
+    {
+      "identity": "test-only-callsite|android/app/src/main/java/com/noop/protocol/Whoop5EcgProbe.kt::verdict/3#1",
+      "rule": "test-only-callsite",
+      "path": "android/app/src/main/java/com/noop/protocol/Whoop5EcgProbe.kt",
+      "line": 220,
+      "text": "Whoop5EcgProbe.verdict/3 has 15 test callsite(s) and no production callsite"
+    },
+    {
+      "identity": "test-only-callsite|android/app/src/main/java/com/noop/protocol/Whoop5EcgProbe.kt::report/4#1",
+      "rule": "test-only-callsite",
+      "path": "android/app/src/main/java/com/noop/protocol/Whoop5EcgProbe.kt",
+      "line": 252,
+      "text": "Whoop5EcgProbe.report/4 has 7 test callsite(s) and no production callsite"
+    },
+    {
+      "identity": "test-only-callsite|android/app/src/main/java/com/noop/protocol/Whoop5RawOptical.kt::decode/1#1",
+      "rule": "test-only-callsite",
+      "path": "android/app/src/main/java/com/noop/protocol/Whoop5RawOptical.kt",
+      "line": 59,
+      "text": "Whoop5RawOptical.decode/1 has 4 test callsite(s) and no production callsite"
+    },
+    {
+      "identity": "duplicate-implementation|android-ui-pearson|android/app/src/main/java/com/noop/ui/CompareScreen.kt::pearson/1#1",
+      "rule": "duplicate-implementation",
+      "path": "android/app/src/main/java/com/noop/ui/CompareScreen.kt",
+      "line": 360,
+      "text": "independent Android UI Pearson implementation CorrelationEngine.pearson/1"
+    },
+    {
+      "identity": "dead-twin-reference|android/app/src/main/java/com/noop/ui/DataSourcesScreen.kt|repo.days",
+      "rule": "dead-twin-reference",
+      "path": "android/app/src/main/java/com/noop/ui/DataSourcesScreen.kt",
+      "line": 155,
+      "text": "Swift target repo.days does not resolve"
+    },
+    {
+      "identity": "duplicate-implementation|android-ui-pearson|android/app/src/main/java/com/noop/ui/InsightsScreen.kt::pearson/1#1",
+      "rule": "duplicate-implementation",
+      "path": "android/app/src/main/java/com/noop/ui/InsightsScreen.kt",
+      "line": 1712,
+      "text": "independent Android UI Pearson implementation InsightsScreen.pearson/1"
+    },
+    {
+      "identity": "duplicate-implementation|android-ui-pearson|android/app/src/main/java/com/noop/ui/LabBookScreen.kt::pearson/1#1",
+      "rule": "duplicate-implementation",
+      "path": "android/app/src/main/java/com/noop/ui/LabBookScreen.kt",
+      "line": 750,
+      "text": "independent Android UI Pearson implementation LabBookScreen.pearson/1"
+    },
+    {
+      "identity": "duplicate-implementation|android-ui-pearson|android/app/src/main/java/com/noop/ui/MindSection.kt::pearson/1#1",
+      "rule": "duplicate-implementation",
+      "path": "android/app/src/main/java/com/noop/ui/MindSection.kt",
+      "line": 324,
+      "text": "independent Android UI Pearson implementation MindCorrelationEngine.pearson/1"
+    },
+    {
+      "identity": "dead-twin-reference|android/app/src/test/java/com/noop/analytics/SleepReadWindowTest.kt|SleepReadWindowTests.swift",
+      "rule": "dead-twin-reference",
+      "path": "android/app/src/test/java/com/noop/analytics/SleepReadWindowTest.kt",
+      "line": 8,
+      "text": "Swift target SleepReadWindowTests.swift does not resolve"
+    },
+    {
+      "identity": "dead-twin-reference|android/app/src/test/java/com/noop/ble/AlarmReadbackDecodeTest.kt|AlarmReadbackDecodeTests",
+      "rule": "dead-twin-reference",
+      "path": "android/app/src/test/java/com/noop/ble/AlarmReadbackDecodeTest.kt",
+      "line": 11,
+      "text": "Swift target AlarmReadbackDecodeTests does not resolve"
+    },
+    {
+      "identity": "dead-twin-reference|android/app/src/test/java/com/noop/ble/BondLoopSalvageProbeTest.kt|BondLoopHardeningTests",
+      "rule": "dead-twin-reference",
+      "path": "android/app/src/test/java/com/noop/ble/BondLoopSalvageProbeTest.kt",
+      "line": 13,
+      "text": "Swift target BondLoopHardeningTests does not resolve"
+    },
+    {
+      "identity": "dead-twin-reference|android/app/src/test/java/com/noop/ble/StandardHrProximityTest.kt|StandardHRProximityTests",
+      "rule": "dead-twin-reference",
+      "path": "android/app/src/test/java/com/noop/ble/StandardHrProximityTest.kt",
+      "line": 8,
+      "text": "Swift target StandardHRProximityTests does not resolve"
+    },
+    {
+      "identity": "dead-twin-reference|android/app/src/test/java/com/noop/ble/Whoop5EventFramePredicateTest.kt|PuffinEventLogTests",
+      "rule": "dead-twin-reference",
+      "path": "android/app/src/test/java/com/noop/ble/Whoop5EventFramePredicateTest.kt",
+      "line": 14,
+      "text": "Swift target PuffinEventLogTests does not resolve"
+    },
+    {
+      "identity": "dead-twin-reference|android/app/src/test/java/com/noop/ui/LastRespRowTest.kt|TodayVitalCardTests",
+      "rule": "dead-twin-reference",
+      "path": "android/app/src/test/java/com/noop/ui/LastRespRowTest.kt",
+      "line": 9,
+      "text": "Swift target TodayVitalCardTests does not resolve"
+    },
+    {
+      "identity": "dead-twin-reference|android/app/src/test/java/com/noop/ui/SleepTileCarryStalenessTest.kt|SleepModelStaleCarryTests",
+      "rule": "dead-twin-reference",
+      "path": "android/app/src/test/java/com/noop/ui/SleepTileCarryStalenessTest.kt",
+      "line": 15,
+      "text": "Swift target SleepModelStaleCarryTests does not resolve"
+    }
+  ],
+  "counters": {
+    "day_string_implementations": 12,
+    "resting_hr_paths": 2,
+    "android_ui_pearson_implementations": 4
+  }
+}

@@ -14,13 +14,17 @@ on:
     branches: [main]
     paths:
       - 'Tools/linux-capture/**'
+      - 'Tools/tests/**'
       - 'Tools/*.py'
+      - 'Tools/parity_*.json'
       - '.github/workflows/tools-python.yml'
   push:
     branches: [main]
     paths:
       - 'Tools/linux-capture/**'
+      - 'Tools/tests/**'
       - 'Tools/*.py'
+      - 'Tools/parity_*.json'
       - '.github/workflows/tools-python.yml'
   workflow_dispatch:
 
@@ -39,6 +43,11 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: '3.12'
+
+      - name: Run parity ledger and tests
+        run: |
+          python3 Tools/parity_ledger.py
+          python3 -m unittest discover -s Tools/tests -v
 
       # `discover` rather than a hand-listed set, so a NEW test file is picked up without editing this
       # workflow — the failure mode that leaves a suite unrun is exactly what this job exists to end.
