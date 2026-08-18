@@ -17,6 +17,16 @@ on:
       - 'Tools/tests/**'
       - 'Tools/*.py'
       - 'Tools/parity_*.json'
+      - 'Packages/StrandAnalytics/Sources/**/*.swift'
+      - 'Packages/StrandImport/Sources/**/*.swift'
+      - 'Packages/WhoopStore/Sources/**/*.swift'
+      - 'Packages/WhoopProtocol/Sources/**/*.swift'
+      - 'Packages/OuraProtocol/Sources/**/*.swift'
+      - 'android/app/src/main/java/com/noop/analytics/**/*.kt'
+      - 'android/app/src/main/java/com/noop/ingest/**/*.kt'
+      - 'android/app/src/main/java/com/noop/data/**/*.kt'
+      - 'android/app/src/main/java/com/noop/protocol/**/*.kt'
+      - 'android/app/src/main/java/com/noop/oura/**/*.kt'
       - '.github/workflows/tools-python.yml'
   push:
     branches: [main]
@@ -25,6 +35,16 @@ on:
       - 'Tools/tests/**'
       - 'Tools/*.py'
       - 'Tools/parity_*.json'
+      - 'Packages/StrandAnalytics/Sources/**/*.swift'
+      - 'Packages/StrandImport/Sources/**/*.swift'
+      - 'Packages/WhoopStore/Sources/**/*.swift'
+      - 'Packages/WhoopProtocol/Sources/**/*.swift'
+      - 'Packages/OuraProtocol/Sources/**/*.swift'
+      - 'android/app/src/main/java/com/noop/analytics/**/*.kt'
+      - 'android/app/src/main/java/com/noop/ingest/**/*.kt'
+      - 'android/app/src/main/java/com/noop/data/**/*.kt'
+      - 'android/app/src/main/java/com/noop/protocol/**/*.kt'
+      - 'android/app/src/main/java/com/noop/oura/**/*.kt'
       - '.github/workflows/tools-python.yml'
   workflow_dispatch:
 
