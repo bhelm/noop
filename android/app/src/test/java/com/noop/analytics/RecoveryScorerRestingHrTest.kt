@@ -7,8 +7,8 @@ import org.junit.Test
 /**
  * Tests RecoveryScorer.restingHR's artifact hardening (#686): the resting floor is the minimum of
  * 5-min bin means, but a thin (single-artifact) bin or a sub-physiological (dropout) bin must NOT
- * win that minimum. Faithful Kotlin mirror of the #686 cases in RecoveryScorerTests.swift — same
- * scenarios, same expected floors, byte-identical logic.
+ * win that minimum. Faithful Kotlin mirror of the Swift cases in RecoveryScorerTests.swift — same
+ * scenarios, same expected floors, value-identical logic.
  */
 class RecoveryScorerRestingHrTest {
 
@@ -55,13 +55,35 @@ class RecoveryScorerRestingHrTest {
     }
 
     @Test
-    fun fallsBackWhenNoBinQualifies() {
+    fun returnsNullWhenNoBinQualifies() {
         // A wholly sparse window: every bin holds a single sample (none clears the count bar).
-        // Rather than return null on data present, fall back to the legacy lowest-bin-mean (here 48).
+        // Sparse artifact bins are insufficient data, not a usable resting-HR floor.
         val start = 4000L
         val samples = listOf(hr(start + 10, 58), hr(start + 320, 48)) // two bins, one sample each
         val r = RecoveryScorer.restingHR(samples, start, start + 600)
-        assertEquals("with no qualifying bin, fall back to the lowest bin mean (never null on data)", 48, r)
+        assertEquals("with no qualifying bin, resting HR must be insufficient data", null, r)
+    }
+
+    @Test
+    fun sessionRestingHrRejectsSingleSampleBin() {
+        val start = 5000L
+        val samples = listOf(hr(start + 10, 30))
+
+        assertEquals(
+            "the production session path must apply the shared sample-density gate",
+            null,
+            SleepStager.sessionRestingHR(start, start + 300, samples),
+        )
+    }
+
+    @Test
+    fun sessionRestingHrKeepsDenseMinimum() {
+        val start = 6000L
+        val samples = ArrayList<HrSample>()
+        for (i in 0 until 300) samples.add(hr(start + i, 60))
+        for (i in 0 until 300) samples.add(hr(start + 300 + i, 50))
+
+        assertEquals(50, SleepStager.sessionRestingHR(start, start + 600, samples))
     }
 
     @Test

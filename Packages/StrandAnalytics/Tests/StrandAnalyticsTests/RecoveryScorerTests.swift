@@ -213,14 +213,32 @@ final class RecoveryScorerTests: XCTestCase {
         XCTAssertEqual(r, 45, "a genuine sustained low bin must still win the floor")
     }
 
-    func testRestingHRFallsBackWhenNoBinQualifies() {
+    func testRestingHRReturnsNilWhenNoBinQualifies() {
         // A wholly sparse window: every bin holds a single sample (none clears the count bar).
-        // Rather than return nil on data present, fall back to the legacy lowest-bin-mean (here 48).
+        // Sparse artifact bins are insufficient data, not a usable resting-HR floor.
         let start = 4000
         let hr = [HRSample(ts: start + 10, bpm: 58),
                   HRSample(ts: start + 320, bpm: 48)]   // two bins, one sample each
         let r = RecoveryScorer.restingHR(hr, start: start, end: start + 600)
-        XCTAssertEqual(r, 48, "with no qualifying bin, fall back to the lowest bin mean (never nil on data)")
+        XCTAssertNil(r, "with no qualifying bin, resting HR must be insufficient data")
+    }
+
+    func testSessionRestingHRRejectsSingleSampleBin() {
+        let start = 5000
+        let hr = [HRSample(ts: start + 10, bpm: 30)]
+
+        XCTAssertNil(
+            SleepStager.sessionRestingHR(start: start, end: start + 300, hr: hr),
+            "the production session path must apply the shared sample-density gate")
+    }
+
+    func testSessionRestingHRKeepsDenseMinimum() {
+        let start = 6000
+        var hr: [HRSample] = []
+        for i in 0..<300 { hr.append(HRSample(ts: start + i, bpm: 60)) }
+        for i in 0..<300 { hr.append(HRSample(ts: start + 300 + i, bpm: 50)) }
+
+        XCTAssertEqual(SleepStager.sessionRestingHR(start: start, end: start + 600, hr: hr), 50)
     }
 
     // MARK: - Recovery Index: recoveryIndexSlope(_:start:end:)
