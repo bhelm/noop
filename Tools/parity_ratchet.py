@@ -792,8 +792,17 @@ def registered_differential(root: Path) -> tuple[set[str], list[str]]:
     except OSError as exc:
         return set(), [f"cannot read differential runner: {exc}"]
     key_pattern = r"([A-Za-z_][A-Za-z0-9_]*(?:/(?:0|[1-9][0-9]*))?)"
-    swift_names = set(re.findall(rf"\bcase\s+\"{key_pattern}\"\s*:", swift))
-    kotlin_names = set(re.findall(rf"\"{key_pattern}\"\s*->", kotlin))
+    # Capture every dispatcher label first, then validate: a malformed key
+    # ("analyze/", "foo/x") must be an explicit registry error, not a silent drop.
+    key_re = re.compile(rf"^{key_pattern}$")
+    swift_labels = re.findall(r"\bcase\s+\"([^\"\n]+)\"\s*:", swift)
+    kotlin_labels = re.findall(r"\"([^\"\n]+)\"\s*->", kotlin)
+    for side, labels in (("swift", swift_labels), ("kotlin", kotlin_labels)):
+        for label in sorted(set(labels)):
+            if not key_re.fullmatch(label):
+                errors.append(f"malformed {side} differential registry key: {label!r}")
+    swift_names = {label for label in swift_labels if key_re.fullmatch(label)}
+    kotlin_names = {label for label in kotlin_labels if key_re.fullmatch(label)}
     if swift_names != kotlin_names:
         errors.append(
             "differential runner registrations disagree: "

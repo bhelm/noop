@@ -591,6 +591,22 @@ func constrained<T>()
         self.assertEqual({"differential": 0, "platform-test": 0, "exempt": 0}, counts)
         self.assertIn("NOTICE", output.getvalue())
 
+    def test_malformed_registry_key_is_an_explicit_error_not_a_silent_drop(self) -> None:
+        self.write(
+            parity_ratchet.SWIFT_RUNNER,
+            'switch name {\ncase "score/1":\ncase "broken/":\ndefault: break\n}\n',
+        )
+        self.write(
+            parity_ratchet.KOTLIN_RUNNER,
+            'when (name) {\n"score/1" -> run()\n"broken/" -> run()\n}\n',
+        )
+
+        registered, errors = parity_ratchet.registered_differential(self.root)
+
+        self.assertEqual({"score/1"}, registered)
+        self.assertIn("malformed swift differential registry key: 'broken/'", errors)
+        self.assertIn("malformed kotlin differential registry key: 'broken/'", errors)
+
     def test_arity_registry_resolves_overloads_with_different_arities(self) -> None:
         swift = self.write(
             "Sources/Pilot/Engine.swift",
