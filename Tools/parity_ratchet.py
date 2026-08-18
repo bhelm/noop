@@ -1071,6 +1071,8 @@ def _function_executions(
         if declaration.line <= item.line <= declaration.end_line
     ]
     if not candidates:
+        if language == "kotlin" and len(named) == 1:
+            return "found", named[0].executions
         return "missing", 0
     entry_line = min(item.line for item in candidates)
     return "found", sum(item.executions for item in candidates if item.line == entry_line)

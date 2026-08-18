@@ -10,11 +10,24 @@ final class ParityRunner: XCTestCase {
     }
 
     private struct Arguments: Decodable {
+        let collapsed: Double?
+        let contiguous: [Bool]?
+        let coverage: Double?
         let denominator: Double?
+        let fraction: Double?
+        let halfWindowSec: Int?
+        let maxRowsPerSecond: Int?
         let minBeatsPerWindow: Int?
+        let nn: [Double]?
         let rr: [RRInput]?
+        let rrMs: [Double]?
+        let rrTolMs: Double?
+        let srcCodes: [Int?]?
         let stepSec: Int?
+        let tsSec: [Int]?
         let trimp: Double?
+        let values: [Double]?
+        let verdict: String?
         let windowSec: Int?
     }
 
@@ -101,6 +114,144 @@ final class ParityRunner: XCTestCase {
             "nonce": record.nonce,
         ]
         switch record.function {
+        case "rmssdRaw":
+            guard record.comparison == "epsilon", let nn = record.args.nn else {
+                throw RunnerError.invalidInput("invalid rmssdRaw case \(record.id)")
+            }
+            result["value"] = try finiteOrNull(HRVAnalyzer.rmssdRaw(nn), record: record)
+        case "sdnnRaw":
+            guard record.comparison == "epsilon", let nn = record.args.nn else {
+                throw RunnerError.invalidInput("invalid sdnnRaw case \(record.id)")
+            }
+            result["value"] = try finiteOrNull(HRVAnalyzer.sdnnRaw(nn), record: record)
+        case "rangeFilter":
+            guard record.comparison == "exact", let values = record.args.values else {
+                throw RunnerError.invalidInput("invalid rangeFilter case \(record.id)")
+            }
+            result["valueBits"] = exactBits(HRVAnalyzer.rangeFilter(values))
+        case "rejectEctopic":
+            guard record.comparison == "exact", let values = record.args.values else {
+                throw RunnerError.invalidInput("invalid rejectEctopic case \(record.id)")
+            }
+            result["valueBits"] = exactBits(HRVAnalyzer.rejectEctopic(values))
+        case "cleanRR":
+            guard record.comparison == "exact", let values = record.args.values else {
+                throw RunnerError.invalidInput("invalid cleanRR case \(record.id)")
+            }
+            result["valueBits"] = exactBits(HRVAnalyzer.cleanRR(values))
+        case "cleanRRGapAware":
+            guard record.comparison == "exact", let values = record.args.values else {
+                throw RunnerError.invalidInput("invalid cleanRRGapAware case \(record.id)")
+            }
+            let clean = HRVAnalyzer.cleanRRGapAware(values)
+            let encoded: [String: Any] = [
+                "contiguous": clean.contiguous,
+                "nn": exactBits(clean.nn),
+            ]
+            result["valueBits"] = encoded
+        case "rmssdGapAware":
+            guard record.comparison == "epsilon", let nn = record.args.nn,
+                  let contiguous = record.args.contiguous, nn.count == contiguous.count else {
+                throw RunnerError.invalidInput("invalid rmssdGapAware case \(record.id)")
+            }
+            result["value"] = try finiteOrNull(
+                HRVAnalyzer.rmssdGapAware(nn, contiguous), record: record
+            )
+        case "pnn50GapAware":
+            guard record.comparison == "epsilon", let nn = record.args.nn,
+                  let contiguous = record.args.contiguous, nn.count == contiguous.count else {
+                throw RunnerError.invalidInput("invalid pnn50GapAware case \(record.id)")
+            }
+            result["value"] = try finiteOrNull(
+                HRVAnalyzer.pnn50GapAware(nn, contiguous), record: record
+            )
+        case "beatSpreadIsTrustworthy":
+            guard record.comparison == "exact", let raw = record.args.verdict,
+                  let verdict = HRVAnalyzer.RrCoverageVerdict(rawValue: raw) else {
+                throw RunnerError.invalidInput("invalid beatSpreadIsTrustworthy case \(record.id)")
+            }
+            result["valueBits"] = HRVAnalyzer.beatSpreadIsTrustworthy(verdict)
+        case "beatAccurateFraction":
+            guard record.comparison == "epsilon", let ts = record.args.tsSec,
+                  let rr = record.args.rrMs else {
+                throw RunnerError.invalidInput("invalid beatAccurateFraction case \(record.id)")
+            }
+            result["value"] = try finite(
+                HRVAnalyzer.beatAccurateFraction(tsSec: ts, rrMs: rr), record: record
+            )
+        case "beatValuesAreTrustworthy":
+            guard record.comparison == "exact", let fraction = record.args.fraction else {
+                throw RunnerError.invalidInput("invalid beatValuesAreTrustworthy case \(record.id)")
+            }
+            result["valueBits"] = HRVAnalyzer.beatValuesAreTrustworthy(
+                beatAccurateFraction: fraction
+            )
+        case "classifyCoverage":
+            guard record.comparison == "exact", let coverage = record.args.coverage,
+                  let collapsed = record.args.collapsed else {
+                throw RunnerError.invalidInput("invalid classifyCoverage case \(record.id)")
+            }
+            let verdict = HRVAnalyzer.classifyCoverage(coverage: coverage, collapsed: collapsed)
+            result["valueBits"] = ["text": verdict.rawValue]
+        case "rrCoverage":
+            guard record.comparison == "epsilon", let ts = record.args.tsSec,
+                  let rr = record.args.rrMs else {
+                throw RunnerError.invalidInput("invalid rrCoverage case \(record.id)")
+            }
+            result["value"] = try finite(
+                HRVAnalyzer.rrCoverage(tsSec: ts, rrMs: rr), record: record
+            )
+        case "duplicateBeatCount":
+            guard record.comparison == "exact", let ts = record.args.tsSec,
+                  let rr = record.args.rrMs else {
+                throw RunnerError.invalidInput("invalid duplicateBeatCount case \(record.id)")
+            }
+            result["valueBits"] = HRVAnalyzer.duplicateBeatCount(tsSec: ts, rrMs: rr)
+        case "collapseOverCount":
+            guard record.comparison == "exact", let ts = record.args.tsSec,
+                  let rr = record.args.rrMs, let rrTol = record.effectiveArgs.rrTolMs,
+                  let window = record.effectiveArgs.windowSec else {
+                throw RunnerError.invalidInput("invalid collapseOverCount case \(record.id)")
+            }
+            let collapsed: (tsSec: [Int], rrMs: [Double])
+            if record.args.rrTolMs == nil, record.args.windowSec == nil {
+                collapsed = HRVAnalyzer.collapseOverCount(tsSec: ts, rrMs: rr)
+            } else {
+                collapsed = HRVAnalyzer.collapseOverCount(
+                    tsSec: ts, rrMs: rr, rrTolMs: rrTol, windowSec: window
+                )
+            }
+            let encoded: [String: Any] = [
+                "rrMs": exactBits(collapsed.rrMs),
+                "tsSec": collapsed.tsSec,
+            ]
+            result["valueBits"] = encoded
+        case "collapsedCoverage":
+            guard record.comparison == "epsilon", let ts = record.args.tsSec,
+                  let rr = record.args.rrMs, let rrTol = record.effectiveArgs.rrTolMs else {
+                throw RunnerError.invalidInput("invalid collapsedCoverage case \(record.id)")
+            }
+            let value = record.args.rrTolMs == nil
+                ? HRVAnalyzer.collapsedCoverage(tsSec: ts, rrMs: rr)
+                : HRVAnalyzer.collapsedCoverage(tsSec: ts, rrMs: rr, rrTolMs: rrTol)
+            result["value"] = try finite(value, record: record)
+        case "densestSecondWindowSample":
+            guard record.comparison == "exact", let ts = record.args.tsSec,
+                  let rr = record.args.rrMs, let src = record.args.srcCodes,
+                  let halfWindow = record.effectiveArgs.halfWindowSec,
+                  let maxRows = record.effectiveArgs.maxRowsPerSecond else {
+                throw RunnerError.invalidInput("invalid densestSecondWindowSample case \(record.id)")
+            }
+            let value: String
+            if record.args.halfWindowSec == nil, record.args.maxRowsPerSecond == nil {
+                value = HRVAnalyzer.densestSecondWindowSample(tsSec: ts, rrMs: rr, srcCodes: src)
+            } else {
+                value = HRVAnalyzer.densestSecondWindowSample(
+                    tsSec: ts, rrMs: rr, srcCodes: src,
+                    halfWindowSec: halfWindow, maxRowsPerSecond: maxRows
+                )
+            }
+            result["valueBits"] = ["text": value]
         case "rollingRmssd":
             guard record.comparison == "epsilon",
                   let inputRR = record.args.rr,
@@ -157,5 +308,21 @@ final class ParityRunner: XCTestCase {
             throw RunnerError.invalidInput("unsupported parity function \(record.function)")
         }
         return result
+    }
+
+    private func exactBits(_ values: [Double]) -> [String] {
+        values.map { String(format: "%016llx", $0.bitPattern) }
+    }
+
+    private func finite(_ value: Double, record: InputRecord) throws -> Double {
+        guard value.isFinite else {
+            throw RunnerError.nonFinite("\(record.function) returned a non-finite value for \(record.id)")
+        }
+        return value
+    }
+
+    private func finiteOrNull(_ value: Double?, record: InputRecord) throws -> Any {
+        guard let value else { return NSNull() }
+        return try finite(value, record: record)
     }
 }

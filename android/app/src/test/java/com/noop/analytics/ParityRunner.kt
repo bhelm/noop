@@ -66,6 +66,140 @@ class ParityRunner {
             "nonce" to record.getString("nonce"),
         )
         when (function) {
+            "rmssdRaw" -> {
+                require(comparison == "epsilon") { "invalid rmssdRaw case $caseId" }
+                result["value"] = finiteOrNull(HrvAnalyzer.rmssdRaw(doubleList(args, "nn")), function, caseId)
+            }
+            "sdnnRaw" -> {
+                require(comparison == "epsilon") { "invalid sdnnRaw case $caseId" }
+                result["value"] = finiteOrNull(HrvAnalyzer.sdnnRaw(doubleList(args, "nn")), function, caseId)
+            }
+            "rangeFilter" -> {
+                require(comparison == "exact") { "invalid rangeFilter case $caseId" }
+                result["valueBits"] = exactBits(HrvAnalyzer.rangeFilter(doubleList(args, "values")))
+            }
+            "rejectEctopic" -> {
+                require(comparison == "exact") { "invalid rejectEctopic case $caseId" }
+                result["valueBits"] = exactBits(HrvAnalyzer.rejectEctopic(doubleList(args, "values")))
+            }
+            "cleanRR" -> {
+                require(comparison == "exact") { "invalid cleanRR case $caseId" }
+                result["valueBits"] = exactBits(HrvAnalyzer.cleanRR(doubleList(args, "values")))
+            }
+            "cleanRRGapAware" -> {
+                require(comparison == "exact") { "invalid cleanRRGapAware case $caseId" }
+                val clean = HrvAnalyzer.cleanRRGapAware(doubleList(args, "values"))
+                result["valueBits"] = sortedMapOf(
+                    "contiguous" to clean.contiguous,
+                    "nn" to exactBits(clean.nn),
+                )
+            }
+            "rmssdGapAware" -> {
+                require(comparison == "epsilon") { "invalid rmssdGapAware case $caseId" }
+                val nn = doubleList(args, "nn")
+                val contiguous = booleanList(args, "contiguous")
+                require(nn.size == contiguous.size) { "invalid rmssdGapAware case $caseId" }
+                result["value"] = finiteOrNull(
+                    HrvAnalyzer.rmssdGapAware(nn, contiguous), function, caseId,
+                )
+            }
+            "pnn50GapAware" -> {
+                require(comparison == "epsilon") { "invalid pnn50GapAware case $caseId" }
+                val nn = doubleList(args, "nn")
+                val contiguous = booleanList(args, "contiguous")
+                require(nn.size == contiguous.size) { "invalid pnn50GapAware case $caseId" }
+                result["value"] = finiteOrNull(
+                    HrvAnalyzer.pnn50GapAware(nn, contiguous), function, caseId,
+                )
+            }
+            "beatSpreadIsTrustworthy" -> {
+                require(comparison == "exact") { "invalid beatSpreadIsTrustworthy case $caseId" }
+                val raw = args.getString("verdict")
+                val verdict = HrvAnalyzer.RrCoverageVerdict.entries.singleOrNull { it.raw == raw }
+                requireNotNull(verdict) { "invalid beatSpreadIsTrustworthy case $caseId" }
+                result["valueBits"] = HrvAnalyzer.beatSpreadIsTrustworthy(verdict)
+            }
+            "beatAccurateFraction" -> {
+                require(comparison == "epsilon") { "invalid beatAccurateFraction case $caseId" }
+                result["value"] = finite(
+                    HrvAnalyzer.beatAccurateFraction(longList(args, "tsSec"), doubleList(args, "rrMs")),
+                    function,
+                    caseId,
+                )
+            }
+            "beatValuesAreTrustworthy" -> {
+                require(comparison == "exact") { "invalid beatValuesAreTrustworthy case $caseId" }
+                result["valueBits"] = HrvAnalyzer.beatValuesAreTrustworthy(args.getDouble("fraction"))
+            }
+            "classifyCoverage" -> {
+                require(comparison == "exact") { "invalid classifyCoverage case $caseId" }
+                val verdict = HrvAnalyzer.classifyCoverage(
+                    args.getDouble("coverage"), args.getDouble("collapsed"),
+                )
+                result["valueBits"] = sortedMapOf("text" to verdict.raw)
+            }
+            "rrCoverage" -> {
+                require(comparison == "epsilon") { "invalid rrCoverage case $caseId" }
+                result["value"] = finite(
+                    HrvAnalyzer.rrCoverage(longList(args, "tsSec"), doubleList(args, "rrMs")),
+                    function,
+                    caseId,
+                )
+            }
+            "duplicateBeatCount" -> {
+                require(comparison == "exact") { "invalid duplicateBeatCount case $caseId" }
+                result["valueBits"] = HrvAnalyzer.duplicateBeatCount(
+                    longList(args, "tsSec"), doubleList(args, "rrMs"),
+                )
+            }
+            "collapseOverCount" -> {
+                require(comparison == "exact") { "invalid collapseOverCount case $caseId" }
+                val ts = longList(args, "tsSec")
+                val rr = doubleList(args, "rrMs")
+                val collapsed = if (!args.has("rrTolMs") && !args.has("windowSec")) {
+                    HrvAnalyzer.collapseOverCount(ts, rr)
+                } else {
+                    HrvAnalyzer.collapseOverCount(
+                        ts,
+                        rr,
+                        effective.getDouble("rrTolMs"),
+                        effective.getLong("windowSec"),
+                    )
+                }
+                result["valueBits"] = sortedMapOf(
+                    "rrMs" to exactBits(collapsed.second),
+                    "tsSec" to collapsed.first,
+                )
+            }
+            "collapsedCoverage" -> {
+                require(comparison == "epsilon") { "invalid collapsedCoverage case $caseId" }
+                val ts = longList(args, "tsSec")
+                val rr = doubleList(args, "rrMs")
+                val value = if (args.has("rrTolMs")) {
+                    HrvAnalyzer.collapsedCoverage(ts, rr, effective.getDouble("rrTolMs"))
+                } else {
+                    HrvAnalyzer.collapsedCoverage(ts, rr)
+                }
+                result["value"] = finite(value, function, caseId)
+            }
+            "densestSecondWindowSample" -> {
+                require(comparison == "exact") { "invalid densestSecondWindowSample case $caseId" }
+                val ts = longList(args, "tsSec")
+                val rr = doubleList(args, "rrMs")
+                val src = nullableIntList(args, "srcCodes")
+                val value = if (!args.has("halfWindowSec") && !args.has("maxRowsPerSecond")) {
+                    HrvAnalyzer.densestSecondWindowSample(ts, rr, src)
+                } else {
+                    HrvAnalyzer.densestSecondWindowSample(
+                        ts,
+                        rr,
+                        src,
+                        effective.getInt("halfWindowSec"),
+                        effective.getInt("maxRowsPerSecond"),
+                    )
+                }
+                result["valueBits"] = sortedMapOf("text" to value)
+            }
             "rollingRmssd" -> {
                 require(comparison == "epsilon") { "invalid rollingRmssd case $caseId" }
                 val rrJson = args.getJSONArray("rr")
@@ -132,6 +266,39 @@ class ParityRunner {
         }
         return result
     }
+
+    private fun doubleList(objectValue: JSONObject, key: String): List<Double> {
+        val array = objectValue.getJSONArray(key)
+        return (0 until array.length()).map { index -> array.getDouble(index) }
+    }
+
+    private fun longList(objectValue: JSONObject, key: String): List<Long> {
+        val array = objectValue.getJSONArray(key)
+        return (0 until array.length()).map { index -> array.getLong(index) }
+    }
+
+    private fun booleanList(objectValue: JSONObject, key: String): List<Boolean> {
+        val array = objectValue.getJSONArray(key)
+        return (0 until array.length()).map { index -> array.getBoolean(index) }
+    }
+
+    private fun nullableIntList(objectValue: JSONObject, key: String): List<Int?> {
+        val array = objectValue.getJSONArray(key)
+        return (0 until array.length()).map { index ->
+            if (array.isNull(index)) null else array.getInt(index)
+        }
+    }
+
+    private fun exactBits(values: List<Double>): List<String> =
+        values.map { java.lang.Long.toHexString(it.toRawBits()).padStart(16, '0') }
+
+    private fun finite(value: Double, function: String, caseId: String): Double {
+        require(value.isFinite()) { "$function returned a non-finite value for $caseId" }
+        return value
+    }
+
+    private fun finiteOrNull(value: Double?, function: String, caseId: String): Double? =
+        value?.let { finite(it, function, caseId) }
 
     private fun canonicalJson(value: Any?): String = when (value) {
         null, JSONObject.NULL -> "null"
