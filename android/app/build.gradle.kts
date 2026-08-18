@@ -219,6 +219,15 @@ tasks.withType<Test>().configureEach {
     dependsOn(syncRoomSchemaSnapshot)
     systemProperty("room.schemaLocation", roomSchemaSnapshotDir.get().asFile.absolutePath)
     inputs.dir(roomSchemaSnapshotDir).withPropertyName("roomSchemas").optional()
+    listOf("PARITY_INPUT", "PARITY_OUTPUT", "PARITY_NEGATIVE_SIDE").forEach { name ->
+        System.getenv(name)?.let { environment(name, it) }
+    }
+    // A parity run must always execute: its inputs (the JSONL file, the nonce, the negative
+    // side) live outside Gradle's model, so an up-to-date skip OR a build-cache hit would
+    // silently write nothing. Gate both mechanisms on any parity variable being set.
+    val parityRun = { listOf("PARITY_INPUT", "PARITY_OUTPUT", "PARITY_NEGATIVE_SIDE").any { System.getenv(it) != null } }
+    outputs.upToDateWhen { !parityRun() }
+    outputs.cacheIf { !parityRun() }
 }
 
 // Resolve every external module to the exact version recorded in app/gradle.lockfile. Direct
