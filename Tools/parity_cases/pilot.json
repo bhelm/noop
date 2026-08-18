@@ -69,13 +69,20 @@
   {
     "args": {"trimp": 100.0},
     "comparison": "exact",
-    "function": "trimpToStrain",
+    "function": "StrainScorer.trimpToStrain/2",
     "id": "trimp_positive"
   },
   {
     "args": {"denominator": 7201.0, "trimp": 7200.0},
     "comparison": "exact",
-    "function": "trimpToStrain",
+    "function": "StrainScorer.trimpToStrain/2",
     "id": "trimp_ceiling"
+  },
+  {
+    "args": {"trimp": 14400.0},
+    "comparison": "exact",
+    "function": "StrainScorer.trimpToStrain/2",
+    "id": "trimp_above_documented_range",
+    "knownBehaviorIssue": "bhelm/noop#12"
   }
 ]

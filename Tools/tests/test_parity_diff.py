@@ -28,7 +28,7 @@ class ParityDiffTests(unittest.TestCase):
             "args": {"trimp": 100.0},
             "comparison": comparison,
             "effectiveArgs": {"denominator": 7201.0, "trimp": 100.0},
-            "function": "trimpToStrain",
+            "function": "StrainScorer.trimpToStrain/2",
             "id": case_id,
             "nonce": nonce,
         }
@@ -36,7 +36,7 @@ class ParityDiffTests(unittest.TestCase):
     def output_record(self, case_id="case", nonce="nonce-1", **fields):
         record = {
             "comparison": fields.pop("comparison", "exact"),
-            "function": "trimpToStrain",
+            "function": "StrainScorer.trimpToStrain/2",
             "id": case_id,
             "nonce": nonce,
         }
@@ -76,7 +76,7 @@ class ParityDiffTests(unittest.TestCase):
         diffs = self.compare(inputs, swift, kotlin)
 
         self.assertEqual(1, len(diffs))
-        self.assertIn("id=case function=trimpToStrain class=exact", diffs[0])
+        self.assertIn("id=case function=StrainScorer.trimpToStrain/2 class=exact", diffs[0])
         self.assertIn("swift=bits:3ff0000000000000", diffs[0])
         self.assertIn("kotlin=bits:3ff0000000000001", diffs[0])
 
@@ -151,6 +151,166 @@ class ParityDiffTests(unittest.TestCase):
             self.assertTrue(any(case["source"].startswith("curated:") for case in selected), function)
             self.assertTrue(any(case["source"].startswith("seeded:") for case in selected), function)
         self.assertEqual(cases, parity_diff.generate_cases("pilot", "fixed-nonce"))
+
+    def test_pilot_generates_curated_and_seeded_cases_for_every_registered_strain_function(self):
+        cases = parity_diff.generate_cases("pilot", "fixed-nonce")
+        strain_functions = {
+            "StrainScorer.banisterTRIMP/5",
+            "StrainScorer.defaultMaxHR/1",
+            "StrainScorer.edwardsTRIMP/4",
+            "StrainScorer.effectiveEffort/2",
+            "StrainScorer.estimateHRmax/2",
+            "StrainScorer.fitStrainDenominator/1",
+            "StrainScorer.pctHRR/3",
+            "StrainScorer.percentile/2",
+            "StrainScorer.sampleDurationMinutes/1",
+            "StrainScorer.sampleDurationsMinutes/1",
+            "StrainScorer.strain/6",
+            "StrainScorer.tanakaHRmax/1",
+            "StrainScorer.trimpToStrain/2",
+            "StrainScorer.zoneWeight/3",
+        }
+        for function in strain_functions:
+            selected = [case for case in cases if case["function"] == function]
+            self.assertTrue(any(case["source"].startswith("curated:") for case in selected), function)
+            self.assertGreaterEqual(
+                len([case for case in selected if case["source"].startswith("seeded:")]), 2, function
+            )
+
+    def test_strain_payloads_fail_closed_before_reaching_native_runners(self):
+        malformed = [
+            {"id": "bad-hr", "function": "StrainScorer.sampleDurationsMinutes/1", "args": {"hr": [{"ts": 1.5, "bpm": 90}]}},
+            {"id": "bad-duration", "function": "StrainScorer.edwardsTRIMP/4", "args": {"hr": [{"ts": 1, "bpm": 90}], "durations": [], "restingHR": 60.0, "hrReserve": 120.0}},
+            {"id": "bad-percentile", "function": "StrainScorer.percentile/2", "args": {"values": [1.0], "pct": 101.0}},
+            {"id": "bad-pairs", "function": "StrainScorer.fitStrainDenominator/1", "args": {"pairs": [[1.0]]}},
+            {"id": "issue-36", "function": "StrainScorer.trimpToStrain/2", "args": {"trimp": 1.0, "denominator": 1.0}},
+            {"id": "issue-37", "function": "StrainScorer.effectiveEffort/2", "args": {"live": 0.0, "stored": -0.0}},
+            {"id": "bad-strain", "function": "StrainScorer.strain/6", "args": {"replayFirstAtEnd": False, "strainCalls": [{"series": {"count": 20, "startTs": 0, "stepSec": 0, "bpm": 100}, "useDefaults": True}]}},
+        ]
+        for record in malformed:
+            with self.subTest(record=record["id"]), self.assertRaises(parity_diff.ParityFormatError):
+                parity_diff._effective_args(record)
+
+    def test_legacy_and_qualified_trimp_labels_share_effective_arguments(self):
+        expected = {"denominator": 7201.0, "trimp": 100.0}
+        for function in ("trimpToStrain", "StrainScorer.trimpToStrain/2"):
+            with self.subTest(function=function):
+                self.assertEqual(
+                    expected,
+                    parity_diff._effective_args(
+                        {"id": function, "function": function, "args": {"trimp": 100.0}}
+                    ),
+                )
+        legacy_cases = [
+            case for case in parity_diff.generate_cases("pilot", "legacy-pilot")
+            if case["function"] == "trimpToStrain"
+        ]
+        self.assertEqual(["trimp_non_positive"], [case["id"] for case in legacy_cases])
+
+    def test_strain_integer_payloads_fail_closed_on_signed_width_and_checked_arithmetic(self):
+        int64_min = -(1 << 63)
+        int64_max = (1 << 63) - 1
+        int32_max = (1 << 31) - 1
+        malformed = [
+            {
+                "id": "duration-subtraction-overflow",
+                "function": "StrainScorer.sampleDurationMinutes/1",
+                "args": {"hr": [{"ts": int64_min, "bpm": 90}, {"ts": int64_max, "bpm": 90}]},
+            },
+            {
+                "id": "duration-ts-above-int64",
+                "function": "StrainScorer.sampleDurationsMinutes/1",
+                "args": {"hr": [{"ts": int64_max + 1, "bpm": 90}]},
+            },
+            {
+                "id": "duration-ts-below-int64",
+                "function": "StrainScorer.sampleDurationsMinutes/1",
+                "args": {"hr": [{"ts": int64_min - 1, "bpm": 90}]},
+            },
+            {
+                "id": "duration-bpm-above-int32",
+                "function": "StrainScorer.sampleDurationMinutes/1",
+                "args": {"hr": [{"ts": 0, "bpm": int32_max + 1}]},
+            },
+            {
+                "id": "series-addition-overflow",
+                "function": "StrainScorer.strain/6",
+                "args": {"strainCalls": [{"series": {"count": 3, "startTs": int64_max - 1, "stepSec": 2, "bpm": 90}, "useDefaults": True}]},
+            },
+            {
+                "id": "series-multiplication-overflow",
+                "function": "StrainScorer.strain/6",
+                "args": {"strainCalls": [{"series": {"count": int32_max, "startTs": 0, "stepSec": int64_max, "bpm": 90}, "useDefaults": True}]},
+            },
+            {
+                "id": "series-count-above-int32",
+                "function": "StrainScorer.strain/6",
+                "args": {"strainCalls": [{"series": {"count": int32_max + 1, "startTs": 0, "stepSec": 1, "bpm": 90}, "useDefaults": True}]},
+            },
+            {
+                "id": "series-final-neighbor-difference-overflow",
+                "function": "StrainScorer.strain/6",
+                "args": {"strainCalls": [{"series": {"count": 2, "startTs": int64_min, "stepSec": 1, "finalTs": int64_max, "bpm": 90}, "useDefaults": True}]},
+            },
+            {
+                "id": "series-total-span-overflow",
+                "function": "StrainScorer.strain/6",
+                "args": {"strainCalls": [{"series": {"count": 2, "startTs": int64_min, "stepSec": 1, "finalTs": 0, "bpm": 90}, "useDefaults": True}]},
+            },
+        ]
+        for record in malformed:
+            with self.subTest(record=record["id"]), self.assertRaises(parity_diff.ParityFormatError):
+                parity_diff._effective_args(record)
+
+        safe = [
+            {"count": 3, "startTs": int64_max - 2, "stepSec": 1, "bpm": 90},
+            {"count": 2, "startTs": int64_min, "stepSec": 1, "finalTs": int64_min + 1, "bpm": 90},
+        ]
+        for index, series in enumerate(safe):
+            with self.subTest(safe=index):
+                effective = parity_diff._effective_args(
+                    {"id": f"safe-{index}", "function": "StrainScorer.strain/6", "args": {"strainCalls": [{"series": series, "useDefaults": True}]}}
+                )
+                self.assertEqual(series, effective["strainCalls"][0]["series"])
+
+    def test_strain_hr_reserve_must_be_strictly_positive(self):
+        records = [
+            {"function": "StrainScorer.pctHRR/3", "args": {"bpm": 90.0, "restingHR": 60.0, "hrReserve": -1.0}},
+            {"function": "StrainScorer.zoneWeight/3", "args": {"bpm": 90.0, "restingHR": 60.0, "hrReserve": 0.0}},
+            {"function": "StrainScorer.edwardsTRIMP/4", "args": {"hr": [], "durations": [], "restingHR": 60.0, "hrReserve": -1.0}},
+            {"function": "StrainScorer.banisterTRIMP/5", "args": {"hr": [], "durations": [], "restingHR": 60.0, "hrReserve": 0.0, "b": 1.92}},
+        ]
+        for index, record in enumerate(records):
+            record["id"] = f"reserve-{index}"
+            with self.subTest(function=record["function"]), self.assertRaises(parity_diff.ParityFormatError):
+                parity_diff._effective_args(record)
+
+    def test_edwards_zones_have_one_exact_ordered_characterization_case(self):
+        selected = [
+            case for case in parity_diff.generate_cases("pilot", "zones")
+            if case["function"] == "StrainScorer.zoneWeight/3"
+            and case["args"].get("characterizeZones") is True
+        ]
+        self.assertEqual(["strain_zone_thresholds"], [case["id"] for case in selected])
+
+    def test_issue_12_shared_behavior_must_be_explicitly_characterized(self):
+        record = {
+            "args": {"hr": []},
+            "comparison": "epsilon",
+            "function": "StrainScorer.sampleDurationsMinutes/1",
+            "id": "unmarked-shared-behavior",
+            "source": "curated:test",
+        }
+        with self.assertRaisesRegex(parity_diff.ParityFormatError, "bhelm/noop#12"):
+            original_curated = parity_diff._curated_cases
+            original_seeded = parity_diff._seeded_cases
+            try:
+                parity_diff._curated_cases = lambda: [record]
+                parity_diff._seeded_cases = lambda: []
+                parity_diff.generate_cases("pilot", "nonce")
+            finally:
+                parity_diff._curated_cases = original_curated
+                parity_diff._seeded_cases = original_seeded
 
     def test_analyze_cases_cover_the_min_beats_boundary_and_two_seeded_inputs(self):
         cases = parity_diff.generate_cases("pilot", "fixed-nonce")
