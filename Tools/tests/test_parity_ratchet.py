@@ -993,6 +993,7 @@ func constrained<T>()
             mock.patch.object(parity_ratchet, "resolve_base", return_value="base"),
             mock.patch.object(parity_ratchet, "_base_shards", return_value=set()),
             mock.patch.object(parity_ratchet, "compare_ratchet", return_value=[]),
+            mock.patch.dict("os.environ", {"CI": ""}, clear=False),
             contextlib.redirect_stdout(output),
         ):
             ratchet_code = parity_ratchet.main(["--root", str(self.root), "ratchet", "--offline"])
