@@ -80,7 +80,13 @@ class ParityRunner {
                 val stepSec = effective.getInt("stepSec")
                 val minBeats = effective.getInt("minBeatsPerWindow")
                 val windowSec = effective.getInt("windowSec")
-                val points = if (args.has("windowSec")) {
+                val points = if (!args.has("windowSec") && !args.has("stepSec") &&
+                    !args.has("minBeatsPerWindow")
+                ) {
+                    // Bare case: every optional argument omitted, so the language's own default
+                    // expressions execute and the cross-comparison itself checks default parity.
+                    HrvAnalyzer.rollingRmssd(rr = rr)
+                } else if (args.has("windowSec")) {
                     HrvAnalyzer.rollingRmssd(
                         rr = rr,
                         windowSec = windowSec,

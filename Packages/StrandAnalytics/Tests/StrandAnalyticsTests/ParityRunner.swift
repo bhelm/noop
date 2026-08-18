@@ -110,12 +110,22 @@ final class ParityRunner: XCTestCase {
                 throw RunnerError.invalidInput("invalid rollingRmssd case \(record.id)")
             }
             let rr = inputRR.map { RRInterval(ts: $0.ts, rrMs: $0.rrMs) }
-            let points = HRVAnalyzer.rollingRmssd(
-                rr: rr,
-                windowSec: windowSec,
-                stepSec: stepSec,
-                minBeatsPerWindow: minBeats
-            )
+            let points: [HRVAnalyzer.RollingRmssdPoint]
+            if record.args.windowSec == nil, record.args.stepSec == nil,
+               record.args.minBeatsPerWindow == nil {
+                // Bare case: every omittable argument omitted, so the language's own default
+                // expressions execute and the cross-comparison itself checks default parity.
+                // windowSec stays explicit — Swift deliberately has no default for it (the
+                // documented one-sided default; Kotlin's default is cross-checked by its runner).
+                points = HRVAnalyzer.rollingRmssd(rr: rr, windowSec: windowSec)
+            } else {
+                points = HRVAnalyzer.rollingRmssd(
+                    rr: rr,
+                    windowSec: windowSec,
+                    stepSec: stepSec,
+                    minBeatsPerWindow: minBeats
+                )
+            }
             var values: [[String: Any]] = []
             for point in points {
                 guard point.rmssd.isFinite else {
