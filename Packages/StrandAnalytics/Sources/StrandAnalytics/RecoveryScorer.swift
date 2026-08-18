@@ -250,21 +250,18 @@ public enum RecoveryScorer {
     /// (≥ `restingHRMinBinSamples`, so one lone artifact beat can't be a bin "mean") AND
     /// physiologically plausible (mean ≥ `restingHRMinPlausibleBpm`, rejecting dropout-driven
     /// sub-physiological dips). The floor DEFINITION is unchanged — still the minimum of the
-    /// 5-min bin means — only artifact bins are barred from being that minimum. If no bin
-    /// qualifies (a wholly sparse/degenerate window), fall back to the lowest of ALL bin means,
-    /// else the all-sample mean, preserving the never-nil-on-data behaviour.
+    /// qualified 5-min bin means — only artifact bins are barred from being that minimum. If no
+    /// bin qualifies (a wholly sparse/degenerate window), returns nil for insufficient data.
     public static func restingHR(_ hr: [HRSample], start: Int, end: Int) -> Int? {
         let seg = hr.filter { $0.ts >= start && $0.ts <= end }
         guard !seg.isEmpty else { return nil }
 
-        var means: [Double] = []          // every bin mean (legacy floor, the fallback)
         var qualified: [Double] = []       // bins eligible to WIN the floor (#686)
         var t = start
         while t < end {
             let win = seg.filter { $0.ts >= t && $0.ts < t + restingHRWindowS }
             if !win.isEmpty {
                 let mean = Double(win.reduce(0) { $0 + $1.bpm }) / Double(win.count)
-                means.append(mean)
                 // A bin wins the floor only if it is well-populated AND physiologically plausible —
                 // a thin (single-artifact) or sub-physiological (dropout) bin can't be the minimum.
                 if win.count >= restingHRMinBinSamples && mean >= restingHRMinPlausibleBpm {
@@ -273,15 +270,7 @@ public enum RecoveryScorer {
             }
             t += restingHRWindowS
         }
-        let floor: Double
-        if let m = qualified.min() {
-            floor = m
-        } else if let m = means.min() {
-            // No bin cleared the artifact bar (sparse window): fall back to the legacy floor.
-            floor = m
-        } else {
-            floor = Double(seg.reduce(0) { $0 + $1.bpm }) / Double(seg.count)
-        }
+        guard let floor = qualified.min() else { return nil }
         return Int(floor.rounded())
     }
 

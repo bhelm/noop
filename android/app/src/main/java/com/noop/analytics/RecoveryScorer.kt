@@ -292,10 +292,10 @@ object RecoveryScorer {
      * Artifact hardening (#686): a bin may only WIN the floor when it is BOTH well-populated
      * (≥ [restingHRMinBinSamples], so one lone artifact beat can't be a bin "mean") AND
      * physiologically plausible (mean ≥ [restingHRMinPlausibleBpm], rejecting dropout-driven
-     * sub-physiological dips). The floor DEFINITION is unchanged — still the minimum of the 5-min
-     * bin means — only artifact bins are barred from being that minimum. If no bin qualifies (a
-     * wholly sparse/degenerate window), fall back to the lowest of ALL bin means, else the
-     * all-sample mean, preserving the never-null-on-data behaviour. Mirrors Swift `restingHR`.
+     * sub-physiological dips). The floor DEFINITION is unchanged — still the minimum of the
+     * qualified 5-min bin means — only artifact bins are barred from being that minimum. If no
+     * bin qualifies (a wholly sparse/degenerate window), returns null for insufficient data.
+     * Mirrors Swift `restingHR`.
      *
      * @param start / @param end window bounds, unix SECONDS (Long).
      */
@@ -303,7 +303,6 @@ object RecoveryScorer {
         val seg = hr.filter { it.ts in start..end }
         if (seg.isEmpty()) return null
 
-        val means = ArrayList<Double>()      // every bin mean (legacy floor, the fallback)
         val qualified = ArrayList<Double>()  // bins eligible to WIN the floor (#686)
         var t = start
         while (t < end) {
@@ -311,7 +310,6 @@ object RecoveryScorer {
             val win = seg.filter { it.ts >= t && it.ts < binEnd }
             if (win.isNotEmpty()) {
                 val mean = win.sumOf { it.bpm }.toDouble() / win.size.toDouble()
-                means.add(mean)
                 // A bin wins the floor only if it is well-populated AND physiologically plausible —
                 // a thin (single-artifact) or sub-physiological (dropout) bin can't be the minimum.
                 if (win.size >= restingHRMinBinSamples && mean >= restingHRMinPlausibleBpm) {
@@ -320,9 +318,7 @@ object RecoveryScorer {
             }
             t += restingHRWindowS
         }
-        val floor: Double = qualified.minOrNull()
-            ?: means.minOrNull()
-            ?: (seg.sumOf { it.bpm }.toDouble() / seg.size.toDouble())
+        val floor = qualified.minOrNull() ?: return null
         return floor.roundToInt()
     }
 

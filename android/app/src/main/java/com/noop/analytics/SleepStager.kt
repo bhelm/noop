@@ -106,7 +106,7 @@ object SleepStager {
     const val daytimeMinSleepMin: Int = 90
 
     /**
-     * A daytime window's resting HR (lowest 5-min rolling mean) must be at or below
+     * A daytime window's resting HR (lowest qualified 5-min bin mean) must be at or below
      * baseline × this to confirm a real cardiac dip. Stricter than the overnight 1.05:
      * a true nap dips BELOW the waking-day median, sedentary stillness does not.
      */
@@ -760,7 +760,7 @@ object SleepStager {
      * too short or never shows a genuine cardiac dip below the day median. Overnight windows
      * never reach here. Returns true = keep, false = reject.
      *
-     * [restingHR] is the window's own lowest 5-min rolling-mean HR (the sleep-depth proxy
+     * [restingHR] is the window's own lowest qualified 5-min bin-mean HR (the sleep-depth proxy
      * detectSleep already computes); [baseline] is the day's median HR. With no usable HR
      * evidence (null baseline OR null restingHR) a daytime stretch cannot be confirmed as a
      * real nap, so it is rejected — sedentary daytime stillness without a measured HR dip is
@@ -2644,22 +2644,9 @@ object SleepStager {
 
     // ── Per-session HR / HRV ─────────────────────────────────────────────────
 
-    /** Lowest 5-min rolling-mean HR during the session (bpm), or null. */
+    /** Lowest qualified 5-min HR mean during the session (bpm), or null. */
     internal fun sessionRestingHR(start: Long, end: Long, hr: List<HrSample>): Int? {
-        val seg = hr.filter { it.ts in start..end }
-        if (seg.isEmpty()) return null
-        val windowS = 5 * 60L
-        val means = ArrayList<Double>()
-        var t = start
-        while (t < end) {
-            val win = seg.filter { it.ts >= t && it.ts < t + windowS }
-            if (win.isNotEmpty()) means.add(win.sumOf { it.bpm }.toDouble() / win.size.toDouble())
-            t += windowS
-        }
-        val m = means.minOrNull()
-        if (m != null) return m.roundToInt()
-        val all = seg.sumOf { it.bpm }.toDouble() / seg.size.toDouble()
-        return all.roundToInt()
+        return RecoveryScorer.restingHR(hr, start, end)
     }
 
     /** One 5-min HRV window: its start ts, the sleep stage at its center, the clean-beat count, and the

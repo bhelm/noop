@@ -46,7 +46,7 @@ public struct SleepSession: Equatable, Sendable {
     /// asleep / in-bed in [0, 1] (AASM TST/TIB; asleep = in-bed − wake).
     public let efficiency: Double
     public let stages: [StageSegment]
-    /// Lowest 5-min rolling-mean HR during the session (bpm), or nil.
+    /// Lowest qualified non-overlapping 5-min bin-mean HR during the session (bpm); nil if no bin qualifies.
     public let restingHR: Int?
     /// Mean RMSSD over 5-min windows across the session (ms), or nil.
     public let avgHRV: Double?
@@ -101,7 +101,7 @@ public enum SleepStager {
     /// A daytime window must run at least this long (minutes) to count — short still
     /// daytime stretches are the dominant false-positive and are rejected outright.
     public static let daytimeMinSleepMin: Int = 90
-    /// A daytime window's resting HR (lowest 5-min rolling mean) must be at or below
+    /// A daytime window's resting HR (lowest qualified 5-min bin mean) must be at or below
     /// baseline × this to confirm a real cardiac dip. Stricter than the overnight 1.05:
     /// a true nap dips BELOW the waking-day median, sedentary stillness does not.
     public static let daytimeRestingHRMult: Double = 0.95
@@ -689,7 +689,7 @@ public enum SleepStager {
     /// is either too short or never shows a genuine cardiac dip below the day median.
     /// Overnight windows never reach here. Returns true = keep, false = reject.
     ///
-    /// `restingHR` is the window's own lowest 5-min rolling-mean HR (the sleep-depth proxy
+    /// `restingHR` is the window's own lowest qualified 5-min bin-mean HR (the sleep-depth proxy
     /// detectSleep already computes); `baseline` is the day's median HR. With no usable HR
     /// evidence (nil baseline OR nil restingHR) a daytime stretch cannot be confirmed as a
     /// real nap, so it is rejected — sedentary daytime stillness without a measured HR dip
@@ -2430,21 +2430,9 @@ public enum SleepStager {
 
     // MARK: - Per-session HR / HRV
 
-    /// Lowest 5-min rolling-mean HR during the session (bpm), or nil.
+    /// Lowest qualified 5-min HR mean during the session (bpm), or nil.
     static func sessionRestingHR(start: Int, end: Int, hr: [HRSample]) -> Int? {
-        let seg = hr.filter { $0.ts >= start && $0.ts <= end }
-        guard !seg.isEmpty else { return nil }
-        let windowS = 5 * 60
-        var means: [Double] = []
-        var t = start
-        while t < end {
-            let win = seg.filter { $0.ts >= t && $0.ts < t + windowS }
-            if !win.isEmpty { means.append(Double(win.reduce(0) { $0 + $1.bpm }) / Double(win.count)) }
-            t += windowS
-        }
-        if let m = means.min() { return Int(m.rounded()) }
-        let all = Double(seg.reduce(0) { $0 + $1.bpm }) / Double(seg.count)
-        return Int(all.rounded())
+        RecoveryScorer.restingHR(hr, start: start, end: end)
     }
 
     /// One 5-min HRV window: its start ts, the sleep stage at its center, the clean-beat count, and the
