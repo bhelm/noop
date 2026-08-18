@@ -187,6 +187,73 @@ fun compute(): Int {
 
         self.assertEqual(["compute"], [item.name for item in declarations])
 
+    def test_multiline_swift_return_and_where_clauses_have_executable_bodies(self) -> None:
+        source = self.write(
+            "Sources/Pilot/Multiline.swift",
+            """func arrow()
+    -> Int {
+    1
+}
+func constrained<T>()
+    where T: Equatable {
+    2
+}
+""",
+        )
+
+        declarations = parity_ratchet.lex_file(self.root, source, "swift")
+
+        self.assertEqual(["arrow", "constrained"], [item.name for item in declarations])
+        self.assertTrue(all(item.coverable for item in declarations))
+        self.assertEqual([4, 8], [item.end_line for item in declarations])
+
+    def test_bodyless_swift_requirement_does_not_capture_following_property_body(self) -> None:
+        source = self.write(
+            "Sources/Pilot/Requirements.swift",
+            """protocol Requirements {
+    func requirement()
+    var value: Int { get }
+}
+""",
+        )
+
+        declarations = parity_ratchet.lex_file(self.root, source, "swift")
+        requirement = next(item for item in declarations if item.name == "requirement")
+
+        self.assertFalse(requirement.coverable)
+        self.assertEqual(2, requirement.end_line)
+
+    def test_bodyless_kotlin_function_does_not_capture_following_nested_type(self) -> None:
+        source = self.write(
+            "src/main/java/pilot/Requirements.kt",
+            """interface Requirements {
+    fun requirement()
+    class Nested {
+        fun nested() = 1
+    }
+}
+""",
+        )
+
+        declarations = parity_ratchet.lex_file(self.root, source, "kotlin")
+        requirement = next(item for item in declarations if item.name == "requirement")
+
+        self.assertFalse(requirement.coverable)
+        self.assertEqual(2, requirement.end_line)
+
+    def test_explicit_kotlin_primary_constructor_is_not_a_body_constructor(self) -> None:
+        source = self.write(
+            "src/main/java/pilot/Primary.kt",
+            """class Primary constructor(val value: Int) {
+    fun doubled() = value * 2
+}
+""",
+        )
+
+        declarations = parity_ratchet.lex_file(self.root, source, "kotlin")
+
+        self.assertEqual(["doubled"], [item.name for item in declarations])
+
     def test_exempt_without_reason_is_rejected(self) -> None:
         shard = self.write(
             "Sources/Pilot/parity-exempt.json",
@@ -465,6 +532,105 @@ fun compute(): Int {
         self.assertEqual({"differential": 0, "platform-test": 0, "exempt": 0}, counts)
         self.assertIn("NOTICE", output.getvalue())
 
+    def write_two_pair_fixture(
+        self,
+        registered: str = "shared",
+        *,
+        declaring_pairs: tuple[str, ...] = ("First", "Second"),
+        covered_pairs: tuple[str, ...] = ("First", "Second"),
+    ) -> tuple[list[parity_ratchet.ModulePair], Path, Path]:
+        pairs = []
+        swift_records = []
+        kotlin_packages = []
+        for ordinal, name in enumerate(("First", "Second"), 1):
+            swift_dir = self.root / f"Sources/{name}"
+            kotlin_dir = self.root / f"src/main/java/{name.lower()}"
+            swift = self.write(
+                f"Sources/{name}/{name}.swift",
+                f"func shared() -> Int {{ {ordinal} }}\n" if name in declaring_pairs else "",
+            )
+            self.write(
+                f"src/main/java/{name.lower()}/{name}.kt",
+                f"fun shared(): Int = {ordinal}\n" if name in declaring_pairs else "",
+            )
+            shard = json.dumps(
+                {"schema_version": 1, "module": name, "exempt": [], "platform-test": []}
+            )
+            self.write(f"Sources/{name}/parity-exempt.json", shard)
+            self.write(f"src/main/java/{name.lower()}/parity-exempt.json", shard)
+            pairs.append(parity_ratchet.ModulePair(name, swift_dir, kotlin_dir))
+            if name in covered_pairs:
+                swift_records.append(
+                    f"SF:{swift}\nFN:1,shared\nFNDA:1,shared\nDA:1,1\nend_of_record\n"
+                )
+                kotlin_packages.append(
+                    f'<package name="{name.lower()}"><class name="{name.lower()}/{name}" sourcefilename="{name}.kt">'
+                    '<method name="shared" desc="()I" line="1"><counter type="METHOD" missed="0" covered="1"/></method>'
+                    f'</class><sourcefile name="{name}.kt"><line nr="1" mi="0" ci="1"/></sourcefile></package>'
+                )
+        self.write(
+            parity_ratchet.SWIFT_RUNNER,
+            f'switch name {{ case "{registered}": break; default: break }}\n',
+        )
+        self.write(
+            parity_ratchet.KOTLIN_RUNNER,
+            f'when (name) {{ "{registered}" -> Unit else -> Unit }}\n',
+        )
+        swift_lcov = self.write("swift.lcov", "".join(swift_records))
+        jacoco = self.write("jacoco.xml", f'<report name="fixture">{"".join(kotlin_packages)}</report>')
+        return pairs, swift_lcov, jacoco
+
+    def test_ratchet_and_verify_accept_two_sharp_pairs_with_same_registered_name(self) -> None:
+        pairs, swift_lcov, jacoco = self.write_two_pair_fixture()
+        output = io.StringIO()
+        with (
+            mock.patch.object(parity_ratchet, "module_pairs", return_value=pairs),
+            mock.patch.object(parity_ratchet, "resolve_base", return_value="base"),
+            mock.patch.object(parity_ratchet, "_base_shards", return_value=set()),
+            mock.patch.object(parity_ratchet, "compare_ratchet", return_value=[]),
+            contextlib.redirect_stdout(output),
+        ):
+            ratchet_code = parity_ratchet.main(["--root", str(self.root), "ratchet", "--offline"])
+            verify_code = parity_ratchet.main(
+                [
+                    "--root", str(self.root),
+                    "verify",
+                    "--swift-lcov", str(swift_lcov),
+                    "--kotlin-jacoco", str(jacoco),
+                ]
+            )
+
+        self.assertEqual(0, ratchet_code)
+        self.assertEqual(0, verify_code)
+        self.assertEqual(2, output.getvalue().count("differential=1"), output.getvalue())
+
+    def test_registered_name_resolving_only_in_one_pair_does_not_fail_other_pair(self) -> None:
+        pairs, swift_lcov, jacoco = self.write_two_pair_fixture(
+            declaring_pairs=("First",),
+            covered_pairs=("First",),
+        )
+        with mock.patch.object(parity_ratchet, "module_pairs", return_value=pairs):
+            errors, _counts = parity_ratchet.verify_coverage(self.root, swift_lcov, jacoco)
+
+        self.assertEqual([], errors)
+
+    def test_verify_requires_coverage_for_every_pair_resolving_registered_name(self) -> None:
+        pairs, swift_lcov, jacoco = self.write_two_pair_fixture(covered_pairs=("First",))
+        with mock.patch.object(parity_ratchet, "module_pairs", return_value=pairs):
+            errors, _counts = parity_ratchet.verify_coverage(self.root, swift_lcov, jacoco)
+
+        self.assertTrue(any("Sources/Second/Second.swift" in error for error in errors), errors)
+        self.assertTrue(any("src/main/java/second/Second.kt" in error for error in errors), errors)
+
+    def test_registered_name_missing_from_every_sharp_pair_is_rejected_once(self) -> None:
+        pairs, _swift_lcov, _jacoco = self.write_two_pair_fixture(registered="missing")
+        with mock.patch.object(parity_ratchet, "module_pairs", return_value=pairs):
+            errors, counts = parity_ratchet.audit_inventory(self.root)
+
+        unresolved = [error for error in errors if "missing" in error and "sharp module pair" in error]
+        self.assertEqual(1, len(unresolved), errors)
+        self.assertEqual(1, counts["differential"])
+
     def test_verify_requires_both_report_arguments(self) -> None:
         stderr = io.StringIO()
         with contextlib.redirect_stderr(stderr):
@@ -507,6 +673,7 @@ fun compute(): Int {
             "Packages/*/Tests/**/*ParityRunner*",
             "android/app/src/test/**",
             "Tools/parity_*.py",
+            "Tools/parity_*.json",
             "Tools/parity_cases/**",
             "Tools/tests/**",
             "**/parity-exempt.json",
@@ -515,6 +682,46 @@ fun compute(): Int {
             ".github/workflows/parity-ratchet.yml",
         ):
             self.assertIn(pattern, workflow)
+
+    def test_coverage_workflow_derives_llvm_cov_from_swift_toolchain(self) -> None:
+        workflow = (REPOSITORY / ".github/workflows/parity-ratchet.yml").read_text()
+        self.assertNotIn("/opt/", workflow)
+        self.assertIn('swift_bin="$(readlink -f "$(command -v swift)")"', workflow)
+        self.assertIn('test -x "$(dirname "$swift_bin")/llvm-cov"', workflow)
+        self.assertIn('"$(dirname "$swift_bin")/llvm-cov" export', workflow)
+
+    def test_claude_linux_wall_documents_strand_analytics_snapshot_support(self) -> None:
+        guidance = (REPOSITORY / "CLAUDE.md").read_text()
+        self.assertIn("`StrandAnalytics` builds and its full test suite runs", guidance)
+        self.assertIn("[`docs/LINUX.md`](docs/LINUX.md)", guidance)
+        self.assertNotIn("`StrandAnalytics` (via `WhoopStore`)", guidance)
+
+    def test_new_baseline_finding_without_issue_remains_rejected(self) -> None:
+        baseline = self.write(
+            parity_ratchet.LEDGER_BASELINE,
+            json.dumps(
+                {
+                    "schema_version": 2,
+                    "findings": [{"identity": "new-finding"}],
+                    "counters": {},
+                }
+            ),
+        )
+        self.assertTrue(baseline.exists())
+        with (
+            mock.patch.object(parity_ratchet, "_base_shards", return_value=set()),
+            mock.patch.object(
+                parity_ratchet,
+                "_base_json",
+                return_value={"schema_version": 2, "findings": [], "counters": {}},
+            ),
+        ):
+            errors = parity_ratchet.compare_ratchet(self.root, "base", offline=True)
+
+        self.assertEqual(
+            ["Tools/parity_ledger_baseline.json: new finding new-finding needs issue"],
+            errors,
+        )
 
 
 class JacocoOverloadDisambiguationTests(unittest.TestCase):

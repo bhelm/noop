@@ -353,6 +353,15 @@ def _type_layout(
 
 def _body_extent(masked: str, closing_paren: int, language: str) -> tuple[int, bool]:
     """Return body end offset and whether the declaration has executable code."""
+    declaration_start = re.compile(
+        r"(?:(?:@[A-Za-z_][A-Za-z0-9_.]*(?:\([^)]*\))?|public|private|fileprivate|"
+        r"internal|protected|open|"
+        r"static|final|override|required|convenience|mutating|nonmutating|abstract|"
+        r"lazy|weak|unowned|const|lateinit|tailrec|suspend|inline|infix|operator|"
+        r"external|data|sealed|annotation|value|inner|companion)\s+)*"
+        r"(?:func|fun|var|let|val|class|struct|enum|protocol|extension|actor|object|"
+        r"interface|init|deinit|subscript|constructor|typealias)\b"
+    )
     index = closing_paren + 1
     nesting = 0
     while index < len(masked):
@@ -367,11 +376,25 @@ def _body_extent(masked: str, closing_paren: int, language: str) -> tuple[int, b
             newline = masked.find("\n", index)
             return (len(masked) if newline < 0 else newline), True
         elif not nesting and char == "\n":
-            # Return types and where clauses can wrap; indented continuation lines do not
-            # begin with a declaration keyword.  Stop only at the next declaration/brace.
-            tail = masked[index + 1 :]
-            next_line = tail.split("\n", 1)[0]
-            if re.match(r"\s*(?:[A-Za-z_][A-Za-z0-9_.?<>\[\], ]*\s*)?$", next_line):
+            next_line = masked[index + 1 :].split("\n", 1)[0].strip()
+            signature = masked[closing_paren + 1 : index].strip()
+            if declaration_start.match(next_line) or next_line.startswith("}"):
+                return closing_paren, False
+            if not next_line or next_line.startswith("{"):
+                index += 1
+                continue
+            if language == "swift":
+                continuation = (
+                    re.search(r"(?:->|\bwhere\b|\b(?:async|throws|rethrows)\b)", signature)
+                    or re.match(r"(?:->|where\b|async\b|throws\b|rethrows\b)", next_line)
+                )
+            else:
+                continuation = (
+                    ":" in signature
+                    or re.search(r"\bwhere\b", signature)
+                    or re.match(r"(?::|where\b|=)", next_line)
+                )
+            if continuation or re.search(r"(?:->|:|,|<|&|\?|\.)\s*$", signature):
                 index += 1
                 continue
             return closing_paren, False
@@ -611,6 +634,7 @@ def _kotlin_initializers(
     fallback = path.stem.replace("+Trace", "Trace")
     ordinals: Counter[tuple[str, int, tuple[int, ...]]] = Counter()
     matched_tokens: set[int] = set()
+    _layout_spans, type_headers = _type_layout(masked, "kotlin")
     companion_ranges: list[tuple[int, int, str]] = []
     for companion in re.finditer(r"\bcompanion\s+object(?:\s+[A-Za-z_][A-Za-z0-9_]*)?\s*\{", masked):
         opening = companion.end() - 1
@@ -648,6 +672,9 @@ def _kotlin_initializers(
             )
         )
     for match in re.finditer(r"\bconstructor\s*\(", masked):
+        if any(start < match.start() < end for start, end, _owner in type_headers):
+            matched_tokens.add(match.start())
+            continue
         direct, owner = _direct_context(spans, depths, match.start(), fallback)
         if not direct:
             raise LexError(
@@ -774,9 +801,33 @@ def registered_differential(root: Path) -> tuple[set[str], list[str]]:
     return swift_names & kotlin_names, errors
 
 
-def audit_module_pair(
-    root: Path, pair: ModulePair, *, base_shards: set[str] | None = None
-) -> tuple[list[str], dict[str, int]]:
+def _resolved_differential(
+    inventories: dict[str, list[Declaration]], registered: set[str]
+) -> set[str]:
+    return {
+        name
+        for name in registered
+        if all(
+            len(
+                [
+                    item
+                    for item in inventories[language]
+                    if item.kind == "function" and item.name == name
+                ]
+            )
+            == 1
+            for language in ("swift", "kotlin")
+        )
+    }
+
+
+def _audit_module_pair(
+    root: Path,
+    pair: ModulePair,
+    *,
+    base_shards: set[str] | None = None,
+    registered: set[str] | None = None,
+) -> tuple[list[str], dict[str, int], set[str]]:
     counts = {"differential": 0, "platform-test": 0, "exempt": 0}
     swift_shard_path = pair.swift_dir / SHARD_NAME
     kotlin_shard_path = pair.kotlin_dir / SHARD_NAME
@@ -787,12 +838,12 @@ def audit_module_pair(
             kotlin_shard_path.relative_to(root).as_posix(),
         }
         if base_shards is not None and relative_shards & base_shards:
-            return [f"{pair.name}: parity ratchet disarmed; merge base had shards, current tree has none"], counts
+            return [f"{pair.name}: parity ratchet disarmed; merge base had shards, current tree has none"], counts, set()
         print(f"NOTICE: {pair.name}: no parity-exempt shards; module pair is not sharp yet")
-        return [], counts
+        return [], counts, set()
     if not all(exists):
         missing = kotlin_shard_path if exists[0] else swift_shard_path
-        return [f"{pair.name}: sharp module pair is missing {missing.relative_to(root)}"], counts
+        return [f"{pair.name}: sharp module pair is missing {missing.relative_to(root)}"], counts, set()
     errors: list[str] = []
     try:
         shards = (load_shard(swift_shard_path), load_shard(kotlin_shard_path))
@@ -801,20 +852,21 @@ def audit_module_pair(
             "kotlin": lex_tree(root, pair.kotlin_dir, "kotlin"),
         }
     except RatchetError as exc:
-        return [str(exc)], counts
-    registered, registry_errors = registered_differential(root)
+        return [str(exc)], counts, set()
+    if registered is None:
+        registered, registry_errors = registered_differential(root)
+    else:
+        registry_errors = []
     errors.extend(registry_errors)
+    pair_registered = _resolved_differential(inventories, registered)
     differential_keys: set[str] = set()
     for language, declarations in inventories.items():
-        for name in sorted(registered):
-            matches = [item for item in declarations if item.kind == "function" and item.name == name]
-            if len(matches) != 1:
-                errors.append(
-                    f"{pair.name}: differential {language} function {name} resolves to {len(matches)} declarations"
-                )
-            else:
-                differential_keys.add(matches[0].key)
-    counts["differential"] = len(registered)
+        for name in sorted(pair_registered):
+            match = next(
+                item for item in declarations if item.kind == "function" and item.name == name
+            )
+            differential_keys.add(match.key)
+    counts["differential"] = len(pair_registered)
     for language, shard in zip(("swift", "kotlin"), shards):
         inventory_keys = {item.key for item in inventories[language]}
         exempt_keys = {item.key for item in shard.exempt}
@@ -831,18 +883,36 @@ def audit_module_pair(
                 )
         for key in sorted((exempt_keys | platform_keys) & differential_keys):
             errors.append(f"{shard.path.relative_to(root)}: differential declaration listed as exception: {key}")
+    return errors, counts, pair_registered
+
+
+def audit_module_pair(
+    root: Path, pair: ModulePair, *, base_shards: set[str] | None = None
+) -> tuple[list[str], dict[str, int]]:
+    errors, counts, _resolved = _audit_module_pair(root, pair, base_shards=base_shards)
     return errors, counts
 
 
 def audit_inventory(root: Path, *, base: str | None = None) -> tuple[list[str], dict[str, int]]:
-    total = {"differential": 0, "platform-test": 0, "exempt": 0}
-    errors: list[str] = []
+    registered, errors = registered_differential(root)
+    total = {"differential": len(registered), "platform-test": 0, "exempt": 0}
+    resolved: set[str] = set()
     base_shards = _base_shards(root, base) if base is not None else None
     for pair in module_pairs(root):
-        pair_errors, counts = audit_module_pair(root, pair, base_shards=base_shards)
+        pair_errors, counts, pair_resolved = _audit_module_pair(
+            root,
+            pair,
+            base_shards=base_shards,
+            registered=registered,
+        )
         errors.extend(pair_errors)
-        for key in total:
+        resolved.update(pair_resolved)
+        for key in ("platform-test", "exempt"):
             total[key] += counts[key]
+    for name in sorted(registered - resolved):
+        errors.append(
+            f"differential function {name} does not resolve exactly once in any sharp module pair"
+        )
     return errors, total
 
 
@@ -1013,6 +1083,7 @@ def coverage_errors(
     swift_lcov: Path,
     kotlin_jacoco: Path,
     platform_keys: dict[str, set[str]] | None = None,
+    differential_groups: list[tuple[dict[str, list[Declaration]], set[str]]] | None = None,
 ) -> list[str]:
     reports = {"swift": parse_lcov(swift_lcov), "kotlin": parse_jacoco(kotlin_jacoco)}
     reports_have_methods = {
@@ -1021,13 +1092,22 @@ def coverage_errors(
     }
     errors: list[str] = []
     selected: dict[str, list[Declaration]] = {"swift": [], "kotlin": []}
+    groups = differential_groups or [(declarations, differential)]
+    for group_declarations, group_names in groups:
+        for language in selected:
+            for name in sorted(group_names):
+                matches = [
+                    item
+                    for item in group_declarations[language]
+                    if item.kind == "function" and item.name == name
+                ]
+                if len(matches) != 1:
+                    errors.append(
+                        f"differential {language} function {name} resolves to {len(matches)} declarations"
+                    )
+                else:
+                    selected[language].append(matches[0])
     for language in selected:
-        for name in sorted(differential):
-            matches = [item for item in declarations[language] if item.kind == "function" and item.name == name]
-            if len(matches) != 1:
-                errors.append(f"differential {language} function {name} resolves to {len(matches)} declarations")
-            else:
-                selected[language].append(matches[0])
         if platform_keys:
             keyed = {item.key: item for item in declarations[language]}
             for key in sorted(platform_keys.get(language, set())):
@@ -1081,14 +1161,21 @@ def verify_coverage(root: Path, swift_lcov: Path, kotlin_jacoco: Path) -> tuple[
         return inventory_errors, counts
     registered, errors = registered_differential(root)
     declarations: dict[str, list[Declaration]] = {"swift": [], "kotlin": []}
+    differential_groups: list[tuple[dict[str, list[Declaration]], set[str]]] = []
     platform: dict[str, set[str]] = {"swift": set(), "kotlin": set()}
     for pair in module_pairs(root):
         swift_shard = pair.swift_dir / SHARD_NAME
         kotlin_shard = pair.kotlin_dir / SHARD_NAME
         if not (swift_shard.exists() and kotlin_shard.exists()):
             continue
-        declarations["swift"].extend(lex_tree(root, pair.swift_dir, "swift"))
-        declarations["kotlin"].extend(lex_tree(root, pair.kotlin_dir, "kotlin"))
+        pair_declarations = {
+            "swift": lex_tree(root, pair.swift_dir, "swift"),
+            "kotlin": lex_tree(root, pair.kotlin_dir, "kotlin"),
+        }
+        pair_registered = _resolved_differential(pair_declarations, registered)
+        differential_groups.append((pair_declarations, pair_registered))
+        declarations["swift"].extend(pair_declarations["swift"])
+        declarations["kotlin"].extend(pair_declarations["kotlin"])
         platform["swift"].update(item.key for item in load_shard(swift_shard).platform_test)
         platform["kotlin"].update(item.key for item in load_shard(kotlin_shard).platform_test)
     errors.extend(
@@ -1098,6 +1185,7 @@ def verify_coverage(root: Path, swift_lcov: Path, kotlin_jacoco: Path) -> tuple[
             swift_lcov=swift_lcov,
             kotlin_jacoco=kotlin_jacoco,
             platform_keys=platform,
+            differential_groups=differential_groups,
         )
     )
     return errors, counts
