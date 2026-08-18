@@ -191,6 +191,22 @@ fun Map<String, String>.bool(vararg keys: String) = false
         twin_map = parity_ledger.build_twin_map(self.root)
         self.assertTrue(any(item.rule == "constant-unverifiable" for item in self.findings(twin_map)))
 
+    def test_stale_constant_pair_is_reported_after_one_sided_rename(self) -> None:
+        self.write_clean_tree()
+        twin_map = parity_ledger.build_twin_map(self.root)
+        self.kotlin.write_text(self.kotlin.read_text().replace("SAMPLE_LIMIT", "RENAMED_LIMIT"))
+
+        stale = [item for item in self.findings(twin_map) if item.rule == "stale-constant-pair"]
+
+        self.assertEqual(1, len(stale))
+        self.assertIn("SAMPLE_LIMIT", stale[0].text)
+
+    def test_resolvable_constant_pair_has_no_stale_finding(self) -> None:
+        self.write_clean_tree()
+        twin_map = parity_ledger.build_twin_map(self.root)
+
+        self.assertFalse(any(item.rule == "stale-constant-pair" for item in self.findings(twin_map)))
+
     def test_constant_owner_disambiguates_same_normalized_name(self) -> None:
         self.swift.write_text("enum SedentaryDetector { static let defaultSmoothWindowS = 240.0 }\n")
         self.kotlin = self.kotlin.with_name("SedentaryDetector.kt")
@@ -372,6 +388,33 @@ object Second { fun add(value: Int) = value }
         code, output = self.run_cli(twin_map, baseline)
         self.assertEqual(1, code)
         self.assertIn("constant-value-mismatch", output)
+
+    def test_write_baseline_preserves_issue_and_additional_fields_by_identity(self) -> None:
+        self.write_clean_tree()
+        twin_map = parity_ledger.build_twin_map(self.root)
+        self.kotlin.write_text(self.kotlin.read_text().replace("SAMPLE_LIMIT = 3", "SAMPLE_LIMIT = 4"))
+        map_path = self.root / "map.json"
+        baseline_path = self.root / "baseline.json"
+        map_path.write_text(json.dumps(twin_map))
+        generated = self.baseline_for(twin_map)
+        generated["findings"][0]["issue"] = 123
+        generated["findings"][0]["reviewed_by"] = "fixture"
+        baseline_path.write_text(json.dumps(generated))
+
+        with contextlib.redirect_stdout(io.StringIO()):
+            code = parity_ledger.main(
+                [
+                    "--root", str(self.root),
+                    "--map", str(map_path),
+                    "--baseline", str(baseline_path),
+                    "--write-baseline",
+                ]
+            )
+        rewritten = json.loads(baseline_path.read_text())
+
+        self.assertEqual(0, code)
+        self.assertEqual(123, rewritten["findings"][0]["issue"])
+        self.assertEqual("fixture", rewritten["findings"][0]["reviewed_by"])
 
 
 if __name__ == "__main__":

@@ -80,7 +80,7 @@ jobs:
               Packages/*/Tests/**/*ParityRunner*|\
               android/app/src/main/java/com/noop/*.kt|android/app/src/main/java/com/noop/**/*.kt|\
               android/app/src/test/**|\
-              Tools/parity_*.py|Tools/parity_cases/**|Tools/tests/**|\
+              Tools/parity_*.py|Tools/parity_*.json|Tools/parity_cases/**|Tools/tests/**|\
               **/parity-exempt.json|\
               android/app/build.gradle.kts|android/gradle/verification-metadata.xml|\
               .github/workflows/parity-ratchet.yml)
@@ -144,7 +144,12 @@ jobs:
         run: |
           swift test --package-path Packages/StrandAnalytics --enable-code-coverage \
             --filter ParityRunner -Xlinker "-L${SQLITE_SNAPSHOT_DIR}"
-          /opt/swift/usr/bin/llvm-cov export -format=lcov \
+          swift_bin="$(readlink -f "$(command -v swift)")"
+          test -x "$(dirname "$swift_bin")/llvm-cov" || {
+            echo "ERROR: llvm-cov is not executable next to resolved Swift binary: $swift_bin" >&2
+            exit 1
+          }
+          "$(dirname "$swift_bin")/llvm-cov" export -format=lcov \
             -instr-profile=Packages/StrandAnalytics/.build/debug/codecov/default.profdata \
             Packages/StrandAnalytics/.build/debug/StrandAnalyticsPackageTests.xctest \
             > "$RUNNER_TEMP/swift.lcov"

@@ -10,6 +10,10 @@ Usage:
   python3 Tools/parity_ledger.py
   python3 Tools/parity_ledger.py --no-baseline
   python3 Tools/parity_ledger.py --bootstrap-map --write-baseline
+
+Baseline flow: regenerate with --write-baseline, add a positive ``issue`` to
+each new finding, then check in both the finding and its issue. Regeneration
+preserves additional fields such as ``issue`` for findings with the same identity.
 """
 
 from __future__ import annotations
@@ -1243,6 +1247,18 @@ def scan(root: Path, twin_map: dict) -> ScanResult:
         left = constants_by_key.get(left_key)
         right = constants_by_key.get(right_key)
         if left is None or right is None:
+            if (left_key, right_key) in mapped_pairs:
+                present = left or right
+                missing = left_key if left is None else right_key
+                findings.append(
+                    _finding(
+                        "stale-constant-pair",
+                        present.path if present is not None else left_key.split("::", 1)[0],
+                        present.line if present is not None else 1,
+                        f"mapped constant {missing} does not resolve",
+                        f"{left_key}|{right_key}",
+                    )
+                )
             continue
         if left.value is None or right.value is None:
             findings.append(
@@ -1368,11 +1384,23 @@ def _write_json(path: Path, value: dict) -> None:
     path.write_text(json.dumps(value, indent=2, sort_keys=False) + "\n")
 
 
-def _baseline(result: ScanResult) -> dict:
+def _baseline(result: ScanResult, existing: dict | None = None) -> dict:
+    existing_by_identity = {
+        item["identity"]: item
+        for item in (existing or {}).get("findings", [])
+        if isinstance(item, dict) and isinstance(item.get("identity"), str)
+    }
     return {
         "schema_version": 2,
         "findings": [
-            {"identity": item.identity, "rule": item.rule, "path": item.path, "line": item.line, "text": item.text}
+            {
+                **existing_by_identity.get(item.identity, {}),
+                "identity": item.identity,
+                "rule": item.rule,
+                "path": item.path,
+                "line": item.line,
+                "text": item.text,
+            }
             for item in result.findings
         ],
         "counters": result.counters,
@@ -1402,7 +1430,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--baseline", dest="baseline_path", type=Path, help="baseline JSON path")
     parser.add_argument("--no-baseline", action="store_true", help="show every current finding")
     parser.add_argument("--bootstrap-map", action="store_true", help="write a fresh inventory map before scanning")
-    parser.add_argument("--write-baseline", action="store_true", help="replace the baseline with current findings")
+    parser.add_argument("--write-baseline", action="store_true", help="rewrite the baseline with current findings")
     args = parser.parse_args(argv)
 
     root = args.root.resolve()
@@ -1417,7 +1445,7 @@ def main(argv: list[str] | None = None) -> int:
 
     result = scan(root, twin_map)
     if args.write_baseline:
-        _write_json(baseline_path, _baseline(result))
+        _write_json(baseline_path, _baseline(result, _load_json(baseline_path, {})))
         print(f"WROTE {baseline_path} ({len(result.findings)} known findings)")
         print(f"OK {_summary(result)}")
         return 0

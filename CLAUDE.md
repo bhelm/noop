@@ -121,10 +121,9 @@ properties are initialized`) will pass every green check and still be broken. If
 Swift, you MUST build the app yourself: `xcodebuild … build` locally, or run `app-build.yml` on demand.
 
 ### Local walls (things that will *not* build where you expect)
-- **On Linux:** only `WhoopProtocol` / `OuraProtocol` (pure) build & test. Every GRDB-linked package —
-  `WhoopStore`, `StrandImport`, `StrandAnalytics` (via `WhoopStore`), and `NoopLocalAccess` — fails with
-  `sqlite3.h not found` (GRDB's CSQLite), and `StrandDesign` needs SwiftUI — all need **macOS**. Android
-  JVM unit tests **do** run on Linux.
+- **On Linux:** `StrandAnalytics` builds and its full test suite runs with the private snapshot-enabled
+  SQLite setup documented in [`docs/LINUX.md`](docs/LINUX.md). `StrandDesign` needs SwiftUI. Android JVM
+  unit tests **do** run on Linux.
 - **App targets** (`Strand`, `NOOPiOS`) need **Xcode on macOS**; there is no Linux/CI unit-test target
   for them (`StrandTests` runs only under `xcodebuild … test` on macOS).
 - **BLE behavior cannot be CI- or Linux-tested.** Anything on the CoreBluetooth / offload / live-HR
