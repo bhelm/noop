@@ -122,6 +122,8 @@ class ParityDiffTests(unittest.TestCase):
         cases = parity_diff.generate_cases("pilot", "fixed-nonce")
         functions = {case["function"] for case in cases}
         hrv_functions = {
+            "HRVAnalyzer.analyze/2=HrvAnalyzer.analyzeRaw/2",
+            "HRVAnalyzer.median/1=HrvAnalyzer.median/1",
             "analyze/3",
             "beatAccurateFraction",
             "beatSpreadIsTrustworthy",
@@ -162,6 +164,39 @@ class ParityDiffTests(unittest.TestCase):
         )
         self.assertEqual([19, 20], [len(case["args"]["rr"]) for case in curated])
         self.assertTrue(all(300 <= beat["rrMs"] <= 2_000 for case in curated for beat in case["args"]["rr"]))
+        self.assertEqual(2, len(seeded))
+
+    def test_raw_analyze_cases_cover_path_boundaries_and_two_seeded_inputs(self):
+        cases = parity_diff.generate_cases("pilot", "fixed-nonce")
+        key = "HRVAnalyzer.analyze/2=HrvAnalyzer.analyzeRaw/2"
+        selected = [case for case in cases if case["function"] == key]
+        curated = [case for case in selected if case["source"] == "curated:hrv"]
+        seeded = [case for case in selected if case["source"].startswith("seeded:")]
+
+        self.assertEqual(
+            ["hrv_analyze_raw_clean", "hrv_analyze_raw_empty", "hrv_analyze_raw_under_min"],
+            [case["id"] for case in curated],
+        )
+        self.assertEqual([20, 0, 19], [len(case["args"]["rawRR"]) for case in curated])
+        self.assertEqual(2, len(seeded))
+
+    def test_hrv_median_cases_cover_shape_edges_and_two_seeded_inputs(self):
+        cases = parity_diff.generate_cases("pilot", "fixed-nonce")
+        key = "HRVAnalyzer.median/1=HrvAnalyzer.median/1"
+        selected = [case for case in cases if case["function"] == key]
+        curated = [case for case in selected if case["source"] == "curated:hrv"]
+        seeded = [case for case in selected if case["source"].startswith("seeded:")]
+
+        self.assertEqual(
+            [
+                "hrv_median_duplicates",
+                "hrv_median_empty",
+                "hrv_median_even",
+                "hrv_median_odd",
+                "hrv_median_singleton",
+            ],
+            [case["id"] for case in curated],
+        )
         self.assertEqual(2, len(seeded))
 
 

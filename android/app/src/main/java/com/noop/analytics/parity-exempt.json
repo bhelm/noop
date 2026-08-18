@@ -2263,11 +2263,6 @@
       "issue": 17
     },
     {
-      "key": "android/app/src/main/java/com/noop/analytics/HrvAnalyzer.kt::analyzeRaw/2[defaults=2]#1",
-      "reason": "Bootstrap debt: no differential or declared platform coverage proof yet.",
-      "issue": 17
-    },
-    {
       "key": "android/app/src/main/java/com/noop/analytics/HrvAnalyzer.kt::COVERAGE_PLAUSIBLE_CEILING@property-initializer#1",
       "reason": "Bootstrap debt: no differential or declared platform coverage proof yet.",
       "issue": 17
@@ -2289,11 +2284,6 @@
     },
     {
       "key": "android/app/src/main/java/com/noop/analytics/HrvAnalyzer.kt::DEFAULT_ROLLING_WINDOW_SEC@property-initializer#1",
-      "reason": "Bootstrap debt: no differential or declared platform coverage proof yet.",
-      "issue": 17
-    },
-    {
-      "key": "android/app/src/main/java/com/noop/analytics/HrvAnalyzer.kt::median/1[defaults=-]#1",
       "reason": "Bootstrap debt: no differential or declared platform coverage proof yet.",
       "issue": 17
     },

@@ -17,8 +17,10 @@ final class ParityRunner: XCTestCase {
         let fraction: Double?
         let halfWindowSec: Int?
         let maxRowsPerSecond: Int?
+        let maxRejectedFraction: Double?
         let minBeatsPerWindow: Int?
         let nn: [Double]?
+        let rawRR: [Double]?
         let rr: [RRInput]?
         let rrMs: [Double]?
         let rrTolMs: Double?
@@ -190,6 +192,28 @@ final class ParityRunner: XCTestCase {
                 "rmssd": try finiteOrNull(value.rmssd, record: record),
                 "sdnn": try finiteOrNull(value.sdnn, record: record),
             ]
+        case "HRVAnalyzer.analyze/2=HrvAnalyzer.analyzeRaw/2":
+            guard record.comparison == "epsilon", let rawRR = record.args.rawRR else {
+                throw RunnerError.invalidInput("invalid raw analyze case \(record.id)")
+            }
+            let value = record.args.maxRejectedFraction.map {
+                HRVAnalyzer.analyze(rawRR: rawRR, maxRejectedFraction: $0)
+            } ?? HRVAnalyzer.analyze(rawRR: rawRR)
+            result["value"] = [
+                "meanNN": try finiteOrNull(value.meanNN, record: record),
+                "nClean": value.nClean,
+                "nInput": value.nInput,
+                "pnn50": try finiteOrNull(value.pnn50, record: record),
+                "rmssd": try finiteOrNull(value.rmssd, record: record),
+                "sdnn": try finiteOrNull(value.sdnn, record: record),
+            ]
+        case "HRVAnalyzer.median/1=HrvAnalyzer.median/1":
+            guard record.comparison == "exact", let values = record.args.values else {
+                throw RunnerError.invalidInput("invalid HRV median case \(record.id)")
+            }
+            result["valueBits"] = String(
+                format: "%016llx", HRVAnalyzer.median(values).bitPattern
+            )
         case "beatSpreadIsTrustworthy":
             guard record.comparison == "exact", let raw = record.args.verdict,
                   let verdict = HRVAnalyzer.RrCoverageVerdict(rawValue: raw) else {
