@@ -110,6 +110,45 @@ class ParityDiffTests(unittest.TestCase):
         with self.assertRaisesRegex(parity_diff.ParityFormatError, "finite"):
             self.compare(inputs, swift, kotlin)
 
+    def test_exact_tree_rejects_unencoded_floating_values(self):
+        inputs = [self.input_record()]
+        swift = [self.output_record(valueBits={"rrMs": [800.0]})]
+        kotlin = [self.output_record(valueBits={"rrMs": ["4089000000000000"]})]
+
+        with self.assertRaisesRegex(parity_diff.ParityFormatError, "encoded"):
+            self.compare(inputs, swift, kotlin)
+
+    def test_pilot_generates_curated_and_seeded_cases_for_every_registered_hrv_function(self):
+        cases = parity_diff.generate_cases("pilot", "fixed-nonce")
+        functions = {case["function"] for case in cases}
+        hrv_functions = {
+            "beatAccurateFraction",
+            "beatSpreadIsTrustworthy",
+            "beatValuesAreTrustworthy",
+            "classifyCoverage",
+            "cleanRR",
+            "cleanRRGapAware",
+            "collapseOverCount",
+            "collapsedCoverage",
+            "densestSecondWindowSample",
+            "duplicateBeatCount",
+            "pnn50GapAware",
+            "rangeFilter",
+            "rejectEctopic",
+            "rmssdGapAware",
+            "rmssdRaw",
+            "rollingRmssd",
+            "rrCoverage",
+            "sdnnRaw",
+        }
+
+        self.assertLessEqual(hrv_functions, functions)
+        for function in hrv_functions:
+            selected = [case for case in cases if case["function"] == function]
+            self.assertTrue(any(case["source"].startswith("curated:") for case in selected), function)
+            self.assertTrue(any(case["source"].startswith("seeded:") for case in selected), function)
+        self.assertEqual(cases, parity_diff.generate_cases("pilot", "fixed-nonce"))
+
 
 if __name__ == "__main__":
     unittest.main()
