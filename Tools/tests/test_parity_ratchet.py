@@ -373,6 +373,65 @@ func constrained<T>()
         self.assertEqual(2, len(errors), errors)
         self.assertTrue(all("function was not executed" in error for error in errors), errors)
 
+    def kotlin_expression_body_errors(
+        self, method_records: list[tuple[int, int]]
+    ) -> list[str]:
+        swift_source = self.write(
+            "Sources/Pilot/Expressions.swift", "func target(_ value: Int) -> Int { value + 1 }\n"
+        )
+        kotlin_source = self.write(
+            "src/main/java/pilot/Expressions.kt",
+            """fun target(value: Int): Int =
+    value + 1
+""",
+        )
+        swift_lcov = self.write(
+            "expressions.lcov",
+            f"SF:{swift_source}\nFN:1,target\nFNDA:1,target\nDA:1,1\nend_of_record\n",
+        )
+        methods = "".join(
+            f'<method name="target" desc="(I)I" line="{line}">'
+            f'<counter type="METHOD" missed="{int(covered == 0)}" covered="{covered}"/>'
+            "</method>"
+            for line, covered in method_records
+        )
+        jacoco = self.write(
+            "expressions.xml",
+            f"""<report><package name="pilot">
+<class name="pilot/Expressions" sourcefilename="Expressions.kt">{methods}</class>
+<sourcefile name="Expressions.kt"><line nr="2" mi="0" ci="1"/></sourcefile>
+</package></report>""",
+        )
+        declarations = {
+            "swift": parity_ratchet.lex_file(self.root, swift_source, "swift"),
+            "kotlin": parity_ratchet.lex_file(self.root, kotlin_source, "kotlin"),
+        }
+        self.assertEqual(
+            (1, 1),
+            (declarations["kotlin"][0].line, declarations["kotlin"][0].end_line),
+        )
+        return parity_ratchet.coverage_errors(
+            declarations,
+            {"target"},
+            swift_lcov=swift_lcov,
+            kotlin_jacoco=jacoco,
+        )
+
+    def test_kotlin_expression_body_accepts_unique_method_on_following_line(self) -> None:
+        self.assertEqual([], self.kotlin_expression_body_errors([(2, 1)]))
+
+    def test_kotlin_expression_body_rejects_unexecuted_method_on_following_line(self) -> None:
+        errors = self.kotlin_expression_body_errors([(2, 0)])
+
+        self.assertEqual(1, len(errors), errors)
+        self.assertIn("registered function was not executed", errors[0])
+
+    def test_kotlin_expression_body_rejects_ambiguous_methods_outside_extent(self) -> None:
+        errors = self.kotlin_expression_body_errors([(2, 1), (3, 1)])
+
+        self.assertEqual(1, len(errors), errors)
+        self.assertIn("no kotlin function coverage record", errors[0])
+
     def test_line_coverage_fallback_is_announced(self) -> None:
         swift_source = self.write("Sources/Pilot/Fallback.swift", "func target() -> Int { 1 }\n")
         kotlin_source = self.write("src/main/java/pilot/Fallback.kt", "fun target(): Int = 1\n")
@@ -649,7 +708,30 @@ func constrained<T>()
     def test_repository_registry_is_runtime_derived_and_shards_hold_no_differential_list(self) -> None:
         registered, errors = parity_ratchet.registered_differential(REPOSITORY)
         self.assertEqual([], errors)
-        self.assertEqual({"rollingRmssd", "trimpToStrain"}, registered)
+        self.assertEqual(
+            {
+                "beatAccurateFraction",
+                "beatSpreadIsTrustworthy",
+                "beatValuesAreTrustworthy",
+                "classifyCoverage",
+                "cleanRR",
+                "cleanRRGapAware",
+                "collapseOverCount",
+                "collapsedCoverage",
+                "densestSecondWindowSample",
+                "duplicateBeatCount",
+                "pnn50GapAware",
+                "rangeFilter",
+                "rejectEctopic",
+                "rmssdGapAware",
+                "rmssdRaw",
+                "rollingRmssd",
+                "rrCoverage",
+                "sdnnRaw",
+                "trimpToStrain",
+            },
+            registered,
+        )
         for path in (
             REPOSITORY / "Packages/StrandAnalytics/Sources/StrandAnalytics/parity-exempt.json",
             REPOSITORY / "android/app/src/main/java/com/noop/analytics/parity-exempt.json",
