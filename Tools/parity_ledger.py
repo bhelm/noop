@@ -168,6 +168,8 @@ class CallSite:
     name: str
     arity: int
     owner: str | None
+    path: str
+    lexical_owner: str | None = None
 
 
 def _paths(root: Path, globs: Iterable[str]) -> list[Path]:
@@ -1072,31 +1074,58 @@ def _call_sites(root: Path, globs: tuple[str, ...]) -> dict[str, list[CallSite]]
             owner = receiver_match.group(1).strip("`") if receiver_match else None
             if owner in {"self", "this", "Self"}:
                 owner = lexical_owner
-            calls[language].append(CallSite(match.group(1).strip("`"), arity, owner))
+            elif owner is not None and owner[:1].islower():
+                # `burst.codesWithTimes(...)`: the receiver is an instance variable; its
+                # type is not recoverable lexically, so resolve like an unqualified call.
+                owner = None
+            calls[language].append(
+                CallSite(match.group(1).strip("`"), arity, owner, _relative(root, path), lexical_owner)
+            )
     return calls
 
 
 def _declaration_call_counts(
     declarations: list[Declaration], sites: dict[str, list[CallSite]]
 ) -> dict[str, int]:
-    by_signature: dict[tuple[str, str, int], list[Declaration]] = defaultdict(list)
+    by_name: dict[tuple[str, str], list[Declaration]] = defaultdict(list)
     for declaration in declarations:
-        by_signature[(declaration.language, _normal_name(declaration.name), declaration.arity)].append(declaration)
+        by_name[(declaration.language, _normal_name(declaration.name))].append(declaration)
     counts: Counter[str] = Counter()
     for language, language_sites in sites.items():
         for site in language_sites:
-            candidates = by_signature.get((language, _normal_name(site.name), site.arity), [])
-            if site.owner:
-                owner = _normal_name(site.owner)
-                candidates = [
-                    item
-                    for item in candidates
-                    if owner in {_normal_name(item.owner), _normal_name(Path(item.path).stem)}
-                ]
-            else:
-                owners = {_normal_name(item.owner) for item in candidates}
-                if len(owners) != 1:
-                    candidates = []
+            # A call may omit defaulted parameters, so besides exact-arity declarations it
+            # can target any same-name declaration with MORE parameters (false test-only
+            # finding for HrvAnalyzer.rollingRmssd/4: its only production call leaves
+            # minBeatsPerWindow defaulted). Exact-arity candidates win outright so that the
+            # relaxed pool cannot introduce owner ambiguity where none existed before.
+            named = by_name.get((language, _normal_name(site.name)), [])
+            exact = [item for item in named if item.arity == site.arity]
+            relaxed = [item for item in named if item.arity > site.arity]
+
+            def _owner_filtered(pool: list[Declaration]) -> list[Declaration]:
+                if site.owner:
+                    owner = _normal_name(site.owner)
+                    return [
+                        item
+                        for item in pool
+                        if owner in {_normal_name(item.owner), _normal_name(Path(item.path).stem)}
+                    ]
+                # Unqualified call: same-file declarations first (self-scope calls) —
+                # within the file, prefer the type whose span the call sits in, so three
+                # same-named members of sibling types don't all take credit. Then the
+                # global pool, only when its owner is unambiguous.
+                local = [item for item in pool if item.path == site.path]
+                if local:
+                    if site.lexical_owner:
+                        lexical = _normal_name(site.lexical_owner)
+                        scoped = [item for item in local if _normal_name(item.owner) == lexical]
+                        if scoped:
+                            return scoped
+                    return local
+                owners = {_normal_name(item.owner) for item in pool}
+                return pool if len(owners) == 1 else []
+
+            candidates = _owner_filtered(exact) or _owner_filtered(relaxed)
             for candidate in candidates:
                 counts[candidate.key] += 1
     return dict(counts)
