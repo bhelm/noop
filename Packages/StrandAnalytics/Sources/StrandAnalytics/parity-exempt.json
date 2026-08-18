@@ -5418,72 +5418,7 @@
       "issue": 17
     },
     {
-      "key": "Packages/StrandAnalytics/Sources/StrandAnalytics/StrainScorer.swift::tanakaHRmax/1[defaults=-]#1",
-      "reason": "Bootstrap debt: no differential or declared platform coverage proof yet.",
-      "issue": 17
-    },
-    {
-      "key": "Packages/StrandAnalytics/Sources/StrandAnalytics/StrainScorer.swift::defaultMaxHR/1[defaults=1]#1",
-      "reason": "Bootstrap debt: no differential or declared platform coverage proof yet.",
-      "issue": 17
-    },
-    {
-      "key": "Packages/StrandAnalytics/Sources/StrandAnalytics/StrainScorer.swift::percentile/2[defaults=-]#1",
-      "reason": "Bootstrap debt: no differential or declared platform coverage proof yet.",
-      "issue": 17
-    },
-    {
-      "key": "Packages/StrandAnalytics/Sources/StrandAnalytics/StrainScorer.swift::estimateHRmax/2[defaults=-]#1",
-      "reason": "Bootstrap debt: no differential or declared platform coverage proof yet.",
-      "issue": 17
-    },
-    {
-      "key": "Packages/StrandAnalytics/Sources/StrandAnalytics/StrainScorer.swift::pctHRR/3[defaults=-]#1",
-      "reason": "Bootstrap debt: no differential or declared platform coverage proof yet.",
-      "issue": 17
-    },
-    {
-      "key": "Packages/StrandAnalytics/Sources/StrandAnalytics/StrainScorer.swift::zoneWeight/3[defaults=-]#1",
-      "reason": "Bootstrap debt: no differential or declared platform coverage proof yet.",
-      "issue": 17
-    },
-    {
       "key": "Packages/StrandAnalytics/Sources/StrandAnalytics/StrainScorer.swift::maxSampleGapMin@property-initializer#1",
-      "reason": "Bootstrap debt: no differential or declared platform coverage proof yet.",
-      "issue": 17
-    },
-    {
-      "key": "Packages/StrandAnalytics/Sources/StrandAnalytics/StrainScorer.swift::effectiveEffort/2[defaults=-]#1",
-      "reason": "Bootstrap debt: no differential or declared platform coverage proof yet.",
-      "issue": 17
-    },
-    {
-      "key": "Packages/StrandAnalytics/Sources/StrandAnalytics/StrainScorer.swift::sampleDurationMinutes/1[defaults=-]#1",
-      "reason": "Bootstrap debt: no differential or declared platform coverage proof yet.",
-      "issue": 17
-    },
-    {
-      "key": "Packages/StrandAnalytics/Sources/StrandAnalytics/StrainScorer.swift::sampleDurationsMinutes/1[defaults=-]#1",
-      "reason": "Bootstrap debt: no differential or declared platform coverage proof yet.",
-      "issue": 17
-    },
-    {
-      "key": "Packages/StrandAnalytics/Sources/StrandAnalytics/StrainScorer.swift::edwardsTRIMP/4[defaults=-]#1",
-      "reason": "Bootstrap debt: no differential or declared platform coverage proof yet.",
-      "issue": 17
-    },
-    {
-      "key": "Packages/StrandAnalytics/Sources/StrandAnalytics/StrainScorer.swift::banisterTRIMP/5[defaults=-]#1",
-      "reason": "Bootstrap debt: no differential or declared platform coverage proof yet.",
-      "issue": 17
-    },
-    {
-      "key": "Packages/StrandAnalytics/Sources/StrandAnalytics/StrainScorer.swift::fitStrainDenominator/1[defaults=-]#1",
-      "reason": "Bootstrap debt: no differential or declared platform coverage proof yet.",
-      "issue": 17
-    },
-    {
-      "key": "Packages/StrandAnalytics/Sources/StrandAnalytics/StrainScorer.swift::strain/6[defaults=2,3,4,5,6]#1",
       "reason": "Bootstrap debt: no differential or declared platform coverage proof yet.",
       "issue": 17
     },

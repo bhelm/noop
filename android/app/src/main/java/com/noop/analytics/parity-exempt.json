@@ -5983,72 +5983,7 @@
       "issue": 17
     },
     {
-      "key": "android/app/src/main/java/com/noop/analytics/StrainScorer.kt::tanakaHRmax/1[defaults=-]#1",
-      "reason": "Bootstrap debt: no differential or declared platform coverage proof yet.",
-      "issue": 17
-    },
-    {
-      "key": "android/app/src/main/java/com/noop/analytics/StrainScorer.kt::defaultMaxHR/1[defaults=1]#1",
-      "reason": "Bootstrap debt: no differential or declared platform coverage proof yet.",
-      "issue": 17
-    },
-    {
-      "key": "android/app/src/main/java/com/noop/analytics/StrainScorer.kt::percentile/2[defaults=-]#1",
-      "reason": "Bootstrap debt: no differential or declared platform coverage proof yet.",
-      "issue": 17
-    },
-    {
-      "key": "android/app/src/main/java/com/noop/analytics/StrainScorer.kt::estimateHRmax/2[defaults=-]#1",
-      "reason": "Bootstrap debt: no differential or declared platform coverage proof yet.",
-      "issue": 17
-    },
-    {
-      "key": "android/app/src/main/java/com/noop/analytics/StrainScorer.kt::pctHRR/3[defaults=-]#1",
-      "reason": "Bootstrap debt: no differential or declared platform coverage proof yet.",
-      "issue": 17
-    },
-    {
-      "key": "android/app/src/main/java/com/noop/analytics/StrainScorer.kt::zoneWeight/3[defaults=-]#1",
-      "reason": "Bootstrap debt: no differential or declared platform coverage proof yet.",
-      "issue": 17
-    },
-    {
       "key": "android/app/src/main/java/com/noop/analytics/StrainScorer.kt::maxSampleGapMin@property-initializer#1",
-      "reason": "Bootstrap debt: no differential or declared platform coverage proof yet.",
-      "issue": 17
-    },
-    {
-      "key": "android/app/src/main/java/com/noop/analytics/StrainScorer.kt::effectiveEffort/2[defaults=-]#1",
-      "reason": "Bootstrap debt: no differential or declared platform coverage proof yet.",
-      "issue": 17
-    },
-    {
-      "key": "android/app/src/main/java/com/noop/analytics/StrainScorer.kt::sampleDurationMinutes/1[defaults=-]#1",
-      "reason": "Bootstrap debt: no differential or declared platform coverage proof yet.",
-      "issue": 17
-    },
-    {
-      "key": "android/app/src/main/java/com/noop/analytics/StrainScorer.kt::sampleDurationsMinutes/1[defaults=-]#1",
-      "reason": "Bootstrap debt: no differential or declared platform coverage proof yet.",
-      "issue": 17
-    },
-    {
-      "key": "android/app/src/main/java/com/noop/analytics/StrainScorer.kt::edwardsTRIMP/4[defaults=-]#1",
-      "reason": "Bootstrap debt: no differential or declared platform coverage proof yet.",
-      "issue": 17
-    },
-    {
-      "key": "android/app/src/main/java/com/noop/analytics/StrainScorer.kt::banisterTRIMP/5[defaults=-]#1",
-      "reason": "Bootstrap debt: no differential or declared platform coverage proof yet.",
-      "issue": 17
-    },
-    {
-      "key": "android/app/src/main/java/com/noop/analytics/StrainScorer.kt::fitStrainDenominator/1[defaults=-]#1",
-      "reason": "Bootstrap debt: no differential or declared platform coverage proof yet.",
-      "issue": 17
-    },
-    {
-      "key": "android/app/src/main/java/com/noop/analytics/StrainScorer.kt::strain/6[defaults=2,3,4,5,6]#1",
       "reason": "Bootstrap debt: no differential or declared platform coverage proof yet.",
       "issue": 17
     },

@@ -36,6 +36,9 @@ ROLLING_DEFAULT_WINDOW_SEC = 300
 ROLLING_DEFAULT_STEP_SEC = 0
 ROLLING_DEFAULT_MIN_BEATS = 8
 STRAIN_DEFAULT_DENOMINATOR = 7201.0
+STRAIN_DEFAULT_AGE = 30
+STRAIN_DEFAULT_MAX_HR = 190.0
+STRAIN_DEFAULT_RESTING_HR = 60.0
 COLLAPSE_DEFAULT_RR_TOL_MS = 40.0
 COLLAPSE_DEFAULT_WINDOW_SEC = 0
 COLLAPSED_COVERAGE_DEFAULT_RR_TOL_MS = 30.0
@@ -46,6 +49,10 @@ HRV_MEDIAN_KEY = "HRVAnalyzer.median/1=HrvAnalyzer.median/1"
 EPSILON = 1e-9
 _MASK64 = (1 << 64) - 1
 _BITS_RE = re.compile(r"^[0-9a-f]{16}$")
+INT32_MIN = -(1 << 31)
+INT32_MAX = (1 << 31) - 1
+INT64_MIN = -(1 << 63)
+INT64_MAX = (1 << 63) - 1
 
 
 class ParityFormatError(ValueError):
@@ -515,11 +522,61 @@ def _seeded_cases() -> list[dict[str, Any]]:
             {
                 "args": args,
                 "comparison": "exact",
-                "function": "trimpToStrain",
+                "function": "StrainScorer.trimpToStrain/2",
                 "id": f"seeded_trimp_{index:02d}",
                 "source": f"seeded:splitmix64:{GENERATOR_SEED:#018x}",
             }
         )
+    for round_index in range(2):
+        percentile_values = sorted(80.0 + rng.bounded(101) for _ in range(6 + round_index))
+        base = 100 + round_index * 1_000
+        strain_a = {
+            "series": {"count": 20, "startTs": base, "stepSec": 32, "bpm": 120 + round_index * 10},
+            "useDefaults": False,
+            "maxHR": 190.0,
+            "restingHR": 60.0,
+            "method": "edwards",
+            "sex": "male",
+            "denominator": 7201.0,
+        }
+        strain_b = dict(strain_a)
+        strain_b["method"] = "banister"
+        strain_b["sex"] = "female"
+        strain_cases = [
+            ("StrainScorer.tanakaHRmax/1", "epsilon", {"age": 18.0 + rng.bounded(63)}),
+            ("StrainScorer.defaultMaxHR/1", "exact", {} if round_index == 0 else {"ageInt": 18 + rng.bounded(63)}),
+            ("StrainScorer.percentile/2", "epsilon", {"values": percentile_values, "pct": float(rng.bounded(101))}),
+            ("StrainScorer.estimateHRmax/2", "epsilon", {"history": {"count": 599 + round_index, "low": 150.0, "high": 180.0 + rng.bounded(31)}, "age": 25.0 + rng.bounded(36)}),
+            ("StrainScorer.pctHRR/3", "epsilon", {"bpm": 50.0 + rng.bounded(151), "restingHR": 60.0, "hrReserve": 120.0}),
+            ("StrainScorer.zoneWeight/3", "exact", {"bpm": 50.0 + rng.bounded(151), "restingHR": 60.0, "hrReserve": 120.0}),
+            ("StrainScorer.effectiveEffort/2", "exact", {"live": rng.bounded(10_001) / 100.0, "stored": rng.bounded(10_001) / 100.0}),
+            ("StrainScorer.sampleDurationMinutes/1", "epsilon", {"hr": [{"ts": base, "bpm": 100}, {"ts": base + 1 + rng.bounded(180), "bpm": 110}]}),
+            ("StrainScorer.sampleDurationsMinutes/1", "epsilon", {"hr": [{"ts": base, "bpm": 100}, {"ts": base + 1, "bpm": 110}, {"ts": base + 2 + rng.bounded(180), "bpm": 120}]}),
+            ("StrainScorer.edwardsTRIMP/4", "epsilon", {"hr": [{"ts": 0, "bpm": 90 + rng.bounded(91)}, {"ts": 30, "bpm": 90 + rng.bounded(91)}], "restingHR": 60.0, "hrReserve": 120.0, "durations": [0.25 + round_index * 0.25, 0.5]}),
+            ("StrainScorer.banisterTRIMP/5", "epsilon", {"hr": [{"ts": 0, "bpm": 90 + rng.bounded(91)}, {"ts": 30, "bpm": 90 + rng.bounded(91)}], "restingHR": 60.0, "hrReserve": 120.0, "durations": [0.25 + round_index * 0.25, 0.5], "b": 1.67 if round_index == 0 else 1.92}),
+            ("StrainScorer.fitStrainDenominator/1", "epsilon", {"pairs": [[10.0, 20.0 + rng.bounded(10)], [100.0, 45.0 + rng.bounded(10)], [500.0, 65.0 + rng.bounded(10)]]}),
+            (
+                "StrainScorer.strain/6",
+                "exact",
+                {
+                    "replayFirstAtEnd": round_index == 0,
+                    "strainCalls": [strain_a, strain_b, strain_a] if round_index == 0 else [
+                        {"series": {"count": 600, "startTs": base, "stepSec": 1, "bpm": 125, "alternateBpm": 145}, "useDefaults": True}
+                    ],
+                },
+            ),
+        ]
+        for index, (function, comparison, args) in enumerate(strain_cases):
+            record = {
+                "args": args,
+                "comparison": comparison,
+                "function": function,
+                "id": f"seeded_strain_{round_index}_{index:02d}",
+                "source": f"seeded:splitmix64:{GENERATOR_SEED:#018x}",
+            }
+            if function == "StrainScorer.sampleDurationsMinutes/1":
+                record["knownBehaviorIssue"] = "bhelm/noop#12"
+            records.append(record)
     verdicts = ["plausible", "underCovered", "sameSecondOverCount"]
     for index in range(2):
         raw = [float(760 + rng.bounded(81)) for _ in range(20 + index)]
@@ -604,6 +661,125 @@ def _seeded_cases() -> list[dict[str, Any]]:
     return records
 
 
+def _is_signed_integer(value: Any, minimum: int, maximum: int) -> bool:
+    return isinstance(value, int) and not isinstance(value, bool) and minimum <= value <= maximum
+
+
+def _checked_integer(value: int, record: dict[str, Any], operation: str) -> int:
+    if not INT64_MIN <= value <= INT64_MAX:
+        raise ParityFormatError(
+            f"case {record.get('id')!r} {record.get('function')} {operation} overflows signed Int64"
+        )
+    return value
+
+
+def _checked_add(left: int, right: int, record: dict[str, Any], operation: str) -> int:
+    return _checked_integer(left + right, record, operation)
+
+
+def _checked_subtract(left: int, right: int, record: dict[str, Any], operation: str) -> int:
+    return _checked_integer(left - right, record, operation)
+
+
+def _checked_multiply(left: int, right: int, record: dict[str, Any], operation: str) -> int:
+    return _checked_integer(left * right, record, operation)
+
+
+def _validate_hr_samples(args: dict[str, Any], record: dict[str, Any]) -> None:
+    rows = args.get("hr")
+    valid = isinstance(rows, list) and all(
+        isinstance(row, dict)
+        and _is_signed_integer(row.get("ts"), INT64_MIN, INT64_MAX)
+        and _is_signed_integer(row.get("bpm"), INT32_MIN, INT32_MAX)
+        for row in rows
+    )
+    if not valid:
+        raise ParityFormatError(
+            f"case {record.get('id')!r} {record.get('function')} requires integer hr ts/bpm rows"
+        )
+    for left, right in zip(rows, rows[1:]):
+        _checked_subtract(right["ts"], left["ts"], record, "adjacent timestamp difference")
+    if len(rows) >= 2:
+        _checked_subtract(rows[-1]["ts"], rows[0]["ts"], record, "total timestamp span")
+
+
+def _is_number(value: Any) -> bool:
+    return isinstance(value, (int, float)) and not isinstance(value, bool)
+
+
+def _effective_strain_call(call: Any, record: dict[str, Any]) -> dict[str, Any]:
+    function = "StrainScorer.strain/6"
+    if not isinstance(call, dict):
+        raise ParityFormatError(f"case {record.get('id')!r} {function} calls must be objects")
+    series = call.get("series")
+    if not isinstance(series, dict):
+        raise ParityFormatError(f"case {record.get('id')!r} {function} requires call.series")
+    if not _is_signed_integer(series.get("count"), 0, INT32_MAX):
+        raise ParityFormatError(f"case {record.get('id')!r} {function} count must fit non-negative Int32")
+    if not _is_signed_integer(series.get("startTs"), INT64_MIN, INT64_MAX):
+        raise ParityFormatError(f"case {record.get('id')!r} {function} startTs must fit signed Int64")
+    if not _is_signed_integer(series.get("stepSec"), INT64_MIN, INT64_MAX):
+        raise ParityFormatError(f"case {record.get('id')!r} {function} stepSec must fit signed Int64")
+    if not _is_signed_integer(series.get("bpm"), INT32_MIN, INT32_MAX):
+        raise ParityFormatError(f"case {record.get('id')!r} {function} series fields must be integers")
+    if series["count"] < 0 or series["stepSec"] <= 0 or not 30 <= series["bpm"] <= 220:
+        raise ParityFormatError(f"case {record.get('id')!r} {function} series is outside the normative domain")
+    alternate = series.get("alternateBpm")
+    if alternate is not None and (
+        not _is_signed_integer(alternate, INT32_MIN, INT32_MAX) or not 30 <= alternate <= 220
+    ):
+        raise ParityFormatError(f"case {record.get('id')!r} {function} alternateBpm is invalid")
+    count = series["count"]
+    start = series["startTs"]
+    step = series["stepSec"]
+    generated_end = start
+    if count > 0:
+        last_offset = _checked_multiply(count - 1, step, record, "series index multiplication")
+        generated_end = _checked_add(start, last_offset, record, "series timestamp addition")
+    final_ts = series.get("finalTs")
+    if final_ts is not None:
+        if not _is_signed_integer(final_ts, INT64_MIN, INT64_MAX) or count < 2:
+            raise ParityFormatError(f"case {record.get('id')!r} {function} finalTs is invalid")
+        neighbor_offset = _checked_multiply(count - 2, step, record, "finalTs neighbor multiplication")
+        neighbor = _checked_add(start, neighbor_offset, record, "finalTs neighbor addition")
+        if final_ts <= neighbor:
+            raise ParityFormatError(f"case {record.get('id')!r} {function} finalTs is invalid")
+        _checked_subtract(final_ts, neighbor, record, "finalTs neighbor difference")
+        generated_end = final_ts
+    if count >= 2:
+        _checked_subtract(generated_end, start, record, "series total span")
+    use_defaults = call.get("useDefaults", False)
+    if not isinstance(use_defaults, bool):
+        raise ParityFormatError(f"case {record.get('id')!r} {function} useDefaults must be boolean")
+    controls = ("maxHR", "restingHR", "method", "sex", "denominator")
+    if use_defaults and any(key in call for key in controls):
+        raise ParityFormatError(f"case {record.get('id')!r} {function} bare calls cannot override defaults")
+    if not use_defaults and not all(key in call for key in controls):
+        raise ParityFormatError(f"case {record.get('id')!r} {function} explicit calls require every control")
+    max_hr = call.get("maxHR", STRAIN_DEFAULT_MAX_HR)
+    resting = call.get("restingHR", STRAIN_DEFAULT_RESTING_HR)
+    denominator = call.get("denominator", STRAIN_DEFAULT_DENOMINATOR)
+    if not all(_is_number(value) for value in (max_hr, resting, denominator)):
+        raise ParityFormatError(f"case {record.get('id')!r} {function} controls must be numeric")
+    if denominator <= 1:
+        raise ParityFormatError(
+            f"case {record.get('id')!r} {function} denominator must be > 1; tracked by bhelm/noop#36"
+        )
+    method = call.get("method", "edwards")
+    sex = call.get("sex", "male")
+    if method not in {"edwards", "banister"} or not isinstance(sex, str):
+        raise ParityFormatError(f"case {record.get('id')!r} {function} method/sex is invalid")
+    return {
+        "denominator": denominator,
+        "maxHR": max_hr,
+        "method": method,
+        "restingHR": resting,
+        "series": dict(series),
+        "sex": sex,
+        "useDefaults": use_defaults,
+    }
+
+
 def _effective_args(record: dict[str, Any]) -> dict[str, Any]:
     args = record.get("args")
     if not isinstance(args, dict):
@@ -618,12 +794,89 @@ def _effective_args(record: dict[str, Any]) -> dict[str, Any]:
             "stepSec": args.get("stepSec", ROLLING_DEFAULT_STEP_SEC),
             "windowSec": args.get("windowSec", ROLLING_DEFAULT_WINDOW_SEC),
         }
-    if function == "trimpToStrain":
-        if not isinstance(args.get("trimp"), (int, float)):
+    if function in {"trimpToStrain", "StrainScorer.trimpToStrain/2"}:
+        if not _is_number(args.get("trimp")):
             raise ParityFormatError(f"case {record.get('id')!r} trimpToStrain requires args.trimp")
+        denominator = args.get("denominator", STRAIN_DEFAULT_DENOMINATOR)
+        if not _is_number(denominator) or denominator <= 1:
+            raise ParityFormatError(
+                f"case {record.get('id')!r} trimpToStrain denominator must be > 1; "
+                "invalid log-domain parity is tracked by bhelm/noop#36"
+            )
         return {
-            "denominator": args.get("denominator", STRAIN_DEFAULT_DENOMINATOR),
+            "denominator": denominator,
             "trimp": args["trimp"],
+        }
+    if function == "StrainScorer.tanakaHRmax/1":
+        if not _is_number(args.get("age")):
+            raise ParityFormatError(f"case {record.get('id')!r} {function} requires numeric args.age")
+        return dict(args)
+    if function == "StrainScorer.defaultMaxHR/1":
+        if "ageInt" in args and (not isinstance(args["ageInt"], int) or isinstance(args["ageInt"], bool)):
+            raise ParityFormatError(f"case {record.get('id')!r} {function} requires integer args.ageInt")
+        return {"ageInt": args.get("ageInt", STRAIN_DEFAULT_AGE)}
+    if function == "StrainScorer.percentile/2":
+        if not isinstance(args.get("values"), list) or not all(_is_number(v) for v in args["values"]) or not _is_number(args.get("pct")):
+            raise ParityFormatError(f"case {record.get('id')!r} {function} requires args.values/pct")
+        if not 0 <= args["pct"] <= 100:
+            raise ParityFormatError(f"case {record.get('id')!r} {function} requires pct in 0...100")
+        return dict(args)
+    if function == "StrainScorer.estimateHRmax/2":
+        history = args.get("history")
+        if not isinstance(history, dict) or not isinstance(history.get("count"), int) or isinstance(history.get("count"), bool) or history["count"] < 0:
+            raise ParityFormatError(f"case {record.get('id')!r} {function} requires non-negative history.count")
+        if not all(_is_number(history.get(k)) for k in ("low", "high")):
+            raise ParityFormatError(f"case {record.get('id')!r} {function} requires numeric history.low/high")
+        if "age" in args and not _is_number(args["age"]):
+            raise ParityFormatError(f"case {record.get('id')!r} {function} requires numeric args.age")
+        return dict(args)
+    if function in {"StrainScorer.pctHRR/3", "StrainScorer.zoneWeight/3"}:
+        if not all(_is_number(args.get(k)) for k in ("bpm", "restingHR", "hrReserve")):
+            raise ParityFormatError(f"case {record.get('id')!r} {function} requires bpm/restingHR/hrReserve")
+        if args["hrReserve"] <= 0:
+            raise ParityFormatError(f"case {record.get('id')!r} {function} requires positive hrReserve")
+        if "characterizeZones" in args and (
+            function != "StrainScorer.zoneWeight/3" or not isinstance(args["characterizeZones"], bool)
+        ):
+            raise ParityFormatError(f"case {record.get('id')!r} {function} characterizeZones must be boolean")
+        return dict(args)
+    if function == "StrainScorer.effectiveEffort/2":
+        if any(k in args and not _is_number(args[k]) for k in ("live", "stored")):
+            raise ParityFormatError(f"case {record.get('id')!r} {function} requires numeric live/stored")
+        if all(k in args and args[k] == 0 for k in ("live", "stored")) and math.copysign(1.0, args["live"]) != math.copysign(1.0, args["stored"]):
+            raise ParityFormatError(
+                f"case {record.get('id')!r} mixed signed-zero exact bits are excluded; "
+                "parity is tracked by bhelm/noop#37"
+            )
+        return dict(args)
+    if function in {"StrainScorer.sampleDurationMinutes/1", "StrainScorer.sampleDurationsMinutes/1"}:
+        _validate_hr_samples(args, record)
+        return dict(args)
+    if function in {"StrainScorer.edwardsTRIMP/4", "StrainScorer.banisterTRIMP/5"}:
+        _validate_hr_samples(args, record)
+        if not isinstance(args.get("durations"), list) or len(args["durations"]) != len(args["hr"]) or not all(_is_number(v) for v in args["durations"]):
+            raise ParityFormatError(f"case {record.get('id')!r} {function} requires one duration per HR row")
+        required = ("restingHR", "hrReserve") + (("b",) if function.endswith("banisterTRIMP/5") else ())
+        if not all(_is_number(args.get(k)) for k in required):
+            raise ParityFormatError(f"case {record.get('id')!r} {function} has missing numeric scalars")
+        if args["hrReserve"] <= 0:
+            raise ParityFormatError(f"case {record.get('id')!r} {function} requires positive hrReserve")
+        return dict(args)
+    if function == "StrainScorer.fitStrainDenominator/1":
+        pairs = args.get("pairs")
+        if not isinstance(pairs, list) or not all(isinstance(p, list) and len(p) == 2 and all(_is_number(v) for v in p) for p in pairs):
+            raise ParityFormatError(f"case {record.get('id')!r} {function} requires numeric [trimp,strain] pairs")
+        return dict(args)
+    if function == "StrainScorer.strain/6":
+        calls = args.get("strainCalls")
+        replay = args.get("replayFirstAtEnd", False)
+        if not isinstance(calls, list) or not calls or not isinstance(replay, bool):
+            raise ParityFormatError(f"case {record.get('id')!r} {function} requires strainCalls/replay flag")
+        if replay and (len(calls) < 3 or calls[0] != calls[-1]):
+            raise ParityFormatError(f"case {record.get('id')!r} {function} replay must be A→B→A")
+        return {
+            "replayFirstAtEnd": replay,
+            "strainCalls": [_effective_strain_call(call, record) for call in calls],
         }
     if function in {"rmssdRaw", "sdnnRaw"}:
         if not isinstance(args.get("nn"), list):
@@ -722,7 +975,7 @@ def generate_cases(suite: str, nonce: str) -> list[dict[str, Any]]:
             {
                 "args": {"trimp": 100.0},
                 "comparison": "exact",
-                "function": "trimpToStrain",
+                "function": "StrainScorer.trimpToStrain/2",
                 "id": "trimp_negative_probe",
                 "source": "negative-control",
             }
@@ -739,6 +992,32 @@ def generate_cases(suite: str, nonce: str) -> list[dict[str, Any]]:
         if case_id in seen:
             raise ParityFormatError(f"duplicate generated id: {case_id}")
         seen.add(case_id)
+        known_issue = record.get("knownBehaviorIssue")
+        if known_issue is not None and known_issue != "bhelm/noop#12":
+            raise ParityFormatError(
+                f"case {case_id!r} has unsupported knownBehaviorIssue {known_issue!r}"
+            )
+        function = record.get("function")
+        args = record.get("args", {})
+        hr = args.get("hr", []) if isinstance(args, dict) else []
+        has_non_increasing_ts = any(
+            left.get("ts", 0) >= right.get("ts", 0)
+            for left, right in zip(hr, hr[1:])
+            if isinstance(left, dict) and isinstance(right, dict)
+        )
+        needs_issue_12 = (
+            function == "StrainScorer.sampleDurationsMinutes/1"
+            or (function == "StrainScorer.sampleDurationMinutes/1" and has_non_increasing_ts)
+            or (
+                function in {"trimpToStrain", "StrainScorer.trimpToStrain/2"}
+                and isinstance(args, dict) and _is_number(args.get("trimp"))
+                and args["trimp"] > 7_200
+            )
+        )
+        if needs_issue_12 and known_issue != "bhelm/noop#12":
+            raise ParityFormatError(
+                f"case {case_id!r} characterizes shared Strain behavior tracked by bhelm/noop#12"
+            )
         record["effectiveArgs"] = _effective_args(record)
         _validate_finite_tree(record["effectiveArgs"], f"case {case_id!r} effectiveArgs")
         record["nonce"] = nonce
