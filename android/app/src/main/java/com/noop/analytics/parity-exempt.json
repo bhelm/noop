@@ -3908,11 +3908,6 @@
       "issue": 17
     },
     {
-      "key": "android/app/src/main/java/com/noop/analytics/RecoveryScorer.kt::parasympatheticSaturation/2[defaults=-]#1",
-      "reason": "Bootstrap debt: no differential or declared platform coverage proof yet.",
-      "issue": 17
-    },
-    {
       "key": "android/app/src/main/java/com/noop/analytics/RecoveryScorer.kt::restingHRWindowS@property-initializer#1",
       "reason": "Bootstrap debt: no differential or declared platform coverage proof yet.",
       "issue": 17
@@ -3928,42 +3923,7 @@
       "issue": 17
     },
     {
-      "key": "android/app/src/main/java/com/noop/analytics/RecoveryScorer.kt::restingHR/3[defaults=-]#1",
-      "reason": "Bootstrap debt: no differential or declared platform coverage proof yet.",
-      "issue": 17
-    },
-    {
       "key": "android/app/src/main/java/com/noop/analytics/RecoveryScorer.kt::recoveryIndexMinBins@property-initializer#1",
-      "reason": "Bootstrap debt: no differential or declared platform coverage proof yet.",
-      "issue": 17
-    },
-    {
-      "key": "android/app/src/main/java/com/noop/analytics/RecoveryScorer.kt::recoveryIndexSlope/3[defaults=-]#1",
-      "reason": "Bootstrap debt: no differential or declared platform coverage proof yet.",
-      "issue": 17
-    },
-    {
-      "key": "android/app/src/main/java/com/noop/analytics/RecoveryScorer.kt::band/1[defaults=-]#1",
-      "reason": "Bootstrap debt: no differential or declared platform coverage proof yet.",
-      "issue": 17
-    },
-    {
-      "key": "android/app/src/main/java/com/noop/analytics/RecoveryScorer.kt::zScore/3[defaults=-]#1",
-      "reason": "Bootstrap debt: no differential or declared platform coverage proof yet.",
-      "issue": 17
-    },
-    {
-      "key": "android/app/src/main/java/com/noop/analytics/RecoveryScorer.kt::recovery/12[defaults=8,9,10,11,12]#1",
-      "reason": "Bootstrap debt: no differential or declared platform coverage proof yet.",
-      "issue": 17
-    },
-    {
-      "key": "android/app/src/main/java/com/noop/analytics/RecoveryScorer.kt::logisticScore/1[defaults=-]#1",
-      "reason": "Bootstrap debt: no differential or declared platform coverage proof yet.",
-      "issue": 17
-    },
-    {
-      "key": "android/app/src/main/java/com/noop/analytics/RecoveryScorer.kt::recovery/11[defaults=8,9,10,11]#1",
       "reason": "Bootstrap debt: no differential or declared platform coverage proof yet.",
       "issue": 17
     },

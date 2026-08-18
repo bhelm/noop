@@ -300,6 +300,116 @@ class ParityRunner {
                     sortedMapOf<String, Any?>("rmssd" to rmssd, "ts" to ts.toString())
                 }
             }
+            "RecoveryScorer.parasympatheticSaturation/2" -> {
+                require(comparison == "epsilon") { "invalid parasympatheticSaturation case $caseId" }
+                val value = RecoveryScorer.parasympatheticSaturation(
+                    args.getDouble("hrvZ"), nullableDouble(args, "rhrZ"),
+                )
+                val encoded = sortedMapOf<String, Any?>(
+                    "active" to value.active,
+                    "dampFraction" to finite(value.dampFraction, function, caseId),
+                    "easedHrvZ" to finite(value.easedHrvZ, function, caseId),
+                )
+                if (args.optBoolean("characterizeRecoveryConstants", false)) {
+                    encoded["constants"] = recoveryConstants()
+                }
+                result["value"] = encoded
+            }
+            "RecoveryScorer.restingHR/3" -> {
+                require(comparison == "exact") { "invalid restingHR case $caseId" }
+                result["valueBits"] = RecoveryScorer.restingHR(
+                    hrSamples(args), args.getLong("start"), args.getLong("end"),
+                )
+            }
+            "RecoveryScorer.recoveryIndexSlope/3" -> {
+                require(comparison == "epsilon") { "invalid recoveryIndexSlope case $caseId" }
+                result["value"] = finiteOrNull(
+                    RecoveryScorer.recoveryIndexSlope(
+                        hrSamples(args), args.getLong("start"), args.getLong("end"),
+                    ), function, caseId,
+                )
+            }
+            "RecoveryScorer.band/1" -> {
+                require(comparison == "exact") { "invalid recovery band case $caseId" }
+                var value = RecoveryScorer.band(args.getDouble("score"))
+                if (negativeSide == "kotlin" && caseId == "recovery_negative_band_probe") {
+                    value += "-mutant"
+                    result["negativeSide"] = "kotlin"
+                }
+                result["valueBits"] = sortedMapOf("text" to value)
+            }
+            "RecoveryScorer.zScore/3" -> {
+                require(comparison == "epsilon") { "invalid recovery zScore case $caseId" }
+                result["value"] = finite(
+                    RecoveryScorer.zScore(
+                        args.getDouble("value"), args.getDouble("mean"), args.getDouble("spread"),
+                    ), function, caseId,
+                )
+            }
+            "RecoveryScorer.recovery/12" -> {
+                require(comparison == "exact") { "invalid driver recovery case $caseId" }
+                val value = if (args.getBoolean("useDefaults")) {
+                    RecoveryScorer.recovery(
+                        hrv = args.getDouble("hrv"), rhr = args.getDouble("rhr"),
+                        resp = nullableDouble(args, "resp"),
+                        hrvBaseline = driverBaseline(args, "hrvBaseline"),
+                        rhrBaseline = driverBaseline(args, "rhrBaseline"),
+                        respBaseline = driverBaseline(args, "respBaseline"),
+                        sleepPerf = nullableDouble(args, "sleepPerf"),
+                    )
+                } else {
+                    RecoveryScorer.recovery(
+                        hrv = effective.getDouble("hrv"), rhr = effective.getDouble("rhr"),
+                        resp = nullableDouble(effective, "resp"),
+                        hrvBaseline = driverBaseline(effective, "hrvBaseline"),
+                        rhrBaseline = driverBaseline(effective, "rhrBaseline"),
+                        respBaseline = driverBaseline(effective, "respBaseline"),
+                        sleepPerf = nullableDouble(effective, "sleepPerf"),
+                        skinTempDev = nullableDouble(effective, "skinTempDev"),
+                        hrvBaselineUsable = effective.getBoolean("hrvBaselineUsable"),
+                        recoveryIndexSlope = nullableDouble(effective, "recoveryIndexSlope"),
+                        effortBaseline = driverBaseline(effective, "effortBaseline"),
+                        priorDayEffort = nullableDouble(effective, "priorDayEffort"),
+                    )
+                }
+                result["valueBits"] = value?.let(::exactBit)
+            }
+            "RecoveryScorer.logisticScore/1" -> {
+                require(comparison == "epsilon") { "invalid logisticScore case $caseId" }
+                var value = RecoveryScorer.logisticScore(args.getDouble("compositeZ"))
+                if (negativeSide == "kotlin" && caseId == "recovery_negative_logistic_probe") {
+                    value += 1e-6
+                    result["negativeSide"] = "kotlin"
+                }
+                result["value"] = finite(value, function, caseId)
+            }
+            "RecoveryScorer.recovery/11" -> {
+                require(comparison == "exact") { "invalid baseline-state recovery case $caseId" }
+                val value = if (args.getBoolean("useDefaults")) {
+                    RecoveryScorer.recovery(
+                        hrv = args.getDouble("hrv"), rhr = args.getDouble("rhr"),
+                        resp = nullableDouble(args, "resp"),
+                        hrvBaseline = baselineState(args.getJSONObject("hrvBaseline")),
+                        rhrBaseline = baselineStateOptional(args, "rhrBaseline"),
+                        respBaseline = baselineStateOptional(args, "respBaseline"),
+                        sleepPerf = nullableDouble(args, "sleepPerf"),
+                    )
+                } else {
+                    RecoveryScorer.recovery(
+                        hrv = effective.getDouble("hrv"), rhr = effective.getDouble("rhr"),
+                        resp = nullableDouble(effective, "resp"),
+                        hrvBaseline = baselineState(effective.getJSONObject("hrvBaseline")),
+                        rhrBaseline = baselineStateOptional(effective, "rhrBaseline"),
+                        respBaseline = baselineStateOptional(effective, "respBaseline"),
+                        sleepPerf = nullableDouble(effective, "sleepPerf"),
+                        skinTempDev = nullableDouble(effective, "skinTempDev"),
+                        recoveryIndexSlope = nullableDouble(effective, "recoveryIndexSlope"),
+                        effortBaseline = baselineStateOptional(effective, "effortBaseline"),
+                        priorDayEffort = nullableDouble(effective, "priorDayEffort"),
+                    )
+                }
+                result["valueBits"] = value?.let(::exactBit)
+            }
             "StrainScorer.trimpToStrain/2" -> {
                 require(comparison == "exact") { "invalid trimpToStrain case $caseId" }
                 val trimp = args.getDouble("trimp")
@@ -522,6 +632,55 @@ class ParityRunner {
 
     private fun exactBit(value: Double): String =
         java.lang.Long.toHexString(value.toRawBits()).padStart(16, '0')
+
+    private fun nullableDouble(value: JSONObject, key: String): Double? =
+        if (!value.has(key) || value.isNull(key)) null else value.getDouble(key)
+
+    private fun driverBaseline(value: JSONObject, key: String): RecoveryScorer.DriverBaseline? {
+        if (!value.has(key) || value.isNull(key)) return null
+        val baseline = value.getJSONObject(key)
+        return RecoveryScorer.DriverBaseline(
+            mean = baseline.getDouble("mean"), spread = baseline.getDouble("spread"),
+        )
+    }
+
+    private fun baselineStateOptional(value: JSONObject, key: String): BaselineState? =
+        if (!value.has(key) || value.isNull(key)) null else baselineState(value.getJSONObject(key))
+
+    private fun baselineState(value: JSONObject): BaselineState {
+        val status = BaselineStatus.entries.single { it.raw == value.getString("status") }
+        return BaselineState(
+            baseline = value.getDouble("baseline"), spread = value.getDouble("spread"),
+            nValid = value.getInt("nValid"), nightsSinceUpdate = value.getInt("nightsSinceUpdate"),
+            status = status,
+        )
+    }
+
+    private fun recoveryConstants(): Map<String, Any> = sortedMapOf(
+        "bandRedMax" to exactBit(RecoveryScorer.bandRedMax),
+        "bandYellowMax" to exactBit(RecoveryScorer.bandYellowMax),
+        "logisticK" to exactBit(RecoveryScorer.logisticK),
+        "logisticZ0" to exactBit(RecoveryScorer.logisticZ0),
+        "populationMean" to exactBit(RecoveryScorer.populationMean),
+        "recoveryIndexMinBins" to RecoveryScorer.recoveryIndexMinBins,
+        "recoveryIndexScaleBpmPerHr" to exactBit(RecoveryScorer.recoveryIndexScaleBpmPerHr),
+        "restingHRMinBinSamples" to RecoveryScorer.restingHRMinBinSamples,
+        "restingHRMinPlausibleBpm" to exactBit(RecoveryScorer.restingHRMinPlausibleBpm),
+        "restingHRWindowS" to RecoveryScorer.restingHRWindowS,
+        "satEnterZ" to exactBit(RecoveryScorer.satEnterZ),
+        "satFullZ" to exactBit(RecoveryScorer.satFullZ),
+        "satMaxDampFraction" to exactBit(RecoveryScorer.satMaxDampFraction),
+        "skinTempScale" to exactBit(RecoveryScorer.skinTempDevScale),
+        "sleepPerfCenter" to exactBit(RecoveryScorer.sleepPerfCenter),
+        "sleepPerfScale" to exactBit(RecoveryScorer.sleepPerfScale),
+        "wActivityBalance" to exactBit(RecoveryScorer.wActivityBalance),
+        "wHRV" to exactBit(RecoveryScorer.wHRV),
+        "wRHR" to exactBit(RecoveryScorer.wRHR),
+        "wRecoveryIndex" to exactBit(RecoveryScorer.wRecoveryIndex),
+        "wResp" to exactBit(RecoveryScorer.wResp),
+        "wSkinTemp" to exactBit(RecoveryScorer.wSkinTemp),
+        "wSleep" to exactBit(RecoveryScorer.wSleep),
+    )
 
     private fun hrSamples(args: JSONObject): List<HrSample> {
         val rows = args.getJSONArray("hr")

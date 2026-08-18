@@ -1,0 +1,43 @@
+[
+  {"id":"recovery_saturation_without_rhr","function":"RecoveryScorer.parasympatheticSaturation/2","comparison":"epsilon","args":{"hrvZ":-2.0}},
+  {"id":"recovery_saturation_below_entry","function":"RecoveryScorer.parasympatheticSaturation/2","comparison":"epsilon","args":{"hrvZ":-0.499999,"rhrZ":2.0}},
+  {"id":"recovery_saturation_entry","function":"RecoveryScorer.parasympatheticSaturation/2","comparison":"epsilon","args":{"hrvZ":-0.5,"rhrZ":0.5}},
+  {"id":"recovery_saturation_ramp","function":"RecoveryScorer.parasympatheticSaturation/2","comparison":"epsilon","args":{"hrvZ":-1.0,"rhrZ":1.25}},
+  {"id":"recovery_saturation_full_and_constants","function":"RecoveryScorer.parasympatheticSaturation/2","comparison":"epsilon","args":{"hrvZ":-2.0,"rhrZ":1.5,"characterizeRecoveryConstants":true}},
+
+  {"id":"recovery_resting_empty","function":"RecoveryScorer.restingHR/3","comparison":"exact","args":{"hr":[],"start":0,"end":300}},
+  {"id":"recovery_resting_sparse_rejected","function":"RecoveryScorer.restingHR/3","comparison":"exact","knownBehaviorIssue":"bhelm/noop#10","args":{"hr":[{"ts":0,"bpm":50},{"ts":60,"bpm":50},{"ts":120,"bpm":50},{"ts":180,"bpm":50}],"start":0,"end":300}},
+  {"id":"recovery_resting_rounding_boundary","function":"RecoveryScorer.restingHR/3","comparison":"exact","args":{"hr":[{"ts":0,"bpm":50},{"ts":1,"bpm":50},{"ts":2,"bpm":50},{"ts":3,"bpm":51},{"ts":4,"bpm":51}],"start":0,"end":300}},
+  {"id":"recovery_resting_minimum_bin","function":"RecoveryScorer.restingHR/3","comparison":"exact","args":{"hr":[{"ts":0,"bpm":65},{"ts":1,"bpm":65},{"ts":2,"bpm":65},{"ts":3,"bpm":65},{"ts":4,"bpm":65},{"ts":300,"bpm":55},{"ts":301,"bpm":55},{"ts":302,"bpm":55},{"ts":303,"bpm":55},{"ts":304,"bpm":55}],"start":0,"end":600}},
+  {"id":"recovery_resting_aligned_endpoint","function":"RecoveryScorer.restingHR/3","comparison":"exact","knownBehaviorIssue":"bhelm/noop#39","args":{"hr":[{"ts":300,"bpm":60},{"ts":300,"bpm":60},{"ts":300,"bpm":60},{"ts":300,"bpm":60},{"ts":300,"bpm":60}],"start":0,"end":300}},
+
+  {"id":"recovery_index_empty","function":"RecoveryScorer.recoveryIndexSlope/3","comparison":"epsilon","args":{"hr":[],"start":0,"end":1800}},
+  {"id":"recovery_index_five_bins","function":"RecoveryScorer.recoveryIndexSlope/3","comparison":"epsilon","args":{"hr":[{"ts":0,"bpm":70},{"ts":300,"bpm":68},{"ts":600,"bpm":66},{"ts":900,"bpm":64},{"ts":1200,"bpm":62}],"start":0,"end":1800}},
+  {"id":"recovery_index_six_bin_decline","function":"RecoveryScorer.recoveryIndexSlope/3","comparison":"epsilon","args":{"hr":[{"ts":0,"bpm":70},{"ts":300,"bpm":68},{"ts":600,"bpm":66},{"ts":900,"bpm":64},{"ts":1200,"bpm":62},{"ts":1500,"bpm":60}],"start":0,"end":1800}},
+  {"id":"recovery_index_sparse_bins","function":"RecoveryScorer.recoveryIndexSlope/3","comparison":"epsilon","knownBehaviorIssue":"bhelm/noop#10","args":{"hr":[{"ts":0,"bpm":20},{"ts":300,"bpm":120},{"ts":600,"bpm":20},{"ts":900,"bpm":120},{"ts":1200,"bpm":20},{"ts":1500,"bpm":120}],"start":0,"end":1800}},
+  {"id":"recovery_index_aligned_endpoint_gate","function":"RecoveryScorer.recoveryIndexSlope/3","comparison":"epsilon","knownBehaviorIssue":"bhelm/noop#39","args":{"hr":[{"ts":0,"bpm":70},{"ts":300,"bpm":68},{"ts":600,"bpm":66},{"ts":900,"bpm":64},{"ts":1200,"bpm":62},{"ts":1800,"bpm":60}],"start":0,"end":1800}},
+
+  {"id":"recovery_band_below_red","function":"RecoveryScorer.band/1","comparison":"exact","args":{"score":33.999999}},
+  {"id":"recovery_band_red_boundary","function":"RecoveryScorer.band/1","comparison":"exact","args":{"score":34.0}},
+  {"id":"recovery_band_below_yellow","function":"RecoveryScorer.band/1","comparison":"exact","args":{"score":66.999999}},
+  {"id":"recovery_band_yellow_boundary","function":"RecoveryScorer.band/1","comparison":"exact","args":{"score":67.0}},
+
+  {"id":"recovery_zscore_center","function":"RecoveryScorer.zScore/3","comparison":"epsilon","args":{"value":50.0,"mean":50.0,"spread":5.0}},
+  {"id":"recovery_zscore_positive","function":"RecoveryScorer.zScore/3","comparison":"epsilon","args":{"value":62.5,"mean":50.0,"spread":5.0}},
+  {"id":"recovery_zscore_tiny_positive_spread","function":"RecoveryScorer.zScore/3","comparison":"epsilon","args":{"value":1.000000001,"mean":1.0,"spread":1e-12}},
+
+  {"id":"recovery_driver_missing_hrv_baseline","function":"RecoveryScorer.recovery/12","comparison":"exact","knownBehaviorIssue":"bhelm/noop#40","args":{"hrv":50.0,"rhr":60.0,"sleepPerf":0.85,"useDefaults":true}},
+  {"id":"recovery_driver_cold_start","function":"RecoveryScorer.recovery/12","comparison":"exact","args":{"hrv":50.0,"rhr":60.0,"hrvBaseline":{"mean":50.0,"spread":5.0},"hrvBaselineUsable":false,"useDefaults":false}},
+  {"id":"recovery_driver_hrv_only_defaults","function":"RecoveryScorer.recovery/12","comparison":"exact","args":{"hrv":55.0,"rhr":60.0,"hrvBaseline":{"mean":50.0,"spread":5.0},"useDefaults":true}},
+  {"id":"recovery_driver_hrv_only_explicit","function":"RecoveryScorer.recovery/12","comparison":"exact","args":{"hrv":55.0,"rhr":60.0,"hrvBaseline":{"mean":50.0,"spread":5.0},"hrvBaselineUsable":true,"useDefaults":false}},
+  {"id":"recovery_driver_all_terms","function":"RecoveryScorer.recovery/12","comparison":"exact","args":{"hrv":58.0,"rhr":52.0,"resp":14.0,"hrvBaseline":{"mean":50.0,"spread":5.0},"rhrBaseline":{"mean":58.0,"spread":3.0},"respBaseline":{"mean":15.0,"spread":1.0},"sleepPerf":0.92,"skinTempDev":-0.4,"hrvBaselineUsable":true,"recoveryIndexSlope":-2.0,"effortBaseline":{"mean":50.0,"spread":10.0},"priorDayEffort":30.0,"useDefaults":false}},
+
+  {"id":"recovery_logistic_low","function":"RecoveryScorer.logisticScore/1","comparison":"epsilon","args":{"compositeZ":-2.0}},
+  {"id":"recovery_logistic_center","function":"RecoveryScorer.logisticScore/1","comparison":"epsilon","args":{"compositeZ":0.0}},
+  {"id":"recovery_logistic_high","function":"RecoveryScorer.logisticScore/1","comparison":"epsilon","args":{"compositeZ":2.0}},
+
+  {"id":"recovery_state_calibrating","function":"RecoveryScorer.recovery/11","comparison":"exact","args":{"hrv":50.0,"rhr":60.0,"hrvBaseline":{"baseline":50.0,"spread":5.0,"nValid":3,"nightsSinceUpdate":0,"status":"calibrating"},"useDefaults":true}},
+  {"id":"recovery_state_provisional_defaults","function":"RecoveryScorer.recovery/11","comparison":"exact","args":{"hrv":55.0,"rhr":60.0,"hrvBaseline":{"baseline":50.0,"spread":5.0,"nValid":4,"nightsSinceUpdate":0,"status":"provisional"},"useDefaults":true}},
+  {"id":"recovery_state_provisional_explicit","function":"RecoveryScorer.recovery/11","comparison":"exact","args":{"hrv":55.0,"rhr":60.0,"hrvBaseline":{"baseline":50.0,"spread":5.0,"nValid":4,"nightsSinceUpdate":0,"status":"provisional"},"useDefaults":false}},
+  {"id":"recovery_state_all_terms","function":"RecoveryScorer.recovery/11","comparison":"exact","args":{"hrv":58.0,"rhr":52.0,"resp":14.0,"hrvBaseline":{"baseline":50.0,"spread":5.0,"nValid":20,"nightsSinceUpdate":0,"status":"trusted"},"rhrBaseline":{"baseline":58.0,"spread":3.0,"nValid":20,"nightsSinceUpdate":0,"status":"trusted"},"respBaseline":{"baseline":15.0,"spread":1.0,"nValid":20,"nightsSinceUpdate":0,"status":"trusted"},"sleepPerf":0.92,"skinTempDev":0.4,"recoveryIndexSlope":-2.0,"effortBaseline":{"baseline":50.0,"spread":10.0,"nValid":20,"nightsSinceUpdate":0,"status":"trusted"},"priorDayEffort":30.0,"useDefaults":false}}
+]

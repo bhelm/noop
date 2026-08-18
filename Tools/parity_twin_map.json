@@ -99,6 +99,11 @@
       "evidence": "machine-resolvable declared function twin"
     },
     {
+      "swift": "Packages/StrandAnalytics/Sources/StrandAnalytics/RecoveryScorer.swift",
+      "kotlin": "android/app/src/main/java/com/noop/analytics/RecoveryScorer.kt",
+      "evidence": "machine-resolvable declared function twin"
+    },
+    {
       "swift": "Packages/StrandAnalytics/Sources/StrandAnalytics/SleepReadout.swift",
       "kotlin": "android/app/src/main/java/com/noop/analytics/SleepReadout.kt",
       "evidence": "machine-resolvable declared function twin"
@@ -343,6 +348,46 @@
     {
       "swift": "Packages/StrandAnalytics/Sources/StrandAnalytics/HRVAnalyzer.swift::rrCoverage/2#1",
       "kotlin": "android/app/src/main/java/com/noop/analytics/HrvAnalyzer.kt::rrCoverage/2#1",
+      "evidence": "declared twin reference"
+    },
+    {
+      "swift": "Packages/StrandAnalytics/Sources/StrandAnalytics/RecoveryScorer.swift::parasympatheticSaturation/2#1",
+      "kotlin": "android/app/src/main/java/com/noop/analytics/RecoveryScorer.kt::parasympatheticSaturation/2#1",
+      "evidence": "declared twin reference"
+    },
+    {
+      "swift": "Packages/StrandAnalytics/Sources/StrandAnalytics/RecoveryScorer.swift::restingHR/3#1",
+      "kotlin": "android/app/src/main/java/com/noop/analytics/RecoveryScorer.kt::restingHR/3#1",
+      "evidence": "declared twin reference"
+    },
+    {
+      "swift": "Packages/StrandAnalytics/Sources/StrandAnalytics/RecoveryScorer.swift::recoveryIndexSlope/3#1",
+      "kotlin": "android/app/src/main/java/com/noop/analytics/RecoveryScorer.kt::recoveryIndexSlope/3#1",
+      "evidence": "declared twin reference"
+    },
+    {
+      "swift": "Packages/StrandAnalytics/Sources/StrandAnalytics/RecoveryScorer.swift::band/1#1",
+      "kotlin": "android/app/src/main/java/com/noop/analytics/RecoveryScorer.kt::band/1#1",
+      "evidence": "declared twin reference"
+    },
+    {
+      "swift": "Packages/StrandAnalytics/Sources/StrandAnalytics/RecoveryScorer.swift::zScore/3#1",
+      "kotlin": "android/app/src/main/java/com/noop/analytics/RecoveryScorer.kt::zScore/3#1",
+      "evidence": "declared twin reference"
+    },
+    {
+      "swift": "Packages/StrandAnalytics/Sources/StrandAnalytics/RecoveryScorer.swift::recovery/12#1",
+      "kotlin": "android/app/src/main/java/com/noop/analytics/RecoveryScorer.kt::recovery/12#1",
+      "evidence": "declared twin reference"
+    },
+    {
+      "swift": "Packages/StrandAnalytics/Sources/StrandAnalytics/RecoveryScorer.swift::logisticScore/1#1",
+      "kotlin": "android/app/src/main/java/com/noop/analytics/RecoveryScorer.kt::logisticScore/1#1",
+      "evidence": "declared twin reference"
+    },
+    {
+      "swift": "Packages/StrandAnalytics/Sources/StrandAnalytics/RecoveryScorer.swift::recovery/11#1",
+      "kotlin": "android/app/src/main/java/com/noop/analytics/RecoveryScorer.kt::recovery/11#1",
       "evidence": "declared twin reference"
     },
     {
@@ -2308,6 +2353,11 @@
       "swift": "Packages/StrandAnalytics/Sources/StrandAnalytics/RecoveryScorer.swift::satMaxDampFraction",
       "kotlin": "android/app/src/main/java/com/noop/analytics/RecoveryScorer.kt::satMaxDampFraction",
       "evidence": "owner-disambiguated camelCase/SNAKE_CASE name"
+    },
+    {
+      "swift": "Packages/StrandAnalytics/Sources/StrandAnalytics/RecoveryScorer.swift::skinTempScaleC",
+      "kotlin": "android/app/src/main/java/com/noop/analytics/RecoveryScorer.kt::skinTempDevScale",
+      "evidence": "documented cross-platform constant rename"
     },
     {
       "swift": "Packages/StrandAnalytics/Sources/StrandAnalytics/RecoveryScorer.swift::sleepPerfCenter",

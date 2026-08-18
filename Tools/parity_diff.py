@@ -44,6 +44,7 @@ COLLAPSE_DEFAULT_WINDOW_SEC = 0
 COLLAPSED_COVERAGE_DEFAULT_RR_TOL_MS = 30.0
 DENSEST_DEFAULT_HALF_WINDOW_SEC = 3
 DENSEST_DEFAULT_MAX_ROWS_PER_SECOND = 24
+RECOVERY_DEFAULT_HRV_BASELINE_USABLE = True
 RAW_ANALYZE_KEY = "HRVAnalyzer.analyze/2=HrvAnalyzer.analyzeRaw/2"
 HRV_MEDIAN_KEY = "HRVAnalyzer.median/1=HrvAnalyzer.median/1"
 EPSILON = 1e-9
@@ -658,6 +659,60 @@ def _seeded_cases() -> list[dict[str, Any]]:
         add("collapseOverCount", "exact", collapse_args)
         add("collapsedCoverage", "epsilon", collapsed_args)
         add("densestSecondWindowSample", "exact", densest_args)
+    recovery_functions = (
+        ("RecoveryScorer.parasympatheticSaturation/2", "epsilon"),
+        ("RecoveryScorer.restingHR/3", "exact"),
+        ("RecoveryScorer.recoveryIndexSlope/3", "epsilon"),
+        ("RecoveryScorer.band/1", "exact"),
+        ("RecoveryScorer.zScore/3", "epsilon"),
+        ("RecoveryScorer.recovery/12", "exact"),
+        ("RecoveryScorer.logisticScore/1", "epsilon"),
+        ("RecoveryScorer.recovery/11", "exact"),
+    )
+    for round_index in range(2):
+        base = 50_000 + round_index * 10_000
+        hr = [
+            {"ts": base + bin_index * 300 + sample, "bpm": 72 - bin_index + round_index}
+            for bin_index in range(6)
+            for sample in range(5)
+        ]
+        driver = {"mean": 50.0 + round_index, "spread": 4.0 + round_index}
+        state = {
+            "baseline": 50.0 + round_index,
+            "spread": 4.0 + round_index,
+            "nValid": 4 + round_index,
+            "nightsSinceUpdate": 0,
+            "status": "provisional",
+        }
+        arguments = (
+            {"hrvZ": -0.75 - round_index * 0.5, "rhrZ": 0.8 + round_index * 0.4},
+            {"hr": hr, "start": base, "end": base + 1800},
+            {"hr": hr, "start": base, "end": base + 1800},
+            {"score": 20.0 + rng.bounded(70)},
+            {"value": 40.0 + rng.bounded(30), "mean": 50.0, "spread": 2.0 + round_index},
+            {
+                "hrv": 48.0 + rng.bounded(20), "rhr": 50.0 + rng.bounded(20),
+                "hrvBaseline": driver, "sleepPerf": 0.75 + round_index * 0.1,
+                "useDefaults": round_index == 0,
+                **({} if round_index == 0 else {"hrvBaselineUsable": True}),
+            },
+            {"compositeZ": -1.0 + round_index * 2.0},
+            {
+                "hrv": 48.0 + rng.bounded(20), "rhr": 50.0 + rng.bounded(20),
+                "hrvBaseline": state, "sleepPerf": 0.75 + round_index * 0.1,
+                "useDefaults": round_index == 0,
+            },
+        )
+        for index, ((function, comparison), args) in enumerate(zip(recovery_functions, arguments)):
+            records.append(
+                {
+                    "args": args,
+                    "comparison": comparison,
+                    "function": function,
+                    "id": f"seeded_recovery_{round_index}_{index:02d}",
+                    "source": f"seeded:splitmix64:{GENERATOR_SEED:#018x}",
+                }
+            )
     return records
 
 
@@ -705,6 +760,106 @@ def _validate_hr_samples(args: dict[str, Any], record: dict[str, Any]) -> None:
 
 def _is_number(value: Any) -> bool:
     return isinstance(value, (int, float)) and not isinstance(value, bool)
+
+
+def _validate_recovery_window(args: dict[str, Any], record: dict[str, Any]) -> dict[str, Any]:
+    _validate_hr_samples(args, record)
+    start = args.get("start")
+    end = args.get("end")
+    if not _is_signed_integer(start, INT64_MIN, INT64_MAX) or not _is_signed_integer(
+        end, INT64_MIN, INT64_MAX
+    ):
+        raise ParityFormatError(
+            f"case {record.get('id')!r} {record.get('function')} start/end must fit signed Int64"
+        )
+    if start > end:
+        raise ParityFormatError(
+            f"case {record.get('id')!r} {record.get('function')} requires start <= end"
+        )
+    _checked_subtract(end, start, record, "window timestamp span")
+    if end > INT64_MAX - 300:
+        raise ParityFormatError(
+            f"case {record.get('id')!r} {record.get('function')} bin-end addition overflows signed Int64"
+        )
+    return dict(args)
+
+
+def _validate_driver_baseline(value: Any, record: dict[str, Any], label: str) -> None:
+    if value is None:
+        return
+    if not isinstance(value, dict) or not all(_is_number(value.get(key)) for key in ("mean", "spread")):
+        raise ParityFormatError(f"case {record.get('id')!r} {label} must be a driver baseline")
+    if value["spread"] <= 0:
+        raise ParityFormatError(f"case {record.get('id')!r} {label}.spread must be positive")
+
+
+def _validate_baseline_state(value: Any, record: dict[str, Any], label: str) -> None:
+    if value is None:
+        return
+    if not isinstance(value, dict) or not all(
+        _is_number(value.get(key)) for key in ("baseline", "spread")
+    ):
+        raise ParityFormatError(f"case {record.get('id')!r} {label} must be a baseline state")
+    if value["spread"] <= 0:
+        raise ParityFormatError(f"case {record.get('id')!r} {label}.spread must be positive")
+    for key in ("nValid", "nightsSinceUpdate"):
+        if not _is_signed_integer(value.get(key), 0, INT32_MAX):
+            raise ParityFormatError(f"case {record.get('id')!r} {label}.{key} must fit non-negative Int32")
+    if value.get("status") not in {"calibrating", "provisional", "trusted", "stale"}:
+        raise ParityFormatError(f"case {record.get('id')!r} {label}.status is not canonical")
+
+
+def _effective_recovery_call(
+    args: dict[str, Any], record: dict[str, Any], baseline_kind: str
+) -> dict[str, Any]:
+    function = record.get("function")
+    if not all(_is_number(args.get(key)) for key in ("hrv", "rhr")):
+        raise ParityFormatError(f"case {record.get('id')!r} {function} requires numeric hrv/rhr")
+    for key in ("resp", "sleepPerf", "skinTempDev", "recoveryIndexSlope", "priorDayEffort"):
+        if key in args and args[key] is not None and not _is_number(args[key]):
+            raise ParityFormatError(f"case {record.get('id')!r} {function} {key} must be numeric or null")
+    use_defaults = args.get("useDefaults")
+    if not isinstance(use_defaults, bool):
+        raise ParityFormatError(f"case {record.get('id')!r} {function} requires boolean useDefaults")
+    baseline_keys = ("hrvBaseline", "rhrBaseline", "respBaseline", "effortBaseline")
+    validator = _validate_driver_baseline if baseline_kind == "driver" else _validate_baseline_state
+    for key in baseline_keys:
+        validator(args.get(key), record, key)
+    effective = dict(args)
+    effective.update(
+        {
+            "resp": args.get("resp"),
+            "rhrBaseline": args.get("rhrBaseline"),
+            "respBaseline": args.get("respBaseline"),
+            "sleepPerf": args.get("sleepPerf"),
+            "skinTempDev": args.get("skinTempDev"),
+            "recoveryIndexSlope": args.get("recoveryIndexSlope"),
+            "effortBaseline": args.get("effortBaseline"),
+            "priorDayEffort": args.get("priorDayEffort"),
+        }
+    )
+    if baseline_kind == "driver":
+        usable = args.get("hrvBaselineUsable", RECOVERY_DEFAULT_HRV_BASELINE_USABLE)
+        if not isinstance(usable, bool):
+            raise ParityFormatError(
+                f"case {record.get('id')!r} {function} hrvBaselineUsable must be boolean"
+            )
+        effective["hrvBaselineUsable"] = usable
+        defaulted = {
+            "skinTempDev", "hrvBaselineUsable", "recoveryIndexSlope",
+            "effortBaseline", "priorDayEffort",
+        }
+        if use_defaults and any(key in args for key in defaulted):
+            raise ParityFormatError(
+                f"case {record.get('id')!r} {function} bare call cannot override defaults"
+            )
+    elif use_defaults and any(
+        key in args for key in ("skinTempDev", "recoveryIndexSlope", "effortBaseline", "priorDayEffort")
+    ):
+        raise ParityFormatError(
+            f"case {record.get('id')!r} {function} bare call cannot override defaults"
+        )
+    return effective
 
 
 def _effective_strain_call(call: Any, record: dict[str, Any]) -> dict[str, Any]:
@@ -878,6 +1033,43 @@ def _effective_args(record: dict[str, Any]) -> dict[str, Any]:
             "replayFirstAtEnd": replay,
             "strainCalls": [_effective_strain_call(call, record) for call in calls],
         }
+    if function == "RecoveryScorer.parasympatheticSaturation/2":
+        if not _is_number(args.get("hrvZ")) or (
+            "rhrZ" in args and args["rhrZ"] is not None and not _is_number(args["rhrZ"])
+        ):
+            raise ParityFormatError(f"case {record.get('id')!r} {function} requires hrvZ/rhrZ")
+        if "characterizeRecoveryConstants" in args and not isinstance(
+            args["characterizeRecoveryConstants"], bool
+        ):
+            raise ParityFormatError(
+                f"case {record.get('id')!r} {function} characterizeRecoveryConstants must be boolean"
+            )
+        return {"hrvZ": args["hrvZ"], "rhrZ": args.get("rhrZ"), **(
+            {"characterizeRecoveryConstants": args["characterizeRecoveryConstants"]}
+            if "characterizeRecoveryConstants" in args else {}
+        )}
+    if function in {"RecoveryScorer.restingHR/3", "RecoveryScorer.recoveryIndexSlope/3"}:
+        return _validate_recovery_window(args, record)
+    if function == "RecoveryScorer.band/1":
+        if not _is_number(args.get("score")):
+            raise ParityFormatError(f"case {record.get('id')!r} {function} requires numeric score")
+        return dict(args)
+    if function == "RecoveryScorer.zScore/3":
+        if not all(_is_number(args.get(key)) for key in ("value", "mean", "spread")):
+            raise ParityFormatError(f"case {record.get('id')!r} {function} requires value/mean/spread")
+        if args["spread"] <= 0:
+            raise ParityFormatError(f"case {record.get('id')!r} {function} spread must be positive")
+        return dict(args)
+    if function == "RecoveryScorer.recovery/12":
+        return _effective_recovery_call(args, record, "driver")
+    if function == "RecoveryScorer.logisticScore/1":
+        if not _is_number(args.get("compositeZ")):
+            raise ParityFormatError(f"case {record.get('id')!r} {function} requires compositeZ")
+        return dict(args)
+    if function == "RecoveryScorer.recovery/11":
+        if not isinstance(args.get("hrvBaseline"), dict):
+            raise ParityFormatError(f"case {record.get('id')!r} {function} requires hrvBaseline")
+        return _effective_recovery_call(args, record, "state")
     if function in {"rmssdRaw", "sdnnRaw"}:
         if not isinstance(args.get("nn"), list):
             raise ParityFormatError(f"case {record.get('id')!r} {function} requires args.nn")
@@ -978,7 +1170,21 @@ def generate_cases(suite: str, nonce: str) -> list[dict[str, Any]]:
                 "function": "StrainScorer.trimpToStrain/2",
                 "id": "trimp_negative_probe",
                 "source": "negative-control",
-            }
+            },
+            {
+                "args": {"score": 34.0},
+                "comparison": "exact",
+                "function": "RecoveryScorer.band/1",
+                "id": "recovery_negative_band_probe",
+                "source": "negative-control",
+            },
+            {
+                "args": {"compositeZ": 0.0},
+                "comparison": "epsilon",
+                "function": "RecoveryScorer.logisticScore/1",
+                "id": "recovery_negative_logistic_probe",
+                "source": "negative-control",
+            },
         ]
     else:
         raw = _curated_cases() + _seeded_cases()
@@ -993,7 +1199,8 @@ def generate_cases(suite: str, nonce: str) -> list[dict[str, Any]]:
             raise ParityFormatError(f"duplicate generated id: {case_id}")
         seen.add(case_id)
         known_issue = record.get("knownBehaviorIssue")
-        if known_issue is not None and known_issue != "bhelm/noop#12":
+        supported_known_issues = {"bhelm/noop#10", "bhelm/noop#12", "bhelm/noop#39", "bhelm/noop#40"}
+        if known_issue is not None and known_issue not in supported_known_issues:
             raise ParityFormatError(
                 f"case {case_id!r} has unsupported knownBehaviorIssue {known_issue!r}"
             )
@@ -1017,6 +1224,19 @@ def generate_cases(suite: str, nonce: str) -> list[dict[str, Any]]:
         if needs_issue_12 and known_issue != "bhelm/noop#12":
             raise ParityFormatError(
                 f"case {case_id!r} characterizes shared Strain behavior tracked by bhelm/noop#12"
+            )
+        expected_recovery_issue = None
+        if function == "RecoveryScorer.recoveryIndexSlope/3" and case_id in {
+            "recovery_index_sparse_bins",
+        }:
+            expected_recovery_issue = "bhelm/noop#10"
+        elif case_id in {"recovery_resting_aligned_endpoint", "recovery_index_aligned_endpoint_gate"}:
+            expected_recovery_issue = "bhelm/noop#39"
+        elif case_id == "recovery_driver_missing_hrv_baseline":
+            expected_recovery_issue = "bhelm/noop#40"
+        if expected_recovery_issue is not None and known_issue != expected_recovery_issue:
+            raise ParityFormatError(
+                f"case {case_id!r} characterizes shared Recovery behavior tracked by {expected_recovery_issue}"
             )
         record["effectiveArgs"] = _effective_args(record)
         _validate_finite_tree(record["effectiveArgs"], f"case {case_id!r} effectiveArgs")
