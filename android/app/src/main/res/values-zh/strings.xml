@@ -2051,4 +2051,26 @@
     <string name="power_saving_low_refresh_desc">无论手环电量如何，后台同步改为每小时一次而非每 15 分钟一次——减少重新连接是 WHOOP 4.0 上最大的省电项。不会丢失任何数据：手环会记录全部内容，并以更大的批次交付。手动同步仍会立即运行，实时心率不受影响。</string>
     <string name="nav_power_saving">省电模式</string>
     <string name="l10n_app_changelog_training_load_a_vo_max_without_f9205a67">训练负荷、无需量腰围的 VO₂max，以及大幅降低的重算耗电</string>
+    <string name="nav_self_hosted_push">自托管推送</string>
+    <string name="push_title">自托管推送</string>
+    <string name="push_subtitle">实验功能 · Android · 仅限 Wi-Fi</string>
+    <string name="push_destination_title">你的端点</string>
+    <string name="push_disclosure">启用后，NOOP 会将此手机上的原始健康记录发送到你控制的端点。这意味着数据会明确离开设备。</string>
+    <string name="push_one_way_warning">仅支持单向导出。NOOP 无法从该端点恢复数据，也不提供接收端。</string>
+    <string name="push_endpoint">端点 URL（已隐藏）</string>
+    <string name="push_token">Bearer 令牌（已隐藏）</string>
+    <string name="push_token_saved">Bearer 令牌（已保存；输入新值可替换）</string>
+    <string name="push_clear_token">清除已保存的令牌</string>
+    <string name="push_token_cleared">已清除保存的令牌，并已关闭推送。</string>
+    <string name="push_save">保存目标</string>
+    <string name="push_saved">目标已保存。</string>
+    <string name="push_enabled">腕带同步后推送</string>
+    <string name="push_enabled_detail">完整传输历史记录后及应用启动时，排队执行有界后台导出。仅通过 Wi-Fi 运行。</string>
+    <string name="push_config_required">启用前请保存有效端点和令牌。</string>
+    <string name="push_status_title">状态</string>
+    <string name="push_status_detail">凭据绝不会出现在状态或 Worker 元数据中。</string>
+    <string name="push_never">从未</string>
+    <string name="push_last_success">上次成功：%1$s</string>
+    <string name="push_last_error">上次错误：%1$s</string>
+    <string name="push_settings_row_detail">向你控制的端点进行实验性单向导出。默认关闭。</string>
 </resources>

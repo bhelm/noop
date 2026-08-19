@@ -2125,4 +2125,26 @@
     <string name="power_saving_low_refresh_desc">Synchronizuje w tle co godzinę zamiast co 15 minut, niezależnie od poziomu naładowania opaski — mniej ponownych połączeń to największa oszczędność w WHOOP 4.0. Nic nie ginie: opaska zapisuje wszystko i przekazuje w większych paczkach. Ręczna synchronizacja nadal działa od razu, a tętno na żywo pozostaje bez zmian.</string>
     <string name="nav_power_saving">Oszczędzanie energii</string>
     <string name="l10n_app_changelog_training_load_a_vo_max_without_f9205a67">Obciążenie treningowe, VO₂max bez centymetra i znacznie mniej baterii na przeliczanie</string>
+    <string name="nav_self_hosted_push">Wysyłanie na własny serwer</string>
+    <string name="push_title">Wysyłanie na własny serwer</string>
+    <string name="push_subtitle">Eksperymentalne · Android · tylko Wi-Fi</string>
+    <string name="push_destination_title">Twój endpoint</string>
+    <string name="push_disclosure">Po włączeniu NOOP wysyła surowe dane zdrowotne z tego telefonu do kontrolowanego przez Ciebie endpointu. Dane jawnie opuszczają urządzenie.</string>
+    <string name="push_one_way_warning">Tylko eksport jednokierunkowy. NOOP nie może odtworzyć danych z tego endpointu i nie udostępnia odbiornika.</string>
+    <string name="push_endpoint">URL endpointu (ukryty)</string>
+    <string name="push_token">Token Bearer (ukryty)</string>
+    <string name="push_token_saved">Token Bearer (zapisany; wpisz, aby zastąpić)</string>
+    <string name="push_clear_token">Usuń zapisany token</string>
+    <string name="push_token_cleared">Zapisany token usunięto. Wysyłanie zostało wyłączone.</string>
+    <string name="push_save">Zapisz miejsce docelowe</string>
+    <string name="push_saved">Miejsce docelowe zapisano.</string>
+    <string name="push_enabled">Wyślij po synchronizacji opaski</string>
+    <string name="push_enabled_detail">Kolejkuje ograniczony eksport w tle po pełnym transferze historii i przy uruchomieniu aplikacji. Tylko Wi-Fi.</string>
+    <string name="push_config_required">Przed włączeniem zapisz prawidłowy endpoint i token.</string>
+    <string name="push_status_title">Stan</string>
+    <string name="push_status_detail">Dane logowania nigdy nie pojawiają się w stanie ani metadanych Workera.</string>
+    <string name="push_never">Nigdy</string>
+    <string name="push_last_success">Ostatnie powodzenie: %1$s</string>
+    <string name="push_last_error">Ostatni błąd: %1$s</string>
+    <string name="push_settings_row_detail">Eksperymentalny eksport jednokierunkowy do kontrolowanego endpointu. Domyślnie wyłączony.</string>
 </resources>

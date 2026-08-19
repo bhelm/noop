@@ -41,7 +41,30 @@
     <string name="nav_support">Support</string>
     <string name="nav_settings">Settings</string>
     <string name="nav_test_centre">Test Centre</string>
+    <string name="nav_self_hosted_push">Self-hosted push</string>
     <string name="nav_more">More</string>
+
+    <string name="push_title">Self-hosted push</string>
+    <string name="push_subtitle">Experimental · Android · Wi-Fi only</string>
+    <string name="push_destination_title">Your endpoint</string>
+    <string name="push_disclosure">When enabled, NOOP sends raw health records from this phone to the endpoint you control. This is explicit data egress from the device.</string>
+    <string name="push_one_way_warning">One-way export only. NOOP cannot restore data from this endpoint and does not provide a receiver.</string>
+    <string name="push_endpoint">Endpoint URL (hidden)</string>
+    <string name="push_token">Bearer token (hidden)</string>
+    <string name="push_token_saved">Bearer token (saved; enter to replace)</string>
+    <string name="push_clear_token">Clear saved token</string>
+    <string name="push_token_cleared">Saved token cleared. Push was turned off.</string>
+    <string name="push_save">Save destination</string>
+    <string name="push_saved">Destination saved.</string>
+    <string name="push_enabled">Push after strap sync</string>
+    <string name="push_enabled_detail">Queues a bounded background export after a complete history offload and at app launch. Runs only on Wi-Fi.</string>
+    <string name="push_config_required">Save a valid endpoint and token before enabling.</string>
+    <string name="push_status_title">Status</string>
+    <string name="push_status_detail">Credentials are never shown in status or worker metadata.</string>
+    <string name="push_never">Never</string>
+    <string name="push_last_success">Last success: %1$s</string>
+    <string name="push_last_error">Last error: %1$s</string>
+    <string name="push_settings_row_detail">Experimental one-way export to an endpoint you control. Off by default.</string>
 
     <!-- More-page section headers (DISPLAY only; the stored expand/collapse key stays the English
          literal in MoreSectionPrefs so persistence and iOS parity are unaffected). -->
