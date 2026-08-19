@@ -410,6 +410,43 @@ class ParityRunner {
                 }
                 result["valueBits"] = value?.let(::exactBit)
             }
+            "RecoveryScorer.recoveryTrace/8=RecoveryScorerTrace.recoveryTrace/8" -> {
+                require(comparison == "exact") { "invalid recoveryTrace case $caseId" }
+                val value = if (args.getBoolean("useDefaults")) {
+                    RecoveryScorerTrace.recoveryTrace(
+                        hrv = args.getDouble("hrv"), rhr = args.getDouble("rhr"),
+                        resp = nullableDouble(args, "resp"),
+                        hrvBaseline = baselineState(args.getJSONObject("hrvBaseline")),
+                        rhrBaseline = baselineStateOptional(args, "rhrBaseline"),
+                        respBaseline = baselineStateOptional(args, "respBaseline"),
+                        sleepPerf = nullableDouble(args, "sleepPerf"),
+                    )
+                } else {
+                    RecoveryScorerTrace.recoveryTrace(
+                        hrv = effective.getDouble("hrv"), rhr = effective.getDouble("rhr"),
+                        resp = nullableDouble(effective, "resp"),
+                        hrvBaseline = baselineState(effective.getJSONObject("hrvBaseline")),
+                        rhrBaseline = baselineStateOptional(effective, "rhrBaseline"),
+                        respBaseline = baselineStateOptional(effective, "respBaseline"),
+                        sleepPerf = nullableDouble(effective, "sleepPerf"),
+                        skinTempDev = nullableDouble(effective, "skinTempDev"),
+                    )
+                }
+                var emittedScore = value.first
+                val emittedTrace = value.second.toMutableList()
+                if (negativeSide == "kotlin" && caseId == "recovery_trace_negative_score_probe") {
+                    emittedScore = requireNotNull(emittedScore) + 1e-6
+                    result["negativeSide"] = "kotlin"
+                }
+                if (negativeSide == "kotlin" && caseId == "recovery_trace_negative_line_probe") {
+                    emittedTrace[0] += " [mutant]"
+                    result["negativeSide"] = "kotlin"
+                }
+                result["valueBits"] = sortedMapOf(
+                    "score" to emittedScore?.let(::exactBit),
+                    "trace" to emittedTrace.map { sortedMapOf("text" to it) },
+                )
+            }
             "StrainScorer.trimpToStrain/2" -> {
                 require(comparison == "exact") { "invalid trimpToStrain case $caseId" }
                 val trimp = args.getDouble("trimp")

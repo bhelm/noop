@@ -536,6 +536,48 @@ final class ParityRunner: XCTestCase {
                 )
             }
             result["valueBits"] = value.map(exactBit) ?? NSNull()
+        case "RecoveryScorer.recoveryTrace/8=RecoveryScorerTrace.recoveryTrace/8":
+            guard record.comparison == "exact", let hrv = record.args.hrv,
+                  let rhr = record.args.rhr, let hrvInput = record.args.hrvBaseline,
+                  let useDefaults = record.args.useDefaults else {
+                throw RunnerError.invalidInput("invalid recoveryTrace case \(record.id)")
+            }
+            let hrvBaseline = try baselineState(hrvInput, record: record)
+            let value: (score: Double?, trace: [String])
+            if useDefaults {
+                value = RecoveryScorer.recoveryTrace(
+                    hrv: hrv, rhr: rhr, resp: record.args.resp,
+                    hrvBaseline: hrvBaseline,
+                    rhrBaseline: try baselineStateOptional(record.args.rhrBaseline, record: record),
+                    respBaseline: try baselineStateOptional(record.args.respBaseline, record: record),
+                    sleepPerf: record.args.sleepPerf
+                )
+            } else {
+                value = RecoveryScorer.recoveryTrace(
+                    hrv: hrv, rhr: rhr, resp: record.effectiveArgs.resp,
+                    hrvBaseline: hrvBaseline,
+                    rhrBaseline: try baselineStateOptional(record.effectiveArgs.rhrBaseline, record: record),
+                    respBaseline: try baselineStateOptional(record.effectiveArgs.respBaseline, record: record),
+                    sleepPerf: record.effectiveArgs.sleepPerf,
+                    skinTempDev: record.effectiveArgs.skinTempDev
+                )
+            }
+            var emittedScore = value.score
+            var emittedTrace = value.trace
+            if negativeSide == "swift", record.id == "recovery_trace_negative_score_probe",
+               let score = emittedScore {
+                emittedScore = score + 1e-6
+                result["negativeSide"] = "swift"
+            }
+            if negativeSide == "swift", record.id == "recovery_trace_negative_line_probe",
+               !emittedTrace.isEmpty {
+                emittedTrace[0] += " [mutant]"
+                result["negativeSide"] = "swift"
+            }
+            result["valueBits"] = [
+                "score": emittedScore.map(exactBit) ?? NSNull(),
+                "trace": emittedTrace.map { ["text": $0] },
+            ] as [String: Any]
         case "StrainScorer.trimpToStrain/2":
             guard record.comparison == "exact", let trimp = record.args.trimp else {
                 throw RunnerError.invalidInput("invalid trimpToStrain case \(record.id)")
