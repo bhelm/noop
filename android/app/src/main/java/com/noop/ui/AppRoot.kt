@@ -104,6 +104,7 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
+import com.noop.push.SelfHostedPushScreen
 
 // MARK: - Navigation model
 //
@@ -171,6 +172,8 @@ private enum class Destination(
     Notifications("notifications", R.string.nav_notifications, Icons.Filled.Notifications),
     PowerSaving("power_saving", R.string.nav_power_saving, Icons.Filled.BatteryStd),
     Settings("settings", R.string.nav_settings, Icons.Filled.Settings),
+    // Developer-facing integration configured from Settings > Advanced.
+    SelfHostedPush("self_hosted_push", R.string.nav_self_hosted_push, Icons.Filled.CloudSync),
     // Nested Settings destination shared by the Settings row and a blank WHOOP 4.0 Steps tile (#1515).
     // Deliberately absent from [drawerGroups]: it is contextual, not another top-level More item.
     StepsCalibration(
@@ -453,8 +456,10 @@ fun AppRoot(viewModel: AppViewModel = viewModel()) {
                         onOpenTestCentre = { nav.navigate(Destination.TestCentre.route) },
                         onOpenBackupSync = { nav.navigate(Destination.BackupSync.route) },
                         onOpenStepsCalibration = { nav.navigate(Destination.StepsCalibration.route) },
+                        onOpenSelfHostedPush = { nav.navigate(Destination.SelfHostedPush.route) },
                     )
                 }
+                composable(Destination.SelfHostedPush.route) { SelfHostedPushScreen() }
                 composable(Destination.StepsCalibration.route) {
                     val profile = remember(context) { ProfileStore.from(context) }
                     var revision by remember { mutableStateOf(0) }

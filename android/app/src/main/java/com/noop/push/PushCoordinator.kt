@@ -1,0 +1,200 @@
+package com.noop.push
+
+import kotlinx.coroutines.CancellationException
+import java.time.LocalDate
+import java.time.ZoneId
+
+/** Coordinates bounded Room snapshots and transport without holding a database read across network I/O. */
+class PushCoordinator(
+    private val source: PushSnapshotSource,
+    private val transport: PushTransport,
+    private val progress: PushProgressStore,
+    private val sourceId: String,
+    private val today: () -> LocalDate = { LocalDate.now() },
+    private val zoneId: ZoneId = ZoneId.systemDefault(),
+) {
+    suspend fun pushAppend(table: PushAppendTable, deviceId: String): PushResult {
+        val stored = try {
+            progress.cursor(table, deviceId)
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (_: Throwable) {
+            return PushResult.Rejected("cursor read failed", retryable = true)
+        }
+        val effective = if (stored == null || stored.rowId <= 0) {
+            null
+        } else {
+            val atCursor = try {
+                source.appendRecordAt(table, deviceId, stored.rowId)
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (_: Throwable) {
+                return PushResult.Rejected("cursor verification failed", retryable = true)
+            }
+            val fingerprint = atCursor?.let { PushProtocol.keyFingerprint(table, deviceId, it.key) }
+            if (fingerprint == stored.naturalKeyFingerprint) stored else null
+        }
+        val rows = try {
+            source.appendRows(table, deviceId, effective?.rowId ?: 0L, PushProtocol.MAX_RECORDS + 1)
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (_: Throwable) {
+            return PushResult.Rejected("append snapshot failed", retryable = true)
+        }
+        if (rows.isEmpty()) return PushResult.NoData
+        val batch = try {
+            PushProtocol.appendBatch(table, sourceId, deviceId, effective, rows)
+        } catch (t: PushProtocolException) {
+            return PushResult.Rejected(t.message ?: "append encoding failed", retryable = false)
+        }
+        val accepted = deliver(batch)
+        if (accepted !is PushResult.Accepted) return accepted
+        val end = batch.endCursor ?: return PushResult.Rejected("append batch lacked end cursor", retryable = true)
+        return try {
+            progress.saveCursor(table, deviceId, end)
+            accepted.copy(hasMore = rows.size > batch.recordCount)
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (_: Throwable) {
+            // The endpoint may have applied the bytes. Keeping the old cursor safely repeats the same upserts.
+            PushResult.Rejected("cursor save failed", retryable = true)
+        }
+    }
+
+    suspend fun pushMutable(table: PushMutableTable, deviceId: String): PushResult {
+        val window = PushWindow.ending(today(), zoneId)
+        val rows = try {
+            source.mutableRows(
+                table, deviceId, window, PushProtocol.MAX_MUTABLE_SNAPSHOT_RECORDS + 1,
+            )
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (_: Throwable) {
+            return PushResult.Rejected("mutable snapshot failed", retryable = true)
+        }
+        if (rows.size > PushProtocol.MAX_MUTABLE_SNAPSHOT_RECORDS) {
+            return PushResult.Rejected("mutable snapshot exceeds local record limit", retryable = false)
+        }
+        var encodedBytes = 0L
+        for (record in rows) {
+            val size = try {
+                PushProtocol.mutableRecordEncodedSize(table, record)
+            } catch (t: PushProtocolException) {
+                return PushResult.Rejected(t.message ?: "mutable encoding failed", retryable = false)
+            }
+            encodedBytes += size
+            if (encodedBytes > PushProtocol.MAX_MUTABLE_SNAPSHOT_ENCODED_BYTES) {
+                return PushResult.Rejected("mutable snapshot exceeds local memory limit", retryable = false)
+            }
+        }
+        val batches = try {
+            PushProtocol.mutableBatches(table, sourceId, deviceId, window, rows)
+        } catch (t: PushProtocolException) {
+            return PushResult.Rejected(t.message ?: "mutable encoding failed", retryable = false)
+        }
+        for (batch in batches) {
+            val accepted = deliver(batch)
+            if (accepted !is PushResult.Accepted) return accepted
+        }
+        val replacementId = batches.first().replacementId ?: batches.first().batchId
+        return try {
+            progress.saveWindow(table, deviceId, PushWindowProgress(window, replacementId))
+            PushResult.Accepted(
+                batchId = replacementId,
+                recordCount = rows.size,
+                hasMore = false,
+                batchCount = batches.size,
+            )
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (_: Throwable) {
+            PushResult.Rejected("window progress save failed", retryable = true)
+        }
+    }
+
+    /** One append page and one complete rolling replacement per actual source device. */
+    suspend fun pushKnownDevices(
+        startDeviceIndex: Int = 0,
+        maxDevices: Int = Int.MAX_VALUE,
+    ): PushRunResult {
+        require(startDeviceIndex >= 0)
+        require(maxDevices > 0)
+        val devices = try {
+            val live = source.knownDeviceIds().filter(String::isNotBlank).distinct()
+            live.forEach { progress.rememberDeviceId(it) }
+            (live + progress.knownDeviceIds()).filter(String::isNotBlank).distinct().sorted()
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (_: Throwable) {
+            return PushRunResult(0, 1, false, hasRetryableFailure = true)
+        }
+        if (devices.isEmpty()) return PushRunResult(0, 0, false)
+        val start = startDeviceIndex % devices.size
+        val selectedCount = minOf(maxDevices, devices.size)
+        val selectedDevices = (0 until selectedCount).map { devices[(start + it) % devices.size] }
+        val nextDeviceIndex = (start + selectedCount) % devices.size
+        var accepted = 0
+        var rejected = 0
+        var more = false
+        var retryableFailure = false
+        for (deviceId in selectedDevices) {
+            for (table in PushAppendTable.entries) {
+                when (val result = pushAppend(table, deviceId)) {
+                    is PushResult.Accepted -> {
+                        accepted += result.batchCount
+                        more = more || result.hasMore
+                    }
+                    is PushResult.Rejected -> {
+                        rejected += 1
+                        retryableFailure = retryableFailure || result.retryable
+                    }
+                    PushResult.NoData -> Unit
+                }
+            }
+            for (table in PushMutableTable.entries) {
+                when (val result = pushMutable(table, deviceId)) {
+                    is PushResult.Accepted -> accepted += result.batchCount
+                    is PushResult.Rejected -> {
+                        rejected += 1
+                        retryableFailure = retryableFailure || result.retryable
+                    }
+                    PushResult.NoData -> Unit
+                }
+            }
+        }
+        return PushRunResult(
+            acceptedBatches = accepted,
+            rejectedBatches = rejected,
+            hasMoreAppendRows = more,
+            hasRetryableFailure = retryableFailure,
+            nextDeviceIndex = nextDeviceIndex,
+            hasMoreDevices = devices.size > selectedCount,
+        )
+    }
+
+    private suspend fun deliver(batch: PushBatch): PushResult {
+        val response = try {
+            transport.post(batch)
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (_: Throwable) {
+            return PushResult.Rejected("transport failed", retryable = true)
+        }
+        if (response.body.size > PushProtocol.MAX_ACK_BYTES) {
+            return PushResult.Rejected("ack exceeds size limit", retryable = false)
+        }
+        if (response.statusCode !in 200..299) {
+            val retryable = response.statusCode == 408 || response.statusCode == 429 || response.statusCode >= 500
+            return PushResult.Rejected("HTTP ${response.statusCode}", retryable)
+        }
+        val ack = try {
+            PushAck.parse(response.body)
+        } catch (t: PushProtocolException) {
+            return PushResult.Rejected(t.message ?: "ack rejected", retryable = false)
+        }
+        if (!ack.exactlyMatches(batch)) {
+            return PushResult.Rejected("ack does not match request", retryable = false)
+        }
+        return PushResult.Accepted(batch.batchId, batch.recordCount, hasMore = false)
+    }
+}

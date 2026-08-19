@@ -486,6 +486,7 @@ fun SettingsScreen(
     onOpenTestCentre: () -> Unit = {},
     onOpenBackupSync: () -> Unit = {},
     onOpenStepsCalibration: () -> Unit = {},
+    onOpenSelfHostedPush: () -> Unit = {},
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -2229,6 +2230,19 @@ fun SettingsScreen(
             onToggle = { advancedOpen = !advancedOpen; SettingsDisclosurePrefs.write(NoopPrefs.of(context), advancedOpen) },
         ) {
         Column(verticalArrangement = Arrangement.spacedBy(Metrics.screenRowSpacing)) {
+        SettingsCard(
+            icon = Icons.Filled.CloudSync,
+            title = uiString(R.string.nav_self_hosted_push),
+            blurb = uiString(R.string.push_settings_row_detail),
+        ) {
+            NoopButton(
+                text = uiString(R.string.nav_self_hosted_push),
+                leadingIcon = Icons.Filled.CloudSync,
+                kind = NoopButtonKind.Secondary,
+                fullWidth = true,
+                onClick = onOpenSelfHostedPush,
+            )
+        }
         // --- Experimental · WHOOP 5 / MG --- (hidden when the user is confidently on a 4.0, #22)
         if (showFiveMGControls) {
         SettingsCard(
