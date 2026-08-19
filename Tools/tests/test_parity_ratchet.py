@@ -1168,13 +1168,14 @@ func constrained<T>()
             "RecoveryForecaster.leastSquaresSlope/1",
             "RecoveryForecaster.clamp/3",
         }
+        watch_recovery = {"WatchRecovery.compute/4"}
         expected = (
             legacy | added | qualified_strain | strain | recovery | recovery_trace
-            | heart_rate_recovery | recovery_drivers | recovery_forecast
+            | heart_rate_recovery | recovery_drivers | recovery_forecast | watch_recovery
         )
         self.assertEqual(19, len(legacy))
         self.assertEqual(21, len(legacy | added))
-        self.assertEqual(51, len(expected))
+        self.assertEqual(52, len(expected))
         self.assertEqual(expected, registered)
         self.assertIn("StrainScorer.trimpToStrain/2", registered)
         self.assertNotIn("trimpToStrain", registered)
@@ -1218,6 +1219,54 @@ func constrained<T>()
         self.assertIn(
             "Packages/StrandAnalytics/Sources/StrandAnalytics/ChargeDrivers.swift::skinTempRelative/1[defaults=-]#1",
             swift_keys,
+        )
+
+    def test_watch_recovery_retires_only_compute_exemptions_and_declares_twins(self) -> None:
+        registered, errors = parity_ratchet.registered_differential(REPOSITORY)
+        self.assertEqual([], errors)
+        self.assertIn("WatchRecovery.compute/4", registered)
+
+        swift_path = REPOSITORY / "Packages/StrandAnalytics/Sources/StrandAnalytics/parity-exempt.json"
+        kotlin_path = REPOSITORY / "android/app/src/main/java/com/noop/analytics/parity-exempt.json"
+        swift_keys = {item["key"] for item in json.loads(swift_path.read_text())["exempt"]}
+        kotlin_keys = {item["key"] for item in json.loads(kotlin_path.read_text())["exempt"]}
+        self.assertNotIn(
+            "Packages/StrandAnalytics/Sources/StrandAnalytics/WatchRecovery.swift::compute/4[defaults=-]#1",
+            swift_keys,
+        )
+        self.assertNotIn(
+            "android/app/src/main/java/com/noop/analytics/WatchRecovery.kt::compute/4[defaults=-]#1",
+            kotlin_keys,
+        )
+        self.assertIn(
+            "Packages/StrandAnalytics/Sources/StrandAnalytics/WatchRecovery.swift::init/2[defaults=-]#1",
+            swift_keys,
+        )
+        self.assertIn(
+            "Packages/StrandAnalytics/Sources/StrandAnalytics/WatchRecovery.swift::minBaselineNights@property-initializer#1",
+            swift_keys,
+        )
+        self.assertIn(
+            "android/app/src/main/java/com/noop/analytics/WatchRecovery.kt::minBaselineNights@property-initializer#1",
+            kotlin_keys,
+        )
+
+        twin_map = json.loads((REPOSITORY / "Tools/parity_twin_map.json").read_text())
+        self.assertIn(
+            {
+                "swift": "Packages/StrandAnalytics/Sources/StrandAnalytics/WatchRecovery.swift",
+                "kotlin": "android/app/src/main/java/com/noop/analytics/WatchRecovery.kt",
+                "evidence": "machine-resolvable declared function twin",
+            },
+            twin_map["file_pairs"],
+        )
+        self.assertIn(
+            {
+                "swift": "Packages/StrandAnalytics/Sources/StrandAnalytics/WatchRecovery.swift::compute/4#1",
+                "kotlin": "android/app/src/main/java/com/noop/analytics/WatchRecovery.kt::compute/4#1",
+                "evidence": "declared twin reference",
+            },
+            twin_map["function_pairs"],
         )
 
     def test_parity_workflow_has_inverted_trigger_and_pinned_actions(self) -> None:

@@ -64,6 +64,10 @@ RECOVERY_FORECAST_MAX_VALUES = 4096
 RECOVERY_FORECAST_HELPER_ABS_MAX = 1e100
 RECOVERY_FORECAST_SLEEP_HOURS_MAX = 24.0
 RECOVERY_FORECAST_SEED = GENERATOR_SEED ^ 0x5246_4F52_4543_4153
+WATCH_RECOVERY_KEY = "WatchRecovery.compute/4"
+WATCH_RECOVERY_MAX_HISTORY = 4096
+WATCH_RECOVERY_ABS_MAX = 1e6
+WATCH_RECOVERY_SEED = GENERATOR_SEED ^ 0x5741_5443_4852_4543
 RAW_ANALYZE_KEY = "HRVAnalyzer.analyze/2=HrvAnalyzer.analyzeRaw/2"
 HRV_MEDIAN_KEY = "HRVAnalyzer.median/1=HrvAnalyzer.median/1"
 EPSILON = 1e-9
@@ -244,6 +248,28 @@ def _validate_recovery_drivers_output(
         )
 
 
+def _validate_watch_recovery_output(
+    value: Any, expected: dict[str, Any], path: str
+) -> None:
+    """Require the exact normalized WatchRecovery result and public gate constant."""
+
+    result = _validate_exact_object_keys(
+        value, {"recovery", "confidence", "minBaselineNights"}, path
+    )
+    recovery = result["recovery"]
+    if recovery is not None:
+        _validate_exact_bits(recovery, f"{path}.recovery")
+    confidence = _validate_exact_object_keys(
+        result["confidence"], {"text"}, f"{path}.confidence"
+    )
+    if confidence["text"] not in {"calibrating", "building", "solid"}:
+        raise ParityFormatError(
+            f"{path}.confidence.text must be one of ['building', 'calibrating', 'solid']"
+        )
+    if type(result["minBaselineNights"]) is not int or result["minBaselineNights"] != 7:
+        raise ParityFormatError(f"{path}.minBaselineNights must be the integer 7")
+
+
 def _validate_exact_tree(value: Any, path: str) -> None:
     """Validate an exact payload: literals plus IEEE-754 bit strings for doubles."""
 
@@ -348,6 +374,7 @@ def _validate_recovery_forecast_output(
 _EXACT_OUTPUT_VALIDATORS = {
     RECOVERY_DRIVERS_KEY: _validate_recovery_drivers_output,
     RECOVERY_FORECAST_KEY: _validate_recovery_forecast_output,
+    WATCH_RECOVERY_KEY: _validate_watch_recovery_output,
 }
 
 
@@ -408,10 +435,22 @@ def _render_payload(kind: str, value: Any, comparison: str) -> str:
 
 
 def _known_behavior_expected(record: dict[str, Any]) -> dict[str, Any] | None:
-    """Return the exact #55 characterization payload, rejecting inert/malformed metadata."""
+    """Return an issue-linked exact oracle, rejecting inert or malformed metadata."""
 
-    if record.get("knownBehaviorIssue") != "bhelm/noop#55":
+    issue = record.get("knownBehaviorIssue")
+    if issue not in {"bhelm/noop#55", "bhelm/noop#61", "bhelm/noop#62"}:
         return None
+    if issue in {"bhelm/noop#61", "bhelm/noop#62"}:
+        if record.get("function") != WATCH_RECOVERY_KEY or record.get("comparison") != "exact":
+            raise ParityFormatError(
+                f"case {record.get('id')!r} {issue} must characterize "
+                f"{WATCH_RECOVERY_KEY} with exact comparison"
+            )
+        expected = record.get("expected")
+        _validate_watch_recovery_output(
+            expected, record, f"case {record.get('id')!r} expected"
+        )
+        return expected
     if record.get("function") != HEART_RATE_RECOVERY_KEY or record.get("comparison") != "exact":
         raise ParityFormatError(
             f"case {record.get('id')!r} bhelm/noop#55 must characterize "
@@ -472,6 +511,7 @@ def compare_files(input_path: Path, swift_path: Path, kotlin_path: Path) -> list
         )
         known_expected = _known_behavior_expected(expected)
         if known_expected is not None:
+            known_issue = expected["knownBehaviorIssue"]
             for side, kind, value in (
                 ("swift", swift_kind, swift_value),
                 ("kotlin", kotlin_kind, kotlin_value),
@@ -479,7 +519,7 @@ def compare_files(input_path: Path, swift_path: Path, kotlin_path: Path) -> list
                 if kind != "value" or value != known_expected:
                     diffs.append(
                         f"KNOWN_BEHAVIOR id={case_id} function={function} "
-                        f"known_behavior=bhelm/noop#55 side={side} "
+                        f"known_behavior={known_issue} side={side} "
                         f"expected=bits:{known_expected} "
                         f"actual={_render_payload(kind, value, comparison)}"
                     )
@@ -766,6 +806,40 @@ def _seeded_recovery_forecast_cases() -> list[dict[str, Any]]:
             )
         )
     return records
+
+
+def _seeded_watch_recovery_cases() -> list[dict[str, Any]]:
+    """Exactly two structured WatchRecovery seeds, isolated from every other module."""
+
+    rng = SplitMix64(WATCH_RECOVERY_SEED)
+    random_hrv = [35.0 + float(rng.bounded(31)) for _ in range(14)]
+    random_rhr = [45.0 + float(rng.bounded(21)) for _ in range(14)]
+    return [
+        {
+            "args": {
+                "todayHrv": 35.0 + float(rng.bounded(31)),
+                "todayRhr": 45 + rng.bounded(21),
+                "hrvHistory": random_hrv,
+                "rhrHistory": random_rhr,
+            },
+            "comparison": "exact",
+            "function": WATCH_RECOVERY_KEY,
+            "id": "seeded_watch_recovery_splitmix64",
+            "source": f"seeded:watch-recovery:splitmix64:{WATCH_RECOVERY_SEED:#018x}",
+        },
+        {
+            "args": {
+                "todayHrv": 52.0,
+                "todayRhr": None,
+                "hrvHistory": [38.0 + index * 2.25 for index in range(14)],
+                "rhrHistory": [61.0 - index * 0.75 for index in range(14)],
+            },
+            "comparison": "exact",
+            "function": WATCH_RECOVERY_KEY,
+            "id": "seeded_watch_recovery_affine",
+            "source": f"seeded:watch-recovery:affine:{WATCH_RECOVERY_SEED:#018x}",
+        },
+    ]
 
 
 def _seeded_cases() -> list[dict[str, Any]]:
@@ -1114,6 +1188,7 @@ def _seeded_cases() -> list[dict[str, Any]]:
             ]
         records.append(record)
     records.extend(_seeded_recovery_forecast_cases())
+    records.extend(_seeded_watch_recovery_cases())
     return records
 
 
@@ -1182,6 +1257,44 @@ def _validate_recovery_window(args: dict[str, Any], record: dict[str, Any]) -> d
         raise ParityFormatError(
             f"case {record.get('id')!r} {record.get('function')} bin-end addition overflows signed Int64"
         )
+    return dict(args)
+
+
+def _validate_watch_recovery_args(args: Any, record: dict[str, Any]) -> dict[str, Any]:
+    """Validate transport safety only; production owns physiological rejection semantics."""
+
+    function = WATCH_RECOVERY_KEY
+    fields = {"todayHrv", "todayRhr", "hrvHistory", "rhrHistory"}
+    if not isinstance(args, dict) or set(args) != fields:
+        raise ParityFormatError(
+            f"case {record.get('id')!r} {function} args must contain exactly {sorted(fields)}"
+        )
+    today_hrv = args["todayHrv"]
+    if today_hrv is not None and not (
+        _is_number(today_hrv)
+        and math.isfinite(float(today_hrv))
+        and abs(float(today_hrv)) <= WATCH_RECOVERY_ABS_MAX
+    ):
+        raise ParityFormatError(
+            f"case {record.get('id')!r} {function} todayHrv must be null or finite and bounded"
+        )
+    today_rhr = args["todayRhr"]
+    if today_rhr is not None and not _is_signed_integer(today_rhr, INT32_MIN, INT32_MAX):
+        raise ParityFormatError(
+            f"case {record.get('id')!r} {function} todayRhr must be null or fit Int32"
+        )
+    for key in ("hrvHistory", "rhrHistory"):
+        values = args[key]
+        if not isinstance(values, list) or len(values) > WATCH_RECOVERY_MAX_HISTORY or not all(
+            _is_number(value)
+            and math.isfinite(float(value))
+            and abs(float(value)) <= WATCH_RECOVERY_ABS_MAX
+            for value in values
+        ):
+            raise ParityFormatError(
+                f"case {record.get('id')!r} {function} {key} must contain at most "
+                f"{WATCH_RECOVERY_MAX_HISTORY} finite bounded numbers"
+            )
     return dict(args)
 
 
@@ -1862,6 +1975,8 @@ def _effective_args(record: dict[str, Any]) -> dict[str, Any]:
         return _validate_heart_rate_recovery(args, record)
     if function == RECOVERY_DRIVERS_KEY:
         return _validate_recovery_drivers_args(args, record)
+    if function == WATCH_RECOVERY_KEY:
+        return _validate_watch_recovery_args(args, record)
     if function in {"rmssdRaw", "sdnnRaw"}:
         if not isinstance(args.get("nn"), list):
             raise ParityFormatError(f"case {record.get('id')!r} {function} requires args.nn")
@@ -2065,6 +2180,26 @@ def generate_cases(suite: str, nonce: str) -> list[dict[str, Any]]:
                 "id": "recovery_drivers_negative_order_probe",
                 "source": "negative-control",
             },
+            {
+                "args": {
+                    "todayHrv": 45.0, "todayRhr": 52,
+                    "hrvHistory": [45.0] * 14, "rhrHistory": [52.0] * 14,
+                },
+                "comparison": "exact",
+                "function": WATCH_RECOVERY_KEY,
+                "id": "watch_recovery_negative_score_probe",
+                "source": "negative-control",
+            },
+            {
+                "args": {
+                    "todayHrv": 45.0, "todayRhr": 52,
+                    "hrvHistory": [45.0] * 14, "rhrHistory": [52.0] * 14,
+                },
+                "comparison": "exact",
+                "function": WATCH_RECOVERY_KEY,
+                "id": "watch_recovery_negative_confidence_probe",
+                "source": "negative-control",
+            },
         ]
     else:
         raw = _curated_cases() + _seeded_cases()
@@ -2079,7 +2214,10 @@ def generate_cases(suite: str, nonce: str) -> list[dict[str, Any]]:
             raise ParityFormatError(f"duplicate generated id: {case_id}")
         seen.add(case_id)
         known_issue = record.get("knownBehaviorIssue")
-        supported_known_issues = {"bhelm/noop#10", "bhelm/noop#12", "bhelm/noop#39", "bhelm/noop#40", "bhelm/noop#55"}
+        supported_known_issues = {
+            "bhelm/noop#10", "bhelm/noop#12", "bhelm/noop#39", "bhelm/noop#40",
+            "bhelm/noop#55", "bhelm/noop#61", "bhelm/noop#62",
+        }
         if known_issue is not None and known_issue not in supported_known_issues:
             raise ParityFormatError(
                 f"case {case_id!r} has unsupported knownBehaviorIssue {known_issue!r}"
@@ -2152,6 +2290,14 @@ def generate_cases(suite: str, nonce: str) -> list[dict[str, Any]]:
             expected_recovery_issue = "bhelm/noop#40"
         elif case_id == "heart_rate_recovery_disconnected_segments_issue_55":
             expected_recovery_issue = "bhelm/noop#55"
+        elif case_id in {
+            "watch_recovery_issue_61_present_rhr_empty_history",
+            "watch_recovery_issue_61_present_rhr_unusable_history",
+            "watch_recovery_issue_61_missing_rhr_control",
+        }:
+            expected_recovery_issue = "bhelm/noop#61"
+        elif case_id == "watch_recovery_issue_62_raw_seven_valid_four":
+            expected_recovery_issue = "bhelm/noop#62"
         if expected_recovery_issue is not None and known_issue != expected_recovery_issue:
             raise ParityFormatError(
                 f"case {case_id!r} characterizes shared Recovery behavior tracked by {expected_recovery_issue}"

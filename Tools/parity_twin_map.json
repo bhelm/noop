@@ -134,6 +134,11 @@
       "evidence": "machine-resolvable declared function twin"
     },
     {
+      "swift": "Packages/StrandAnalytics/Sources/StrandAnalytics/WatchRecovery.swift",
+      "kotlin": "android/app/src/main/java/com/noop/analytics/WatchRecovery.kt",
+      "evidence": "machine-resolvable declared function twin"
+    },
+    {
       "swift": "Packages/StrandAnalytics/Sources/StrandAnalytics/WorkoutDetector.swift",
       "kotlin": "android/app/src/main/java/com/noop/analytics/IntelligenceEngine.kt",
       "evidence": "machine-resolvable declared function twin"
@@ -418,6 +423,11 @@
     {
       "swift": "Packages/StrandAnalytics/Sources/StrandAnalytics/RecoveryForecast.swift::clamp/3#1",
       "kotlin": "android/app/src/main/java/com/noop/analytics/RecoveryForecast.kt::clamp/3#1",
+      "evidence": "declared twin reference"
+    },
+    {
+      "swift": "Packages/StrandAnalytics/Sources/StrandAnalytics/WatchRecovery.swift::compute/4#1",
+      "kotlin": "android/app/src/main/java/com/noop/analytics/WatchRecovery.kt::compute/4#1",
       "evidence": "declared twin reference"
     },
     {

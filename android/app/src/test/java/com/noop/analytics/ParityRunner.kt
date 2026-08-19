@@ -571,6 +571,29 @@ class ParityRunner {
                     )
                 )
             }
+            "WatchRecovery.compute/4" -> {
+                require(comparison == "exact") { "invalid WatchRecovery.compute/4 case $caseId" }
+                val value = WatchRecovery.compute(
+                    todayHrv = nullableDouble(args, "todayHrv"),
+                    todayRhr = if (args.isNull("todayRhr")) null else args.getInt("todayRhr"),
+                    hrvHistory = doubleList(args, "hrvHistory"),
+                    rhrHistory = doubleList(args, "rhrHistory"),
+                )
+                val encoded = sortedMapOf<String, Any?>(
+                    "recovery" to value.recovery?.let(::exactBit),
+                    "confidence" to sortedMapOf("text" to value.confidence.raw),
+                    "minBaselineNights" to WatchRecovery.minBaselineNights,
+                )
+                if (negativeSide == "kotlin" && caseId == "watch_recovery_negative_score_probe") {
+                    encoded["recovery"] = exactBit((value.recovery ?: 0.0) + 1.0)
+                    result["negativeSide"] = "kotlin"
+                }
+                if (negativeSide == "kotlin" && caseId == "watch_recovery_negative_confidence_probe") {
+                    encoded["confidence"] = sortedMapOf("text" to "calibrating")
+                    result["negativeSide"] = "kotlin"
+                }
+                result["valueBits"] = encoded
+            }
             "StrainScorer.trimpToStrain/2" -> {
                 require(comparison == "exact") { "invalid trimpToStrain case $caseId" }
                 val trimp = args.getDouble("trimp")

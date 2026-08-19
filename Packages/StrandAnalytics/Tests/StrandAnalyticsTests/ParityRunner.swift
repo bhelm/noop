@@ -63,6 +63,10 @@ final class ParityRunner: XCTestCase {
         let compositeZ: Double?
         let fraction: Double?
         let hrv: Double?
+        let todayHrv: Double?
+        let todayRhr: Int?
+        let hrvHistory: [Double]?
+        let rhrHistory: [Double]?
         let hrvBaseline: BaselineInput?
         let hrvZ: Double?
         let rhr: Double?
@@ -721,6 +725,29 @@ final class ParityRunner: XCTestCase {
                 throw RunnerError.invalidInput("invalid RecoveryForecast clamp case \(record.id)")
             }
             result["valueBits"] = exactBit(RecoveryForecaster.clamp(x, lo, hi))
+        case "WatchRecovery.compute/4":
+            guard record.comparison == "exact", let hrvHistory = record.args.hrvHistory,
+                  let rhrHistory = record.args.rhrHistory else {
+                throw RunnerError.invalidInput("invalid WatchRecovery.compute/4 case \(record.id)")
+            }
+            let value = WatchRecovery.compute(
+                todaySDNN: record.args.todayHrv, todayRHR: record.args.todayRhr,
+                sdnnHistory: hrvHistory, rhrHistory: rhrHistory
+            )
+            var encoded: [String: Any] = [
+                "recovery": value.recovery.map(exactBit) ?? NSNull(),
+                "confidence": ["text": value.confidence.rawValue],
+                "minBaselineNights": WatchRecovery.minBaselineNights,
+            ]
+            if negativeSide == "swift", record.id == "watch_recovery_negative_score_probe" {
+                encoded["recovery"] = exactBit((value.recovery ?? 0.0) + 1.0)
+                result["negativeSide"] = "swift"
+            }
+            if negativeSide == "swift", record.id == "watch_recovery_negative_confidence_probe" {
+                encoded["confidence"] = ["text": "calibrating"]
+                result["negativeSide"] = "swift"
+            }
+            result["valueBits"] = encoded
         case "StrainScorer.trimpToStrain/2":
             guard record.comparison == "exact", let trimp = record.args.trimp else {
                 throw RunnerError.invalidInput("invalid trimpToStrain case \(record.id)")

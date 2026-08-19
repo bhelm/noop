@@ -5833,11 +5833,6 @@
       "issue": 17
     },
     {
-      "key": "Packages/StrandAnalytics/Sources/StrandAnalytics/WatchRecovery.swift::compute/4[defaults=-]#1",
-      "reason": "Bootstrap debt: no differential or declared platform coverage proof yet.",
-      "issue": 17
-    },
-    {
       "key": "Packages/StrandAnalytics/Sources/StrandAnalytics/WeeklyDigest.swift::label@computed-property#1",
       "reason": "Bootstrap debt: no differential or declared platform coverage proof yet.",
       "issue": 17
