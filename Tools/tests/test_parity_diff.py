@@ -1272,6 +1272,133 @@ class ParityDiffTests(unittest.TestCase):
         )
         self.assertEqual(2, len(seeded))
 
+    def test_sleep_foundations_have_curated_boundaries_and_two_isolated_seeds_each(self):
+        cases = parity_diff.generate_cases("pilot", "sleep-seeds")
+        for function in sorted(parity_diff.SLEEP_FUNCTIONS):
+            with self.subTest(function=function):
+                selected = [case for case in cases if case["function"] == function]
+                curated = [case for case in selected if case["source"] == "curated:sleep_foundations.json"]
+                seeded = [case for case in selected if case["source"].startswith("seeded:splitmix64:")]
+                self.assertGreaterEqual(len(curated), 3)
+                self.assertEqual(2, len(seeded))
+                self.assertEqual(2, len({case["source"] for case in seeded}))
+                self.assertEqual(
+                    {f"seeded:splitmix64:{seed:#018x}" for seed in parity_diff.SLEEP_SEEDS[function]},
+                    {case["source"] for case in seeded},
+                )
+
+    def test_sleep_issue_41_and_42_regressions_are_exact_and_issue_linked(self):
+        cases = {case["id"]: case for case in parity_diff.generate_cases("pilot", "sleep-issues")}
+        expected = {
+            "sleep_wake_issue_41_lf": "bhelm/noop#41",
+            "sleep_wake_issue_41_cr": "bhelm/noop#41",
+            "sleep_reclip_issue_42_negative_start": "bhelm/noop#42",
+            "sleep_reclip_issue_42_empty_stage": "bhelm/noop#42",
+        }
+        for case_id, issue in expected.items():
+            with self.subTest(case_id=case_id):
+                self.assertEqual("exact", cases[case_id]["comparison"])
+                self.assertEqual(issue, cases[case_id]["regressionIssue"])
+
+    def test_sleep_issue_fixtures_fail_closed_when_id_or_payload_is_reused(self):
+        originals = {
+            case["id"]: case for case in parity_diff._curated_cases()
+            if case["id"] in {
+                "sleep_wake_issue_41_lf", "sleep_wake_issue_41_cr",
+                "sleep_reclip_issue_42_negative_start", "sleep_reclip_issue_42_empty_stage",
+            }
+        }
+        mutations = [
+            ("sleep_wake_issue_41_lf", {"stage": "wake"}),
+            ("sleep_wake_issue_41_cr", {"stage": "awake"}),
+            ("sleep_reclip_issue_42_negative_start", {
+                "stagesJSON": '[{"start":0,"end":10,"stage":"light"}]',
+                "sessionStart": 0, "oldEnd": 20, "newStart": 0, "newEnd": 20,
+            }),
+            ("sleep_reclip_issue_42_empty_stage", {
+                "stagesJSON": '[{"start":100,"end":200,"stage":"wake"}]',
+                "sessionStart": 100, "oldEnd": 300, "newStart": 100, "newEnd": 300,
+            }),
+        ]
+        for case_id, args in mutations:
+            mutated = dict(originals[case_id])
+            mutated["args"] = args
+            with self.subTest(case_id=case_id), self.assertRaisesRegex(
+                parity_diff.ParityFormatError, "exact regression fixture"
+            ):
+                original_curated = parity_diff._curated_cases
+                original_seeded = parity_diff._seeded_cases
+                try:
+                    parity_diff._curated_cases = lambda: [mutated]
+                    parity_diff._seeded_cases = lambda: []
+                    parity_diff.generate_cases("pilot", "fixture-pin")
+                finally:
+                    parity_diff._curated_cases = original_curated
+                    parity_diff._seeded_cases = original_seeded
+
+    def test_sleep_reclip_malformed_segments_are_only_allowed_for_exact_issue_42_fixtures(self):
+        malformed = [
+            '[{"start":-10,"end":10,"stage":"light"}]',
+            '[{"start":100,"end":200,"stage":""}]',
+        ]
+        for index, stages_json in enumerate(malformed):
+            record = {
+                "id": f"unlinked-malformed-{index}",
+                "function": parity_diff.SLEEP_RECLIP_KEY,
+                "comparison": "exact",
+                "args": {
+                    "stagesJSON": stages_json,
+                    "sessionStart": 0, "oldEnd": 300, "newStart": 0, "newEnd": 300,
+                },
+            }
+            with self.subTest(stages_json=stages_json), self.assertRaisesRegex(
+                parity_diff.ParityFormatError, "malformed segment"
+            ):
+                parity_diff._effective_args(record)
+
+    def test_sleep_payloads_fail_closed_before_native_dispatch(self):
+        invalid = [
+            {"id": "credit", "function": parity_diff.SLEEP_CREDIT_KEY,
+             "args": {"mainSleepMin": float("nan"), "useDefaults": True}},
+            {"id": "ledger", "function": parity_diff.SLEEP_LEDGER_KEY,
+             "args": {"series": [{"day": "x", "totalSleepMin": 1.0, "extra": 1}], "useDefaults": True}},
+            {"id": "auto", "function": parity_diff.SLEEP_AUTO_BED_KEY,
+             "args": {"previousBed": 0, "candidateBed": 0, "originalWake": None, "now": 0,
+                      "zone": "Europe/Berlin", "useDefaults": False}},
+            {"id": "disjoint", "function": parity_diff.SLEEP_DISJOINT_KEY,
+             "args": {"newStart": 0, "newEnd": 1, "coverageStart": 0}},
+            {"id": "clamp", "function": parity_diff.SLEEP_CLAMP_KEY,
+             "args": {"start": 0, "end": 1, "now": 0, "slackSec": 100_000, "useDefaults": False}},
+            {"id": "wake", "function": parity_diff.SLEEP_WAKE_KEY, "args": {"stage": "wäkë"}},
+            {"id": "reclip", "function": parity_diff.SLEEP_RECLIP_KEY,
+             "args": {"stagesJSON": '[{"start":0,"end":1,"stage":"wake","extra":1}]',
+                      "sessionStart": 0, "oldEnd": 1, "newStart": 0, "newEnd": 1}},
+        ]
+        for record in invalid:
+            record["comparison"] = "exact"
+            with self.subTest(function=record["function"]), self.assertRaises(parity_diff.ParityFormatError):
+                parity_diff._effective_args(record)
+
+    def test_sleep_exact_output_schema_rejects_common_mode_malformed_reclip(self):
+        case = next(
+            case for case in parity_diff.generate_cases("pilot", "sleep-schema")
+            if case["id"] == "sleep_reclip_valid_clip_and_tail"
+        )
+        malformed = {
+            "comparison": "exact", "function": parity_diff.SLEEP_RECLIP_KEY,
+            "id": case["id"], "nonce": case["nonce"],
+            "valueBits": {"shape": {"text": "segments"}, "value": [{"start": 1, "end": 2}]},
+        }
+        with self.assertRaisesRegex(parity_diff.ParityFormatError, "keys mismatch"):
+            self.compare([case], [malformed], [malformed])
+
+    def test_sleep_negative_suite_has_source_and_output_mutants(self):
+        cases = parity_diff.generate_cases("negative", "sleep-negative")
+        selected = {case["id"]: case for case in cases if case["id"].startswith("sleep_negative_")}
+        self.assertEqual({"sleep_negative_source_probe", "sleep_negative_output_probe"}, set(selected))
+        self.assertEqual(parity_diff.SLEEP_WAKE_KEY, selected["sleep_negative_source_probe"]["function"])
+        self.assertEqual(parity_diff.SLEEP_CREDIT_KEY, selected["sleep_negative_output_probe"]["function"])
+
 
 if __name__ == "__main__":
     unittest.main()

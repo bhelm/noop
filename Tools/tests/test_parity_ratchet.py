@@ -1169,13 +1169,23 @@ func constrained<T>()
             "RecoveryForecaster.clamp/3",
         }
         watch_recovery = {"WatchRecovery.compute/4"}
+        sleep_foundations = {
+            "SleepDebt.creditedSleepMin/2",
+            "SleepDebt.ledger/3",
+            "SleepEditGuard.autoCorrectedBed/5",
+            "SleepEditGuard.isDisjoint/4",
+            "SleepEditGuard.clampedEditWindow/4",
+            "SleepStageVocabulary.isWake/1",
+            "SleepWindowReclip.reclip/5",
+        }
         expected = (
             legacy | added | qualified_strain | strain | recovery | recovery_trace
             | heart_rate_recovery | recovery_drivers | recovery_forecast | watch_recovery
+            | sleep_foundations
         )
         self.assertEqual(19, len(legacy))
         self.assertEqual(21, len(legacy | added))
-        self.assertEqual(52, len(expected))
+        self.assertEqual(59, len(expected))
         self.assertEqual(expected, registered)
         self.assertIn("StrainScorer.trimpToStrain/2", registered)
         self.assertNotIn("trimpToStrain", registered)

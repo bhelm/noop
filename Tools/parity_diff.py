@@ -50,6 +50,55 @@ RECOVERY_TRACE_KEY = (
 )
 RECOVERY_FORECAST_KEY = "RecoveryForecaster.forecast/6"
 HEART_RATE_RECOVERY_KEY = "HeartRateRecovery.calculate/4"
+SLEEP_CREDIT_KEY = "SleepDebt.creditedSleepMin/2"
+SLEEP_LEDGER_KEY = "SleepDebt.ledger/3"
+SLEEP_AUTO_BED_KEY = "SleepEditGuard.autoCorrectedBed/5"
+SLEEP_DISJOINT_KEY = "SleepEditGuard.isDisjoint/4"
+SLEEP_CLAMP_KEY = "SleepEditGuard.clampedEditWindow/4"
+SLEEP_WAKE_KEY = "SleepStageVocabulary.isWake/1"
+SLEEP_RECLIP_KEY = "SleepWindowReclip.reclip/5"
+SLEEP_FUNCTIONS = {
+    SLEEP_CREDIT_KEY, SLEEP_LEDGER_KEY, SLEEP_AUTO_BED_KEY, SLEEP_DISJOINT_KEY,
+    SLEEP_CLAMP_KEY, SLEEP_WAKE_KEY, SLEEP_RECLIP_KEY,
+}
+SLEEP_DEFAULT_NEED_HOURS = 8.0
+SLEEP_DEFAULT_WINDOW = 14
+SLEEP_DEFAULT_SLACK_SEC = 300
+SLEEP_MAX_ROWS = 256
+SLEEP_MAX_TEXT_BYTES = 16_384
+SLEEP_SEEDS = {
+    SLEEP_CREDIT_KEY: (0x534C_4352_4544_0001, 0x534C_4352_4544_0002),
+    SLEEP_LEDGER_KEY: (0x534C_4C45_4447_0001, 0x534C_4C45_4447_0002),
+    SLEEP_AUTO_BED_KEY: (0x534C_4155_544F_0001, 0x534C_4155_544F_0002),
+    SLEEP_DISJOINT_KEY: (0x534C_4449_534A_0001, 0x534C_4449_534A_0002),
+    SLEEP_CLAMP_KEY: (0x534C_434C_414D_0001, 0x534C_434C_414D_0002),
+    SLEEP_WAKE_KEY: (0x534C_5741_4B45_0001, 0x534C_5741_4B45_0002),
+    SLEEP_RECLIP_KEY: (0x534C_5245_434C_0001, 0x534C_5245_434C_0002),
+}
+SLEEP_REGRESSION_FIXTURES = {
+    "sleep_wake_issue_41_lf": {
+        "function": SLEEP_WAKE_KEY, "regressionIssue": "bhelm/noop#41",
+        "args": {"stage": "\nwake\n"},
+    },
+    "sleep_wake_issue_41_cr": {
+        "function": SLEEP_WAKE_KEY, "regressionIssue": "bhelm/noop#41",
+        "args": {"stage": "\rawake\r"},
+    },
+    "sleep_reclip_issue_42_negative_start": {
+        "function": SLEEP_RECLIP_KEY, "regressionIssue": "bhelm/noop#42",
+        "args": {
+            "stagesJSON": '[{"start":-10,"end":10,"stage":"light"}]',
+            "sessionStart": 0, "oldEnd": 20, "newStart": 0, "newEnd": 20,
+        },
+    },
+    "sleep_reclip_issue_42_empty_stage": {
+        "function": SLEEP_RECLIP_KEY, "regressionIssue": "bhelm/noop#42",
+        "args": {
+            "stagesJSON": '[{"start":100,"end":200,"stage":""}]',
+            "sessionStart": 100, "oldEnd": 300, "newStart": 100, "newEnd": 300,
+        },
+    },
+}
 RECOVERY_DRIVERS_KEY = (
     "RecoveryScorer.chargeDrivers/8=RecoveryDrivers.chargeDrivers/8"
 )
@@ -371,10 +420,73 @@ def _validate_recovery_forecast_output(
         _validate_exact_bits(constants[field], f"{path}.constants.{field}")
 
 
+def _validate_sleep_output(value: Any, expected: dict[str, Any], path: str) -> None:
+    function = expected["function"]
+    if function == SLEEP_CREDIT_KEY:
+        if value is not None:
+            _validate_exact_bits(value, path)
+        return
+    if function == SLEEP_LEDGER_KEY:
+        ledger = _validate_exact_object_keys(value, {"balanceMin", "needMin", "nights"}, path)
+        _validate_exact_bits(ledger["balanceMin"], f"{path}.balanceMin")
+        _validate_exact_bits(ledger["needMin"], f"{path}.needMin")
+        if not isinstance(ledger["nights"], list) or len(ledger["nights"]) > SLEEP_MAX_ROWS:
+            raise ParityFormatError(f"{path}.nights must be a bounded array")
+        for index, night_value in enumerate(ledger["nights"]):
+            night = _validate_exact_object_keys(
+                night_value, {"day", "sleptMin", "deltaMin"}, f"{path}.nights[{index}]"
+            )
+            if not isinstance(night["day"], dict) or set(night["day"]) != {"text"} or not isinstance(night["day"]["text"], str):
+                raise ParityFormatError(f"{path}.nights[{index}].day must be exact text")
+            _validate_exact_bits(night["sleptMin"], f"{path}.nights[{index}].sleptMin")
+            _validate_exact_bits(night["deltaMin"], f"{path}.nights[{index}].deltaMin")
+        return
+    if function in {SLEEP_AUTO_BED_KEY, SLEEP_DISJOINT_KEY, SLEEP_WAKE_KEY}:
+        if function == SLEEP_AUTO_BED_KEY and type(value) is not int:
+            raise ParityFormatError(f"{path} must be an integer timestamp")
+        if function != SLEEP_AUTO_BED_KEY and not isinstance(value, bool):
+            raise ParityFormatError(f"{path} must be boolean")
+        return
+    if function == SLEEP_CLAMP_KEY:
+        if value is None:
+            return
+        window = _validate_exact_object_keys(value, {"start", "end"}, path)
+        if type(window["start"]) is not int or type(window["end"]) is not int:
+            raise ParityFormatError(f"{path} window bounds must be integers")
+        return
+    if function == SLEEP_RECLIP_KEY:
+        if value is None:
+            return
+        normalized = _validate_exact_object_keys(value, {"shape", "value"}, path)
+        shape = normalized["shape"]
+        if not isinstance(shape, dict) or set(shape) != {"text"} or shape["text"] not in {"segments", "minutes"}:
+            raise ParityFormatError(f"{path}.shape must be exact segments/minutes text")
+        if shape["text"] == "segments":
+            if not isinstance(normalized["value"], list) or len(normalized["value"]) > SLEEP_MAX_ROWS + 1:
+                raise ParityFormatError(f"{path}.value must be a bounded segment array")
+            for index, raw_segment in enumerate(normalized["value"]):
+                segment = _validate_exact_object_keys(
+                    raw_segment, {"start", "end", "stage"}, f"{path}.value[{index}]"
+                )
+                if type(segment["start"]) is not int or type(segment["end"]) is not int:
+                    raise ParityFormatError(f"{path}.value[{index}] bounds must be integers")
+                if not isinstance(segment["stage"], dict) or set(segment["stage"]) != {"text"} or not isinstance(segment["stage"]["text"], str):
+                    raise ParityFormatError(f"{path}.value[{index}].stage must be exact text")
+        else:
+            minutes = _validate_exact_object_keys(
+                normalized["value"], {"awake", "light", "deep", "rem"}, f"{path}.value"
+            )
+            for key in minutes:
+                _validate_exact_bits(minutes[key], f"{path}.value.{key}")
+        return
+    raise ParityFormatError(f"{path} has no Sleep output contract for {function}")
+
+
 _EXACT_OUTPUT_VALIDATORS = {
     RECOVERY_DRIVERS_KEY: _validate_recovery_drivers_output,
     RECOVERY_FORECAST_KEY: _validate_recovery_forecast_output,
     WATCH_RECOVERY_KEY: _validate_watch_recovery_output,
+    **{function: _validate_sleep_output for function in SLEEP_FUNCTIONS},
 }
 
 
@@ -842,6 +954,78 @@ def _seeded_watch_recovery_cases() -> list[dict[str, Any]]:
     ]
 
 
+def _seeded_sleep_cases() -> list[dict[str, Any]]:
+    """Two function-local deterministic streams per Sleep helper; never share RNG state."""
+
+    records: list[dict[str, Any]] = []
+    for function, seeds in SLEEP_SEEDS.items():
+        for index, seed in enumerate(seeds):
+            rng = SplitMix64(seed)
+            source = f"seeded:splitmix64:{seed:#018x}"
+            if function == SLEEP_CREDIT_KEY:
+                args = {
+                    "mainSleepMin": 300.0 + rng.bounded(241) / 2.0,
+                    "napSleepMin": (-30.0 if index else 0.0) + rng.bounded(121) / 2.0,
+                    "useDefaults": False,
+                }
+            elif function == SLEEP_LEDGER_KEY:
+                args = {
+                    "series": [
+                        {"day": f"2026-08-{day:02d}", "totalSleepMin": (
+                            None if day % 5 == 0 else 300.0 + rng.bounded(241) / 2.0
+                        )}
+                        for day in range(1, 9)
+                    ],
+                    "needHours": 7.0 + rng.bounded(9) / 4.0,
+                    "window": 2 + rng.bounded(7),
+                    "useDefaults": False,
+                }
+            elif function == SLEEP_AUTO_BED_KEY:
+                candidate = 1_775_081_600 + rng.bounded(3_600)
+                args = {
+                    "previousBed": candidate - rng.bounded(1_800),
+                    "candidateBed": candidate,
+                    "originalWake": candidate - 1_800 if index else None,
+                    "now": candidate - (600 if index == 0 else -600),
+                    "zone": "UTC",
+                    "useDefaults": False,
+                }
+            elif function == SLEEP_DISJOINT_KEY:
+                start = 10_000 + rng.bounded(1_000)
+                args = {
+                    "newStart": start, "newEnd": start + 600 + rng.bounded(600),
+                    "coverageStart": start + (-1200 if index == 0 else 1200),
+                    "coverageEnd": start + (-1 if index == 0 else 1800),
+                }
+            elif function == SLEEP_CLAMP_KEY:
+                start = 20_000 + rng.bounded(1_000)
+                args = {
+                    "start": start, "end": start + 1_800 + rng.bounded(3_600),
+                    "now": start + 2_400, "slackSec": 60 + rng.bounded(600),
+                    "useDefaults": False,
+                }
+            elif function == SLEEP_WAKE_KEY:
+                pad = " \t"[rng.bounded(2)]
+                args = {"stage": f"{pad}{'WAKE' if index == 0 else 'awake'}{pad}"}
+            else:
+                start = 30_000 + rng.bounded(1_000)
+                args = {
+                    "stagesJSON": (
+                        f'[{ {"start": start, "end": start + 1200, "stage": "light"} }]'.replace("'", '"')
+                        if index == 0 else
+                        '{"awake":15.0,"light":240.0,"deep":60.0,"rem":75.0}'
+                    ),
+                    "sessionStart": start, "oldEnd": start + 3_600,
+                    "newStart": start + 300, "newEnd": start + 3_900,
+                }
+            records.append({
+                "args": args, "comparison": "exact", "function": function,
+                "id": f"seeded_sleep_{function.split('.')[1].split('/')[0]}_{index:02d}",
+                "source": source,
+            })
+    return records
+
+
 def _seeded_cases() -> list[dict[str, Any]]:
     rng = SplitMix64(GENERATOR_SEED)
     records: list[dict[str, Any]] = []
@@ -1189,6 +1373,7 @@ def _seeded_cases() -> list[dict[str, Any]]:
         records.append(record)
     records.extend(_seeded_recovery_forecast_cases())
     records.extend(_seeded_watch_recovery_cases())
+    records.extend(_seeded_sleep_cases())
     return records
 
 
@@ -1718,11 +1903,171 @@ def _effective_strain_call(call: Any, record: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _sleep_int(value: Any, record: dict[str, Any], label: str) -> int:
+    if not _is_signed_integer(value, -1_000_000_000_000, 1_000_000_000_000):
+        raise ParityFormatError(
+            f"case {record.get('id')!r} {record.get('function')} {label} must be a safe signed timestamp"
+        )
+    return value
+
+
+def _validate_sleep_args(args: dict[str, Any], record: dict[str, Any]) -> dict[str, Any]:
+    """Validate the deliberately bounded, platform-neutral Sleep differential domain."""
+
+    function = record.get("function")
+    case_id = record.get("id")
+    if function == SLEEP_CREDIT_KEY:
+        allowed = {"mainSleepMin", "napSleepMin", "useDefaults"}
+        if set(args) - allowed or not {"mainSleepMin", "useDefaults"} <= set(args):
+            raise ParityFormatError(f"case {case_id!r} {function} has invalid fields")
+        if args["mainSleepMin"] is not None and not (
+            _is_number(args["mainSleepMin"]) and -1_440.0 <= args["mainSleepMin"] <= 1_440.0
+        ):
+            raise ParityFormatError(f"case {case_id!r} {function} mainSleepMin is outside [-1440, 1440]")
+        use_defaults = args["useDefaults"]
+        if not isinstance(use_defaults, bool):
+            raise ParityFormatError(f"case {case_id!r} {function} useDefaults must be boolean")
+        if use_defaults and "napSleepMin" in args:
+            raise ParityFormatError(f"case {case_id!r} {function} bare call cannot override arg2")
+        nap = args.get("napSleepMin", 0.0)
+        if not _is_number(nap) or not -1_440.0 <= nap <= 1_440.0:
+            raise ParityFormatError(f"case {case_id!r} {function} napSleepMin is outside [-1440, 1440]")
+        return {"mainSleepMin": args["mainSleepMin"], "napSleepMin": nap, "useDefaults": use_defaults}
+    if function == SLEEP_LEDGER_KEY:
+        allowed = {"series", "needHours", "window", "useDefaults"}
+        if set(args) - allowed or not {"series", "useDefaults"} <= set(args):
+            raise ParityFormatError(f"case {case_id!r} {function} has invalid fields")
+        series = args["series"]
+        if not isinstance(series, list) or len(series) > SLEEP_MAX_ROWS:
+            raise ParityFormatError(f"case {case_id!r} {function} series must be a bounded array")
+        for index, row in enumerate(series):
+            if not isinstance(row, dict) or set(row) != {"day", "totalSleepMin"}:
+                raise ParityFormatError(f"case {case_id!r} {function} series[{index}] has invalid fields")
+            if not isinstance(row["day"], str) or not (1 <= len(row["day"].encode("utf-8")) <= 64):
+                raise ParityFormatError(f"case {case_id!r} {function} series[{index}].day is invalid")
+            slept = row["totalSleepMin"]
+            if slept is not None and not (_is_number(slept) and -1_440.0 <= slept <= 1_440.0):
+                raise ParityFormatError(f"case {case_id!r} {function} series[{index}].totalSleepMin is invalid")
+        use_defaults = args["useDefaults"]
+        if not isinstance(use_defaults, bool):
+            raise ParityFormatError(f"case {case_id!r} {function} useDefaults must be boolean")
+        if use_defaults and ({"needHours", "window"} & set(args)):
+            raise ParityFormatError(f"case {case_id!r} {function} bare call cannot override defaults")
+        need = args.get("needHours", SLEEP_DEFAULT_NEED_HOURS)
+        window = args.get("window", SLEEP_DEFAULT_WINDOW)
+        if not _is_number(need) or not -24.0 <= need <= 24.0:
+            raise ParityFormatError(f"case {case_id!r} {function} needHours is outside [-24, 24]")
+        if not _is_signed_integer(window, -SLEEP_MAX_ROWS, SLEEP_MAX_ROWS):
+            raise ParityFormatError(f"case {case_id!r} {function} window is outside the bounded domain")
+        return {"series": series, "needHours": need, "window": window, "useDefaults": use_defaults}
+    if function == SLEEP_AUTO_BED_KEY:
+        allowed = {"previousBed", "candidateBed", "originalWake", "now", "zone", "useDefaults"}
+        if set(args) - allowed or not {"previousBed", "candidateBed", "originalWake", "now", "useDefaults"} <= set(args):
+            raise ParityFormatError(f"case {case_id!r} {function} has invalid fields")
+        for key in ("previousBed", "candidateBed", "now"):
+            _sleep_int(args[key], record, key)
+        if args["originalWake"] is not None:
+            _sleep_int(args["originalWake"], record, "originalWake")
+        use_defaults = args["useDefaults"]
+        if not isinstance(use_defaults, bool):
+            raise ParityFormatError(f"case {case_id!r} {function} useDefaults must be boolean")
+        if use_defaults and "zone" in args:
+            raise ParityFormatError(f"case {case_id!r} {function} bare call cannot override arg5")
+        zone = args.get("zone", "system")
+        if zone not in {"UTC", "system"}:
+            raise ParityFormatError(f"case {case_id!r} {function} zone must be UTC or system")
+        return {**args, "zone": zone}
+    if function == SLEEP_DISJOINT_KEY:
+        if set(args) != {"newStart", "newEnd", "coverageStart", "coverageEnd"}:
+            raise ParityFormatError(f"case {case_id!r} {function} requires exactly four bounds")
+        for key in args:
+            _sleep_int(args[key], record, key)
+        return dict(args)
+    if function == SLEEP_CLAMP_KEY:
+        allowed = {"start", "end", "now", "slackSec", "useDefaults"}
+        if set(args) - allowed or not {"start", "end", "now", "useDefaults"} <= set(args):
+            raise ParityFormatError(f"case {case_id!r} {function} has invalid fields")
+        for key in ("start", "end", "now"):
+            _sleep_int(args[key], record, key)
+        use_defaults = args["useDefaults"]
+        if not isinstance(use_defaults, bool):
+            raise ParityFormatError(f"case {case_id!r} {function} useDefaults must be boolean")
+        if use_defaults and "slackSec" in args:
+            raise ParityFormatError(f"case {case_id!r} {function} bare call cannot override arg4")
+        slack = args.get("slackSec", SLEEP_DEFAULT_SLACK_SEC)
+        if not _is_signed_integer(slack, -86_400, 86_400):
+            raise ParityFormatError(f"case {case_id!r} {function} slackSec is outside [-86400, 86400]")
+        _checked_add(args["now"], slack, record, "now + slackSec")
+        _checked_subtract(args["end"], args["start"], record, "end - start")
+        return {**args, "slackSec": slack}
+    if function == SLEEP_WAKE_KEY:
+        if set(args) != {"stage"} or not isinstance(args["stage"], str):
+            raise ParityFormatError(f"case {case_id!r} {function} requires stage text")
+        if len(args["stage"].encode("utf-8")) > 256 or any(ord(ch) > 127 for ch in args["stage"]):
+            raise ParityFormatError(f"case {case_id!r} {function} stage must be bounded ASCII")
+        return dict(args)
+    if function == SLEEP_RECLIP_KEY:
+        required = {"stagesJSON", "sessionStart", "oldEnd", "newStart", "newEnd"}
+        if set(args) != required:
+            raise ParityFormatError(f"case {case_id!r} {function} requires exactly {sorted(required)}")
+        for key in required - {"stagesJSON"}:
+            _sleep_int(args[key], record, key)
+        if args["newEnd"] <= args["newStart"] or args["oldEnd"] < args["sessionStart"]:
+            raise ParityFormatError(f"case {case_id!r} {function} requires valid old/new windows")
+        _checked_subtract(args["newEnd"], args["newStart"], record, "newEnd - newStart")
+        _checked_subtract(args["oldEnd"], args["sessionStart"], record, "oldEnd - sessionStart")
+        stages = args["stagesJSON"]
+        if stages is None:
+            return dict(args)
+        if not isinstance(stages, str) or len(stages.encode("utf-8")) > SLEEP_MAX_TEXT_BYTES:
+            raise ParityFormatError(f"case {case_id!r} {function} stagesJSON must be bounded UTF-8 text or null")
+        try:
+            parsed = json.loads(stages)
+        except json.JSONDecodeError as exc:
+            raise ParityFormatError(f"case {case_id!r} {function} stagesJSON is invalid JSON: {exc}") from exc
+        if isinstance(parsed, list):
+            if len(parsed) > SLEEP_MAX_ROWS:
+                raise ParityFormatError(f"case {case_id!r} {function} segment array is too large")
+            for index, segment in enumerate(parsed):
+                if not isinstance(segment, dict) or set(segment) != {"start", "end", "stage"}:
+                    raise ParityFormatError(f"case {case_id!r} {function} segment[{index}] has invalid fields")
+                _sleep_int(segment["start"], record, f"segment[{index}].start")
+                _sleep_int(segment["end"], record, f"segment[{index}].end")
+                if not isinstance(segment["stage"], str) or len(segment["stage"].encode("utf-8")) > 64:
+                    raise ParityFormatError(f"case {case_id!r} {function} segment[{index}].stage is invalid")
+                malformed = (
+                    segment["start"] < 0
+                    or segment["end"] <= segment["start"]
+                    or not segment["stage"]
+                )
+                expected_fixture = SLEEP_REGRESSION_FIXTURES.get(str(case_id))
+                if malformed and not (
+                    expected_fixture is not None
+                    and expected_fixture["function"] == function
+                    and expected_fixture["args"] == args
+                    and expected_fixture["regressionIssue"] == record.get("regressionIssue")
+                ):
+                    raise ParityFormatError(
+                        f"case {case_id!r} {function} has a malformed segment outside an exact regression fixture"
+                    )
+        elif isinstance(parsed, dict):
+            if set(parsed) - {"awake", "light", "deep", "rem"}:
+                raise ParityFormatError(f"case {case_id!r} {function} minute dictionary has unknown fields")
+            if not all(_is_number(value) and 0.0 <= value <= 1_440.0 for value in parsed.values()):
+                raise ParityFormatError(f"case {case_id!r} {function} minute dictionary values are invalid")
+        else:
+            raise ParityFormatError(f"case {case_id!r} {function} stagesJSON must contain an array or object")
+        return dict(args)
+    raise AssertionError(f"unhandled Sleep function {function}")
+
+
 def _effective_args(record: dict[str, Any]) -> dict[str, Any]:
     args = record.get("args")
     if not isinstance(args, dict):
         raise ParityFormatError(f"case {record.get('id')!r} args must be an object")
     function = record.get("function")
+    if function in SLEEP_FUNCTIONS:
+        return _validate_sleep_args(args, record)
     if function == RECOVERY_FORECAST_KEY:
         allowed = {
             "characterizeForecastConstants", "needHours", "needNights",
@@ -2072,6 +2417,20 @@ def generate_cases(suite: str, nonce: str) -> list[dict[str, Any]]:
     if suite == "negative":
         raw = [
             {
+                "args": {"stage": "wake"},
+                "comparison": "exact",
+                "function": SLEEP_WAKE_KEY,
+                "id": "sleep_negative_source_probe",
+                "source": "negative-control",
+            },
+            {
+                "args": {"mainSleepMin": 420.0, "napSleepMin": 30.0, "useDefaults": False},
+                "comparison": "exact",
+                "function": SLEEP_CREDIT_KEY,
+                "id": "sleep_negative_output_probe",
+                "source": "negative-control",
+            },
+            {
                 "args": {
                     "samples": [
                         *({"ts": 880 + index * 10, "bpm": 145} for index in range(13)),
@@ -2250,13 +2609,29 @@ def generate_cases(suite: str, nonce: str) -> list[dict[str, Any]]:
             "forecast_clamp_issue_56_negative_x_positive_upper_zero",
         }
         regression_issue = record.get("regressionIssue")
-        if regression_issue is not None and regression_issue != "bhelm/noop#56":
+        supported_regression_issues = {"bhelm/noop#41", "bhelm/noop#42", "bhelm/noop#56"}
+        if regression_issue is not None and regression_issue not in supported_regression_issues:
             raise ParityFormatError(
                 f"case {case_id!r} has unsupported regressionIssue {regression_issue!r}"
             )
         if (case_id in issue_56_cases) != (regression_issue == "bhelm/noop#56"):
             raise ParityFormatError(
                 f"case {case_id!r} must bind the signed-zero regression to bhelm/noop#56"
+            )
+        sleep_fixture = SLEEP_REGRESSION_FIXTURES.get(case_id)
+        if sleep_fixture is not None:
+            if not (
+                record.get("comparison") == "exact"
+                and record.get("function") == sleep_fixture["function"]
+                and record.get("args") == sleep_fixture["args"]
+                and regression_issue == sleep_fixture["regressionIssue"]
+            ):
+                raise ParityFormatError(
+                    f"case {case_id!r} must preserve its exact regression fixture and issue reference"
+                )
+        elif regression_issue in {"bhelm/noop#41", "bhelm/noop#42"}:
+            raise ParityFormatError(
+                f"case {case_id!r} may not reuse a Sleep regression issue outside its exact fixture"
             )
         function = record.get("function")
         args = record.get("args", {})
