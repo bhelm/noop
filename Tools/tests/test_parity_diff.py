@@ -198,6 +198,122 @@ class ParityDiffTests(unittest.TestCase):
         constants = next(case for case in cases if case["id"] == "recovery_saturation_full_and_constants")
         self.assertTrue(constants["effectiveArgs"]["characterizeRecoveryConstants"])
 
+    def test_recovery_trace_has_curated_boundaries_and_two_structured_seeds(self):
+        cases = parity_diff.generate_cases("pilot", "trace-coverage")
+        selected = [case for case in cases if case["function"] == parity_diff.RECOVERY_TRACE_KEY]
+        curated = [case for case in selected if case["source"] == "curated:recovery_trace.json"]
+        seeded = [case for case in selected if case["source"].startswith("seeded:")]
+
+        self.assertGreaterEqual(len(curated), 18)
+        self.assertEqual(2, len(seeded))
+        self.assertTrue(all(case["comparison"] == "exact" for case in selected))
+        self.assertTrue(all(isinstance(case["args"]["hrvBaseline"], dict) for case in seeded))
+
+    def test_recovery_trace_issue_38_acceptance_is_an_exact_complete_trace_case(self):
+        cases = {case["id"]: case for case in parity_diff.generate_cases("pilot", "issue-38")}
+        case = cases["recovery_trace_issue_38_negative_half_tie"]
+
+        self.assertEqual(parity_diff.RECOVERY_TRACE_KEY, case["function"])
+        self.assertEqual("exact", case["comparison"])
+        self.assertEqual(0.125, case["args"]["skinTempDev"])
+        self.assertFalse(case["args"]["useDefaults"])
+
+    def test_recovery_trace_omitted_and_explicit_arg8_paths_are_distinct(self):
+        cases = {case["id"]: case for case in parity_diff.generate_cases("pilot", "trace-default")}
+        omitted = cases["recovery_trace_default_arg8_omitted"]
+        explicit = cases["recovery_trace_explicit_arg8_null"]
+
+        self.assertNotIn("skinTempDev", omitted["args"])
+        self.assertIsNone(omitted["effectiveArgs"]["skinTempDev"])
+        self.assertIn("skinTempDev", explicit["args"])
+        self.assertIsNone(explicit["effectiveArgs"]["skinTempDev"])
+
+    def test_recovery_trace_payloads_fail_closed_with_issue_linked_rounding_exclusion(self):
+        baseline = {
+            "baseline": 50.0, "spread": 5.0, "nValid": 14,
+            "nightsSinceUpdate": 0, "status": "trusted",
+        }
+        malformed = [
+            {"hrv": 50.0, "rhr": 60.0, "useDefaults": True},
+            {"hrv": 50.0, "rhr": 60.0, "hrvBaseline": baseline, "useDefaults": False,
+             "skinTempDev": -0.0},
+            {"hrv": 49.98, "rhr": 60.0, "hrvBaseline": baseline, "useDefaults": True},
+            {"hrv": 1e20, "rhr": 60.0, "hrvBaseline": baseline, "useDefaults": True},
+            {"hrv": 50.0, "rhr": 60.0, "hrvBaseline": {**baseline, "status": "TRUSTED"},
+             "useDefaults": True},
+            {"hrv": 50.0, "rhr": 60.0, "hrvBaseline": {**baseline, "spread": 0.0},
+             "useDefaults": True},
+            {"hrv": 50.0, "rhr": 60.0, "hrvBaseline": baseline, "skinTempDev": None,
+             "useDefaults": True},
+            {"hrv": 50.0, "rhr": 60.0, "hrvBaseline": baseline, "useDefaults": True,
+             "surprise": 1},
+        ]
+        for index, args in enumerate(malformed):
+            record = {"id": f"bad-trace-{index}", "function": parity_diff.RECOVERY_TRACE_KEY,
+                      "args": args}
+            with self.subTest(index=index), self.assertRaises(parity_diff.ParityFormatError) as caught:
+                parity_diff._effective_args(record)
+            if 1 <= index < 4:
+                self.assertIn("bhelm/noop#47", str(caught.exception))
+
+    def test_recovery_trace_issue_47_exclusion_covers_each_derived_rounding_path(self):
+        hrv_baseline = {
+            "baseline": 50.0, "spread": 5.0, "nValid": 14,
+            "nightsSinceUpdate": 0, "status": "trusted",
+        }
+        base = {"hrv": 50.0, "rhr": 60.0, "hrvBaseline": hrv_baseline,
+                "useDefaults": True}
+        derived = {
+            "rhr-z": {
+                **base, "rhr": 60.02,
+                "rhrBaseline": {**hrv_baseline, "baseline": 60.0},
+            },
+            "resp-z": {
+                **base, "resp": 15.004,
+                "respBaseline": {**hrv_baseline, "baseline": 15.0, "spread": 1.0},
+            },
+            "sleep-z": {**base, "sleepPerf": 0.84952},
+            "skin-z": {**base, "skinTempDev": 0.004, "useDefaults": False},
+            "composite-z": {
+                **base, "hrv": 50.5, "rhr": 61.45,
+                "rhrBaseline": {**hrv_baseline, "baseline": 60.0},
+            },
+        }
+        for label, args in derived.items():
+            record = {"id": f"issue-47-{label}", "function": parity_diff.RECOVERY_TRACE_KEY,
+                      "args": args}
+            with self.subTest(label=label), self.assertRaisesRegex(
+                parity_diff.ParityFormatError, "bhelm/noop#47"
+            ):
+                parity_diff._effective_args(record)
+
+        boundary = {
+            **base, "hrv": 49.0,
+            "hrvBaseline": {**hrv_baseline, "spread": 200.0},
+        }
+        effective = parity_diff._effective_args(
+            {"id": "issue-47-boundary", "function": parity_diff.RECOVERY_TRACE_KEY,
+             "args": boundary}
+        )
+        self.assertEqual(49.0, effective["hrv"])
+
+    def test_recovery_trace_exact_payload_compares_score_bits_and_ordered_lines(self):
+        input_record = self.input_record("trace")
+        input_record["function"] = parity_diff.RECOVERY_TRACE_KEY
+        inputs = [input_record]
+        swift = [self.output_record(
+            "trace", function=parity_diff.RECOVERY_TRACE_KEY,
+            valueBits={"score": "4059000000000000", "trace": [{"text": "first"}, {"text": "second"}]},
+        )]
+        kotlin = [self.output_record(
+            "trace", function=parity_diff.RECOVERY_TRACE_KEY,
+            valueBits={"score": "4059000000000000", "trace": [{"text": "second"}, {"text": "first"}]},
+        )]
+
+        diffs = self.compare(inputs, swift, kotlin)
+        self.assertEqual(1, len(diffs))
+        self.assertIn("class=exact", diffs[0])
+
     def test_recovery_payloads_fail_closed_before_native_dispatch(self):
         int64_max = (1 << 63) - 1
         malformed = [

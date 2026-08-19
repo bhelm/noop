@@ -1154,10 +1154,13 @@ func constrained<T>()
             "RecoveryScorer.logisticScore/1",
             "RecoveryScorer.recovery/11",
         }
-        expected = legacy | added | qualified_strain | strain | recovery
+        recovery_trace = {
+            "RecoveryScorer.recoveryTrace/8=RecoveryScorerTrace.recoveryTrace/8",
+        }
+        expected = legacy | added | qualified_strain | strain | recovery | recovery_trace
         self.assertEqual(19, len(legacy))
         self.assertEqual(21, len(legacy | added))
-        self.assertEqual(43, len(expected))
+        self.assertEqual(44, len(expected))
         self.assertEqual(expected, registered)
         self.assertIn("StrainScorer.trimpToStrain/2", registered)
         self.assertNotIn("trimpToStrain", registered)

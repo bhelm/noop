@@ -45,6 +45,9 @@ COLLAPSED_COVERAGE_DEFAULT_RR_TOL_MS = 30.0
 DENSEST_DEFAULT_HALF_WINDOW_SEC = 3
 DENSEST_DEFAULT_MAX_ROWS_PER_SECOND = 24
 RECOVERY_DEFAULT_HRV_BASELINE_USABLE = True
+RECOVERY_TRACE_KEY = (
+    "RecoveryScorer.recoveryTrace/8=RecoveryScorerTrace.recoveryTrace/8"
+)
 RAW_ANALYZE_KEY = "HRVAnalyzer.analyze/2=HrvAnalyzer.analyzeRaw/2"
 HRV_MEDIAN_KEY = "HRVAnalyzer.median/1=HrvAnalyzer.median/1"
 EPSILON = 1e-9
@@ -713,6 +716,45 @@ def _seeded_cases() -> list[dict[str, Any]]:
                     "source": f"seeded:splitmix64:{GENERATOR_SEED:#018x}",
                 }
             )
+    for round_index in range(2):
+        baseline = {
+            "baseline": 48.0 + round_index * 3.0,
+            "nValid": 8 + round_index * 8,
+            "nightsSinceUpdate": round_index,
+            "spread": 4.0 + round_index,
+            "status": "provisional" if round_index == 0 else "trusted",
+        }
+        records.append(
+            {
+                "args": {
+                    "hrv": 44.0 + rng.bounded(17),
+                    "hrvBaseline": baseline,
+                    "resp": 13.0 + rng.bounded(5) / 2.0,
+                    "respBaseline": {
+                        "baseline": 15.0,
+                        "nValid": 12,
+                        "nightsSinceUpdate": round_index,
+                        "spread": 1.5,
+                        "status": "trusted",
+                    },
+                    "rhr": 48.0 + rng.bounded(17),
+                    "rhrBaseline": {
+                        "baseline": 58.0,
+                        "nValid": 12,
+                        "nightsSinceUpdate": round_index,
+                        "spread": 4.0,
+                        "status": "trusted",
+                    },
+                    "skinTempDev": 0.2 + round_index * 0.15,
+                    "sleepPerf": 0.72 + round_index * 0.18,
+                    "useDefaults": False,
+                },
+                "comparison": "exact",
+                "function": RECOVERY_TRACE_KEY,
+                "id": f"seeded_recovery_trace_{round_index:02d}",
+                "source": f"seeded:splitmix64:{GENERATOR_SEED:#018x}",
+            }
+        )
     return records
 
 
@@ -859,6 +901,131 @@ def _effective_recovery_call(
         raise ParityFormatError(
             f"case {record.get('id')!r} {function} bare call cannot override defaults"
         )
+    return effective
+
+
+def _validate_recovery_trace_args(args: Any, record: dict[str, Any]) -> dict[str, Any]:
+    """Validate the public trace adapter inside a finite physiological envelope.
+
+    The bound is deliberately much tighter than the public Double domain. Kotlin's current
+    two-decimal formatter passes through a Long and therefore differs from Swift for very large
+    finite values and for negative values that round to zero (bhelm/noop#47). This differential
+    slice fails closed before either native runner for those unresolved domains.
+    """
+
+    function = RECOVERY_TRACE_KEY
+    if not isinstance(args, dict):
+        raise ParityFormatError(f"case {record.get('id')!r} {function} args must be an object")
+    allowed = {
+        "hrv", "rhr", "resp", "hrvBaseline", "rhrBaseline", "respBaseline",
+        "sleepPerf", "skinTempDev", "useDefaults",
+    }
+    unknown = sorted(set(args) - allowed)
+    if unknown:
+        raise ParityFormatError(
+            f"case {record.get('id')!r} {function} has unknown fields {unknown}"
+        )
+    use_defaults = args.get("useDefaults")
+    if not isinstance(use_defaults, bool):
+        raise ParityFormatError(
+            f"case {record.get('id')!r} {function} useDefaults must be boolean"
+        )
+    if use_defaults and "skinTempDev" in args:
+        raise ParityFormatError(
+            f"case {record.get('id')!r} {function} bare call cannot override arg8"
+        )
+
+    def scalar(key: str, minimum: float, maximum: float, optional: bool = False) -> float | None:
+        value = args.get(key)
+        if optional and value is None:
+            return None
+        if not _is_number(value) or not minimum <= value <= maximum:
+            raise ParityFormatError(
+                f"case {record.get('id')!r} {function} {key} is outside [{minimum}, {maximum}]; "
+                "large finite trace inputs remain tracked by bhelm/noop#47"
+            )
+        if value == 0.0 and math.copysign(1.0, value) < 0:
+            raise ParityFormatError(
+                f"case {record.get('id')!r} {function} excludes signed zero pending bhelm/noop#47"
+            )
+        return float(value)
+
+    hrv = scalar("hrv", 1.0, 1_000.0)
+    rhr = scalar("rhr", 20.0, 250.0)
+    resp = scalar("resp", 1.0, 100.0, optional=True)
+    sleep = scalar("sleepPerf", 0.0, 1.0, optional=True)
+    skin = scalar("skinTempDev", -20.0, 20.0, optional=True)
+
+    statuses = {"calibrating", "provisional", "trusted", "stale"}
+
+    def baseline(key: str, minimum: float, maximum: float, required: bool) -> dict[str, Any] | None:
+        value = args.get(key)
+        if value is None and not required:
+            return None
+        if not isinstance(value, dict) or set(value) != {
+            "baseline", "spread", "nValid", "nightsSinceUpdate", "status"
+        }:
+            raise ParityFormatError(
+                f"case {record.get('id')!r} {function} {key} must be a complete baseline state"
+            )
+        center = value.get("baseline")
+        spread = value.get("spread")
+        if not _is_number(center) or not minimum <= center <= maximum:
+            raise ParityFormatError(
+                f"case {record.get('id')!r} {function} {key}.baseline is out of bounds"
+            )
+        if not _is_number(spread) or not 0.001 <= spread <= 1_000.0:
+            raise ParityFormatError(
+                f"case {record.get('id')!r} {function} {key}.spread is out of bounds"
+            )
+        for count_key in ("nValid", "nightsSinceUpdate"):
+            if not _is_signed_integer(value.get(count_key), 0, 1_000_000):
+                raise ParityFormatError(
+                    f"case {record.get('id')!r} {function} {key}.{count_key} is invalid"
+                )
+        if value.get("status") not in statuses:
+            raise ParityFormatError(
+                f"case {record.get('id')!r} {function} {key}.status is invalid"
+            )
+        return value
+
+    hrv_base = baseline("hrvBaseline", 1.0, 1_000.0, required=True)
+    rhr_base = baseline("rhrBaseline", 20.0, 250.0, required=False)
+    resp_base = baseline("respBaseline", 1.0, 100.0, required=False)
+    assert hrv is not None and rhr is not None and hrv_base is not None
+
+    # Reject every derived negative value in the signed-zero rounding interval. Merely checking
+    # direct inputs is insufficient: z-scores and penalties can enter it after arithmetic.
+    hrv_z = (hrv - hrv_base["baseline"]) / hrv_base["spread"]
+    derived = [hrv_z]
+    terms = [(hrv_z, 0.55)]
+    if rhr_base is not None:
+        rhr_z = (rhr_base["baseline"] - rhr) / rhr_base["spread"]
+        derived.append(rhr_z)
+        terms.append((rhr_z, 0.20))
+    if resp is not None and resp_base is not None:
+        resp_z = (resp_base["baseline"] - resp) / resp_base["spread"]
+        derived.append(resp_z)
+        terms.append((resp_z, 0.05))
+    if sleep is not None:
+        sleep_z = (sleep - 0.85) / 0.12
+        derived.append(sleep_z)
+        terms.append((sleep_z, 0.15))
+    if skin is not None:
+        skin_z = -abs(skin)
+        derived.extend((skin_z, skin))
+        terms.append((skin_z, 0.05))
+    if hrv_base["status"] in {"provisional", "trusted"}:
+        total_weight = sum(weight for _z, weight in terms)
+        derived.append(sum(z * weight for z, weight in terms) / total_weight)
+    if any(-0.005 < value < 0.0 or (value == 0.0 and math.copysign(1.0, value) < 0) for value in derived):
+        raise ParityFormatError(
+            f"case {record.get('id')!r} {function} enters the signed-zero trace domain tracked by bhelm/noop#47"
+        )
+
+    effective = dict(args)
+    effective.update({"resp": resp, "rhrBaseline": rhr_base, "respBaseline": resp_base,
+                      "sleepPerf": sleep, "skinTempDev": skin})
     return effective
 
 
@@ -1070,6 +1237,8 @@ def _effective_args(record: dict[str, Any]) -> dict[str, Any]:
         if not isinstance(args.get("hrvBaseline"), dict):
             raise ParityFormatError(f"case {record.get('id')!r} {function} requires hrvBaseline")
         return _effective_recovery_call(args, record, "state")
+    if function == RECOVERY_TRACE_KEY:
+        return _validate_recovery_trace_args(args, record)
     if function in {"rmssdRaw", "sdnnRaw"}:
         if not isinstance(args.get("nn"), list):
             raise ParityFormatError(f"case {record.get('id')!r} {function} requires args.nn")
@@ -1183,6 +1352,32 @@ def generate_cases(suite: str, nonce: str) -> list[dict[str, Any]]:
                 "comparison": "epsilon",
                 "function": "RecoveryScorer.logisticScore/1",
                 "id": "recovery_negative_logistic_probe",
+                "source": "negative-control",
+            },
+            {
+                "args": {
+                    "hrv": 55.0, "rhr": 56.0,
+                    "hrvBaseline": {"baseline": 50.0, "spread": 5.0, "nValid": 14,
+                                    "nightsSinceUpdate": 0, "status": "trusted"},
+                    "sleepPerf": 0.9, "useDefaults": True,
+                },
+                "comparison": "exact",
+                "function": RECOVERY_TRACE_KEY,
+                "id": "recovery_trace_negative_score_probe",
+                "source": "negative-control",
+            },
+            {
+                "args": {
+                    "hrv": 45.0, "rhr": 55.0,
+                    "hrvBaseline": {"baseline": 50.0, "spread": 10.0, "nValid": 14,
+                                    "nightsSinceUpdate": 0, "status": "trusted"},
+                    "rhrBaseline": {"baseline": 60.0, "spread": 10.0, "nValid": 14,
+                                    "nightsSinceUpdate": 0, "status": "trusted"},
+                    "skinTempDev": 0.125, "useDefaults": False,
+                },
+                "comparison": "exact",
+                "function": RECOVERY_TRACE_KEY,
+                "id": "recovery_trace_negative_line_probe",
                 "source": "negative-control",
             },
         ]
