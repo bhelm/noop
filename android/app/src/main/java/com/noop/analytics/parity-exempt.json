@@ -5118,11 +5118,6 @@
       "issue": 17
     },
     {
-      "key": "android/app/src/main/java/com/noop/analytics/SleepStager.kt::detectSleep/10[defaults=1,2,3,5,6,7,8,9,10]#1",
-      "reason": "Bootstrap debt: no differential or declared platform coverage proof yet.",
-      "issue": 17
-    },
-    {
       "key": "android/app/src/main/java/com/noop/analytics/SleepStager.kt::detectSleepUncached/10[defaults=-]#1",
       "reason": "Bootstrap debt: no differential or declared platform coverage proof yet.",
       "issue": 17
@@ -5138,22 +5133,7 @@
       "issue": 17
     },
     {
-      "key": "android/app/src/main/java/com/noop/analytics/SleepStager.kt::stageSession/6[defaults=-]#1",
-      "reason": "Bootstrap debt: no differential or declared platform coverage proof yet.",
-      "issue": 17
-    },
-    {
       "key": "android/app/src/main/java/com/noop/analytics/SleepStager.kt::stageSessionUncached/6[defaults=-]#1",
-      "reason": "Bootstrap debt: no differential or declared platform coverage proof yet.",
-      "issue": 17
-    },
-    {
-      "key": "android/app/src/main/java/com/noop/analytics/SleepStager.kt::sessionEpochMotion/3[defaults=-]#1",
-      "reason": "Bootstrap debt: no differential or declared platform coverage proof yet.",
-      "issue": 17
-    },
-    {
-      "key": "android/app/src/main/java/com/noop/analytics/SleepStager.kt::sessionEpochSleepState/3[defaults=-]#1",
       "reason": "Bootstrap debt: no differential or declared platform coverage proof yet.",
       "issue": 17
     },
@@ -5318,11 +5298,6 @@
       "issue": 17
     },
     {
-      "key": "android/app/src/main/java/com/noop/analytics/SleepStager.kt::remFunnelDiagnostic/6[defaults=-]#1",
-      "reason": "Bootstrap debt: no differential or declared platform coverage proof yet.",
-      "issue": 17
-    },
-    {
       "key": "android/app/src/main/java/com/noop/analytics/SleepStager.kt::stageDepthRank/1[defaults=-]#1",
       "reason": "Bootstrap debt: no differential or declared platform coverage proof yet.",
       "issue": 17
@@ -5353,11 +5328,6 @@
       "issue": 17
     },
     {
-      "key": "android/app/src/main/java/com/noop/analytics/SleepStager.kt::hypnogramMetrics/1[defaults=-]#1",
-      "reason": "Bootstrap debt: no differential or declared platform coverage proof yet.",
-      "issue": 17
-    },
-    {
       "key": "android/app/src/main/java/com/noop/analytics/SleepStager.kt::standardDeviation/1[defaults=-]#1",
       "reason": "Bootstrap debt: no differential or declared platform coverage proof yet.",
       "issue": 17
@@ -5374,11 +5344,6 @@
     },
     {
       "key": "android/app/src/main/java/com/noop/analytics/SleepStagerTrace.kt::round2/1[defaults=-]#1",
-      "reason": "Bootstrap debt: no differential or declared platform coverage proof yet.",
-      "issue": 17
-    },
-    {
-      "key": "android/app/src/main/java/com/noop/analytics/SleepStagerV2.kt::stageSession/6[defaults=-]#1",
       "reason": "Bootstrap debt: no differential or declared platform coverage proof yet.",
       "issue": 17
     },

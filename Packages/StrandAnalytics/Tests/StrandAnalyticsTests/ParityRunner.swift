@@ -56,6 +56,26 @@ final class ParityRunner: XCTestCase {
     private struct SSTStagesInput: Decodable { let startTs: Int; let stagesJSON: String? }
     private struct SSTOnsetInput: Decodable { let startTs: Int; let onset: Int }
     private struct SSTHistoryInput: Decodable { let start: Int; let end: Int; let dayKey: String }
+    private struct StagerSeriesInput: Decodable {
+        let startTs: Int; let count: Int; let stepSec: Int
+        let pattern: String; let order: String; let base: Int?
+    }
+    private struct StagerIntervalInput: Decodable { let start: Int; let end: Int }
+    private struct StagerStateInput: Decodable { let ts: Int; let state: Int }
+    private struct StagerStageInput: Decodable { let start: Int; let end: Int; let stage: String }
+    private struct StagerSessionInput: Decodable {
+        let start: Int; let end: Int; let efficiency: Double
+        let stages: [StagerStageInput]; let restingHR: Int?; let avgHRV: Double?
+    }
+    private struct StagerCallInput: Decodable {
+        let start: Int?; let end: Int?
+        let gravity: StagerSeriesInput?
+        let hr: StagerSeriesInput?; let rr: StagerSeriesInput?; let resp: StagerSeriesInput?
+        let tzOffsetSeconds: Int?; let wristOff: [StagerIntervalInput]?
+        let bandSleepState: [StagerStateInput]?; let useSleepStagerV2: Bool?
+        let sleepHRBaseline: Double?; let useDefaults: Bool?
+        let sleepState: [StagerStateInput]?; let session: StagerSessionInput?
+    }
     private enum HistoryArgument: Decodable {
         case generated(HistoryInput)
         case sleep([SSTHistoryInput])
@@ -180,6 +200,7 @@ final class ParityRunner: XCTestCase {
         let manual: [SSTStagesInput]?
         let onsetByStart: [SSTOnsetInput]?
         let minDays: Int?
+        let calls: [StagerCallInput]?
     }
 
     private struct InputRecord: Decodable {
@@ -268,6 +289,121 @@ final class ParityRunner: XCTestCase {
             ? "StrainScorer.trimpToStrain/2"
             : record.function
         switch dispatchFunction {
+        case "SleepStager.detectSleep/10":
+            var payload: [Any] = try XCTUnwrap(record.args.calls).map { call in
+                let gravity = try stagerGravity(call.gravity)
+                let sessions: [SleepSession]
+                if call.useDefaults == true {
+                    sessions = SleepStager.detectSleep(gravity: gravity)
+                } else {
+                    sessions = SleepStager.detectSleep(
+                        hr: try stagerHeartRate(call.hr), rr: try stagerRR(call.rr),
+                        resp: try stagerResp(call.resp), gravity: gravity,
+                        tzOffsetSeconds: try XCTUnwrap(call.tzOffsetSeconds),
+                        wristOff: try XCTUnwrap(call.wristOff).map { ($0.start, $0.end) },
+                        bandSleepState: try XCTUnwrap(call.bandSleepState).map { ($0.ts, $0.state) },
+                        useSleepStagerV2: try XCTUnwrap(call.useSleepStagerV2),
+                        sleepHRBaseline: call.sleepHRBaseline)
+                }
+                return sessions.map(sessionPayload)
+            }
+            if negativeSide == "swift", record.id == "sleep_stager_negative_detect_probe" {
+                payload[0] = []; result["negativeSide"] = "swift"
+            }
+            result["valueBits"] = payload
+        case "SleepStager.stageSession/6":
+            var payload: [Any] = try XCTUnwrap(record.args.calls).map { call in
+                let start = try XCTUnwrap(call.start), end = try XCTUnwrap(call.end)
+                let gravity = try stagerGravity(call.gravity), hr = try stagerHeartRate(call.hr)
+                let rr = try stagerRR(call.rr), resp = try stagerResp(call.resp)
+                let stages = SleepStager.stageSession(
+                    start: start, end: end, grav: gravity, hr: hr, rr: rr, resp: resp)
+                return stages.map(stagePayload)
+            }
+            if negativeSide == "swift", record.id == "sleep_stager_negative_v1_probe" {
+                if var stages = payload[0] as? [[String: Any]], !stages.isEmpty,
+                   var stage = stages[0]["stage"] as? [String: String] {
+                    stage["text"] = stage["text"] == "wake" ? "light" : "wake"
+                    stages[0]["stage"] = stage; payload[0] = stages
+                }
+                result["negativeSide"] = "swift"
+            }
+            result["valueBits"] = payload
+        case "SleepStagerV2.stageSession/6":
+            var payload: [Any] = try XCTUnwrap(record.args.calls).map { call in
+                let start = try XCTUnwrap(call.start), end = try XCTUnwrap(call.end)
+                let stages = SleepStagerV2.stageSession(
+                    start: start, end: end, grav: try stagerGravity(call.gravity),
+                    hr: try stagerHeartRate(call.hr), rr: try stagerRR(call.rr),
+                    resp: try stagerResp(call.resp))
+                return stages.map(stagePayload)
+            }
+            if negativeSide == "swift", record.id == "sleep_stager_negative_v2_probe" {
+                if var stages = payload[0] as? [[String: Any]], !stages.isEmpty,
+                   var stage = stages[0]["stage"] as? [String: String] {
+                    stage["text"] = stage["text"] == "wake" ? "light" : "wake"
+                    stages[0]["stage"] = stage; payload[0] = stages
+                }
+                result["negativeSide"] = "swift"
+            }
+            result["valueBits"] = payload
+        case "SleepStager.sessionEpochMotion/3":
+            var payload: [Any] = try XCTUnwrap(record.args.calls).map { call in
+                SleepStager.sessionEpochMotion(
+                    start: try XCTUnwrap(call.start), end: try XCTUnwrap(call.end),
+                    grav: try stagerGravity(call.gravity)).map(exactBit)
+            }
+            if negativeSide == "swift", record.id == "sleep_stager_negative_motion_probe" {
+                if var motion = payload[0] as? [String], !motion.isEmpty {
+                    motion[0] = exactBit(Double.greatestFiniteMagnitude); payload[0] = motion
+                }
+                result["negativeSide"] = "swift"
+            }
+            result["valueBits"] = payload
+        case "SleepStager.sessionEpochSleepState/3":
+            var payload: [Any] = try XCTUnwrap(record.args.calls).map { call in
+                SleepStager.sessionEpochSleepState(
+                    start: try XCTUnwrap(call.start), end: try XCTUnwrap(call.end),
+                    sleepState: try XCTUnwrap(call.sleepState).map { ($0.ts, $0.state) })
+            }
+            if negativeSide == "swift", record.id == "sleep_stager_negative_state_probe" {
+                if var states = payload[0] as? [Int], !states.isEmpty {
+                    states[0] = (states[0] + 1) % 4; payload[0] = states
+                }
+                result["negativeSide"] = "swift"
+            }
+            result["valueBits"] = payload
+        case "SleepStager.remFunnelDiagnostic/6":
+            var payload: [Any] = try XCTUnwrap(record.args.calls).map { call in
+                let value = SleepStager.remFunnelDiagnostic(
+                    start: try XCTUnwrap(call.start), end: try XCTUnwrap(call.end),
+                    grav: try stagerGravity(call.gravity), hr: try stagerHeartRate(call.hr),
+                    rr: try stagerRR(call.rr), resp: try stagerResp(call.resp))
+                return value.map(remDiagnosticPayload) ?? NSNull()
+            }
+            if negativeSide == "swift", record.id == "sleep_stager_negative_rem_probe" {
+                if var diagnostic = payload[0] as? [String: Any],
+                   let present = diagnostic["respChannelPresent"] as? Bool {
+                    diagnostic["respChannelPresent"] = !present; payload[0] = diagnostic
+                }
+                result["negativeSide"] = "swift"
+            }
+            result["valueBits"] = payload
+        case "SleepStager.hypnogramMetrics/1":
+            var payload: [Any] = try XCTUnwrap(record.args.calls).map { call in
+                let input = try XCTUnwrap(call.session)
+                let session = SleepSession(
+                    start: input.start, end: input.end, efficiency: input.efficiency,
+                    stages: input.stages.map { .init(start: $0.start, end: $0.end, stage: $0.stage) },
+                    restingHR: input.restingHR, avgHRV: input.avgHRV)
+                return hypnogramPayload(SleepStager.hypnogramMetrics(session))
+            }
+            if negativeSide == "swift", record.id == "sleep_stager_negative_metrics_probe",
+               var first = payload[0] as? [String: Any] {
+                first["disturbances"] = (first["disturbances"] as? Int ?? 0) + 1
+                payload[0] = first; result["negativeSide"] = "swift"
+            }
+            result["valueBits"] = payload
         case "SleepStageTotals.minutes/1":
             var payload = minutesPayload(SleepStageTotals.minutes(fromStagesJSON: record.args.stagesJSON))
             if negativeSide == "swift", record.id == "sleep_stage_totals_negative_decode_probe" {
@@ -1261,6 +1397,92 @@ final class ParityRunner: XCTestCase {
     private func baselineStateOptional(_ input: BaselineInput?, record: InputRecord) throws -> BaselineState? {
         guard let input else { return nil }
         return try baselineState(input, record: record)
+    }
+
+    private func stagerOrder<T>(_ rows: [T], _ order: String) throws -> [T] {
+        if order == "sorted" { return rows }
+        guard order == "odd-even" else { throw RunnerError.invalidInput("invalid stager order") }
+        return stride(from: 0, to: rows.count, by: 2).map { rows[$0] }
+            + stride(from: 1, to: rows.count, by: 2).map { rows[$0] }
+    }
+
+    private func stagerGravity(_ input: StagerSeriesInput?) throws -> [GravitySample] {
+        let input = try XCTUnwrap(input)
+        let rows = (0..<input.count).map { index -> GravitySample in
+            let xyz: (Double, Double, Double)
+            if input.pattern == "still-z" { xyz = (0, 0, 1) }
+            else if input.pattern == "alternating-same-sum" { xyz = index.isMultiple(of: 2) ? (1, 0, 0) : (0, 0, 1) }
+            else if input.pattern == "pulse-same-sum" { xyz = index % 30 == 15 ? (1, 1, -1) : (0, 0, 1) }
+            else if input.pattern == "gentle-wave" { xyz = index.isMultiple(of: 2) ? (0.001, 0, 1) : (0, 0, 1) }
+            else { xyz = (.nan, .nan, .nan) }
+            return GravitySample(ts: input.startTs + index * input.stepSec, x: xyz.0, y: xyz.1, z: xyz.2)
+        }
+        guard rows.allSatisfy({ $0.x.isFinite && $0.y.isFinite && $0.z.isFinite }) else {
+            throw RunnerError.invalidInput("invalid gravity pattern")
+        }
+        return try stagerOrder(rows, input.order)
+    }
+
+    private func stagerHeartRate(_ input: StagerSeriesInput?) throws -> [HRSample] {
+        let input = try XCTUnwrap(input), base = try XCTUnwrap(input.base)
+        let rows = (0..<input.count).map { index in
+            HRSample(ts: input.startTs + index * input.stepSec,
+                     bpm: base + (input.pattern == "minute-wave" ? (index / 60) % 3 : 0))
+        }
+        return try stagerOrder(rows, input.order)
+    }
+
+    private func stagerRR(_ input: StagerSeriesInput?) throws -> [RRInterval] {
+        let input = try XCTUnwrap(input), base = try XCTUnwrap(input.base)
+        let wave = [0, 40, 0, -40]
+        let rows = (0..<input.count).map { index in
+            RRInterval(ts: input.startTs + index * input.stepSec,
+                       rrMs: base + (input.pattern == "four-wave" ? wave[index % wave.count] : 0))
+        }
+        return try stagerOrder(rows, input.order)
+    }
+
+    private func stagerResp(_ input: StagerSeriesInput?) throws -> [RespSample] {
+        let input = try XCTUnwrap(input), base = try XCTUnwrap(input.base)
+        let wave = [0, 10, 0, -10]
+        let rows = (0..<input.count).map { index in
+            RespSample(ts: input.startTs + index * input.stepSec,
+                       raw: base + (input.pattern == "four-wave" ? wave[index % wave.count] : 0))
+        }
+        return try stagerOrder(rows, input.order)
+    }
+
+    private func stagePayload(_ value: StageSegment) -> [String: Any] {
+        ["start": value.start, "end": value.end, "stage": ["text": value.stage]]
+    }
+
+    private func sessionPayload(_ value: SleepSession) -> [String: Any] {
+        ["start": value.start, "end": value.end, "efficiency": exactBit(value.efficiency),
+         "stages": value.stages.map(stagePayload),
+         "restingHR": value.restingHR.map { $0 as Any } ?? NSNull(),
+         "avgHRV": value.avgHRV.map(exactBit) ?? NSNull()]
+    }
+
+    private func remDiagnosticPayload(_ value: SleepStager.REMFunnelDiagnostic) -> [String: Any] {
+        ["sleepEpochs": value.sleepEpochs, "remAtClassify": value.remAtClassify,
+         "remAfterReimpose": value.remAfterReimpose,
+         "remStrippedByOnsetGuard": value.remStrippedByOnsetGuard,
+         "respChannelPresent": value.respChannelPresent,
+         "blockedNotStill": value.blockedNotStill,
+         "blockedNoCardiacActivation": value.blockedNoCardiacActivation,
+         "blockedRespRegular": value.blockedRespRegular,
+         "blockedNoRespFallbackBar": value.blockedNoRespFallbackBar,
+         "wonOtherStage": value.wonOtherStage, "isZeroREM": value.isZeroREM]
+    }
+
+    private func hypnogramPayload(_ value: SleepStager.HypnogramMetrics) -> [String: Any] {
+        ["tibS": exactBit(value.tibS), "tstS": exactBit(value.tstS),
+         "sptS": exactBit(value.sptS), "solS": exactBit(value.solS),
+         "remLatencyS": exactBit(value.remLatencyS), "wasoS": exactBit(value.wasoS),
+         "efficiency": exactBit(value.efficiency), "disturbances": value.disturbances,
+         "deepMin": exactBit(value.deepMin), "remMin": exactBit(value.remMin),
+         "lightMin": exactBit(value.lightMin), "deepPct": exactBit(value.deepPct),
+         "remPct": exactBit(value.remPct), "lightPct": exactBit(value.lightPct)]
     }
 
     private func sstBlocks(_ input: [SSTBlockInput]?) throws -> [SleepStageTotals.NightBlock] {

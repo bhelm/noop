@@ -2,6 +2,8 @@ package com.noop.analytics
 
 import com.noop.data.RrInterval
 import com.noop.data.HrSample
+import com.noop.data.GravitySample
+import com.noop.data.RespSample
 import org.json.JSONArray
 import org.json.JSONObject
 import org.junit.Assume
@@ -72,6 +74,86 @@ class ParityRunner {
             function
         }
         when (dispatchFunction) {
+            "SleepStager.detectSleep/10" -> {
+                val calls=args.getJSONArray("calls")
+                val payload=MutableList<Any?>(calls.length()){index->
+                    val call=calls.getJSONObject(index);val gravity=stagerGravity(call.getJSONObject("gravity"))
+                    val sessions=if(call.getBoolean("useDefaults")) SleepStager.detectSleep(gravity=gravity) else SleepStager.detectSleep(
+                        hr=stagerHeartRate(call.getJSONObject("hr")),rr=stagerRR(call.getJSONObject("rr")),
+                        resp=stagerResp(call.getJSONObject("resp")),gravity=gravity,
+                        tzOffsetSeconds=call.getLong("tzOffsetSeconds"),wristOff=jsonIntervals(call.getJSONArray("wristOff")),
+                        bandSleepState=jsonStates(call.getJSONArray("bandSleepState")),
+                        useSleepStagerV2=call.getBoolean("useSleepStagerV2"),sleepHRBaseline=nullableDouble(call,"sleepHRBaseline"))
+                    sessions.map(::sessionPayload)
+                }
+                if(negativeSide=="kotlin"&&caseId=="sleep_stager_negative_detect_probe"){payload[0]=emptyList<Any>();result["negativeSide"]="kotlin"}
+                result["valueBits"]=payload
+            }
+            "SleepStager.stageSession/6" -> {
+                val calls=args.getJSONArray("calls")
+                val payload=MutableList<Any?>(calls.length()){index->
+                    val call=calls.getJSONObject(index);val start=call.getLong("start");val end=call.getLong("end")
+                    val gravity=stagerGravity(call.getJSONObject("gravity"));val hr=stagerHeartRate(call.getJSONObject("hr"))
+                    val rr=stagerRR(call.getJSONObject("rr"));val resp=stagerResp(call.getJSONObject("resp"))
+                    SleepStager.stageSession(start,end,gravity,hr,rr,resp).map(::stagePayload)
+                }
+                if(negativeSide=="kotlin"&&caseId=="sleep_stager_negative_v1_probe"){
+                    val stages=(payload[0] as List<Map<String,Any>>).map{it.toMutableMap()}.toMutableList()
+                    val stage=(stages[0]["stage"] as Map<String,String>).toMutableMap();stage["text"]=if(stage["text"]=="wake")"light" else "wake";stages[0]["stage"]=stage;payload[0]=stages;result["negativeSide"]="kotlin"
+                }
+                result["valueBits"]=payload
+            }
+            "SleepStagerV2.stageSession/6" -> {
+                val calls=args.getJSONArray("calls")
+                val payload=MutableList<Any?>(calls.length()){index->
+                    val call=calls.getJSONObject(index)
+                    SleepStagerV2.stageSession(call.getLong("start"),call.getLong("end"),
+                        stagerGravity(call.getJSONObject("gravity")),stagerHeartRate(call.getJSONObject("hr")),
+                        stagerRR(call.getJSONObject("rr")),stagerResp(call.getJSONObject("resp"))).map(::stagePayload)
+                }
+                if(negativeSide=="kotlin"&&caseId=="sleep_stager_negative_v2_probe"){
+                    val stages=(payload[0] as List<Map<String,Any>>).map{it.toMutableMap()}.toMutableList()
+                    val stage=(stages[0]["stage"] as Map<String,String>).toMutableMap();stage["text"]=if(stage["text"]=="wake")"light" else "wake";stages[0]["stage"]=stage;payload[0]=stages;result["negativeSide"]="kotlin"
+                }
+                result["valueBits"]=payload
+            }
+            "SleepStager.sessionEpochMotion/3" -> {
+                val calls=args.getJSONArray("calls")
+                val payload=MutableList<Any?>(calls.length()){index->val call=calls.getJSONObject(index);SleepStager.sessionEpochMotion(call.getLong("start"),call.getLong("end"),stagerGravity(call.getJSONObject("gravity"))).map(::exactBit)}
+                if(negativeSide=="kotlin"&&caseId=="sleep_stager_negative_motion_probe"){
+                    val motion=(payload[0] as List<String>).toMutableList();motion[0]=exactBit(Double.MAX_VALUE);payload[0]=motion;result["negativeSide"]="kotlin"
+                };result["valueBits"]=payload
+            }
+            "SleepStager.sessionEpochSleepState/3" -> {
+                val calls=args.getJSONArray("calls")
+                val payload=MutableList<Any?>(calls.length()){index->val call=calls.getJSONObject(index);SleepStager.sessionEpochSleepState(call.getLong("start"),call.getLong("end"),jsonStates(call.getJSONArray("sleepState")))}
+                if(negativeSide=="kotlin"&&caseId=="sleep_stager_negative_state_probe"){
+                    val states=(payload[0] as List<Int>).toMutableList();states[0]=(states[0]+1)%4;payload[0]=states;result["negativeSide"]="kotlin"
+                };result["valueBits"]=payload
+            }
+            "SleepStager.remFunnelDiagnostic/6" -> {
+                val calls=args.getJSONArray("calls")
+                val payload=MutableList<Any?>(calls.length()){index->val call=calls.getJSONObject(index);SleepStager.remFunnelDiagnostic(
+                    call.getLong("start"),call.getLong("end"),stagerGravity(call.getJSONObject("gravity")),
+                    stagerHeartRate(call.getJSONObject("hr")),stagerRR(call.getJSONObject("rr")),stagerResp(call.getJSONObject("resp")))?.let(::remDiagnosticPayload)}
+                if(negativeSide=="kotlin"&&caseId=="sleep_stager_negative_rem_probe"){
+                    val diagnostic=(payload[0] as Map<String,Any>).toMutableMap();diagnostic["respChannelPresent"]=!(diagnostic["respChannelPresent"] as Boolean);payload[0]=diagnostic;result["negativeSide"]="kotlin"
+                };result["valueBits"]=payload
+            }
+            "SleepStager.hypnogramMetrics/1" -> {
+                val calls=args.getJSONArray("calls")
+                val payload=MutableList<Any?>(calls.length()){index->
+                    val input=calls.getJSONObject(index).getJSONObject("session")
+                    val stageRows=input.getJSONArray("stages")
+                    val session=DetectedSleep(input.getLong("start"),input.getLong("end"),input.getDouble("efficiency"),
+                        (0 until stageRows.length()).map{rowIndex->val row=stageRows.getJSONObject(rowIndex);StageSegment(row.getLong("start"),row.getLong("end"),row.getString("stage"))},
+                        if(input.isNull("restingHR"))null else input.getInt("restingHR"),nullableDouble(input,"avgHRV"))
+                    hypnogramPayload(SleepStager.hypnogramMetrics(session))
+                }
+                if(negativeSide=="kotlin"&&caseId=="sleep_stager_negative_metrics_probe"){
+                    val first=(payload[0] as Map<String,Any?>).toMutableMap();first["disturbances"]=(first["disturbances"] as Int)+1;payload[0]=first;result["negativeSide"]="kotlin"
+                };result["valueBits"]=payload
+            }
             "SleepStageTotals.minutes/1" -> {
                 var payload: Any? = minutesPayload(SleepStageTotals.minutes(nullableString(args,"stagesJSON")))
                 if (negativeSide == "kotlin" && caseId == "sleep_stage_totals_negative_decode_probe") { payload=minutesPayload(SleepStageTotals.Minutes()); result["negativeSide"]="kotlin" }
@@ -988,6 +1070,62 @@ class ParityRunner {
         }
         return sortedMapOf("shape" to sortedMapOf("text" to "minutes"), "value" to value)
     }
+
+    private fun <T> stagerOrder(rows: List<T>, order: String): List<T> {
+        if(order=="sorted")return rows
+        require(order=="odd-even"){"invalid stager order"}
+        return rows.filterIndexed{index,_->index%2==0}+rows.filterIndexed{index,_->index%2==1}
+    }
+
+    private fun stagerGravity(input:JSONObject):List<GravitySample>{
+        val start=input.getLong("startTs");val count=input.getInt("count");val step=input.getLong("stepSec")
+        val rows=(0 until count).map{index->
+            val pattern=input.getString("pattern")
+            val xyz=if(pattern=="still-z")Triple(0.0,0.0,1.0)
+                else if(pattern=="alternating-same-sum")if(index%2==0)Triple(1.0,0.0,0.0)else Triple(0.0,0.0,1.0)
+                else if(pattern=="pulse-same-sum")if(index%30==15)Triple(1.0,1.0,-1.0)else Triple(0.0,0.0,1.0)
+                else if(pattern=="gentle-wave")if(index%2==0)Triple(0.001,0.0,1.0)else Triple(0.0,0.0,1.0)
+                else error("invalid gravity pattern")
+            GravitySample("parity",start+index*step,xyz.first,xyz.second,xyz.third)
+        };return stagerOrder(rows,input.getString("order"))
+    }
+
+    private fun stagerHeartRate(input:JSONObject):List<HrSample>{
+        val start=input.getLong("startTs");val count=input.getInt("count");val step=input.getLong("stepSec");val base=input.getInt("base")
+        val rows=(0 until count).map{index->HrSample("parity",start+index*step,base+if(input.getString("pattern")=="minute-wave")(index/60)%3 else 0)}
+        return stagerOrder(rows,input.getString("order"))
+    }
+
+    private fun stagerRR(input:JSONObject):List<RrInterval>{
+        val start=input.getLong("startTs");val count=input.getInt("count");val step=input.getLong("stepSec");val base=input.getInt("base");val wave=listOf(0,40,0,-40)
+        val rows=(0 until count).map{index->RrInterval("parity",start+index*step,base+if(input.getString("pattern")=="four-wave")wave[index%4]else 0)}
+        return stagerOrder(rows,input.getString("order"))
+    }
+
+    private fun stagerResp(input:JSONObject):List<RespSample>{
+        val start=input.getLong("startTs");val count=input.getInt("count");val step=input.getLong("stepSec");val base=input.getInt("base");val wave=listOf(0,10,0,-10)
+        val rows=(0 until count).map{index->RespSample("parity",start+index*step,base+if(input.getString("pattern")=="four-wave")wave[index%4]else 0)}
+        return stagerOrder(rows,input.getString("order"))
+    }
+
+    private fun jsonIntervals(rows:JSONArray):List<Pair<Long,Long>> = (0 until rows.length()).map{index->val row=rows.getJSONObject(index);row.getLong("start") to row.getLong("end")}
+    private fun jsonStates(rows:JSONArray):List<Pair<Long,Int>> = (0 until rows.length()).map{index->val row=rows.getJSONObject(index);row.getLong("ts") to row.getInt("state")}
+    private fun stagePayload(value:StageSegment):Map<String,Any> = sortedMapOf("start" to value.start,"end" to value.end,"stage" to sortedMapOf("text" to value.stage))
+    private fun sessionPayload(value:DetectedSleep):Map<String,Any?> = sortedMapOf(
+        "start" to value.start,"end" to value.end,"efficiency" to exactBit(value.efficiency),
+        "stages" to value.stages.map(::stagePayload),"restingHR" to value.restingHR,"avgHRV" to value.avgHRV?.let(::exactBit))
+    private fun remDiagnosticPayload(value:SleepStager.REMFunnelDiagnostic):Map<String,Any> = sortedMapOf(
+        "sleepEpochs" to value.sleepEpochs,"remAtClassify" to value.remAtClassify,
+        "remAfterReimpose" to value.remAfterReimpose,"remStrippedByOnsetGuard" to value.remStrippedByOnsetGuard,
+        "respChannelPresent" to value.respChannelPresent,"blockedNotStill" to value.blockedNotStill,
+        "blockedNoCardiacActivation" to value.blockedNoCardiacActivation,"blockedRespRegular" to value.blockedRespRegular,
+        "blockedNoRespFallbackBar" to value.blockedNoRespFallbackBar,"wonOtherStage" to value.wonOtherStage,"isZeroREM" to value.isZeroREM)
+    private fun hypnogramPayload(value:HypnogramMetrics):Map<String,Any> = sortedMapOf(
+        "tibS" to exactBit(value.tibS),"tstS" to exactBit(value.tstS),"sptS" to exactBit(value.sptS),
+        "solS" to exactBit(value.solS),"remLatencyS" to exactBit(value.remLatencyS),"wasoS" to exactBit(value.wasoS),
+        "efficiency" to exactBit(value.efficiency),"disturbances" to value.disturbances,
+        "deepMin" to exactBit(value.deepMin),"remMin" to exactBit(value.remMin),"lightMin" to exactBit(value.lightMin),
+        "deepPct" to exactBit(value.deepPct),"remPct" to exactBit(value.remPct),"lightPct" to exactBit(value.lightPct))
 
     private fun nullableDouble(value: JSONObject, key: String): Double? =
         if (!value.has(key) || value.isNull(key)) null else value.getDouble(key)

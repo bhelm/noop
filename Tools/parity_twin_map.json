@@ -501,6 +501,41 @@
       "evidence": "declared twin reference"
     },
     {
+      "swift": "Packages/StrandAnalytics/Sources/StrandAnalytics/SleepStager.swift::detectSleep/10#1",
+      "kotlin": "android/app/src/main/java/com/noop/analytics/SleepStager.kt::detectSleep/10#1",
+      "evidence": "differential parity harness: public Sleep-stager rollout"
+    },
+    {
+      "swift": "Packages/StrandAnalytics/Sources/StrandAnalytics/SleepStager.swift::stageSession/6#1",
+      "kotlin": "android/app/src/main/java/com/noop/analytics/SleepStager.kt::stageSession/6#1",
+      "evidence": "differential parity harness: public Sleep-stager rollout"
+    },
+    {
+      "swift": "Packages/StrandAnalytics/Sources/StrandAnalytics/SleepStager.swift::sessionEpochMotion/3#1",
+      "kotlin": "android/app/src/main/java/com/noop/analytics/SleepStager.kt::sessionEpochMotion/3#1",
+      "evidence": "differential parity harness: public Sleep-stager rollout"
+    },
+    {
+      "swift": "Packages/StrandAnalytics/Sources/StrandAnalytics/SleepStager.swift::sessionEpochSleepState/3#1",
+      "kotlin": "android/app/src/main/java/com/noop/analytics/SleepStager.kt::sessionEpochSleepState/3#1",
+      "evidence": "differential parity harness: public Sleep-stager rollout"
+    },
+    {
+      "swift": "Packages/StrandAnalytics/Sources/StrandAnalytics/SleepStager.swift::remFunnelDiagnostic/6#1",
+      "kotlin": "android/app/src/main/java/com/noop/analytics/SleepStager.kt::remFunnelDiagnostic/6#1",
+      "evidence": "differential parity harness: public Sleep-stager rollout"
+    },
+    {
+      "swift": "Packages/StrandAnalytics/Sources/StrandAnalytics/SleepStager.swift::hypnogramMetrics/1#1",
+      "kotlin": "android/app/src/main/java/com/noop/analytics/SleepStager.kt::hypnogramMetrics/1#1",
+      "evidence": "differential parity harness: public Sleep-stager rollout"
+    },
+    {
+      "swift": "Packages/StrandAnalytics/Sources/StrandAnalytics/SleepStagerV2.swift::stageSession/6#1",
+      "kotlin": "android/app/src/main/java/com/noop/analytics/SleepStagerV2.kt::stageSession/6#1",
+      "evidence": "differential parity harness: public Sleep-stager rollout"
+    },
+    {
       "swift": "Packages/StrandAnalytics/Sources/StrandAnalytics/SleepStager.swift::posturVarianceG2/1#1",
       "kotlin": "android/app/src/main/java/com/noop/analytics/SleepStager.kt::posturVarianceG2/1#1",
       "evidence": "declared twin reference"

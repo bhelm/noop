@@ -1267,14 +1267,20 @@ func constrained<T>()
             "SleepStageTotals.mainNightIndex/3", "SleepStageTotals.mainNightSelection/3",
             "SleepStageTotals.dailyAggregateHonoringEdits/6", "SleepStageTotals.habitualMidsleepSec/3",
         }
+        sleep_stager = {
+            "SleepStager.detectSleep/10", "SleepStager.stageSession/6",
+            "SleepStager.sessionEpochMotion/3", "SleepStager.sessionEpochSleepState/3",
+            "SleepStager.remFunnelDiagnostic/6", "SleepStager.hypnogramMetrics/1",
+            "SleepStagerV2.stageSession/6",
+        }
         expected = (
             legacy | added | qualified_strain | strain | recovery | recovery_trace
             | heart_rate_recovery | recovery_drivers | recovery_forecast | watch_recovery
-            | sleep_foundations | sleep_stage_totals
+            | sleep_foundations | sleep_stage_totals | sleep_stager
         )
         self.assertEqual(19, len(legacy))
         self.assertEqual(21, len(legacy | added))
-        self.assertEqual(71, len(expected))
+        self.assertEqual(78, len(expected))
         self.assertEqual(expected, registered)
         self.assertIn("StrainScorer.trimpToStrain/2", registered)
         self.assertNotIn("trimpToStrain", registered)

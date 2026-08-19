@@ -3,6 +3,7 @@ import math
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 from Tools import parity_diff
 
@@ -1274,7 +1275,7 @@ class ParityDiffTests(unittest.TestCase):
 
     def test_sleep_foundations_have_curated_boundaries_and_two_isolated_seeds_each(self):
         cases = parity_diff.generate_cases("pilot", "sleep-seeds")
-        for function in sorted(parity_diff.SLEEP_FUNCTIONS - parity_diff.SLEEP_STAGE_TOTALS_KEYS):
+        for function in sorted(parity_diff.SLEEP_FUNCTIONS - parity_diff.SLEEP_STAGE_TOTALS_KEYS - parity_diff.SLEEP_STAGER_KEYS):
             with self.subTest(function=function):
                 selected = [case for case in cases if case["function"] == function]
                 curated = [case for case in selected if case["source"] == "curated:sleep_foundations.json"]
@@ -1537,6 +1538,153 @@ class ParityDiffTests(unittest.TestCase):
         kotlin = (Path(__file__).parents[2] / "android/app/src/test/java/com/noop/analytics/ParityRunner.kt").read_text()
         self.assertIn('sleep_stage_totals_negative_selection_probe', swift)
         self.assertIn('sleep_stage_totals_negative_selection_probe', kotlin)
+
+    def test_sleep_stager_has_exactly_two_operation_local_seeds(self):
+        cases = parity_diff.generate_cases("pilot", "s3-seeds")
+        for function in parity_diff.SLEEP_STAGER_KEYS:
+            seeded = [case for case in cases if case["function"] == function
+                      and case["source"].startswith(f"seeded:{function}:")]
+            self.assertEqual(2, len(seeded), function)
+            self.assertEqual({"splitmix64", "affine"}, {case["source"].split(":")[2] for case in seeded})
+
+    def test_sleep_stager_seeds_are_distinct_responsive_and_isolated(self):
+        base = parity_diff._seeded_sleep_stager_cases()
+        perturbed = parity_diff._seeded_sleep_stager_cases(parity_diff.SLEEP_STAGER_SEED ^ 1)
+        perturbed_by_id = {case["id"]: case for case in perturbed}
+        for function in parity_diff.SLEEP_STAGER_KEYS:
+            selected = [case for case in base if case["function"] == function]
+            self.assertEqual(2, len(selected), function)
+            self.assertNotEqual(selected[0]["args"], selected[1]["args"], function)
+            for case in selected:
+                self.assertNotEqual(case["args"], perturbed_by_id[case["id"]]["args"], case["id"])
+        unrelated = parity_diff.SplitMix64(parity_diff.GENERATOR_SEED)
+        for _ in range(100):
+            unrelated.next_u64()
+        self.assertEqual(base, parity_diff._seeded_sleep_stager_cases())
+
+    def test_sleep_stager_curated_matrix_and_issue_regressions_are_complete(self):
+        cases = {case["id"]: case for case in parity_diff.generate_cases("pilot", "s3-matrix")}
+        curated = [case for case in cases.values() if case["source"] == "curated:sleep_stager.json"]
+        self.assertEqual(parity_diff.SLEEP_STAGER_KEYS, {case["function"] for case in curated})
+        expected = {
+            "sleep_stager_issue_66_detect_cache_aba": ("bhelm/noop#66", parity_diff.SLEEP_STAGER_DETECT_KEY, 3),
+            "sleep_stager_issue_66_v1_cache_aba": ("bhelm/noop#66", parity_diff.SLEEP_STAGER_V1_KEY, 3),
+            "sleep_stager_issue_66_v2_cache_aba": ("bhelm/noop#66", parity_diff.SLEEP_STAGER_V2_KEY, 3),
+            "sleep_stager_issue_67_v2_sorted_shuffled": ("bhelm/noop#67", parity_diff.SLEEP_STAGER_V2_KEY, 2),
+        }
+        for case_id, (issue, function, count) in expected.items():
+            case = cases[case_id]
+            self.assertEqual((issue, function, count),
+                             (case["regressionIssue"], case["function"], len(case["args"]["calls"])))
+        self.assertNotIn("bhelm/noop#43", {case.get("knownBehaviorIssue") for case in cases.values()})
+        self.assertNotIn("bhelm/noop#43", {case.get("regressionIssue") for case in cases.values()})
+
+    def test_sleep_stager_issue_fixtures_fail_closed_on_payload_mutation_or_reuse(self):
+        raw = parity_diff._curated_cases()
+        fixtures = [case for case in raw if case.get("regressionIssue") in {"bhelm/noop#66", "bhelm/noop#67"}]
+        self.assertEqual(4, len(fixtures))
+        for fixture in fixtures:
+            mutated = json.loads(json.dumps(fixture))
+            call = mutated["args"]["calls"][0]
+            series = call.get("gravity")
+            if series is not None:
+                series["count"] += 1
+            with self.subTest(case=fixture["id"]), self.assertRaisesRegex(
+                parity_diff.ParityFormatError, "exact issue-linked"
+            ):
+                with mock.patch.object(parity_diff, "_curated_cases", return_value=[mutated]):
+                    parity_diff.generate_cases("pilot", "mutant")
+
+    def test_sleep_stager_rejects_unknown_unbounded_and_non_common_inputs(self):
+        base = {"id":"bad","function":parity_diff.SLEEP_STAGER_MOTION_KEY,"comparison":"exact",
+                "args":{"calls":[{"start":1,"end":61,"gravity":{"startTs":1,"count":60,
+                "stepSec":1,"pattern":"gentle-wave","order":"sorted"}}]}}
+        bad = [
+            {**base, "args": {**base["args"], "extra": 1}},
+            {**base, "args":{"calls":[{**base["args"]["calls"][0], "gravity":{
+                **base["args"]["calls"][0]["gravity"], "count":21_601}}]}},
+            {**base, "args":{"calls":[{**base["args"]["calls"][0], "gravity":{
+                **base["args"]["calls"][0]["gravity"], "pattern":"raw-rows"}}]}},
+        ]
+        for record in bad:
+            with self.subTest(record=record), self.assertRaises(parity_diff.ParityFormatError):
+                parity_diff._effective_args(record)
+
+    def test_sleep_stager_exact_output_schema_and_cache_oracles_fail_closed(self):
+        cases = {case["id"]:case for case in parity_diff.generate_cases("pilot", "s3-output")}
+        v1 = cases["sleep_stager_v1_degenerate"]
+        bad_stage = [[{"start":1750000000,"end":1750000600,"stage":{"text":"asleep"}}]]
+        with self.assertRaisesRegex(parity_diff.ParityFormatError, "vocabulary"):
+            parity_diff._validate_sleep_output(bad_stage, v1, "valueBits")
+
+        issue66 = cases["sleep_stager_issue_66_v1_cache_aba"]
+        start, end = issue66["effectiveArgs"]["calls"][0]["start"], issue66["effectiveArgs"]["calls"][0]["end"]
+        light = [{"start":start,"end":end,"stage":{"text":"light"}}]
+        with self.assertRaisesRegex(parity_diff.ParityFormatError, "A→B→A"):
+            parity_diff._validate_sleep_output([light, light, light], issue66, "valueBits")
+
+        issue67 = cases["sleep_stager_issue_67_v2_sorted_shuffled"]
+        start, end = issue67["effectiveArgs"]["calls"][0]["start"], issue67["effectiveArgs"]["calls"][0]["end"]
+        wake = [{"start":start,"end":end,"stage":{"text":"wake"}}]
+        with self.assertRaisesRegex(parity_diff.ParityFormatError, "frozen sorted/shuffled"):
+            parity_diff._validate_sleep_output([wake, wake], issue67, "valueBits")
+
+    def test_sleep_stager_rem_schema_allows_smoothing_to_create_guard_strips(self):
+        case = next(case for case in parity_diff.generate_cases("pilot", "s3-rem-seams")
+                    if case["function"] == parity_diff.SLEEP_STAGER_REM_KEY)
+        diagnostic = {
+            "sleepEpochs":1, "remAtClassify":0, "remAfterReimpose":0,
+            "remStrippedByOnsetGuard":1, "respChannelPresent":False,
+            "blockedNotStill":0, "blockedNoCardiacActivation":0,
+            "blockedRespRegular":0, "blockedNoRespFallbackBar":0,
+            "wonOtherStage":1, "isZeroREM":True,
+        }
+        parity_diff._validate_sleep_output([diagnostic], case, "valueBits")
+
+    def test_sleep_stager_rem_schema_bounds_disjoint_post_smoothing_counts(self):
+        case = next(case for case in parity_diff.generate_cases("pilot", "s3-rem-bounds")
+                    if case["function"] == parity_diff.SLEEP_STAGER_REM_KEY)
+        base = {
+            "sleepEpochs":1, "remAtClassify":0, "remAfterReimpose":0,
+            "remStrippedByOnsetGuard":0, "respChannelPresent":False,
+            "blockedNotStill":0, "blockedNoCardiacActivation":0,
+            "blockedRespRegular":0, "blockedNoRespFallbackBar":0,
+            "wonOtherStage":1, "isZeroREM":True,
+        }
+        invalid = [
+            {**base, "remStrippedByOnsetGuard":2},
+            {**base, "remStrippedByOnsetGuard":1, "remAfterReimpose":1, "isZeroREM":False},
+        ]
+        for diagnostic in invalid:
+            with self.subTest(diagnostic=diagnostic), self.assertRaisesRegex(
+                parity_diff.ParityFormatError, "contradict"
+            ):
+                parity_diff._validate_sleep_output([diagnostic], case, "valueBits")
+
+    def test_sleep_stager_negative_suite_covers_all_public_entries(self):
+        selected = {case["function"] for case in parity_diff.generate_cases("negative", "s3-negative")
+                    if case["id"].startswith("sleep_stager_negative_")}
+        self.assertEqual(parity_diff.SLEEP_STAGER_KEYS, selected)
+
+    def test_sleep_stager_exemptions_removed_and_twin_map_declares_all_seven(self):
+        root = Path(__file__).parents[2]
+        swift_exempt = (root / "Packages/StrandAnalytics/Sources/StrandAnalytics/parity-exempt.json").read_text()
+        kotlin_exempt = (root / "android/app/src/main/java/com/noop/analytics/parity-exempt.json").read_text()
+        twins = json.loads((root / "Tools/parity_twin_map.json").read_text())["function_pairs"]
+        expected = {
+            ("SleepStager.swift::detectSleep/10", "SleepStager.kt::detectSleep/10"),
+            ("SleepStager.swift::stageSession/6", "SleepStager.kt::stageSession/6"),
+            ("SleepStager.swift::sessionEpochMotion/3", "SleepStager.kt::sessionEpochMotion/3"),
+            ("SleepStager.swift::sessionEpochSleepState/3", "SleepStager.kt::sessionEpochSleepState/3"),
+            ("SleepStager.swift::remFunnelDiagnostic/6", "SleepStager.kt::remFunnelDiagnostic/6"),
+            ("SleepStager.swift::hypnogramMetrics/1", "SleepStager.kt::hypnogramMetrics/1"),
+            ("SleepStagerV2.swift::stageSession/6", "SleepStagerV2.kt::stageSession/6"),
+        }
+        for swift_tail, kotlin_tail in expected:
+            self.assertNotIn(swift_tail, swift_exempt)
+            self.assertNotIn(kotlin_tail, kotlin_exempt)
+            self.assertTrue(any(pair["swift"].endswith(swift_tail + "#1")
+                                and pair["kotlin"].endswith(kotlin_tail + "#1") for pair in twins))
 
 
 if __name__ == "__main__":
