@@ -43,6 +43,21 @@ class ParityDiffTests(unittest.TestCase):
         record.update(fields)
         return record
 
+    def recovery_forecast_value(self, **overrides):
+        value = {
+            "score": "404e000000000000",
+            "band": "4020000000000000",
+            "baseline": "404e000000000000",
+            "planned": "4020000000000000",
+            "need": "401e000000000000",
+            "nights": 10,
+            "confidence": {"text": "solid"},
+            "low": "404a000000000000",
+            "high": "4051000000000000",
+        }
+        value.update(overrides)
+        return value
+
     def compare(self, inputs, swift, kotlin):
         input_path = self.write_jsonl("input.jsonl", inputs)
         swift_path = self.write_jsonl("swift.jsonl", swift)
@@ -117,6 +132,106 @@ class ParityDiffTests(unittest.TestCase):
 
         with self.assertRaisesRegex(parity_diff.ParityFormatError, "encoded"):
             self.compare(inputs, swift, kotlin)
+
+    def test_recovery_forecast_exact_schema_rejects_common_mode_missing_field(self):
+        function = "RecoveryForecaster.forecast/6"
+        input_record = self.input_record("forecast")
+        input_record["function"] = function
+        malformed = self.recovery_forecast_value()
+        del malformed["low"]
+        output = self.output_record("forecast", function=function, valueBits=malformed)
+
+        with self.assertRaisesRegex(parity_diff.ParityFormatError, "low"):
+            self.compare([input_record], [output], [output])
+
+    def test_recovery_forecast_exact_schema_rejects_common_mode_extra_field(self):
+        function = "RecoveryForecaster.forecast/6"
+        input_record = self.input_record("forecast")
+        input_record["function"] = function
+        malformed = self.recovery_forecast_value(unexpected="3ff0000000000000")
+        output = self.output_record("forecast", function=function, valueBits=malformed)
+
+        with self.assertRaisesRegex(parity_diff.ParityFormatError, "unexpected"):
+            self.compare([input_record], [output], [output])
+
+    def test_recovery_forecast_exact_schema_rejects_common_mode_malformed_fields(self):
+        function = "RecoveryForecaster.forecast/6"
+        malformed_fields = {
+            "score": 62,
+            "nights": True,
+            "confidence": {"text": "calibrating"},
+        }
+        for field, malformed_value in malformed_fields.items():
+            input_record = self.input_record(f"forecast-{field}")
+            input_record["function"] = function
+            malformed = self.recovery_forecast_value(**{field: malformed_value})
+            output = self.output_record(
+                f"forecast-{field}", function=function, valueBits=malformed
+            )
+
+            with self.subTest(field=field), self.assertRaisesRegex(
+                parity_diff.ParityFormatError, field
+            ):
+                self.compare([input_record], [output], [output])
+
+    def test_recovery_forecast_exact_schema_accepts_null_and_valid_object(self):
+        function = "RecoveryForecaster.forecast/6"
+        inputs = [self.input_record("forecast-null"), self.input_record("forecast-value")]
+        for input_record in inputs:
+            input_record["function"] = function
+        swift = [
+            self.output_record("forecast-null", function=function, valueBits=None),
+            self.output_record(
+                "forecast-value", function=function, valueBits=self.recovery_forecast_value()
+            ),
+        ]
+
+        self.assertEqual([], self.compare(inputs, swift, swift))
+
+    def test_recovery_forecast_constants_schema_is_controlled_by_input_flag(self):
+        function = "RecoveryForecaster.forecast/6"
+        constants = {
+            "baselineWindow": 14,
+            "effortWindow": 14,
+            "minBaselineNights": 5,
+            "solidNeedNights": 7,
+            "trustedNights": 10,
+            "defaultNeedHours": "401e000000000000",
+            "effortSpread": "4028000000000000",
+            "minBandPoints": "4020000000000000",
+            "reversionAdjCap": "4020000000000000",
+            "reversionWeight": "3ff0000000000000",
+            "sleepOverCap": "3fd0000000000000",
+            "sleepWeight": "402c000000000000",
+            "strainAdjCap": "4028000000000000",
+            "strainWeight": "4022000000000000",
+            "thinBandPoints": "4018000000000000",
+        }
+        characterized = self.input_record("forecast-constants")
+        characterized["function"] = function
+        characterized["args"]["characterizeForecastConstants"] = True
+        characterized_output = self.output_record(
+            "forecast-constants",
+            function=function,
+            valueBits=self.recovery_forecast_value(constants=constants),
+        )
+        self.assertEqual(
+            [], self.compare([characterized], [characterized_output], [characterized_output])
+        )
+
+        missing = self.output_record(
+            "forecast-constants", function=function, valueBits=self.recovery_forecast_value()
+        )
+        with self.assertRaisesRegex(parity_diff.ParityFormatError, "constants"):
+            self.compare([characterized], [missing], [missing])
+
+        ordinary = self.input_record("forecast")
+        ordinary["function"] = function
+        unexpected = self.output_record(
+            "forecast", function=function, valueBits=self.recovery_forecast_value(constants=constants)
+        )
+        with self.assertRaisesRegex(parity_diff.ParityFormatError, "constants"):
+            self.compare([ordinary], [unexpected], [unexpected])
 
     def test_pilot_generates_curated_and_seeded_cases_for_every_registered_hrv_function(self):
         cases = parity_diff.generate_cases("pilot", "fixed-nonce")

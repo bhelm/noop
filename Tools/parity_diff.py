@@ -48,6 +48,7 @@ RECOVERY_DEFAULT_HRV_BASELINE_USABLE = True
 RECOVERY_TRACE_KEY = (
     "RecoveryScorer.recoveryTrace/8=RecoveryScorerTrace.recoveryTrace/8"
 )
+RECOVERY_FORECAST_KEY = "RecoveryForecaster.forecast/6"
 RAW_ANALYZE_KEY = "HRVAnalyzer.analyze/2=HrvAnalyzer.analyzeRaw/2"
 HRV_MEDIAN_KEY = "HRVAnalyzer.median/1=HrvAnalyzer.median/1"
 EPSILON = 1e-9
@@ -203,6 +204,94 @@ def _validate_exact_tree(value: Any, path: str) -> None:
     raise ParityFormatError(f"{path} contains unsupported {type(value).__name__}")
 
 
+def _validate_exact_object_keys(value: Any, expected_keys: set[str], path: str) -> dict[str, Any]:
+    if not isinstance(value, dict):
+        raise ParityFormatError(f"{path} must be an object")
+    actual_keys = set(value)
+    if actual_keys != expected_keys:
+        missing = sorted(expected_keys - actual_keys)
+        extra = sorted(actual_keys - expected_keys)
+        raise ParityFormatError(f"{path} keys mismatch: missing={missing} extra={extra}")
+    return value
+
+
+def _validate_exact_bits(value: Any, path: str) -> None:
+    if not isinstance(value, str) or _BITS_RE.fullmatch(value) is None:
+        raise ParityFormatError(f"{path} must be 16 lowercase hex digits")
+
+
+def _forecast_constants_requested(expected: dict[str, Any]) -> bool:
+    effective_args = expected.get("effectiveArgs")
+    if isinstance(effective_args, dict) and "characterizeForecastConstants" in effective_args:
+        return effective_args["characterizeForecastConstants"] is True
+    args = expected.get("args")
+    return isinstance(args, dict) and args.get("characterizeForecastConstants") is True
+
+
+def _validate_recovery_forecast_output(
+    value: Any, expected: dict[str, Any], path: str
+) -> None:
+    """Validate the normalized nullable RecoveryForecast exact-output contract."""
+
+    if value is None:
+        return
+    base_keys = {
+        "score", "band", "baseline", "planned", "need",
+        "nights", "confidence", "low", "high",
+    }
+    characterize_constants = _forecast_constants_requested(expected)
+    forecast = _validate_exact_object_keys(
+        value,
+        base_keys | ({"constants"} if characterize_constants else set()),
+        path,
+    )
+    for field in ("score", "band", "baseline", "planned", "need", "low", "high"):
+        _validate_exact_bits(forecast[field], f"{path}.{field}")
+    if type(forecast["nights"]) is not int:
+        raise ParityFormatError(f"{path}.nights must be an integer")
+    confidence = _validate_exact_object_keys(
+        forecast["confidence"], {"text"}, f"{path}.confidence"
+    )
+    if confidence["text"] not in {"building", "solid"}:
+        raise ParityFormatError(
+            f"{path}.confidence.text must be one of ['building', 'solid']"
+        )
+    if not characterize_constants:
+        return
+    integer_constants = {
+        "baselineWindow", "effortWindow", "minBaselineNights",
+        "solidNeedNights", "trustedNights",
+    }
+    floating_constants = {
+        "defaultNeedHours", "effortSpread", "minBandPoints", "reversionAdjCap",
+        "reversionWeight", "sleepOverCap", "sleepWeight", "strainAdjCap",
+        "strainWeight", "thinBandPoints",
+    }
+    constants = _validate_exact_object_keys(
+        forecast["constants"], integer_constants | floating_constants, f"{path}.constants"
+    )
+    for field in integer_constants:
+        if type(constants[field]) is not int:
+            raise ParityFormatError(f"{path}.constants.{field} must be an integer")
+    for field in floating_constants:
+        _validate_exact_bits(constants[field], f"{path}.constants.{field}")
+
+
+_EXACT_OUTPUT_VALIDATORS = {
+    RECOVERY_FORECAST_KEY: _validate_recovery_forecast_output,
+}
+
+
+def _validate_function_output(
+    expected: dict[str, Any], comparison: str, kind: str, value: Any, path: str
+) -> None:
+    if comparison != "exact" or kind != "value":
+        return
+    validator = _EXACT_OUTPUT_VALIDATORS.get(expected["function"])
+    if validator is not None:
+        validator(value, expected, path)
+
+
 def _validate_finite_tree(value: Any, path: str) -> None:
     if isinstance(value, bool) or value is None or isinstance(value, str):
         return
@@ -277,6 +366,12 @@ def compare_files(input_path: Path, swift_path: Path, kotlin_path: Path) -> list
         _validate_record_contract(expected, kotlin[case_id], "kotlin")
         swift_kind, swift_value = _payload(swift[case_id], comparison, "swift", case_id)
         kotlin_kind, kotlin_value = _payload(kotlin[case_id], comparison, "kotlin", case_id)
+        _validate_function_output(
+            expected, comparison, swift_kind, swift_value, f"swift id={case_id} valueBits"
+        )
+        _validate_function_output(
+            expected, comparison, kotlin_kind, kotlin_value, f"kotlin id={case_id} valueBits"
+        )
         equal = swift_kind == kotlin_kind
         if equal and swift_kind == "value" and comparison == "epsilon":
             equal = _epsilon_equal(swift_value, kotlin_value)
