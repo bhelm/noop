@@ -233,8 +233,23 @@
       "issue": 17
     },
     {
-      "key": "android/app/src/main/java/com/noop/analytics/AnalyticsEngine.kt::analyzeDay/30[defaults=2,3,4,5,6,7,8,9,10,11,12,13,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30]#1",
-      "reason": "Bootstrap debt: no differential or declared platform coverage proof yet.",
+      "key": "android/app/src/main/java/com/noop/analytics/AnalyticsEngine.kt::analyzeDay/31[defaults=2,3,4,5,6,7,8,9,10,11,12,13,14,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31]#1",
+      "reason": "Bootstrap debt signature updated for upstream #1450 in f40897ac71a0..140c8b3c44bf; the analyzeDay pipeline still has no differential or declared platform coverage proof.",
+      "issue": 17
+    },
+    {
+      "key": "android/app/src/main/java/com/noop/analytics/TrainingLoadEngine.kt::ctl@computed-property#1",
+      "reason": "Implementation-only Point alias imported by upstream #1423 / b8c7b15f in f40897ac71a0..140c8b3c44bf; no production or test callsite executes this declaration, so platform-test coverage would be dishonest.",
+      "issue": 17
+    },
+    {
+      "key": "android/app/src/main/java/com/noop/analytics/TrainingLoadEngine.kt::atl@computed-property#1",
+      "reason": "Implementation-only Point alias imported by upstream #1423 / b8c7b15f in f40897ac71a0..140c8b3c44bf; no production or test callsite executes this declaration, so platform-test coverage would be dishonest.",
+      "issue": 17
+    },
+    {
+      "key": "android/app/src/main/java/com/noop/analytics/TrainingLoadEngine.kt::tsb@computed-property#1",
+      "reason": "Implementation-only Point alias imported by upstream #1423 / b8c7b15f in f40897ac71a0..140c8b3c44bf; no production or test callsite executes this declaration, so platform-test coverage would be dishonest.",
       "issue": 17
     },
     {
@@ -6716,7 +6731,203 @@
       "key": "android/app/src/main/java/com/noop/analytics/RecoveryScorer.kt::constructor/1[defaults=-]#1",
       "reason": "Bootstrap debt: no differential or declared platform coverage proof yet.",
       "issue": 17
+    },
+    {
+      "key": "android/app/src/main/java/com/noop/analytics/AnalyticsEngine.kt::VENDOR_RESP_MIN_SPAN_S@property-initializer#1",
+      "reason": "Bootstrap debt: upstream #1450 / b6b2f73f, imported range f40897ac71a0..140c8b3c44bf; Kotlin/JVM emits no executable coverage record for this constant property initializer.",
+      "issue": 17
+    },
+    {
+      "key": "android/app/src/main/java/com/noop/analytics/SleepHeartRateContrast.kt::DEFAULT_MINIMUM_VALID_SAMPLES@property-initializer#1",
+      "reason": "Bootstrap debt: upstream #1424 / 6cb36669, imported range f40897ac71a0..140c8b3c44bf; Kotlin/JVM emits no executable coverage record for this constant property initializer.",
+      "issue": 17
+    },
+    {
+      "key": "android/app/src/main/java/com/noop/analytics/SleepHeartRateContrast.kt::VALID_MAX_BPM@property-initializer#1",
+      "reason": "Bootstrap debt: upstream #1424 / 6cb36669, imported range f40897ac71a0..140c8b3c44bf; Kotlin/JVM emits no executable coverage record for this constant property initializer.",
+      "issue": 17
+    },
+    {
+      "key": "android/app/src/main/java/com/noop/analytics/SleepHeartRateContrast.kt::VALID_MIN_BPM@property-initializer#1",
+      "reason": "Bootstrap debt: upstream #1424 / 6cb36669, imported range f40897ac71a0..140c8b3c44bf; Kotlin/JVM emits no executable coverage record for this constant property initializer.",
+      "issue": 17
+    },
+    {
+      "key": "android/app/src/main/java/com/noop/analytics/SleepSessionDedup.kt::ONSET_KEY_GRID_SECONDS@property-initializer#1",
+      "reason": "Bootstrap debt: upstream #1284 residual / 23a08f9a, imported range f40897ac71a0..140c8b3c44bf; Kotlin/JVM emits no executable coverage record for this constant property initializer.",
+      "issue": 17
     }
   ],
-  "platform-test": []
+  "platform-test": [
+    {
+        "key": "android/app/src/main/java/com/noop/analytics/AnalyticsEngine.kt::vendorRespRateBpm/2[defaults=-]#1",
+        "test": "com.noop.analytics.VendorRespRateTest; upstream #1450 / b6b2f73f; imported range f40897ac71a0..140c8b3c44bf",
+        "issue": 17
+    },
+    {
+        "key": "android/app/src/main/java/com/noop/analytics/HrvAnalyzer.kt::spotCaptureOverCounted/2[defaults=-]#1",
+        "test": "com.noop.ui.HrvCaptureWindowTest; upstream #1417 / 5749d285; imported range f40897ac71a0..140c8b3c44bf",
+        "issue": 17
+    },
+    {
+        "key": "android/app/src/main/java/com/noop/analytics/ReadinessTrainingLoad.kt::evaluateWithTrainingLoad/3[defaults=2,3]#1",
+        "test": "com.noop.analytics.ReadinessTrainingLoadTest; upstream #1423 / b8c7b15f; imported range f40897ac71a0..140c8b3c44bf",
+        "issue": 17
+    },
+    {
+        "key": "android/app/src/main/java/com/noop/analytics/RrEmissionStats.kt::compute/1[defaults=-]#1",
+        "test": "com.noop.analytics.RrEmissionStatsTest; upstream #1443/#1451 / 5456325f..799a9613; imported range f40897ac71a0..140c8b3c44bf",
+        "issue": 17
+    },
+    {
+        "key": "android/app/src/main/java/com/noop/analytics/RrEmissionStats.kt::fill@property-initializer#1",
+        "test": "com.noop.analytics.RrEmissionStatsTest; upstream #1443/#1451 / 5456325f..799a9613; imported range f40897ac71a0..140c8b3c44bf",
+        "issue": 17
+    },
+    {
+        "key": "android/app/src/main/java/com/noop/analytics/RrEmissionStats.kt::gapHist@property-initializer#1",
+        "test": "com.noop.analytics.RrEmissionStatsTest; upstream #1443/#1451 / 5456325f..799a9613; imported range f40897ac71a0..140c8b3c44bf",
+        "issue": 17
+    },
+    {
+        "key": "android/app/src/main/java/com/noop/analytics/RrEmissionStats.kt::logLine/4[defaults=-]#1",
+        "test": "com.noop.analytics.RrEmissionStatsTest; upstream #1443/#1451 / 5456325f..799a9613; imported range f40897ac71a0..140c8b3c44bf",
+        "issue": 17
+    },
+    {
+        "key": "android/app/src/main/java/com/noop/analytics/RrEmissionStats.kt::modalGapSec@computed-property#1",
+        "test": "com.noop.analytics.RrEmissionStatsTest; upstream #1443/#1451 / 5456325f..799a9613; imported range f40897ac71a0..140c8b3c44bf",
+        "issue": 17
+    },
+    {
+        "key": "android/app/src/main/java/com/noop/analytics/SleepHeartRateContrast.kt::evaluate/3[defaults=3]#1",
+        "test": "com.noop.analytics.SleepHeartRateContrastTest; upstream #1424 / 6cb36669; imported range f40897ac71a0..140c8b3c44bf",
+        "issue": 17
+    },
+    {
+        "key": "android/app/src/main/java/com/noop/analytics/SleepHeartRateContrast.kt::summarize/1[defaults=-]#1",
+        "test": "com.noop.analytics.SleepHeartRateContrastTest; upstream #1424 / 6cb36669; imported range f40897ac71a0..140c8b3c44bf",
+        "issue": 17
+    },
+    {
+        "key": "android/app/src/main/java/com/noop/analytics/SleepSessionDedup.kt::keyedStart/2[defaults=2]#1",
+        "test": "com.noop.analytics.SleepSessionDedupTest; upstream #1284 residual / 23a08f9a; imported range f40897ac71a0..140c8b3c44bf",
+        "issue": 17
+    },
+    {
+        "key": "android/app/src/main/java/com/noop/analytics/SleepSessionDedup.kt::planBank/2[defaults=-]#1",
+        "test": "com.noop.analytics.SleepSessionDedupTest; upstream #1284 residual / 23a08f9a; imported range f40897ac71a0..140c8b3c44bf",
+        "issue": 17
+    },
+    {
+        "key": "android/app/src/main/java/com/noop/analytics/SleepSessionDedup.kt::rankComparator/1[defaults=-]#1",
+        "test": "com.noop.analytics.SleepSessionDedupTest; upstream #1284 residual / 23a08f9a; imported range f40897ac71a0..140c8b3c44bf",
+        "issue": 17
+    },
+    {
+        "key": "android/app/src/main/java/com/noop/analytics/TrainingLoadEngine.kt::acuteLoad@computed-property#1",
+        "test": "com.noop.analytics.TrainingLoadEngineTest; upstream #1423 / b8c7b15f; imported range f40897ac71a0..140c8b3c44bf",
+        "issue": 17
+    },
+    {
+        "key": "android/app/src/main/java/com/noop/analytics/TrainingLoadEngine.kt::acuteTimeConstantDays@property-initializer#1",
+        "test": "com.noop.analytics.TrainingLoadEngineTest; upstream #1423 / b8c7b15f; imported range f40897ac71a0..140c8b3c44bf",
+        "issue": 17
+    },
+    {
+        "key": "android/app/src/main/java/com/noop/analytics/TrainingLoadEngine.kt::atl@computed-property#2",
+        "test": "com.noop.analytics.TrainingLoadEngineTest; upstream #1423 / b8c7b15f; imported range f40897ac71a0..140c8b3c44bf",
+        "issue": 17
+    },
+    {
+        "key": "android/app/src/main/java/com/noop/analytics/TrainingLoadEngine.kt::balance@computed-property#1",
+        "test": "com.noop.analytics.TrainingLoadEngineTest; upstream #1423 / b8c7b15f; imported range f40897ac71a0..140c8b3c44bf",
+        "issue": 17
+    },
+    {
+        "key": "android/app/src/main/java/com/noop/analytics/TrainingLoadEngine.kt::chronicLoad@computed-property#1",
+        "test": "com.noop.analytics.TrainingLoadEngineTest; upstream #1423 / b8c7b15f; imported range f40897ac71a0..140c8b3c44bf",
+        "issue": 17
+    },
+    {
+        "key": "android/app/src/main/java/com/noop/analytics/TrainingLoadEngine.kt::chronicTimeConstantDays@property-initializer#1",
+        "test": "com.noop.analytics.TrainingLoadEngineTest; upstream #1423 / b8c7b15f; imported range f40897ac71a0..140c8b3c44bf",
+        "issue": 17
+    },
+    {
+        "key": "android/app/src/main/java/com/noop/analytics/TrainingLoadEngine.kt::ctl@computed-property#2",
+        "test": "com.noop.analytics.TrainingLoadEngineTest; upstream #1423 / b8c7b15f; imported range f40897ac71a0..140c8b3c44bf",
+        "issue": 17
+    },
+    {
+        "key": "android/app/src/main/java/com/noop/analytics/TrainingLoadEngine.kt::dayOrdinal/1[defaults=-]#1",
+        "test": "com.noop.analytics.TrainingLoadEngineTest; upstream #1423 / b8c7b15f; imported range f40897ac71a0..140c8b3c44bf",
+        "issue": 17
+    },
+    {
+        "key": "android/app/src/main/java/com/noop/analytics/TrainingLoadEngine.kt::dayString/1[defaults=-]#1",
+        "test": "com.noop.analytics.TrainingLoadEngineTest; upstream #1423 / b8c7b15f; imported range f40897ac71a0..140c8b3c44bf",
+        "issue": 17
+    },
+    {
+        "key": "android/app/src/main/java/com/noop/analytics/TrainingLoadEngine.kt::establishedDays@property-initializer#1",
+        "test": "com.noop.analytics.TrainingLoadEngineTest; upstream #1423 / b8c7b15f; imported range f40897ac71a0..140c8b3c44bf",
+        "issue": 17
+    },
+    {
+        "key": "android/app/src/main/java/com/noop/analytics/TrainingLoadEngine.kt::evaluate/3[defaults=2,3]#1",
+        "test": "com.noop.analytics.TrainingLoadEngineTest; upstream #1423 / b8c7b15f; imported range f40897ac71a0..140c8b3c44bf",
+        "issue": 17
+    },
+    {
+        "key": "android/app/src/main/java/com/noop/analytics/TrainingLoadEngine.kt::evaluateDense/2[defaults=2]#1",
+        "test": "com.noop.analytics.TrainingLoadEngineTest; upstream #1423 / b8c7b15f; imported range f40897ac71a0..140c8b3c44bf",
+        "issue": 17
+    },
+    {
+        "key": "android/app/src/main/java/com/noop/analytics/TrainingLoadEngine.kt::floorDiv/2[defaults=-]#1",
+        "test": "com.noop.analytics.TrainingLoadEngineTest; upstream #1423 / b8c7b15f; imported range f40897ac71a0..140c8b3c44bf",
+        "issue": 17
+    },
+    {
+        "key": "android/app/src/main/java/com/noop/analytics/TrainingLoadEngine.kt::isAvailable@computed-property#1",
+        "test": "com.noop.analytics.TrainingLoadEngineTest; upstream #1423 / b8c7b15f; imported range f40897ac71a0..140c8b3c44bf",
+        "issue": 17
+    },
+    {
+        "key": "android/app/src/main/java/com/noop/analytics/TrainingLoadEngine.kt::isLeapYear/1[defaults=-]#1",
+        "test": "com.noop.analytics.TrainingLoadEngineTest; upstream #1423 / b8c7b15f; imported range f40897ac71a0..140c8b3c44bf",
+        "issue": 17
+    },
+    {
+        "key": "android/app/src/main/java/com/noop/analytics/TrainingLoadEngine.kt::isValid@computed-property#1",
+        "test": "com.noop.analytics.TrainingLoadEngineTest; upstream #1423 / b8c7b15f; imported range f40897ac71a0..140c8b3c44bf",
+        "issue": 17
+    },
+    {
+        "key": "android/app/src/main/java/com/noop/analytics/TrainingLoadEngine.kt::minimumDays@property-initializer#1",
+        "test": "com.noop.analytics.TrainingLoadEngineTest; upstream #1423 / b8c7b15f; imported range f40897ac71a0..140c8b3c44bf",
+        "issue": 17
+    },
+    {
+        "key": "android/app/src/main/java/com/noop/analytics/TrainingLoadEngine.kt::primeDays@property-initializer#1",
+        "test": "com.noop.analytics.TrainingLoadEngineTest; upstream #1423 / b8c7b15f; imported range f40897ac71a0..140c8b3c44bf",
+        "issue": 17
+    },
+    {
+        "key": "android/app/src/main/java/com/noop/analytics/TrainingLoadEngine.kt::standard@property-initializer#1",
+        "test": "com.noop.analytics.TrainingLoadEngineTest; upstream #1423 / b8c7b15f; imported range f40897ac71a0..140c8b3c44bf",
+        "issue": 17
+    },
+    {
+        "key": "android/app/src/main/java/com/noop/analytics/TrainingLoadEngine.kt::tsb@computed-property#2",
+        "test": "com.noop.analytics.TrainingLoadEngineTest; upstream #1423 / b8c7b15f; imported range f40897ac71a0..140c8b3c44bf",
+        "issue": 17
+    },
+    {
+        "key": "android/app/src/main/java/com/noop/analytics/TrainingLoadEngine.kt::unavailable/4[defaults=3,4]#1",
+        "test": "com.noop.analytics.TrainingLoadEngineTest; upstream #1423 / b8c7b15f; imported range f40897ac71a0..140c8b3c44bf",
+        "issue": 17
+    }
+]
 }

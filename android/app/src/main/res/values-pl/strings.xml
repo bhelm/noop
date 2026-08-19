@@ -2110,4 +2110,19 @@
     <string name="breath_proto_presence_punching_caution">Niezalecane jako domyślne dla początkujących, chyba że celem jest przebicie senności.</string>
     <!-- /breath protocol catalog -->
     <string name="l10n_breathe_screen_calm_me_a1b2c3d4">Uspokój mnie</string>
+    <string name="trends_training_load">Obciążenie treningowe</string>
+    <string name="trends_tl_legend_ctl">CTL · Kondycja</string>
+    <string name="trends_tl_legend_atl">ATL · Zmęczenie</string>
+    <string name="trends_tl_established">Kondycja 42-dniowa vs zmęczenie 7-dniowe</string>
+    <string name="trends_tl_building">Budowanie — %1$d z %2$d dni</string>
+    <string name="trends_tl_unavailable">Obciążenie przewlekłe vs ostre</string>
+    <string name="trends_tl_needs">Wymaga %1$d+ kolejnych dni Wysiłku, aby zacząć. Na razie %2$d.</string>
+    <string name="trends_tl_form">Forma</string>
+    <string name="sleep_delete_user_edited_body">Usuwa ten sen i przelicza dzień bez niego. Możesz cofnąć przez kilka sekund.</string>
+    <string name="sleep_delete_recorded_body">Usuwa ten zarejestrowany sen i przelicza dzień bez niego. NOOP nie wykryje ponownie snu w tym oknie. Możesz cofnąć przez kilka sekund.</string>
+    <string name="settings_waist_footnote_unset">Opcjonalnie · VO₂max powstaje z ~4 nocy pomiaru tętna; obwód talii zwiększa dokładność. Wiek sprawnościowy go nie potrzebuje. Zmierz w pasie, na wysokości pępka.</string>
+    <string name="settings_waist_footnote_set">Twój VO₂max korzysta z obwodu talii, aby oszacowanie było dokładniejsze</string>
+    <string name="power_saving_low_refresh">Rzadsze odświeżanie</string>
+    <string name="power_saving_low_refresh_desc">Synchronizuje w tle co godzinę zamiast co 15 minut, niezależnie od poziomu naładowania opaski — mniej ponownych połączeń to największa oszczędność w WHOOP 4.0. Nic nie ginie: opaska zapisuje wszystko i przekazuje w większych paczkach. Ręczna synchronizacja nadal działa od razu, a tętno na żywo pozostaje bez zmian.</string>
+    <string name="nav_power_saving">Oszczędzanie energii</string>
 </resources>

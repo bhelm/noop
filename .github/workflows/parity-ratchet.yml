@@ -53,6 +53,7 @@ jobs:
     runs-on: ubuntu-24.04
     env:
       SQLITE_SNAPSHOT_DIR: ${{ github.workspace }}/.ci/sqlite-snapshot
+      GRADLE_OPTS: -Dorg.gradle.jvmargs=-Xmx1536m -Dkotlin.daemon.enabled=false
     steps:
       - name: Checkout full history
         uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
@@ -135,15 +136,15 @@ jobs:
         if: steps.changes.outputs.twins == 'true'
         run: python3 Tools/parity_diff.py generate --output "$RUNNER_TEMP/parity-input.jsonl"
 
-      - name: Run Swift differential coverage
+      - name: Run Swift full and differential coverage
         if: steps.changes.outputs.twins == 'true'
         env:
           LD_LIBRARY_PATH: ${{ env.SQLITE_SNAPSHOT_DIR }}
           PARITY_INPUT: ${{ runner.temp }}/parity-input.jsonl
           PARITY_OUTPUT: ${{ runner.temp }}/parity-swift.jsonl
         run: |
-          swift test --package-path Packages/StrandAnalytics --enable-code-coverage \
-            --filter ParityRunner -Xlinker "-L${SQLITE_SNAPSHOT_DIR}"
+          swift test --package-path Packages/StrandAnalytics --enable-code-coverage --jobs 1 \
+            -Xlinker "-L${SQLITE_SNAPSHOT_DIR}"
           swift_bin="$(readlink -f "$(command -v swift)")"
           test -x "$(dirname "$swift_bin")/llvm-cov" || {
             echo "ERROR: llvm-cov is not executable next to resolved Swift binary: $swift_bin" >&2
@@ -154,17 +155,22 @@ jobs:
             Packages/StrandAnalytics/.build/debug/StrandAnalyticsPackageTests.xctest \
             > "$RUNNER_TEMP/swift.lcov"
 
-      - name: Run Kotlin differential coverage
+      - name: Run Kotlin full and differential coverage
         if: steps.changes.outputs.twins == 'true'
         env:
           PARITY_INPUT: ${{ runner.temp }}/parity-input.jsonl
           PARITY_OUTPUT: ${{ runner.temp }}/parity-kotlin.jsonl
-        run: ./android/gradlew -p android :app:testFullDebugUnitTest --tests com.noop.analytics.ParityRunner
+        run: |
+          ./android/gradlew -p android --no-daemon --max-workers=1 --no-parallel \
+            -Pkotlin.compiler.execution.strategy=in-process \
+            :app:testFullDebugUnitTest
 
       - name: Export Kotlin JaCoCo XML
         if: steps.changes.outputs.twins == 'true'
         run: |
           ./android/gradlew -p android :app:jacocoFullDebugUnitTestReport \
+            --no-daemon --max-workers=1 --no-parallel \
+            -Pkotlin.compiler.execution.strategy=in-process \
             -x :app:testFullDebugUnitTest
 
       - name: Compare outputs and prove source coverage

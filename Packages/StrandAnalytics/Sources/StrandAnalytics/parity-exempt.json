@@ -188,8 +188,23 @@
       "issue": 17
     },
     {
-      "key": "Packages/StrandAnalytics/Sources/StrandAnalytics/AnalyticsEngine.swift::analyzeDay/30[defaults=2,3,4,5,6,7,8,9,10,11,12,13,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30]#1",
-      "reason": "Bootstrap debt: no differential or declared platform coverage proof yet.",
+      "key": "Packages/StrandAnalytics/Sources/StrandAnalytics/AnalyticsEngine.swift::analyzeDay/31[defaults=2,3,4,5,6,7,8,9,10,11,12,13,14,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31]#1",
+      "reason": "Bootstrap debt signature updated for upstream #1450 in f40897ac71a0..140c8b3c44bf; the analyzeDay pipeline still has no differential or declared platform coverage proof.",
+      "issue": 17
+    },
+    {
+      "key": "Packages/StrandAnalytics/Sources/StrandAnalytics/TrainingLoadEngine.swift::ctl@computed-property#1",
+      "reason": "Implementation-only Point alias imported by upstream #1423 / b8c7b15f in f40897ac71a0..140c8b3c44bf; no production or test callsite executes this declaration, so platform-test coverage would be dishonest.",
+      "issue": 17
+    },
+    {
+      "key": "Packages/StrandAnalytics/Sources/StrandAnalytics/TrainingLoadEngine.swift::atl@computed-property#1",
+      "reason": "Implementation-only Point alias imported by upstream #1423 / b8c7b15f in f40897ac71a0..140c8b3c44bf; no production or test callsite executes this declaration, so platform-test coverage would be dishonest.",
+      "issue": 17
+    },
+    {
+      "key": "Packages/StrandAnalytics/Sources/StrandAnalytics/TrainingLoadEngine.swift::tsb@computed-property#1",
+      "reason": "Implementation-only Point alias imported by upstream #1423 / b8c7b15f in f40897ac71a0..140c8b3c44bf; no production or test callsite executes this declaration, so platform-test coverage would be dishonest.",
       "issue": 17
     },
     {
@@ -6191,7 +6206,188 @@
       "key": "Packages/StrandAnalytics/Sources/StrandAnalytics/WorkoutTypeClassifier.swift::stddev/1[defaults=-]#1",
       "reason": "Bootstrap debt: no differential or declared platform coverage proof yet.",
       "issue": 17
+    },
+    {
+      "key": "Packages/StrandAnalytics/Sources/StrandAnalytics/AnalyticsEngine.swift::vendorRespMinSpanS@property-initializer#1",
+      "reason": "Bootstrap debt: upstream #1450 / b6b2f73f, imported range f40897ac71a0..140c8b3c44bf; Swift emits no executable coverage record for this constant property initializer.",
+      "issue": 17
+    },
+    {
+      "key": "Packages/StrandAnalytics/Sources/StrandAnalytics/AnalyticsMemo.swift::fnvBasis@property-initializer#1",
+      "reason": "Bootstrap debt: upstream #1453 follow-up / 2fe84e37, imported range f40897ac71a0..140c8b3c44bf; Swift emits no executable coverage record for this constant property initializer.",
+      "issue": 17
+    },
+    {
+      "key": "Packages/StrandAnalytics/Sources/StrandAnalytics/AnalyticsMemo.swift::fnvPrime@property-initializer#1",
+      "reason": "Bootstrap debt: upstream #1453 follow-up / 2fe84e37, imported range f40897ac71a0..140c8b3c44bf; Swift emits no executable coverage record for this constant property initializer.",
+      "issue": 17
+    },
+    {
+      "key": "Packages/StrandAnalytics/Sources/StrandAnalytics/SleepHeartRateContrast.swift::defaultMinimumValidSamples@property-initializer#1",
+      "reason": "Bootstrap debt: upstream #1424 / 6cb36669, imported range f40897ac71a0..140c8b3c44bf; Swift emits no executable coverage record for this constant property initializer.",
+      "issue": 17
+    },
+    {
+      "key": "Packages/StrandAnalytics/Sources/StrandAnalytics/SleepHeartRateContrast.swift::validMaxBpm@property-initializer#1",
+      "reason": "Bootstrap debt: upstream #1424 / 6cb36669, imported range f40897ac71a0..140c8b3c44bf; Swift emits no executable coverage record for this constant property initializer.",
+      "issue": 17
+    },
+    {
+      "key": "Packages/StrandAnalytics/Sources/StrandAnalytics/SleepHeartRateContrast.swift::validMinBpm@property-initializer#1",
+      "reason": "Bootstrap debt: upstream #1424 / 6cb36669, imported range f40897ac71a0..140c8b3c44bf; Swift emits no executable coverage record for this constant property initializer.",
+      "issue": 17
+    },
+    {
+      "key": "Packages/StrandAnalytics/Sources/StrandAnalytics/TrainingLoadEngine.swift::standard@property-initializer#1",
+      "reason": "Bootstrap debt: upstream #1423 / b8c7b15f, imported range f40897ac71a0..140c8b3c44bf; Swift emits no executable coverage record for this constant property initializer.",
+      "issue": 17
     }
   ],
-  "platform-test": []
+  "platform-test": [
+    {
+        "key": "Packages/StrandAnalytics/Sources/StrandAnalytics/AnalyticsEngine.swift::vendorRespRateBpm/2[defaults=-]#1",
+        "test": "StrandAnalyticsTests.VendorRespRateTests; upstream #1450 / b6b2f73f; imported range f40897ac71a0..140c8b3c44bf",
+        "issue": 17
+    },
+    {
+        "key": "Packages/StrandAnalytics/Sources/StrandAnalytics/AnalyticsMemo.swift::gravityQuant/3[defaults=-]#1",
+        "test": "StrandAnalyticsTests.SleepStagerCacheFingerprintTests; upstream #1453 follow-up / 2fe84e37; imported range f40897ac71a0..140c8b3c44bf",
+        "issue": 17
+    },
+    {
+        "key": "Packages/StrandAnalytics/Sources/StrandAnalytics/HRVAnalyzer.swift::spotCaptureOverCounted/2[defaults=-]#1",
+        "test": "StrandAnalyticsTests.RrCoverageVerdictTests; upstream #1417 / 5749d285; imported range f40897ac71a0..140c8b3c44bf",
+        "issue": 17
+    },
+    {
+        "key": "Packages/StrandAnalytics/Sources/StrandAnalytics/ReadinessTrainingLoad.swift::evaluateWithTrainingLoad/3[defaults=2,3]#1",
+        "test": "StrandAnalyticsTests.ReadinessTrainingLoadTests; upstream #1423 / b8c7b15f; imported range f40897ac71a0..140c8b3c44bf",
+        "issue": 17
+    },
+    {
+        "key": "Packages/StrandAnalytics/Sources/StrandAnalytics/ReadinessTrainingLoad.swift::init/2[defaults=-]#1",
+        "test": "StrandAnalyticsTests.ReadinessTrainingLoadTests; upstream #1423 / b8c7b15f; imported range f40897ac71a0..140c8b3c44bf",
+        "issue": 17
+    },
+    {
+        "key": "Packages/StrandAnalytics/Sources/StrandAnalytics/RrEmissionStats.swift::compute/1[defaults=-]#1",
+        "test": "StrandAnalyticsTests.RrEmissionStatsTests; upstream #1443/#1451 / 5456325f..799a9613; imported range f40897ac71a0..140c8b3c44bf",
+        "issue": 17
+    },
+    {
+        "key": "Packages/StrandAnalytics/Sources/StrandAnalytics/RrEmissionStats.swift::init/8[defaults=7,8]#1",
+        "test": "StrandAnalyticsTests.RrEmissionStatsTests; upstream #1443/#1451 / 5456325f..799a9613; imported range f40897ac71a0..140c8b3c44bf",
+        "issue": 17
+    },
+    {
+        "key": "Packages/StrandAnalytics/Sources/StrandAnalytics/RrEmissionStats.swift::logLine/4[defaults=-]#1",
+        "test": "StrandAnalyticsTests.RrEmissionStatsTests; upstream #1443/#1451 / 5456325f..799a9613; imported range f40897ac71a0..140c8b3c44bf",
+        "issue": 17
+    },
+    {
+        "key": "Packages/StrandAnalytics/Sources/StrandAnalytics/RrEmissionStats.swift::modalGapSec@computed-property#1",
+        "test": "StrandAnalyticsTests.RrEmissionStatsTests; upstream #1443/#1451 / 5456325f..799a9613; imported range f40897ac71a0..140c8b3c44bf",
+        "issue": 17
+    },
+    {
+        "key": "Packages/StrandAnalytics/Sources/StrandAnalytics/SleepHeartRateContrast.swift::evaluate/3[defaults=3]#1",
+        "test": "StrandAnalyticsTests.SleepHeartRateContrastTests; upstream #1424 / 6cb36669; imported range f40897ac71a0..140c8b3c44bf",
+        "issue": 17
+    },
+    {
+        "key": "Packages/StrandAnalytics/Sources/StrandAnalytics/SleepHeartRateContrast.swift::init/10[defaults=-]#1",
+        "test": "StrandAnalyticsTests.SleepHeartRateContrastTests; upstream #1424 / 6cb36669; imported range f40897ac71a0..140c8b3c44bf",
+        "issue": 17
+    },
+    {
+        "key": "Packages/StrandAnalytics/Sources/StrandAnalytics/SleepHeartRateContrast.swift::summarize/1[defaults=-]#1",
+        "test": "StrandAnalyticsTests.SleepHeartRateContrastTests; upstream #1424 / 6cb36669; imported range f40897ac71a0..140c8b3c44bf",
+        "issue": 17
+    },
+    {
+        "key": "Packages/StrandAnalytics/Sources/StrandAnalytics/TrainingLoadEngine.swift::acuteLoad@computed-property#1",
+        "test": "StrandAnalyticsTests.TrainingLoadEngineTests; upstream #1423 / b8c7b15f; imported range f40897ac71a0..140c8b3c44bf",
+        "issue": 17
+    },
+    {
+        "key": "Packages/StrandAnalytics/Sources/StrandAnalytics/TrainingLoadEngine.swift::atl@computed-property#2",
+        "test": "StrandAnalyticsTests.TrainingLoadEngineTests; upstream #1423 / b8c7b15f; imported range f40897ac71a0..140c8b3c44bf",
+        "issue": 17
+    },
+    {
+        "key": "Packages/StrandAnalytics/Sources/StrandAnalytics/TrainingLoadEngine.swift::balance@computed-property#1",
+        "test": "StrandAnalyticsTests.TrainingLoadEngineTests; upstream #1423 / b8c7b15f; imported range f40897ac71a0..140c8b3c44bf",
+        "issue": 17
+    },
+    {
+        "key": "Packages/StrandAnalytics/Sources/StrandAnalytics/TrainingLoadEngine.swift::chronicLoad@computed-property#1",
+        "test": "StrandAnalyticsTests.TrainingLoadEngineTests; upstream #1423 / b8c7b15f; imported range f40897ac71a0..140c8b3c44bf",
+        "issue": 17
+    },
+    {
+        "key": "Packages/StrandAnalytics/Sources/StrandAnalytics/TrainingLoadEngine.swift::ctl@computed-property#2",
+        "test": "StrandAnalyticsTests.TrainingLoadEngineTests; upstream #1423 / b8c7b15f; imported range f40897ac71a0..140c8b3c44bf",
+        "issue": 17
+    },
+    {
+        "key": "Packages/StrandAnalytics/Sources/StrandAnalytics/TrainingLoadEngine.swift::dayOrdinal/1[defaults=-]#1",
+        "test": "StrandAnalyticsTests.TrainingLoadEngineTests; upstream #1423 / b8c7b15f; imported range f40897ac71a0..140c8b3c44bf",
+        "issue": 17
+    },
+    {
+        "key": "Packages/StrandAnalytics/Sources/StrandAnalytics/TrainingLoadEngine.swift::dayString/1[defaults=-]#1",
+        "test": "StrandAnalyticsTests.TrainingLoadEngineTests; upstream #1423 / b8c7b15f; imported range f40897ac71a0..140c8b3c44bf",
+        "issue": 17
+    },
+    {
+        "key": "Packages/StrandAnalytics/Sources/StrandAnalytics/TrainingLoadEngine.swift::evaluate/3[defaults=2,3]#1",
+        "test": "StrandAnalyticsTests.TrainingLoadEngineTests; upstream #1423 / b8c7b15f; imported range f40897ac71a0..140c8b3c44bf",
+        "issue": 17
+    },
+    {
+        "key": "Packages/StrandAnalytics/Sources/StrandAnalytics/TrainingLoadEngine.swift::evaluateDense/2[defaults=2]#1",
+        "test": "StrandAnalyticsTests.TrainingLoadEngineTests; upstream #1423 / b8c7b15f; imported range f40897ac71a0..140c8b3c44bf",
+        "issue": 17
+    },
+    {
+        "key": "Packages/StrandAnalytics/Sources/StrandAnalytics/TrainingLoadEngine.swift::floorDiv/2[defaults=-]#1",
+        "test": "StrandAnalyticsTests.TrainingLoadEngineTests; upstream #1423 / b8c7b15f; imported range f40897ac71a0..140c8b3c44bf",
+        "issue": 17
+    },
+    {
+        "key": "Packages/StrandAnalytics/Sources/StrandAnalytics/TrainingLoadEngine.swift::init/2[defaults=-]#1",
+        "test": "StrandAnalyticsTests.TrainingLoadEngineTests; upstream #1423 / b8c7b15f; imported range f40897ac71a0..140c8b3c44bf",
+        "issue": 17
+    },
+    {
+        "key": "Packages/StrandAnalytics/Sources/StrandAnalytics/TrainingLoadEngine.swift::init/5[defaults=1,2,3,4,5]#1",
+        "test": "StrandAnalyticsTests.TrainingLoadEngineTests; upstream #1423 / b8c7b15f; imported range f40897ac71a0..140c8b3c44bf",
+        "issue": 17
+    },
+    {
+        "key": "Packages/StrandAnalytics/Sources/StrandAnalytics/TrainingLoadEngine.swift::isAvailable@computed-property#1",
+        "test": "StrandAnalyticsTests.TrainingLoadEngineTests; upstream #1423 / b8c7b15f; imported range f40897ac71a0..140c8b3c44bf",
+        "issue": 17
+    },
+    {
+        "key": "Packages/StrandAnalytics/Sources/StrandAnalytics/TrainingLoadEngine.swift::isLeapYear/1[defaults=-]#1",
+        "test": "StrandAnalyticsTests.TrainingLoadEngineTests; upstream #1423 / b8c7b15f; imported range f40897ac71a0..140c8b3c44bf",
+        "issue": 17
+    },
+    {
+        "key": "Packages/StrandAnalytics/Sources/StrandAnalytics/TrainingLoadEngine.swift::isValid@computed-property#1",
+        "test": "StrandAnalyticsTests.TrainingLoadEngineTests; upstream #1423 / b8c7b15f; imported range f40897ac71a0..140c8b3c44bf",
+        "issue": 17
+    },
+    {
+        "key": "Packages/StrandAnalytics/Sources/StrandAnalytics/TrainingLoadEngine.swift::tsb@computed-property#2",
+        "test": "StrandAnalyticsTests.TrainingLoadEngineTests; upstream #1423 / b8c7b15f; imported range f40897ac71a0..140c8b3c44bf",
+        "issue": 17
+    },
+    {
+        "key": "Packages/StrandAnalytics/Sources/StrandAnalytics/TrainingLoadEngine.swift::unavailable/4[defaults=3,4]#1",
+        "test": "StrandAnalyticsTests.TrainingLoadEngineTests; upstream #1423 / b8c7b15f; imported range f40897ac71a0..140c8b3c44bf",
+        "issue": 17
+    }
+]
 }

@@ -202,6 +202,11 @@
       "swift": "Packages/WhoopStore/Sources/WhoopStore/StreamStore.swift",
       "kotlin": "android/app/src/main/java/com/noop/data/WhoopRepository.kt",
       "evidence": "machine-resolvable declared function twin"
+    },
+    {
+      "swift": "Packages/WhoopStore/Sources/WhoopStore/BackupProvenance.swift",
+      "kotlin": "android/app/src/main/java/com/noop/data/BackupProvenance.kt",
+      "evidence": "machine-resolvable declared function twin; upstream f40897ac71a0..140c8b3c44bf"
     }
   ],
   "function_pairs": [
@@ -604,6 +609,21 @@
       "swift": "Packages/WhoopStore/Sources/WhoopStore/StreamStore.swift::v18AuxSamples/4#1",
       "kotlin": "android/app/src/main/java/com/noop/data/WhoopRepository.kt::v18AuxSamples/4#1",
       "evidence": "declared twin reference"
+    },
+    {
+      "swift": "Packages/StrandAnalytics/Sources/StrandAnalytics/HRVAnalyzer.swift::spotCaptureOverCounted/2#1",
+      "kotlin": "android/app/src/main/java/com/noop/analytics/HrvAnalyzer.kt::spotCaptureOverCounted/2#1",
+      "evidence": "declared twin reference; upstream #1417 / 5749d285"
+    },
+    {
+      "swift": "Packages/WhoopStore/Sources/WhoopStore/BackupProvenance.swift::json/5#1",
+      "kotlin": "android/app/src/main/java/com/noop/data/BackupProvenance.kt::json/5#1",
+      "evidence": "declared twin reference; upstream f40897ac71a0..140c8b3c44bf"
+    },
+    {
+      "swift": "Packages/WhoopStore/Sources/WhoopStore/BackupProvenance.swift::payloadJson/3#1",
+      "kotlin": "android/app/src/main/java/com/noop/data/BackupProvenance.kt::payloadJson/3#1",
+      "evidence": "declared twin reference; upstream f40897ac71a0..140c8b3c44bf"
     }
   ],
   "property_pairs": [
@@ -611,6 +631,76 @@
       "swift": "Packages/WhoopProtocol/Sources/WhoopProtocol/FeatureFlagProbe.swift::announcedFlags@property#1",
       "kotlin": "android/app/src/main/java/com/noop/protocol/FeatureFlagProbe.kt::announcedFlags@property#1",
       "evidence": "same file/type owner and property name"
+    },
+    {
+      "swift": "Packages/StrandAnalytics/Sources/StrandAnalytics/TrainingLoadEngine.swift::acuteLoad@property#1",
+      "kotlin": "android/app/src/main/java/com/noop/analytics/TrainingLoadEngine.kt::acuteLoad@property#1",
+      "evidence": "same file/type owner and property name; upstream f40897ac71a0..140c8b3c44bf"
+    },
+    {
+      "swift": "Packages/StrandAnalytics/Sources/StrandAnalytics/TrainingLoadEngine.swift::atl@property#1",
+      "kotlin": "android/app/src/main/java/com/noop/analytics/TrainingLoadEngine.kt::atl@property#1",
+      "evidence": "same file/type owner and property name; upstream f40897ac71a0..140c8b3c44bf"
+    },
+    {
+      "swift": "Packages/StrandAnalytics/Sources/StrandAnalytics/TrainingLoadEngine.swift::atl@property#2",
+      "kotlin": "android/app/src/main/java/com/noop/analytics/TrainingLoadEngine.kt::atl@property#2",
+      "evidence": "same file/type owner and property name; upstream f40897ac71a0..140c8b3c44bf"
+    },
+    {
+      "swift": "Packages/StrandAnalytics/Sources/StrandAnalytics/TrainingLoadEngine.swift::balance@property#1",
+      "kotlin": "android/app/src/main/java/com/noop/analytics/TrainingLoadEngine.kt::balance@property#1",
+      "evidence": "same file/type owner and property name; upstream f40897ac71a0..140c8b3c44bf"
+    },
+    {
+      "swift": "Packages/StrandAnalytics/Sources/StrandAnalytics/TrainingLoadEngine.swift::chronicLoad@property#1",
+      "kotlin": "android/app/src/main/java/com/noop/analytics/TrainingLoadEngine.kt::chronicLoad@property#1",
+      "evidence": "same file/type owner and property name; upstream f40897ac71a0..140c8b3c44bf"
+    },
+    {
+      "swift": "Packages/StrandAnalytics/Sources/StrandAnalytics/TrainingLoadEngine.swift::ctl@property#1",
+      "kotlin": "android/app/src/main/java/com/noop/analytics/TrainingLoadEngine.kt::ctl@property#1",
+      "evidence": "same file/type owner and property name; upstream f40897ac71a0..140c8b3c44bf"
+    },
+    {
+      "swift": "Packages/StrandAnalytics/Sources/StrandAnalytics/TrainingLoadEngine.swift::ctl@property#2",
+      "kotlin": "android/app/src/main/java/com/noop/analytics/TrainingLoadEngine.kt::ctl@property#2",
+      "evidence": "same file/type owner and property name; upstream f40897ac71a0..140c8b3c44bf"
+    },
+    {
+      "swift": "Packages/StrandAnalytics/Sources/StrandAnalytics/TrainingLoadEngine.swift::isAvailable@property#1",
+      "kotlin": "android/app/src/main/java/com/noop/analytics/TrainingLoadEngine.kt::isAvailable@property#1",
+      "evidence": "same file/type owner and property name; upstream f40897ac71a0..140c8b3c44bf"
+    },
+    {
+      "swift": "Packages/StrandAnalytics/Sources/StrandAnalytics/TrainingLoadEngine.swift::isValid@property#1",
+      "kotlin": "android/app/src/main/java/com/noop/analytics/TrainingLoadEngine.kt::isValid@property#1",
+      "evidence": "same file/type owner and property name; upstream f40897ac71a0..140c8b3c44bf"
+    },
+    {
+      "swift": "Packages/StrandAnalytics/Sources/StrandAnalytics/RrEmissionStats.swift::modalGapSec@property#1",
+      "kotlin": "android/app/src/main/java/com/noop/analytics/RrEmissionStats.kt::modalGapSec@property#1",
+      "evidence": "same file/type owner and property name; upstream f40897ac71a0..140c8b3c44bf"
+    },
+    {
+      "swift": "Packages/WhoopProtocol/Sources/WhoopProtocol/Whoop5RawOptical.swift::readingsA@property#1",
+      "kotlin": "android/app/src/main/java/com/noop/protocol/Whoop5RawOptical.kt::readingsA@property#1",
+      "evidence": "same file/type owner and property name; upstream f40897ac71a0..140c8b3c44bf"
+    },
+    {
+      "swift": "Packages/WhoopProtocol/Sources/WhoopProtocol/Whoop5RawOptical.swift::readingsB@property#1",
+      "kotlin": "android/app/src/main/java/com/noop/protocol/Whoop5RawOptical.kt::readingsB@property#1",
+      "evidence": "same file/type owner and property name; upstream f40897ac71a0..140c8b3c44bf"
+    },
+    {
+      "swift": "Packages/StrandAnalytics/Sources/StrandAnalytics/TrainingLoadEngine.swift::tsb@property#1",
+      "kotlin": "android/app/src/main/java/com/noop/analytics/TrainingLoadEngine.kt::tsb@property#1",
+      "evidence": "same file/type owner and property name; upstream f40897ac71a0..140c8b3c44bf"
+    },
+    {
+      "swift": "Packages/StrandAnalytics/Sources/StrandAnalytics/TrainingLoadEngine.swift::tsb@property#2",
+      "kotlin": "android/app/src/main/java/com/noop/analytics/TrainingLoadEngine.kt::tsb@property#2",
+      "evidence": "same file/type owner and property name; upstream f40897ac71a0..140c8b3c44bf"
     },
     {
       "swift": "Packages/StrandAnalytics/Sources/StrandAnalytics/SleepStageTotals.swift::asleep@property#1",
@@ -4093,6 +4183,66 @@
       "swift": "Packages/WhoopStore/Sources/WhoopStore/V18Aux.swift::headerBytes",
       "kotlin": "android/app/src/main/java/com/noop/data/V18AuxCodec.kt::HEADER_BYTES",
       "evidence": "owner-disambiguated camelCase/SNAKE_CASE name"
+    },
+    {
+      "swift": "Packages/StrandAnalytics/Sources/StrandAnalytics/AnalyticsEngine.swift::vendorRespMinSpanS",
+      "kotlin": "android/app/src/main/java/com/noop/analytics/AnalyticsEngine.kt::VENDOR_RESP_MIN_SPAN_S",
+      "evidence": "owner-disambiguated camelCase/SNAKE_CASE name; upstream #1450 / b6b2f73f"
+    },
+    {
+      "swift": "Packages/StrandAnalytics/Sources/StrandAnalytics/SleepHeartRateContrast.swift::defaultMinimumValidSamples",
+      "kotlin": "android/app/src/main/java/com/noop/analytics/SleepHeartRateContrast.kt::DEFAULT_MINIMUM_VALID_SAMPLES",
+      "evidence": "owner-disambiguated camelCase/SNAKE_CASE name; upstream #1424 / 6cb36669"
+    },
+    {
+      "swift": "Packages/StrandAnalytics/Sources/StrandAnalytics/SleepHeartRateContrast.swift::validMaxBpm",
+      "kotlin": "android/app/src/main/java/com/noop/analytics/SleepHeartRateContrast.kt::VALID_MAX_BPM",
+      "evidence": "owner-disambiguated camelCase/SNAKE_CASE name; upstream #1424 / 6cb36669"
+    },
+    {
+      "swift": "Packages/StrandAnalytics/Sources/StrandAnalytics/SleepHeartRateContrast.swift::validMinBpm",
+      "kotlin": "android/app/src/main/java/com/noop/analytics/SleepHeartRateContrast.kt::VALID_MIN_BPM",
+      "evidence": "owner-disambiguated camelCase/SNAKE_CASE name; upstream #1424 / 6cb36669"
+    },
+    {
+      "swift": "Packages/WhoopStore/Sources/WhoopStore/SleepSessionDedup.swift::onsetKeyGridSeconds",
+      "kotlin": "android/app/src/main/java/com/noop/analytics/SleepSessionDedup.kt::ONSET_KEY_GRID_SECONDS",
+      "evidence": "owner-disambiguated camelCase/SNAKE_CASE name; upstream #1284 residual / 23a08f9a"
+    },
+    {
+      "swift": "Packages/WhoopStore/Sources/WhoopStore/BackupProvenance.swift::entryName",
+      "kotlin": "android/app/src/main/java/com/noop/data/BackupProvenance.kt::ENTRY_NAME",
+      "evidence": "owner-disambiguated camelCase/SNAKE_CASE name; upstream f40897ac71a0..140c8b3c44bf"
+    },
+    {
+      "swift": "Packages/WhoopStore/Sources/WhoopStore/BackupProvenance.swift::kind",
+      "kotlin": "android/app/src/main/java/com/noop/data/BackupProvenance.kt::KIND",
+      "evidence": "owner-disambiguated camelCase/SNAKE_CASE name; upstream f40897ac71a0..140c8b3c44bf"
+    },
+    {
+      "swift": "Packages/WhoopProtocol/Sources/WhoopProtocol/Whoop5RawOptical.swift::checksumOffset",
+      "kotlin": "android/app/src/main/java/com/noop/protocol/Whoop5RawOptical.kt::CHECKSUM_OFFSET",
+      "evidence": "owner-disambiguated camelCase/SNAKE_CASE name; upstream f40897ac71a0..140c8b3c44bf"
+    },
+    {
+      "swift": "Packages/WhoopProtocol/Sources/WhoopProtocol/Whoop5RawOptical.swift::layoutVersion",
+      "kotlin": "android/app/src/main/java/com/noop/protocol/Whoop5RawOptical.kt::LAYOUT_VERSION",
+      "evidence": "owner-disambiguated camelCase/SNAKE_CASE name; upstream f40897ac71a0..140c8b3c44bf"
+    },
+    {
+      "swift": "Packages/WhoopProtocol/Sources/WhoopProtocol/Whoop5RawOptical.swift::recordClass",
+      "kotlin": "android/app/src/main/java/com/noop/protocol/Whoop5RawOptical.kt::RECORD_CLASS",
+      "evidence": "owner-disambiguated camelCase/SNAKE_CASE name; upstream f40897ac71a0..140c8b3c44bf"
+    },
+    {
+      "swift": "Packages/WhoopProtocol/Sources/WhoopProtocol/Whoop5RawOptical.swift::sampleMax",
+      "kotlin": "android/app/src/main/java/com/noop/protocol/Whoop5RawOptical.kt::SAMPLE_MAX",
+      "evidence": "owner-disambiguated camelCase/SNAKE_CASE name; upstream f40897ac71a0..140c8b3c44bf"
+    },
+    {
+      "swift": "Packages/WhoopProtocol/Sources/WhoopProtocol/Whoop5RawOptical.swift::sampleMin",
+      "kotlin": "android/app/src/main/java/com/noop/protocol/Whoop5RawOptical.kt::SAMPLE_MIN",
+      "evidence": "owner-disambiguated camelCase/SNAKE_CASE name; upstream f40897ac71a0..140c8b3c44bf"
     }
   ],
   "unpaired_files": {
@@ -4283,7 +4433,12 @@
       "Packages/WhoopStore/Sources/WhoopStore/TimestampHeal.swift",
       "Packages/WhoopStore/Sources/WhoopStore/V18Aux.swift",
       "Packages/WhoopStore/Sources/WhoopStore/WhoopLiveCapabilities.swift",
-      "Packages/WhoopStore/Sources/WhoopStore/WhoopStore.swift"
+      "Packages/WhoopStore/Sources/WhoopStore/WhoopStore.swift",
+      "Packages/StrandAnalytics/Sources/StrandAnalytics/ReadinessTrainingLoad.swift",
+      "Packages/StrandAnalytics/Sources/StrandAnalytics/RrEmissionStats.swift",
+      "Packages/StrandAnalytics/Sources/StrandAnalytics/SleepHeartRateContrast.swift",
+      "Packages/StrandAnalytics/Sources/StrandAnalytics/TrainingLoadEngine.swift",
+      "Packages/WhoopStore/Sources/WhoopStore/AppleStepHourStore.swift"
     ],
     "kotlin": [
       "android/app/src/main/java/com/noop/analytics/ActivityCostEngine.kt",
@@ -4444,7 +4599,11 @@
       "android/app/src/main/java/com/noop/protocol/Whoop5Ecg.kt",
       "android/app/src/main/java/com/noop/protocol/Whoop5EcgProbe.kt",
       "android/app/src/main/java/com/noop/protocol/Whoop5RawOptical.kt",
-      "android/app/src/main/java/com/noop/protocol/Whoop5Variant.kt"
+      "android/app/src/main/java/com/noop/protocol/Whoop5Variant.kt",
+      "android/app/src/main/java/com/noop/analytics/ReadinessTrainingLoad.kt",
+      "android/app/src/main/java/com/noop/analytics/RrEmissionStats.kt",
+      "android/app/src/main/java/com/noop/analytics/SleepHeartRateContrast.kt",
+      "android/app/src/main/java/com/noop/analytics/TrainingLoadEngine.kt"
     ]
   },
   "unpaired_functions": {
@@ -5961,7 +6120,33 @@
       "Packages/WhoopStore/Sources/WhoopStore/WhoopStore.swift::primaryKeyColumns/1#1",
       "Packages/WhoopStore/Sources/WhoopStore/WhoopStore.swift::columnNamesForTest/1#1",
       "Packages/WhoopStore/Sources/WhoopStore/WhoopStore.swift::columnIsNullableWithoutDefaultForTest/2#1",
-      "Packages/WhoopStore/Sources/WhoopStore/WhoopStore.swift::indexNamesForTest/1#1"
+      "Packages/WhoopStore/Sources/WhoopStore/WhoopStore.swift::indexNamesForTest/1#1",
+      "Packages/StrandAnalytics/Sources/StrandAnalytics/AnalyticsEngine.swift::analyzeDay/31#1",
+      "Packages/StrandAnalytics/Sources/StrandAnalytics/AnalyticsEngine.swift::vendorRespRateBpm/2#1",
+      "Packages/StrandAnalytics/Sources/StrandAnalytics/AnalyticsMemo.swift::gravityQuant/3#1",
+      "Packages/StrandAnalytics/Sources/StrandAnalytics/ReadinessTrainingLoad.swift::evaluateWithTrainingLoad/3#1",
+      "Packages/StrandAnalytics/Sources/StrandAnalytics/RrEmissionStats.swift::compute/1#1",
+      "Packages/StrandAnalytics/Sources/StrandAnalytics/RrEmissionStats.swift::logLine/4#1",
+      "Packages/StrandAnalytics/Sources/StrandAnalytics/SleepHeartRateContrast.swift::evaluate/3#1",
+      "Packages/StrandAnalytics/Sources/StrandAnalytics/SleepHeartRateContrast.swift::summarize/1#1",
+      "Packages/StrandAnalytics/Sources/StrandAnalytics/TrainingLoadEngine.swift::dayOrdinal/1#1",
+      "Packages/StrandAnalytics/Sources/StrandAnalytics/TrainingLoadEngine.swift::dayString/1#1",
+      "Packages/StrandAnalytics/Sources/StrandAnalytics/TrainingLoadEngine.swift::evaluate/3#1",
+      "Packages/StrandAnalytics/Sources/StrandAnalytics/TrainingLoadEngine.swift::evaluateDense/2#1",
+      "Packages/StrandAnalytics/Sources/StrandAnalytics/TrainingLoadEngine.swift::floorDiv/2#1",
+      "Packages/StrandAnalytics/Sources/StrandAnalytics/TrainingLoadEngine.swift::isLeapYear/1#1",
+      "Packages/StrandAnalytics/Sources/StrandAnalytics/TrainingLoadEngine.swift::unavailable/4#1",
+      "Packages/WhoopProtocol/Sources/WhoopProtocol/Whoop5RawOptical.swift::i16/2#1",
+      "Packages/WhoopProtocol/Sources/WhoopProtocol/Whoop5RawOptical.swift::u16/2#1",
+      "Packages/WhoopStore/Sources/WhoopStore/AppleStepHourStore.swift::appleStepHours/3#1",
+      "Packages/WhoopStore/Sources/WhoopStore/AppleStepHourStore.swift::upsertAppleStepHours/2#1",
+      "Packages/WhoopStore/Sources/WhoopStore/BackupProvenance.swift::shouldRecord/2#1",
+      "Packages/WhoopStore/Sources/WhoopStore/MetricsCache.swift::withStartTs/1#1",
+      "Packages/WhoopStore/Sources/WhoopStore/OuraRespScale.swift::forVendorRate/2#1",
+      "Packages/WhoopStore/Sources/WhoopStore/SleepSessionDedup.swift::keyedStart/2#1",
+      "Packages/WhoopStore/Sources/WhoopStore/SleepSessionDedup.swift::planBank/2#1",
+      "Packages/WhoopStore/Sources/WhoopStore/SleepSessionDedup.swift::rankKey/2#1",
+      "Packages/WhoopStore/Sources/WhoopStore/WhoopStore.swift::recordEvent/4#1"
     ],
     "kotlin": [
       "android/app/src/main/java/com/noop/analytics/ActivityCostEngine.kt::sentence/0#1",
@@ -7903,7 +8088,35 @@
       "android/app/src/main/java/com/noop/protocol/Whoop5RawOptical.kt::u8/1#1",
       "android/app/src/main/java/com/noop/protocol/Whoop5RawOptical.kt::u32/1#1",
       "android/app/src/main/java/com/noop/protocol/Whoop5RawOptical.kt::i32/1#1",
-      "android/app/src/main/java/com/noop/protocol/Whoop5Variant.kt::from/2#1"
+      "android/app/src/main/java/com/noop/protocol/Whoop5Variant.kt::from/2#1",
+      "android/app/src/main/java/com/noop/analytics/AnalyticsEngine.kt::analyzeDay/31#1",
+      "android/app/src/main/java/com/noop/analytics/AnalyticsEngine.kt::vendorRespRateBpm/2#1",
+      "android/app/src/main/java/com/noop/analytics/BreathProtocol.kt::invoke/3#1",
+      "android/app/src/main/java/com/noop/analytics/IntelligenceEngine.kt::sweepPoint/1#1",
+      "android/app/src/main/java/com/noop/analytics/ReadinessTrainingLoad.kt::evaluateWithTrainingLoad/3#1",
+      "android/app/src/main/java/com/noop/analytics/RrEmissionStats.kt::compute/1#1",
+      "android/app/src/main/java/com/noop/analytics/RrEmissionStats.kt::logLine/4#1",
+      "android/app/src/main/java/com/noop/analytics/SleepHeartRateContrast.kt::evaluate/3#1",
+      "android/app/src/main/java/com/noop/analytics/SleepHeartRateContrast.kt::summarize/1#1",
+      "android/app/src/main/java/com/noop/analytics/SleepSessionDedup.kt::keyedStart/2#1",
+      "android/app/src/main/java/com/noop/analytics/SleepSessionDedup.kt::planBank/2#1",
+      "android/app/src/main/java/com/noop/analytics/SleepSessionDedup.kt::rankComparator/1#1",
+      "android/app/src/main/java/com/noop/analytics/TrainingLoadEngine.kt::dayOrdinal/1#1",
+      "android/app/src/main/java/com/noop/analytics/TrainingLoadEngine.kt::dayString/1#1",
+      "android/app/src/main/java/com/noop/analytics/TrainingLoadEngine.kt::evaluate/3#1",
+      "android/app/src/main/java/com/noop/analytics/TrainingLoadEngine.kt::evaluateDense/2#1",
+      "android/app/src/main/java/com/noop/analytics/TrainingLoadEngine.kt::floorDiv/2#1",
+      "android/app/src/main/java/com/noop/analytics/TrainingLoadEngine.kt::isLeapYear/1#1",
+      "android/app/src/main/java/com/noop/analytics/TrainingLoadEngine.kt::unavailable/4#1",
+      "android/app/src/main/java/com/noop/data/BackupProvenance.kt::shouldRecord/2#1",
+      "android/app/src/main/java/com/noop/data/BackupProvenance.kt::sortedJsonObject/1#1",
+      "android/app/src/main/java/com/noop/data/DeviceRegistryDao.kt::deleteAppleStepHoursFor/1#1",
+      "android/app/src/main/java/com/noop/data/DeviceRegistryDao.kt::reKeyAppleStepHour/2#1",
+      "android/app/src/main/java/com/noop/data/OuraRespScale.kt::forVendorRate/2#1",
+      "android/app/src/main/java/com/noop/data/WhoopDatabase.kt::migrate/1#29",
+      "android/app/src/main/java/com/noop/data/WhoopRepository.kt::recordEvent/4#1",
+      "android/app/src/main/java/com/noop/protocol/Whoop5RawOptical.kt::i16/1#1",
+      "android/app/src/main/java/com/noop/protocol/Whoop5RawOptical.kt::u16/1#1"
     ]
   },
   "unpaired_properties": {

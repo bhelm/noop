@@ -110,6 +110,26 @@ class ParityLedgerTests(unittest.TestCase):
         rules = {item.rule for item in self.findings() if item.path == "Strand/Outside.swift"}
         self.assertIn("dead-twin-reference", rules)
 
+    def test_android_test_reference_resolves_swift_strand_test_symbol(self) -> None:
+        self.write_clean_tree()
+        swift_test = self.root / "StrandTests/WorkoutSourceTests.swift"
+        swift_test.parent.mkdir(parents=True)
+        swift_test.write_text(
+            "final class WorkoutSourceTests { func testPreservingCapturedCarriesStepsFromOld() {} }\n"
+        )
+        kotlin_test = self.root / "android/app/src/test/java/com/noop/ui/WorkoutEditingTest.kt"
+        kotlin_test.parent.mkdir(parents=True)
+        kotlin_test.write_text(
+            "/** Twin of Swift `testPreservingCapturedCarriesStepsFromOld`. */\n"
+            "fun preservingCapturedCarriesStepsFromOld() {}\n"
+        )
+
+        findings = [
+            item for item in self.findings()
+            if item.rule == "dead-twin-reference" and item.path.endswith("WorkoutEditingTest.kt")
+        ]
+        self.assertEqual([], findings)
+
     def test_new_one_sided_function_is_rejected(self) -> None:
         self.write_clean_tree()
         twin_map = parity_ledger.build_twin_map(self.root)
@@ -234,6 +254,26 @@ fun Map<String, String>.bool(vararg keys: String) = false
         rules = {finding.rule for finding in self.findings(twin_map)}
         self.assertIn("constant-value-mismatch", rules)
         self.assertEqual(1, self.exit_code(twin_map))
+
+    def test_platform_database_schema_versions_are_not_parity_twins(self) -> None:
+        swift = self.root / "Packages/WhoopStore/Sources/WhoopStore/WhoopStore.swift"
+        kotlin = self.root / "android/app/src/main/java/com/noop/data/WhoopDatabase.kt"
+        swift.parent.mkdir(parents=True)
+        kotlin.parent.mkdir(parents=True)
+        swift.write_text("public enum WhoopStore { public static let schemaVersion = 18 }\n")
+        kotlin.write_text("object WhoopDatabase { const val SCHEMA_VERSION = 31 }\n")
+
+        twin_map = parity_ledger.build_twin_map(self.root)
+        pairs = {(item["swift"], item["kotlin"]) for item in twin_map["constant_pairs"]}
+        self.assertNotIn(
+            (
+                "Packages/WhoopStore/Sources/WhoopStore/WhoopStore.swift::schemaVersion",
+                "android/app/src/main/java/com/noop/data/WhoopDatabase.kt::SCHEMA_VERSION",
+            ),
+            pairs,
+        )
+        constant_findings = [item for item in self.findings(twin_map) if item.rule.startswith("constant-")]
+        self.assertEqual([], constant_findings)
 
     def test_test_only_wiring_is_rejected(self) -> None:
         self.write_clean_tree()
@@ -399,6 +439,13 @@ object Second { fun add(value: Int) = value }
         generated = self.baseline_for(twin_map)
         generated["findings"][0]["issue"] = 123
         generated["findings"][0]["reviewed_by"] = "fixture"
+        generated["counter_issues"] = {
+            "day_string_implementations": {
+                "value": generated["counters"]["day_string_implementations"],
+                "issue": 71,
+                "reason": "Imported upstream duplication",
+            },
+        }
         baseline_path.write_text(json.dumps(generated))
 
         with contextlib.redirect_stdout(io.StringIO()):
@@ -415,6 +462,22 @@ object Second { fun add(value: Int) = value }
         self.assertEqual(0, code)
         self.assertEqual(123, rewritten["findings"][0]["issue"])
         self.assertEqual("fixture", rewritten["findings"][0]["reviewed_by"])
+        self.assertEqual(generated["counter_issues"], rewritten["counter_issues"])
+
+        generated["counter_issues"]["day_string_implementations"]["value"] = 999
+        baseline_path.write_text(json.dumps(generated))
+        with contextlib.redirect_stdout(io.StringIO()):
+            code = parity_ledger.main(
+                [
+                    "--root", str(self.root),
+                    "--map", str(map_path),
+                    "--baseline", str(baseline_path),
+                    "--write-baseline",
+                ]
+            )
+        rewritten = json.loads(baseline_path.read_text())
+        self.assertEqual(0, code)
+        self.assertNotIn("day_string_implementations", rewritten.get("counter_issues", {}))
 
 
 if __name__ == "__main__":

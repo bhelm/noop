@@ -460,6 +460,38 @@ func constrained<T>()
             ),
         )
 
+    def test_kotlin_extension_function_accepts_jacoco_receiver_arity(self) -> None:
+        swift_source = self.write(
+            "Sources/Pilot/Extension.swift", "func target(_ value: Int) -> Int { value }\n"
+        )
+        kotlin_source = self.write(
+            "src/main/java/pilot/Extension.kt",
+            "fun Engine.target(value: Int): Int = value\n",
+        )
+        swift_lcov = self.write(
+            "extension.lcov",
+            f"SF:{swift_source}\nFN:1,target\nFNDA:1,target\nDA:1,1\nend_of_record\n",
+        )
+        jacoco = self.write(
+            "extension.xml",
+            """<report><package name="pilot">
+<class name="pilot/ExtensionKt" sourcefilename="Extension.kt">
+<method name="target" desc="(Lpilot/Engine;I)I" line="1"><counter type="METHOD" missed="0" covered="1"/></method>
+</class><sourcefile name="Extension.kt"><line nr="1" mi="0" ci="1"/></sourcefile>
+</package></report>""",
+        )
+        declarations = {
+            "swift": parity_ratchet.lex_file(self.root, swift_source, "swift"),
+            "kotlin": parity_ratchet.lex_file(self.root, kotlin_source, "kotlin"),
+        }
+
+        self.assertEqual(
+            [],
+            parity_ratchet.coverage_errors(
+                declarations, {"target/1"}, swift_lcov=swift_lcov, kotlin_jacoco=jacoco
+            ),
+        )
+
     def test_line_coverage_fallback_is_announced(self) -> None:
         swift_source = self.write("Sources/Pilot/Fallback.swift", "func target() -> Int { 1 }\n")
         kotlin_source = self.write("src/main/java/pilot/Fallback.kt", "fun target(): Int = 1\n")
@@ -549,6 +581,55 @@ func constrained<T>()
         path.write_text(json.dumps(self.shard([])))
         baseline.write_text(json.dumps({"schema_version": 2, "findings": [], "counters": {"paths": 1}}))
         self.assertEqual([], parity_ratchet.compare_ratchet(self.root, base, offline=True))
+
+    def test_ratchet_accepts_counter_growth_only_with_issue_and_reason(self) -> None:
+        self.init_git()
+        baseline = self.write(
+            "Tools/parity_ledger_baseline.json",
+            json.dumps({"schema_version": 2, "findings": [], "counters": {"paths": 2}}),
+        )
+        base = self.commit_all("base")
+
+        baseline.write_text(json.dumps({
+            "schema_version": 2,
+            "findings": [],
+            "counters": {"paths": 3},
+            "counter_issues": {
+                "paths": {"value": 3, "issue": 71, "reason": "Imported upstream duplication"},
+            },
+        }))
+        self.assertEqual([], parity_ratchet.compare_ratchet(self.root, base, offline=True))
+
+        baseline.write_text(json.dumps({
+            "schema_version": 2,
+            "findings": [],
+            "counters": {"paths": 4},
+            "counter_issues": {
+                "paths": {"value": 3, "issue": 71, "reason": "Imported upstream duplication"},
+            },
+        }))
+        errors = parity_ratchet.compare_ratchet(self.root, base, offline=True)
+        self.assertTrue(any("counter paths increased" in error and "exact value 4" in error for error in errors), errors)
+
+        baseline.write_text(json.dumps({
+            "schema_version": 2,
+            "findings": [],
+            "counters": {"paths": 1},
+            "counter_issues": {
+                "paths": {"value": 3, "issue": 71, "reason": "Imported upstream duplication"},
+            },
+        }))
+        errors = parity_ratchet.compare_ratchet(self.root, base, offline=True)
+        self.assertTrue(any("counter_issues paths" in error and "exact value 1" in error for error in errors), errors)
+
+        baseline.write_text(json.dumps({
+            "schema_version": 2,
+            "findings": [],
+            "counters": {"paths": 3},
+            "counter_issues": {"paths": {"value": 3, "issue": 71}},
+        }))
+        errors = parity_ratchet.compare_ratchet(self.root, base, offline=True)
+        self.assertTrue(any("counter paths increased" in error and "issue" in error for error in errors), errors)
 
     def test_ratchet_rejects_removing_a_merge_base_shard_as_disarmed(self) -> None:
         self.init_git()
@@ -1319,6 +1400,17 @@ func constrained<T>()
         self.assertIn('swift_bin="$(readlink -f "$(command -v swift)")"', workflow)
         self.assertIn('test -x "$(dirname "$swift_bin")/llvm-cov"', workflow)
         self.assertIn('"$(dirname "$swift_bin")/llvm-cov" export', workflow)
+
+    def test_coverage_workflow_runs_full_suites_with_bounded_workers(self) -> None:
+        workflow = (REPOSITORY / ".github/workflows/parity-ratchet.yml").read_text()
+        self.assertNotIn("--filter ParityRunner", workflow)
+        self.assertNotIn("--tests com.noop.analytics.ParityRunner", workflow)
+        self.assertIn("--enable-code-coverage --jobs 1", workflow)
+        self.assertIn("-Dorg.gradle.jvmargs=-Xmx1536m", workflow)
+        self.assertGreaterEqual(workflow.count("--max-workers=1 --no-parallel"), 2)
+        self.assertGreaterEqual(
+            workflow.count("-Pkotlin.compiler.execution.strategy=in-process"), 2
+        )
 
     def test_claude_linux_wall_documents_strand_analytics_snapshot_support(self) -> None:
         guidance = (REPOSITORY / "CLAUDE.md").read_text()
