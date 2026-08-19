@@ -104,6 +104,11 @@
       "evidence": "machine-resolvable declared function twin"
     },
     {
+      "swift": "Packages/StrandAnalytics/Sources/StrandAnalytics/RecoveryForecast.swift",
+      "kotlin": "android/app/src/main/java/com/noop/analytics/RecoveryForecast.kt",
+      "evidence": "machine-resolvable declared function twin"
+    },
+    {
       "swift": "Packages/StrandAnalytics/Sources/StrandAnalytics/SleepReadout.swift",
       "kotlin": "android/app/src/main/java/com/noop/analytics/SleepReadout.kt",
       "evidence": "machine-resolvable declared function twin"
@@ -388,6 +393,31 @@
     {
       "swift": "Packages/StrandAnalytics/Sources/StrandAnalytics/RecoveryScorer.swift::recovery/11#1",
       "kotlin": "android/app/src/main/java/com/noop/analytics/RecoveryScorer.kt::recovery/11#1",
+      "evidence": "declared twin reference"
+    },
+    {
+      "swift": "Packages/StrandAnalytics/Sources/StrandAnalytics/RecoveryForecast.swift::forecast/6#1",
+      "kotlin": "android/app/src/main/java/com/noop/analytics/RecoveryForecast.kt::forecast/6#1",
+      "evidence": "declared twin reference"
+    },
+    {
+      "swift": "Packages/StrandAnalytics/Sources/StrandAnalytics/RecoveryForecast.swift::mean/1#1",
+      "kotlin": "android/app/src/main/java/com/noop/analytics/RecoveryForecast.kt::mean/1#1",
+      "evidence": "declared twin reference"
+    },
+    {
+      "swift": "Packages/StrandAnalytics/Sources/StrandAnalytics/RecoveryForecast.swift::sampleSD/1#1",
+      "kotlin": "android/app/src/main/java/com/noop/analytics/RecoveryForecast.kt::sampleSD/1#1",
+      "evidence": "declared twin reference"
+    },
+    {
+      "swift": "Packages/StrandAnalytics/Sources/StrandAnalytics/RecoveryForecast.swift::leastSquaresSlope/1#1",
+      "kotlin": "android/app/src/main/java/com/noop/analytics/RecoveryForecast.kt::leastSquaresSlope/1#1",
+      "evidence": "declared twin reference"
+    },
+    {
+      "swift": "Packages/StrandAnalytics/Sources/StrandAnalytics/RecoveryForecast.swift::clamp/3#1",
+      "kotlin": "android/app/src/main/java/com/noop/analytics/RecoveryForecast.kt::clamp/3#1",
       "evidence": "declared twin reference"
     },
     {

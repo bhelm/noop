@@ -1161,13 +1161,20 @@ func constrained<T>()
         recovery_drivers = {
             "RecoveryScorer.chargeDrivers/8=RecoveryDrivers.chargeDrivers/8",
         }
+        recovery_forecast = {
+            "RecoveryForecaster.forecast/6",
+            "RecoveryForecaster.mean/1",
+            "RecoveryForecaster.sampleSD/1",
+            "RecoveryForecaster.leastSquaresSlope/1",
+            "RecoveryForecaster.clamp/3",
+        }
         expected = (
             legacy | added | qualified_strain | strain | recovery | recovery_trace
-            | heart_rate_recovery | recovery_drivers
+            | heart_rate_recovery | recovery_drivers | recovery_forecast
         )
         self.assertEqual(19, len(legacy))
         self.assertEqual(21, len(legacy | added))
-        self.assertEqual(46, len(expected))
+        self.assertEqual(51, len(expected))
         self.assertEqual(expected, registered)
         self.assertIn("StrainScorer.trimpToStrain/2", registered)
         self.assertNotIn("trimpToStrain", registered)

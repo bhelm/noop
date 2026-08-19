@@ -514,6 +514,63 @@ class ParityRunner {
                     "trace" to emittedTrace.map { sortedMapOf("text" to it) },
                 )
             }
+            "RecoveryForecaster.forecast/6" -> {
+                require(comparison == "exact") { "invalid RecoveryForecast case $caseId" }
+                val value = if (args.getBoolean("useDefaults")) {
+                    RecoveryForecaster.forecast(
+                        recentCharge = doubleList(args, "recentCharge"),
+                        todayEffort = nullableDouble(args, "todayEffort"),
+                        plannedSleepHours = args.getDouble("plannedSleepHours"),
+                    )
+                } else {
+                    RecoveryForecaster.forecast(
+                        recentCharge = doubleList(args, "recentCharge"),
+                        recentEffort = doubleList(effective, "recentEffort"),
+                        todayEffort = nullableDouble(args, "todayEffort"),
+                        plannedSleepHours = args.getDouble("plannedSleepHours"),
+                        needHours = nullableDouble(effective, "needHours"),
+                        needNights = effective.getInt("needNights"),
+                    )
+                }
+                var encoded: Map<String, Any>? = value?.let(::recoveryForecastBits)
+                if (negativeSide == "kotlin" && caseId == "recovery_forecast_negative_output_probe") {
+                    encoded = requireNotNull(encoded).toMutableMap().also { it["low"] = exactBit(1.0) }
+                    result["negativeSide"] = "kotlin"
+                }
+                if (encoded != null && args.optBoolean("characterizeForecastConstants", false)) {
+                    encoded = encoded.toMutableMap().also { it["constants"] = recoveryForecastConstants() }
+                }
+                result["valueBits"] = encoded
+            }
+            "RecoveryForecaster.mean/1" -> {
+                require(comparison == "epsilon") { "invalid RecoveryForecast mean case $caseId" }
+                val values = doubleList(args, "values").toMutableList()
+                if (negativeSide == "kotlin" && caseId == "recovery_forecast_negative_source_probe") {
+                    values += 100.0
+                    result["negativeSide"] = "kotlin"
+                }
+                result["value"] = finite(RecoveryForecaster.mean(values), function, caseId)
+            }
+            "RecoveryForecaster.sampleSD/1" -> {
+                require(comparison == "epsilon") { "invalid RecoveryForecast sampleSD case $caseId" }
+                result["value"] = finite(
+                    RecoveryForecaster.sampleSD(doubleList(args, "values")), function, caseId,
+                )
+            }
+            "RecoveryForecaster.leastSquaresSlope/1" -> {
+                require(comparison == "epsilon") { "invalid RecoveryForecast slope case $caseId" }
+                result["value"] = finite(
+                    RecoveryForecaster.leastSquaresSlope(doubleList(args, "values")), function, caseId,
+                )
+            }
+            "RecoveryForecaster.clamp/3" -> {
+                require(comparison == "exact") { "invalid RecoveryForecast clamp case $caseId" }
+                result["valueBits"] = exactBit(
+                    RecoveryForecaster.clamp(
+                        args.getDouble("x"), args.getDouble("lo"), args.getDouble("hi"),
+                    )
+                )
+            }
             "StrainScorer.trimpToStrain/2" -> {
                 require(comparison == "exact") { "invalid trimpToStrain case $caseId" }
                 val trimp = args.getDouble("trimp")
@@ -784,6 +841,36 @@ class ParityRunner {
         "wResp" to exactBit(RecoveryScorer.wResp),
         "wSkinTemp" to exactBit(RecoveryScorer.wSkinTemp),
         "wSleep" to exactBit(RecoveryScorer.wSleep),
+    )
+
+    private fun recoveryForecastBits(value: RecoveryForecast): Map<String, Any> = sortedMapOf(
+        "band" to exactBit(value.band),
+        "baseline" to exactBit(value.baseline),
+        "confidence" to sortedMapOf("text" to value.confidence.raw),
+        "high" to exactBit(value.high),
+        "low" to exactBit(value.low),
+        "need" to exactBit(value.needHours),
+        "nights" to value.nights,
+        "planned" to exactBit(value.plannedSleepHours),
+        "score" to exactBit(value.charge),
+    )
+
+    private fun recoveryForecastConstants(): Map<String, Any> = sortedMapOf(
+        "baselineWindow" to RecoveryForecaster.baselineWindow,
+        "defaultNeedHours" to exactBit(RecoveryForecaster.defaultNeedHours),
+        "effortSpread" to exactBit(RecoveryForecaster.effortSpread),
+        "effortWindow" to RecoveryForecaster.effortWindow,
+        "minBandPoints" to exactBit(RecoveryForecaster.minBandPoints),
+        "minBaselineNights" to RecoveryForecaster.minBaselineNights,
+        "reversionAdjCap" to exactBit(RecoveryForecaster.reversionAdjCap),
+        "reversionWeight" to exactBit(RecoveryForecaster.reversionWeight),
+        "sleepOverCap" to exactBit(RecoveryForecaster.sleepOverCap),
+        "sleepWeight" to exactBit(RecoveryForecaster.sleepWeight),
+        "solidNeedNights" to RecoveryForecaster.solidNeedNights,
+        "strainAdjCap" to exactBit(RecoveryForecaster.strainAdjCap),
+        "strainWeight" to exactBit(RecoveryForecaster.strainWeight),
+        "thinBandPoints" to exactBit(RecoveryForecaster.thinBandPoints),
+        "trustedNights" to RecoveryForecaster.trustedNights,
     )
 
     private fun hrSamples(args: JSONObject, key: String = "hr"): List<HrSample> {
