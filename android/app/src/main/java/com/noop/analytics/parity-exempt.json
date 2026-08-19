@@ -6338,11 +6338,6 @@
       "issue": 17
     },
     {
-      "key": "android/app/src/main/java/com/noop/analytics/WatchRecovery.kt::compute/4[defaults=-]#1",
-      "reason": "Bootstrap debt: no differential or declared platform coverage proof yet.",
-      "issue": 17
-    },
-    {
       "key": "android/app/src/main/java/com/noop/analytics/WeeklyDigest.kt::label@computed-property#1",
       "reason": "Bootstrap debt: no differential or declared platform coverage proof yet.",
       "issue": 17

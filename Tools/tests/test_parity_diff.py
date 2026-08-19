@@ -58,6 +58,15 @@ class ParityDiffTests(unittest.TestCase):
         value.update(overrides)
         return value
 
+    def watch_recovery_value(self, **overrides):
+        value = {
+            "recovery": "404cf759b59ded46",
+            "confidence": {"text": "building"},
+            "minBaselineNights": 7,
+        }
+        value.update(overrides)
+        return value
+
     def compare(self, inputs, swift, kotlin):
         input_path = self.write_jsonl("input.jsonl", inputs)
         swift_path = self.write_jsonl("swift.jsonl", swift)
@@ -232,6 +241,126 @@ class ParityDiffTests(unittest.TestCase):
         )
         with self.assertRaisesRegex(parity_diff.ParityFormatError, "constants"):
             self.compare([ordinary], [unexpected], [unexpected])
+
+    def test_watch_recovery_exact_schema_rejects_common_mode_malformed_payloads(self):
+        function = parity_diff.WATCH_RECOVERY_KEY
+        malformed = {
+            "missing": {"recovery": None, "confidence": {"text": "calibrating"}},
+            "extra": self.watch_recovery_value(extra=True),
+            "plain-float": self.watch_recovery_value(recovery=50.0),
+            "confidence": self.watch_recovery_value(confidence={"text": "trusted"}),
+            "constant": self.watch_recovery_value(minBaselineNights=6),
+        }
+        for label, value in malformed.items():
+            input_record = self.input_record(f"watch-{label}")
+            input_record["function"] = function
+            output = self.output_record(
+                f"watch-{label}", function=function, valueBits=value
+            )
+            with self.subTest(label=label), self.assertRaises(parity_diff.ParityFormatError):
+                self.compare([input_record], [output], [output])
+
+    def test_watch_recovery_exact_schema_accepts_null_and_ieee_recovery(self):
+        function = parity_diff.WATCH_RECOVERY_KEY
+        inputs = [self.input_record("watch-null"), self.input_record("watch-score")]
+        for input_record in inputs:
+            input_record["function"] = function
+        outputs = [
+            self.output_record(
+                "watch-null", function=function,
+                valueBits=self.watch_recovery_value(
+                    recovery=None, confidence={"text": "calibrating"}
+                ),
+            ),
+            self.output_record(
+                "watch-score", function=function, valueBits=self.watch_recovery_value()
+            ),
+        ]
+        self.assertEqual([], self.compare(inputs, outputs, outputs))
+
+    def test_watch_recovery_input_contract_is_exact_bounded_and_not_physiologically_prefiltered(self):
+        valid = {
+            "todayHrv": -1.0,
+            "todayRhr": -20,
+            "hrvHistory": [-1.0, 0.0, 999.0],
+            "rhrHistory": [-1.0, 0.0, 999.0],
+        }
+        record = {"id": "watch-input", "function": parity_diff.WATCH_RECOVERY_KEY}
+        self.assertEqual(valid, parity_diff._validate_watch_recovery_args(valid, record))
+
+        malformed = [
+            {**valid, "extra": 1},
+            {key: value for key, value in valid.items() if key != "todayHrv"},
+            {**valid, "todayHrv": math.nan},
+            {**valid, "todayRhr": True},
+            {**valid, "todayRhr": 1 << 31},
+            {**valid, "hrvHistory": "not-an-array"},
+            {**valid, "rhrHistory": [math.inf]},
+            {**valid, "hrvHistory": [0.0] * (parity_diff.WATCH_RECOVERY_MAX_HISTORY + 1)},
+        ]
+        for index, args in enumerate(malformed):
+            with self.subTest(index=index), self.assertRaises(parity_diff.ParityFormatError):
+                parity_diff._validate_watch_recovery_args(args, record)
+
+    def test_watch_recovery_curated_matrix_and_exactly_two_isolated_seeds(self):
+        cases = parity_diff.generate_cases("pilot", "watch-matrix")
+        selected = [case for case in cases if case["function"] == parity_diff.WATCH_RECOVERY_KEY]
+        curated = [case for case in selected if case["source"] == "curated:watch_recovery.json"]
+        seeded = [case for case in selected if case["source"].startswith("seeded:watch-recovery:")]
+        self.assertEqual(15, len(curated))
+        self.assertEqual(2, len(seeded))
+        self.assertTrue(all(case["comparison"] == "exact" for case in selected))
+        required = {
+            "watch_recovery_empty_histories", "watch_recovery_missing_today_hrv",
+            "watch_recovery_six_nights", "watch_recovery_seven_nights",
+            "watch_recovery_fourteen_at_baseline",
+            "watch_recovery_fourteen_high_hrv_low_rhr",
+            "watch_recovery_fourteen_low_hrv_high_rhr",
+            "watch_recovery_missing_today_rhr", "watch_recovery_order_forward",
+            "watch_recovery_order_reversed", "watch_recovery_all_history_out_of_range",
+        }
+        self.assertLessEqual(required, {case["id"] for case in curated})
+        before = parity_diff._seeded_watch_recovery_cases()
+        unrelated = parity_diff.SplitMix64(parity_diff.GENERATOR_SEED)
+        for _ in range(1000):
+            unrelated.next_u64()
+        self.assertEqual(before, parity_diff._seeded_watch_recovery_cases())
+
+    def test_watch_recovery_known_behaviors_have_enforced_per_side_oracles(self):
+        cases = {case["id"]: case for case in parity_diff.generate_cases("pilot", "watch-oracle")}
+        expected = {
+            "watch_recovery_issue_61_present_rhr_empty_history": "4058a4bc6fa91466",
+            "watch_recovery_issue_61_present_rhr_unusable_history": "4058a4bc6fa91466",
+            "watch_recovery_issue_61_missing_rhr_control": "404cf759b59ded46",
+            "watch_recovery_issue_62_raw_seven_valid_four": "404990598933d95c",
+        }
+        for case_id, recovery_bits in expected.items():
+            case = cases[case_id]
+            self.assertIn(case["knownBehaviorIssue"], {"bhelm/noop#61", "bhelm/noop#62"})
+            self.assertEqual(recovery_bits, case["expected"]["recovery"])
+            wrong = self.watch_recovery_value(recovery="3ff0000000000000")
+            output = self.output_record(
+                case_id, nonce="watch-oracle", function=parity_diff.WATCH_RECOVERY_KEY,
+                valueBits=wrong,
+            )
+            diffs = self.compare([case], [output], [output])
+            self.assertEqual(2, len(diffs))
+            self.assertTrue(any("side=swift" in diff for diff in diffs))
+            self.assertTrue(any("side=kotlin" in diff for diff in diffs))
+
+    def test_watch_recovery_negative_suite_has_score_and_confidence_mutants_on_both_runners(self):
+        negative = {
+            case["id"]: case for case in parity_diff.generate_cases("negative", "watch-negative")
+        }
+        self.assertIn("watch_recovery_negative_score_probe", negative)
+        self.assertIn("watch_recovery_negative_confidence_probe", negative)
+        root = Path(__file__).resolve().parents[2]
+        swift = (root / "Packages/StrandAnalytics/Tests/StrandAnalyticsTests/ParityRunner.swift").read_text()
+        kotlin = (root / "android/app/src/test/java/com/noop/analytics/ParityRunner.kt").read_text()
+        for runner, side in ((swift, "swift"), (kotlin, "kotlin")):
+            self.assertIn('"watch_recovery_negative_score_probe"', runner)
+            self.assertIn('"watch_recovery_negative_confidence_probe"', runner)
+            self.assertIn(f'result["negativeSide"] = "{side}"', runner)
 
     def test_pilot_generates_curated_and_seeded_cases_for_every_registered_hrv_function(self):
         cases = parity_diff.generate_cases("pilot", "fixed-nonce")
