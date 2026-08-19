@@ -430,6 +430,53 @@ class ParityRunner {
                 }
                 result["valueBits"] = value?.let(::exactBit)
             }
+            "RecoveryScorer.chargeDrivers/8=RecoveryDrivers.chargeDrivers/8" -> {
+                require(comparison == "exact") { "invalid chargeDrivers case $caseId" }
+                val value = if (args.getBoolean("useDefaults")) {
+                    RecoveryDrivers.chargeDrivers(
+                        hrv = args.getDouble("hrv"),
+                        rhr = args.getDouble("rhr"),
+                        resp = nullableDouble(args, "resp"),
+                        hrvBaseline = baselineState(args.getJSONObject("hrvBaseline")),
+                        rhrBaseline = baselineStateOptional(args, "rhrBaseline"),
+                        respBaseline = baselineStateOptional(args, "respBaseline"),
+                        sleepPerf = nullableDouble(args, "sleepPerf"),
+                    )
+                } else {
+                    RecoveryDrivers.chargeDrivers(
+                        hrv = args.getDouble("hrv"),
+                        rhr = args.getDouble("rhr"),
+                        resp = nullableDouble(effective, "resp"),
+                        hrvBaseline = baselineState(args.getJSONObject("hrvBaseline")),
+                        rhrBaseline = baselineStateOptional(effective, "rhrBaseline"),
+                        respBaseline = baselineStateOptional(effective, "respBaseline"),
+                        sleepPerf = nullableDouble(effective, "sleepPerf"),
+                        skinTempDev = nullableDouble(effective, "skinTempDev"),
+                    )
+                }
+                val encoded = value.map { driver ->
+                    sortedMapOf<String, Any>(
+                        "baselineText" to sortedMapOf("text" to driver.baselineText),
+                        "deltaPoints" to driver.deltaPoints,
+                        "label" to sortedMapOf("text" to driver.label),
+                        "valueText" to sortedMapOf("text" to driver.valueText),
+                        "verdict" to sortedMapOf("text" to driver.verdict),
+                    )
+                }.toMutableList()
+                if (negativeSide == "kotlin" && caseId == "recovery_drivers_negative_delta_probe" &&
+                    encoded.isNotEmpty()
+                ) {
+                    encoded[0]["deltaPoints"] = (encoded[0]["deltaPoints"] as Int) + 1
+                    result["negativeSide"] = "kotlin"
+                }
+                if (negativeSide == "kotlin" && caseId == "recovery_drivers_negative_order_probe" &&
+                    encoded.size >= 2
+                ) {
+                    java.util.Collections.swap(encoded, 0, 1)
+                    result["negativeSide"] = "kotlin"
+                }
+                result["valueBits"] = encoded
+            }
             "RecoveryScorer.recoveryTrace/8=RecoveryScorerTrace.recoveryTrace/8" -> {
                 require(comparison == "exact") { "invalid recoveryTrace case $caseId" }
                 val value = if (args.getBoolean("useDefaults")) {

@@ -533,6 +533,228 @@ class ParityDiffTests(unittest.TestCase):
         self.assertEqual(1, len(diffs))
         self.assertIn("class=exact", diffs[0])
 
+    def test_recovery_drivers_has_curated_boundaries_and_two_structured_seeds(self):
+        cases = parity_diff.generate_cases("pilot", "drivers-coverage")
+        selected = [case for case in cases if case["function"] == parity_diff.RECOVERY_DRIVERS_KEY]
+        curated = [case for case in selected if case["source"] == "curated:recovery_drivers.json"]
+        seeded = [case for case in selected if case["source"].startswith("seeded:splitmix64:")]
+
+        self.assertGreaterEqual(len(curated), 12)
+        self.assertEqual(2, len(seeded))
+        self.assertTrue(all(case["comparison"] == "exact" for case in selected))
+        ids = {case["id"] for case in curated}
+        self.assertLessEqual(
+            {
+                "recovery_drivers_all_zero_stable_order",
+                "recovery_drivers_cold_empty",
+                "recovery_drivers_stale_empty",
+                "recovery_drivers_resp_value_without_baseline",
+                "recovery_drivers_resp_baseline_without_value",
+                "recovery_drivers_saturation_detected",
+                "recovery_drivers_skin_positive",
+                "recovery_drivers_skin_negative",
+            },
+            ids,
+        )
+        self.assertTrue(all(isinstance(case["args"]["hrvBaseline"], dict) for case in seeded))
+
+    def test_recovery_drivers_issue_51_has_exact_expected_row_on_default_path(self):
+        cases = {case["id"]: case for case in parity_diff.generate_cases("pilot", "drivers-half")}
+        case = cases["recovery_drivers_issue_51_negative_half_tie"]
+
+        self.assertEqual(parity_diff.RECOVERY_DRIVERS_KEY, case["function"])
+        self.assertEqual("exact", case["comparison"])
+        self.assertEqual(29.99117725828923, case["args"]["hrv"])
+        self.assertEqual(60.0, case["args"]["rhr"])
+        self.assertEqual(30.0, case["args"]["hrvBaseline"]["baseline"])
+        self.assertEqual(0.55, case["args"]["hrvBaseline"]["spread"])
+        self.assertTrue(case["args"]["useDefaults"])
+        self.assertEqual({"hrv", "rhr", "hrvBaseline", "useDefaults"}, set(case["args"]))
+        self.assertEqual("bhelm/noop#51", case["acceptanceIssue"])
+        self.assertEqual(
+            [{
+                "baselineText": {"text": "30 ms baseline"},
+                "deltaPoints": -1,
+                "label": {"text": "Heart rate variability"},
+                "valueText": {"text": "30 ms"},
+                "verdict": {"text": "below baseline, limiting recovery"},
+            }],
+            case["expectedRows"],
+        )
+        z_score = (case["args"]["hrv"] - 30.0) / (1.253 * 0.55)
+        def logistic(z):
+            return 100.0 / (1.0 + math.exp(-1.6 * (z - -0.20)))
+        self.assertEqual(-0.5, logistic(z_score) - logistic(0.0))
+
+    def test_recovery_drivers_issue_52_seed_has_exact_expected_rows_and_issue_ref(self):
+        cases = {case["id"]: case for case in parity_diff.generate_cases("pilot", "drivers-skin")}
+        case = cases["seeded_recovery_drivers_01"]
+
+        self.assertEqual("bhelm/noop#52", case["acceptanceIssue"])
+        self.assertEqual(-0.35, case["args"]["skinTempDev"])
+        self.assertEqual(
+            [
+                {"baselineText": {"text": "51 ms baseline"}, "deltaPoints": -17,
+                 "label": {"text": "Heart rate variability"}, "valueText": {"text": "46 ms"},
+                 "verdict": {"text": "below baseline, limiting recovery"}},
+                {"baselineText": {"text": ""}, "deltaPoints": 2,
+                 "label": {"text": "Sleep quality"}, "valueText": {"text": "90%"},
+                 "verdict": {"text": "a strong night, supporting recovery"}},
+                {"baselineText": {"text": "15.0 br/min baseline"}, "deltaPoints": 1,
+                 "label": {"text": "Respiratory rate"}, "valueText": {"text": "14.0 br/min"},
+                 "verdict": {"text": "below baseline, supporting recovery"}},
+                {"baselineText": {"text": ""}, "deltaPoints": -1,
+                 "label": {"text": "Skin temperature"}, "valueText": {"text": "-0.4 C vs baseline"},
+                 "verdict": {"text": "cooler than baseline, limiting recovery"}},
+                {"baselineText": {"text": "58 bpm baseline"}, "deltaPoints": 0,
+                 "label": {"text": "Resting heart rate"}, "valueText": {"text": "58 bpm"},
+                 "verdict": {"text": "at baseline"}},
+            ],
+            case["expectedRows"],
+        )
+
+    def test_recovery_drivers_issue_oracle_rejects_common_mode_regression(self):
+        cases = {case["id"]: case for case in parity_diff.generate_cases("pilot", "drivers-oracle")}
+        case = cases["recovery_drivers_issue_51_negative_half_tie"]
+        wrong = [{**case["expectedRows"][0], "deltaPoints": 0}]
+        output = [self.output_record(
+            case["id"], nonce="drivers-oracle", function=parity_diff.RECOVERY_DRIVERS_KEY,
+            valueBits=wrong,
+        )]
+
+        with self.assertRaisesRegex(parity_diff.ParityFormatError, "expectedRows"):
+            self.compare([case], output, output)
+
+    def test_recovery_drivers_omitted_and_explicit_arg8_paths_are_distinct(self):
+        cases = {case["id"]: case for case in parity_diff.generate_cases("pilot", "drivers-default")}
+        omitted = cases["recovery_drivers_default_arg8_omitted"]
+        explicit = cases["recovery_drivers_explicit_arg8_null"]
+
+        self.assertTrue(omitted["args"]["useDefaults"])
+        self.assertNotIn("skinTempDev", omitted["args"])
+        self.assertIsNone(omitted["effectiveArgs"]["skinTempDev"])
+        self.assertFalse(explicit["args"]["useDefaults"])
+        self.assertIn("skinTempDev", explicit["args"])
+        self.assertIsNone(explicit["effectiveArgs"]["skinTempDev"])
+
+    def test_recovery_drivers_payloads_fail_closed_before_native_dispatch(self):
+        baseline = {
+            "baseline": 50.0, "spread": 5.0, "nValid": 14,
+            "nightsSinceUpdate": 0, "status": "trusted",
+        }
+        valid = {"hrv": 50.0, "rhr": 60.0, "hrvBaseline": baseline, "useDefaults": True}
+        malformed = [
+            {"hrv": 50.0, "rhr": 60.0, "useDefaults": True},
+            {**valid, "surprise": 1},
+            {**valid, "skinTempDev": None},
+            {**valid, "useDefaults": False},
+            {**valid, "hrv": 0.0},
+            {**valid, "hrv": 10 ** 400},
+            {**valid, "rhr": math.inf},
+            {**valid, "hrvBaseline": {**baseline, "status": "TRUSTED"}},
+            {**valid, "hrvBaseline": {**baseline, "spread": 0.0}},
+            {**valid, "hrvBaseline": {**baseline, "extra": 1}},
+            {**valid, "resp": 0.5},
+            {**valid, "sleepPerf": 1.01},
+            {**valid, "useDefaults": False, "skinTempDev": -0.0},
+        ]
+        for index, args in enumerate(malformed):
+            record = {"id": f"bad-drivers-{index}", "function": parity_diff.RECOVERY_DRIVERS_KEY,
+                      "args": args}
+            with self.subTest(index=index), self.assertRaises(parity_diff.ParityFormatError):
+                parity_diff._effective_args(record)
+
+    def test_recovery_drivers_output_requires_exact_row_fields_and_text_wrappers(self):
+        input_record = self.input_record("drivers-shape")
+        input_record["function"] = parity_diff.RECOVERY_DRIVERS_KEY
+        good = {
+            "label": {"text": "Heart rate variability"},
+            "deltaPoints": 1,
+            "valueText": {"text": "51 ms"},
+            "baselineText": {"text": "50 ms baseline"},
+            "verdict": {"text": "above baseline, supporting recovery"},
+        }
+        malformed = [
+            {key: value for key, value in good.items() if key != "verdict"},
+            {**good, "label": "Heart rate variability"},
+            {**good, "deltaPoints": True},
+            {**good, "deltaPoints": 101},
+            {**good, "unexpected": {"text": "no"}},
+        ]
+        for index, row in enumerate(malformed):
+            swift = [self.output_record(
+                "drivers-shape", function=parity_diff.RECOVERY_DRIVERS_KEY, valueBits=[row]
+            )]
+            kotlin = [self.output_record(
+                "drivers-shape", function=parity_diff.RECOVERY_DRIVERS_KEY, valueBits=[good]
+            )]
+            with self.subTest(index=index), self.assertRaises(parity_diff.ParityFormatError):
+                self.compare([input_record], swift, kotlin)
+
+    def test_recovery_drivers_exact_payload_detects_delta_and_row_order_mutations(self):
+        input_record = self.input_record("drivers-exact")
+        input_record["function"] = parity_diff.RECOVERY_DRIVERS_KEY
+        hrv = {
+            "label": {"text": "Heart rate variability"}, "deltaPoints": 0,
+            "valueText": {"text": "50 ms"}, "baselineText": {"text": "50 ms baseline"},
+            "verdict": {"text": "at baseline"},
+        }
+        rhr = {
+            "label": {"text": "Resting heart rate"}, "deltaPoints": 0,
+            "valueText": {"text": "60 bpm"}, "baselineText": {"text": "60 bpm baseline"},
+            "verdict": {"text": "at baseline"},
+        }
+        swift = [self.output_record(
+            "drivers-exact", function=parity_diff.RECOVERY_DRIVERS_KEY, valueBits=[hrv, rhr]
+        )]
+        for label, kotlin_rows in (
+            ("delta", [{**hrv, "deltaPoints": 1}, rhr]),
+            ("order", [rhr, hrv]),
+        ):
+            kotlin = [self.output_record(
+                "drivers-exact", function=parity_diff.RECOVERY_DRIVERS_KEY, valueBits=kotlin_rows
+            )]
+            with self.subTest(mutation=label):
+                diffs = self.compare([input_record], swift, kotlin)
+                self.assertEqual(1, len(diffs))
+                self.assertIn("class=exact", diffs[0])
+
+    def test_recovery_drivers_negative_suite_assigns_delta_and_order_probes_to_native_sides(self):
+        cases = {case["id"]: case for case in parity_diff.generate_cases("negative", "drivers-neg")}
+        self.assertEqual(
+            parity_diff.RECOVERY_DRIVERS_KEY,
+            cases["recovery_drivers_negative_delta_probe"]["function"],
+        )
+        self.assertEqual(
+            parity_diff.RECOVERY_DRIVERS_KEY,
+            cases["recovery_drivers_negative_order_probe"]["function"],
+        )
+        repository = Path(__file__).resolve().parents[2]
+        swift = (repository / "Packages/StrandAnalytics/Tests/StrandAnalyticsTests/ParityRunner.swift").read_text()
+        kotlin = (repository / "android/app/src/test/java/com/noop/analytics/ParityRunner.kt").read_text()
+        self.assertIn('negativeSide == "swift", record.id == "recovery_drivers_negative_order_probe"', swift)
+        self.assertIn('negativeSide == "swift", record.id == "recovery_drivers_negative_delta_probe"', swift)
+        self.assertIn('negativeSide == "kotlin" && caseId == "recovery_drivers_negative_delta_probe"', kotlin)
+        self.assertIn('negativeSide == "kotlin" && caseId == "recovery_drivers_negative_order_probe"', kotlin)
+
+    def test_recovery_drivers_runners_pin_default_arity_and_posix_formatting(self):
+        repository = Path(__file__).resolve().parents[2]
+        swift = (repository / "Packages/StrandAnalytics/Tests/StrandAnalyticsTests/ParityRunner.swift").read_text()
+        kotlin = (repository / "android/app/src/test/java/com/noop/analytics/ParityRunner.kt").read_text()
+        swift_block = swift.split(
+            'case "RecoveryScorer.chargeDrivers/8=RecoveryDrivers.chargeDrivers/8":', 1
+        )[1].split('case "RecoveryScorer.recoveryTrace/8=RecoveryScorerTrace.recoveryTrace/8":', 1)[0]
+        kotlin_block = kotlin.split(
+            '"RecoveryScorer.chargeDrivers/8=RecoveryDrivers.chargeDrivers/8" ->', 1
+        )[1].split('"RecoveryScorer.recoveryTrace/8=RecoveryScorerTrace.recoveryTrace/8" ->', 1)[0]
+        self.assertEqual(2, swift_block.count("RecoveryScorer.chargeDrivers("))
+        self.assertEqual(1, swift_block.count("skinTempDev:"))
+        self.assertEqual(2, kotlin_block.count("RecoveryDrivers.chargeDrivers("))
+        self.assertEqual(1, kotlin_block.count("skinTempDev ="))
+        self.assertIn('Locale(identifier: "en_US_POSIX")', swift)
+        self.assertIn('format: "%.1f br/min"', swift)
+        self.assertIn('format: "%+.1f C vs baseline"', swift)
+
     def test_recovery_payloads_fail_closed_before_native_dispatch(self):
         int64_max = (1 << 63) - 1
         malformed = [

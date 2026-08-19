@@ -561,6 +561,53 @@ final class ParityRunner: XCTestCase {
                 )
             }
             result["valueBits"] = value.map(exactBit) ?? NSNull()
+        case "RecoveryScorer.chargeDrivers/8=RecoveryDrivers.chargeDrivers/8":
+            guard record.comparison == "exact", let hrv = record.args.hrv,
+                  let rhr = record.args.rhr, let hrvInput = record.args.hrvBaseline,
+                  let useDefaults = record.args.useDefaults else {
+                throw RunnerError.invalidInput("invalid chargeDrivers case \(record.id)")
+            }
+            let hrvBaseline = try baselineState(hrvInput, record: record)
+            let value: [ChargeDriver]
+            if useDefaults {
+                value = RecoveryScorer.chargeDrivers(
+                    hrv: hrv, rhr: rhr, resp: record.args.resp,
+                    hrvBaseline: hrvBaseline,
+                    rhrBaseline: try baselineStateOptional(record.args.rhrBaseline, record: record),
+                    respBaseline: try baselineStateOptional(record.args.respBaseline, record: record),
+                    sleepPerf: record.args.sleepPerf
+                )
+            } else {
+                value = RecoveryScorer.chargeDrivers(
+                    hrv: hrv, rhr: rhr, resp: record.effectiveArgs.resp,
+                    hrvBaseline: hrvBaseline,
+                    rhrBaseline: try baselineStateOptional(record.effectiveArgs.rhrBaseline, record: record),
+                    respBaseline: try baselineStateOptional(record.effectiveArgs.respBaseline, record: record),
+                    sleepPerf: record.effectiveArgs.sleepPerf,
+                    skinTempDev: record.effectiveArgs.skinTempDev
+                )
+            }
+            try validateChargeDriverFormatting(value, record: record)
+            var encoded = value.map { driver in
+                [
+                    "baselineText": ["text": driver.baselineText],
+                    "deltaPoints": driver.deltaPoints,
+                    "label": ["text": driver.label],
+                    "valueText": ["text": driver.valueText],
+                    "verdict": ["text": driver.verdict],
+                ] as [String: Any]
+            }
+            if negativeSide == "swift", record.id == "recovery_drivers_negative_delta_probe",
+               !encoded.isEmpty, let delta = encoded[0]["deltaPoints"] as? Int {
+                encoded[0]["deltaPoints"] = delta + 1
+                result["negativeSide"] = "swift"
+            }
+            if negativeSide == "swift", record.id == "recovery_drivers_negative_order_probe",
+               encoded.count >= 2 {
+                encoded.swapAt(0, 1)
+                result["negativeSide"] = "swift"
+            }
+            result["valueBits"] = encoded
         case "RecoveryScorer.recoveryTrace/8=RecoveryScorerTrace.recoveryTrace/8":
             guard record.comparison == "exact", let hrv = record.args.hrv,
                   let rhr = record.args.rhr, let hrvInput = record.args.hrvBaseline,
@@ -845,6 +892,42 @@ final class ParityRunner: XCTestCase {
             baseline: baseline, spread: input.spread, nValid: nValid,
             nightsSinceUpdate: nights, status: status
         )
+    }
+
+    private func validateChargeDriverFormatting(
+        _ drivers: [ChargeDriver], record: InputRecord
+    ) throws {
+        guard !drivers.isEmpty else { return }
+        let locale = Locale(identifier: "en_US_POSIX")
+        if let resp = record.effectiveArgs.resp, let baseline = record.effectiveArgs.respBaseline,
+           let baselineValue = baseline.baseline {
+            guard let row = drivers.first(where: { $0.label == "Respiratory rate" }) else {
+                throw RunnerError.invalidInput("chargeDrivers omitted respiration row \(record.id)")
+            }
+            let expectedValue = String(
+                format: "%.1f br/min", locale: locale, resp
+            )
+            let expectedBaseline = String(
+                format: "%.1f br/min baseline", locale: locale, baselineValue
+            )
+            guard row.valueText == expectedValue, row.baselineText == expectedBaseline else {
+                throw RunnerError.invalidInput("chargeDrivers respiration formatting is not en_US_POSIX \(record.id)")
+            }
+        }
+        if let skin = record.effectiveArgs.skinTempDev {
+            guard let row = drivers.first(where: { $0.label == "Skin temperature" }) else {
+                throw RunnerError.invalidInput("chargeDrivers omitted skin-temperature row \(record.id)")
+            }
+            let expected = String(
+                format: "%+.1f C vs baseline", locale: locale, skin
+            )
+            guard row.valueText == expected else {
+                throw RunnerError.invalidInput(
+                    "chargeDrivers skin formatting is not en_US_POSIX \(record.id): "
+                    + "actual=\(row.valueText.debugDescription) expected=\(expected.debugDescription)"
+                )
+            }
+        }
     }
 
     private func hrSamples(_ input: [HRInput]) -> [HRSample] {

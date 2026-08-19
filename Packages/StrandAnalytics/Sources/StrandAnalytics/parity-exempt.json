@@ -1133,11 +1133,6 @@
       "issue": 17
     },
     {
-      "key": "Packages/StrandAnalytics/Sources/StrandAnalytics/ChargeDrivers.swift::chargeDrivers/8[defaults=8]#1",
-      "reason": "Bootstrap debt: no differential or declared platform coverage proof yet.",
-      "issue": 17
-    },
-    {
       "key": "Packages/StrandAnalytics/Sources/StrandAnalytics/ChargeDrivers.swift::hrvVerdict/3[defaults=3]#1",
       "reason": "Bootstrap debt: no differential or declared platform coverage proof yet.",
       "issue": 17
