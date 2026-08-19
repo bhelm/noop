@@ -324,6 +324,110 @@ class ParityDiffTests(unittest.TestCase):
         self.assertTrue(all(case["comparison"] == "exact" for case in selected))
         self.assertTrue(all(isinstance(case["args"]["hrvBaseline"], dict) for case in seeded))
 
+    def test_heart_rate_recovery_has_complete_curated_matrix_and_exactly_two_structured_seeds(self):
+        cases = parity_diff.generate_cases("pilot", "hrr-coverage")
+        selected = [case for case in cases if case["function"] == parity_diff.HEART_RATE_RECOVERY_KEY]
+        curated = [case for case in selected if case["source"] == "curated:heart_rate_recovery.json"]
+        seeded = [case for case in selected if case["source"].startswith("seeded:")]
+
+        self.assertGreaterEqual(len(curated), 18)
+        self.assertEqual(2, len(seeded))
+        self.assertTrue(all(case["comparison"] == "exact" for case in selected))
+        ids = {case["id"] for case in curated}
+        for fragment in (
+            "threshold_below", "threshold_exact", "duration_119", "duration_120",
+            "lookback_300", "gap_10", "gap_11", "bpm_bounds", "cessation_boundary",
+            "sample_count", "tolerance_15_16", "post_count", "median_odd_even",
+            "missing_windows", "negative_recovery", "shuffled_duplicates",
+            "disconnected_segments_issue_55",
+        ):
+            self.assertTrue(any(fragment in case_id for case_id in ids), fragment)
+        by_id = {case["id"]: case for case in curated}
+        self.assertIn("heart_rate_recovery_cessation_sample_count_2", by_id)
+        self.assertIn("heart_rate_recovery_cessation_sample_count_3", by_id)
+        self.assertFalse(any("overall_sample_count" in case_id for case_id in ids))
+        bpm_samples = by_id["heart_rate_recovery_bpm_bounds_asymmetric_29_30_250_251"]["args"]["samples"]
+        self.assertEqual([29, 30, 31], [row["bpm"] for row in bpm_samples if 1059 <= row["ts"] <= 1061])
+        self.assertEqual([249, 250, 251], [row["bpm"] for row in bpm_samples if 1119 <= row["ts"] <= 1121])
+        tolerance = by_id["heart_rate_recovery_tolerance_15_16"]["args"]
+        offsets = {row["ts"] - tolerance["workoutEnd"] for row in tolerance["samples"]}
+        for target in (60, 120, 300):
+            self.assertTrue({target - 16, target - 15, target, target + 15, target + 16} <= offsets)
+        issue = next(case for case in curated if "disconnected_segments_issue_55" in case["id"])
+        self.assertEqual("bhelm/noop#55", issue["knownBehaviorIssue"])
+        self.assertEqual(
+            {"endHR": 130, "after1Minute": 20, "after2Minutes": None, "after5Minutes": None},
+            issue["expected"],
+        )
+
+    def test_heart_rate_recovery_validator_rejects_unknown_malformed_and_overflow(self):
+        good = {
+            "samples": [{"ts": 880, "bpm": 140}, {"ts": 890, "bpm": 140}, {"ts": 900, "bpm": 140}],
+            "workoutStart": 500, "workoutEnd": 1000, "maxHR": 200.0,
+        }
+        int64_max = (1 << 63) - 1
+        malformed = [
+            {**good, "surprise": 1},
+            {**good, "workoutStart": True},
+            {**good, "workoutStart": 0},
+            {**good, "workoutEnd": 500},
+            {**good, "maxHR": float("inf")},
+            {**good, "maxHR": 251.0},
+            {**good, "samples": [{"ts": 1, "bpm": True}]},
+            {**good, "samples": [{}]},
+            {**good, "samples": good["samples"] * 4000},
+            {**good, "workoutEnd": int64_max},
+            {**good, "samples": [{"ts": -(1 << 63), "bpm": 140}]},
+        ]
+        for index, args in enumerate(malformed):
+            with self.subTest(index=index), self.assertRaises(parity_diff.ParityFormatError):
+                parity_diff._effective_args({
+                    "id": f"bad-hrr-{index}", "function": parity_diff.HEART_RATE_RECOVERY_KEY,
+                    "args": args,
+                })
+
+    def test_heart_rate_recovery_negative_suite_declares_one_exact_mutant_probe(self):
+        selected = [
+            case for case in parity_diff.generate_cases("negative", "hrr-mutant")
+            if case["function"] == parity_diff.HEART_RATE_RECOVERY_KEY
+        ]
+        self.assertEqual(["heart_rate_recovery_negative_probe"], [case["id"] for case in selected])
+        self.assertEqual("exact", selected[0]["comparison"])
+
+    def test_heart_rate_recovery_known_behavior_expected_is_enforced_per_side(self):
+        case_id = "heart_rate_recovery_disconnected_segments_issue_55"
+        expected = {"endHR": 130, "after1Minute": 20, "after2Minutes": None, "after5Minutes": None}
+        input_record = self.input_record(case_id)
+        input_record.update({
+            "function": parity_diff.HEART_RATE_RECOVERY_KEY,
+            "knownBehaviorIssue": "bhelm/noop#55",
+            "expected": expected,
+        })
+        swift = self.output_record(case_id, function=parity_diff.HEART_RATE_RECOVERY_KEY, valueBits=None)
+        kotlin = self.output_record(case_id, function=parity_diff.HEART_RATE_RECOVERY_KEY, valueBits=None)
+
+        diffs = self.compare([input_record], [swift], [kotlin])
+
+        self.assertEqual(2, len(diffs))
+        self.assertTrue(all("known_behavior=bhelm/noop#55" in diff for diff in diffs))
+        self.assertTrue(any("side=swift" in diff for diff in diffs))
+        self.assertTrue(any("side=kotlin" in diff for diff in diffs))
+
+    def test_heart_rate_recovery_known_behavior_expected_fails_closed_when_malformed(self):
+        case_id = "heart_rate_recovery_disconnected_segments_issue_55"
+        input_record = self.input_record(case_id)
+        input_record.update({
+            "function": parity_diff.HEART_RATE_RECOVERY_KEY,
+            "knownBehaviorIssue": "bhelm/noop#55",
+            "expected": {"endHR": 130, "after1Minute": 20, "surprise": None},
+        })
+        output = self.output_record(
+            case_id, function=parity_diff.HEART_RATE_RECOVERY_KEY, valueBits=None
+        )
+
+        with self.assertRaisesRegex(parity_diff.ParityFormatError, "expected"):
+            self.compare([input_record], [output], [output])
+
     def test_recovery_trace_issue_38_acceptance_is_an_exact_complete_trace_case(self):
         cases = {case["id"]: case for case in parity_diff.generate_cases("pilot", "issue-38")}
         case = cases["recovery_trace_issue_38_negative_half_tie"]
