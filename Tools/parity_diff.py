@@ -16,7 +16,7 @@ The runners are deliberately not launched here. A complete run is strictly seria
 
 For a negative-side proof, generate ``--suite negative`` and set
 ``PARITY_NEGATIVE_SIDE=swift`` (then ``kotlin``) on both runner commands. Only
-the named runner mutates the declared ``trimpToStrain`` probe.
+the named runner mutates its declared negative probes.
 """
 
 from __future__ import annotations
@@ -50,6 +50,9 @@ RECOVERY_TRACE_KEY = (
 )
 RECOVERY_FORECAST_KEY = "RecoveryForecaster.forecast/6"
 HEART_RATE_RECOVERY_KEY = "HeartRateRecovery.calculate/4"
+RECOVERY_DRIVERS_KEY = (
+    "RecoveryScorer.chargeDrivers/8=RecoveryDrivers.chargeDrivers/8"
+)
 RAW_ANALYZE_KEY = "HRVAnalyzer.analyze/2=HrvAnalyzer.analyzeRaw/2"
 HRV_MEDIAN_KEY = "HRVAnalyzer.median/1=HrvAnalyzer.median/1"
 EPSILON = 1e-9
@@ -172,9 +175,62 @@ def _payload(record: dict[str, Any], comparison: str, side: str, case_id: str) -
     value = record[value_field]
     if comparison == "exact":
         _validate_exact_tree(value, f"{side} id={case_id} valueBits")
+        if record.get("function") == RECOVERY_DRIVERS_KEY:
+            _validate_recovery_drivers_rows(value, f"{side} id={case_id} valueBits")
     else:
         _validate_finite_tree(value, f"{side} id={case_id} value")
     return ("value", value)
+
+
+def _validate_recovery_drivers_rows(value: Any, path: str) -> None:
+    """Require the exact public Charge-driver row contract, including text wrappers."""
+
+    if not isinstance(value, list) or len(value) > 5:
+        raise ParityFormatError(f"{path} must be a list of at most five driver rows")
+    fields = {"label", "deltaPoints", "valueText", "baselineText", "verdict"}
+    labels: set[str] = set()
+    canonical_labels = {
+        "Heart rate variability", "Resting heart rate", "Sleep quality",
+        "Respiratory rate", "Skin temperature",
+    }
+    for index, row in enumerate(value):
+        row_path = f"{path}[{index}]"
+        if not isinstance(row, dict) or set(row) != fields:
+            raise ParityFormatError(f"{row_path} must contain exactly {sorted(fields)}")
+        delta = row.get("deltaPoints")
+        if not _is_signed_integer(delta, -100, 100):
+            raise ParityFormatError(f"{row_path}.deltaPoints must be within [-100, 100]")
+        decoded: dict[str, str] = {}
+        for field in ("label", "valueText", "baselineText", "verdict"):
+            wrapper = row.get(field)
+            if not isinstance(wrapper, dict) or set(wrapper) != {"text"} or not isinstance(
+                wrapper.get("text"), str
+            ):
+                raise ParityFormatError(f"{row_path}.{field} must be an exact text wrapper")
+            decoded[field] = wrapper["text"]
+        if decoded["label"] not in canonical_labels:
+            raise ParityFormatError(f"{row_path}.label is not a canonical Charge-driver label")
+        if decoded["label"] in labels:
+            raise ParityFormatError(f"{row_path}.label is duplicated")
+        labels.add(decoded["label"])
+        if not decoded["valueText"] or not decoded["verdict"]:
+            raise ParityFormatError(f"{row_path} valueText/verdict must not be empty")
+
+
+def _validate_recovery_drivers_output(
+    value: Any, expected: dict[str, Any], path: str
+) -> None:
+    """Apply the structural contract and any issue-linked exact-row oracle."""
+
+    _validate_recovery_drivers_rows(value, path)
+    expected_rows = expected.get("expectedRows")
+    if expected_rows is None:
+        return
+    _validate_recovery_drivers_rows(expected_rows, f"input id={expected['id']} expectedRows")
+    if value != expected_rows:
+        raise ParityFormatError(
+            f"{path} does not match issue-linked expectedRows for {expected['id']}"
+        )
 
 
 def _validate_exact_tree(value: Any, path: str) -> None:
@@ -279,6 +335,7 @@ def _validate_recovery_forecast_output(
 
 
 _EXACT_OUTPUT_VALIDATORS = {
+    RECOVERY_DRIVERS_KEY: _validate_recovery_drivers_output,
     RECOVERY_FORECAST_KEY: _validate_recovery_forecast_output,
 }
 
@@ -893,6 +950,8 @@ def _seeded_cases() -> list[dict[str, Any]]:
                 "source": f"seeded:splitmix64:{GENERATOR_SEED:#018x}",
             }
         )
+    charge_rng = SplitMix64(GENERATOR_SEED)
+    charge_rng.state = rng.state
     for index in range(2):
         workout_end = 80_000 + index * 1_000
         samples = [
@@ -919,6 +978,65 @@ def _seeded_cases() -> list[dict[str, Any]]:
                 "source": f"seeded:splitmix64:{GENERATOR_SEED:#018x}",
             }
         )
+    for round_index in range(2):
+        baseline = {
+            "baseline": 48.0 + round_index * 3.0,
+            "nValid": 8 + round_index * 8,
+            "nightsSinceUpdate": round_index,
+            "spread": 4.0 + round_index,
+            "status": "provisional" if round_index == 0 else "trusted",
+        }
+        args = {
+            "hrv": 44.0 + charge_rng.bounded(17),
+            "hrvBaseline": baseline,
+            "resp": 13.0 + charge_rng.bounded(5) / 2.0,
+            "respBaseline": {
+                "baseline": 15.0,
+                "nValid": 12,
+                "nightsSinceUpdate": round_index,
+                "spread": 1.5,
+                "status": "trusted",
+            },
+            "rhr": 48.0 + charge_rng.bounded(17),
+            "rhrBaseline": {
+                "baseline": 58.0,
+                "nValid": 12,
+                "nightsSinceUpdate": round_index,
+                "spread": 4.0,
+                "status": "trusted",
+            },
+            "sleepPerf": 0.72 + round_index * 0.18,
+            "useDefaults": round_index == 0,
+        }
+        if round_index != 0:
+            args["skinTempDev"] = -0.35
+        record = {
+            "args": args,
+            "comparison": "exact",
+            "function": RECOVERY_DRIVERS_KEY,
+            "id": f"seeded_recovery_drivers_{round_index:02d}",
+            "source": f"seeded:splitmix64:{GENERATOR_SEED:#018x}",
+        }
+        if round_index == 1:
+            record["acceptanceIssue"] = "bhelm/noop#52"
+            record["expectedRows"] = [
+                {"baselineText": {"text": "51 ms baseline"}, "deltaPoints": -17,
+                 "label": {"text": "Heart rate variability"}, "valueText": {"text": "46 ms"},
+                 "verdict": {"text": "below baseline, limiting recovery"}},
+                {"baselineText": {"text": ""}, "deltaPoints": 2,
+                 "label": {"text": "Sleep quality"}, "valueText": {"text": "90%"},
+                 "verdict": {"text": "a strong night, supporting recovery"}},
+                {"baselineText": {"text": "15.0 br/min baseline"}, "deltaPoints": 1,
+                 "label": {"text": "Respiratory rate"}, "valueText": {"text": "14.0 br/min"},
+                 "verdict": {"text": "below baseline, supporting recovery"}},
+                {"baselineText": {"text": ""}, "deltaPoints": -1,
+                 "label": {"text": "Skin temperature"}, "valueText": {"text": "-0.4 C vs baseline"},
+                 "verdict": {"text": "cooler than baseline, limiting recovery"}},
+                {"baselineText": {"text": "58 bpm baseline"}, "deltaPoints": 0,
+                 "label": {"text": "Resting heart rate"}, "valueText": {"text": "58 bpm"},
+                 "verdict": {"text": "at baseline"}},
+            ]
+        records.append(record)
     return records
 
 
@@ -1237,6 +1355,106 @@ def _validate_recovery_trace_args(args: Any, record: dict[str, Any]) -> dict[str
     return effective
 
 
+def _validate_recovery_drivers_args(args: Any, record: dict[str, Any]) -> dict[str, Any]:
+    """Fail closed around the finite physiological domain of the public driver adapter."""
+
+    function = RECOVERY_DRIVERS_KEY
+    if not isinstance(args, dict):
+        raise ParityFormatError(f"case {record.get('id')!r} {function} args must be an object")
+    allowed = {
+        "hrv", "rhr", "resp", "hrvBaseline", "rhrBaseline", "respBaseline",
+        "sleepPerf", "skinTempDev", "useDefaults",
+    }
+    unknown = sorted(set(args) - allowed)
+    if unknown:
+        raise ParityFormatError(
+            f"case {record.get('id')!r} {function} has unknown fields {unknown}"
+        )
+    use_defaults = args.get("useDefaults")
+    if not isinstance(use_defaults, bool):
+        raise ParityFormatError(
+            f"case {record.get('id')!r} {function} useDefaults must be boolean"
+        )
+    if use_defaults and "skinTempDev" in args:
+        raise ParityFormatError(
+            f"case {record.get('id')!r} {function} seven-argument call cannot provide arg8"
+        )
+    if not use_defaults and "skinTempDev" not in args:
+        raise ParityFormatError(
+            f"case {record.get('id')!r} {function} explicit eight-argument call requires arg8"
+        )
+
+    def scalar(key: str, minimum: float, maximum: float, optional: bool = False) -> float | None:
+        value = args.get(key)
+        if optional and value is None:
+            return None
+        if not _is_number(value) or not minimum <= value <= maximum or not math.isfinite(float(value)):
+            raise ParityFormatError(
+                f"case {record.get('id')!r} {function} {key} is outside [{minimum}, {maximum}]"
+            )
+        if value == 0.0 and math.copysign(1.0, value) < 0:
+            raise ParityFormatError(
+                f"case {record.get('id')!r} {function} {key} must not be negative zero"
+            )
+        return float(value)
+
+    hrv = scalar("hrv", 1.0, 1_000.0)
+    rhr = scalar("rhr", 20.0, 250.0)
+    resp = scalar("resp", 1.0, 100.0, optional=True)
+    sleep = scalar("sleepPerf", 0.0, 1.0, optional=True)
+    skin = scalar("skinTempDev", -20.0, 20.0, optional=True)
+    statuses = {"calibrating", "provisional", "trusted", "stale"}
+
+    def baseline(key: str, minimum: float, maximum: float, required: bool) -> dict[str, Any] | None:
+        value = args.get(key)
+        if value is None and not required:
+            return None
+        required_fields = {"baseline", "spread", "nValid", "nightsSinceUpdate", "status"}
+        if not isinstance(value, dict) or set(value) != required_fields:
+            raise ParityFormatError(
+                f"case {record.get('id')!r} {function} {key} must be a complete baseline state"
+            )
+        center = value.get("baseline")
+        spread = value.get("spread")
+        if not _is_number(center) or not minimum <= center <= maximum or not math.isfinite(float(center)):
+            raise ParityFormatError(
+                f"case {record.get('id')!r} {function} {key}.baseline is out of bounds"
+            )
+        if not _is_number(spread) or not 0.001 <= spread <= 1_000.0 or not math.isfinite(float(spread)):
+            raise ParityFormatError(
+                f"case {record.get('id')!r} {function} {key}.spread is out of bounds"
+            )
+        for count_key in ("nValid", "nightsSinceUpdate"):
+            if not _is_signed_integer(value.get(count_key), 0, 1_000_000):
+                raise ParityFormatError(
+                    f"case {record.get('id')!r} {function} {key}.{count_key} is invalid"
+                )
+        if value.get("status") not in statuses:
+            raise ParityFormatError(
+                f"case {record.get('id')!r} {function} {key}.status is invalid"
+            )
+        return value
+
+    hrv_base = baseline("hrvBaseline", 1.0, 1_000.0, required=True)
+    rhr_base = baseline("rhrBaseline", 20.0, 250.0, required=False)
+    resp_base = baseline("respBaseline", 1.0, 100.0, required=False)
+    assert hrv is not None and rhr is not None and hrv_base is not None
+    effective = dict(args)
+    effective.update(
+        {
+            "hrv": hrv,
+            "rhr": rhr,
+            "resp": resp,
+            "hrvBaseline": hrv_base,
+            "rhrBaseline": rhr_base,
+            "respBaseline": resp_base,
+            "sleepPerf": sleep,
+            "skinTempDev": skin,
+        }
+    )
+    return effective
+
+
 def _effective_strain_call(call: Any, record: dict[str, Any]) -> dict[str, Any]:
     function = "StrainScorer.strain/6"
     if not isinstance(call, dict):
@@ -1449,6 +1667,8 @@ def _effective_args(record: dict[str, Any]) -> dict[str, Any]:
         return _validate_recovery_trace_args(args, record)
     if function == HEART_RATE_RECOVERY_KEY:
         return _validate_heart_rate_recovery(args, record)
+    if function == RECOVERY_DRIVERS_KEY:
+        return _validate_recovery_drivers_args(args, record)
     if function in {"rmssdRaw", "sdnnRaw"}:
         if not isinstance(args.get("nn"), list):
             raise ParityFormatError(f"case {record.get('id')!r} {function} requires args.nn")
@@ -1604,6 +1824,32 @@ def generate_cases(suite: str, nonce: str) -> list[dict[str, Any]]:
                 "id": "recovery_trace_negative_line_probe",
                 "source": "negative-control",
             },
+            {
+                "args": {
+                    "hrv": 55.0, "rhr": 60.0,
+                    "hrvBaseline": {"baseline": 50.0, "spread": 5.0, "nValid": 14,
+                                    "nightsSinceUpdate": 0, "status": "trusted"},
+                    "useDefaults": True,
+                },
+                "comparison": "exact",
+                "function": RECOVERY_DRIVERS_KEY,
+                "id": "recovery_drivers_negative_delta_probe",
+                "source": "negative-control",
+            },
+            {
+                "args": {
+                    "hrv": 50.0, "rhr": 60.0,
+                    "hrvBaseline": {"baseline": 50.0, "spread": 5.0, "nValid": 14,
+                                    "nightsSinceUpdate": 0, "status": "trusted"},
+                    "rhrBaseline": {"baseline": 60.0, "spread": 5.0, "nValid": 14,
+                                    "nightsSinceUpdate": 0, "status": "trusted"},
+                    "useDefaults": True,
+                },
+                "comparison": "exact",
+                "function": RECOVERY_DRIVERS_KEY,
+                "id": "recovery_drivers_negative_order_probe",
+                "source": "negative-control",
+            },
         ]
     else:
         raw = _curated_cases() + _seeded_cases()
@@ -1622,6 +1868,27 @@ def generate_cases(suite: str, nonce: str) -> list[dict[str, Any]]:
         if known_issue is not None and known_issue not in supported_known_issues:
             raise ParityFormatError(
                 f"case {case_id!r} has unsupported knownBehaviorIssue {known_issue!r}"
+            )
+        acceptance_issue = record.get("acceptanceIssue")
+        expected_acceptance_issue = {
+            "recovery_drivers_issue_51_negative_half_tie": "bhelm/noop#51",
+            "seeded_recovery_drivers_01": "bhelm/noop#52",
+        }.get(case_id)
+        if expected_acceptance_issue is not None:
+            if acceptance_issue != expected_acceptance_issue:
+                raise ParityFormatError(
+                    f"case {case_id!r} must reference acceptanceIssue {expected_acceptance_issue}"
+                )
+            if record.get("function") != RECOVERY_DRIVERS_KEY or "expectedRows" not in record:
+                raise ParityFormatError(
+                    f"case {case_id!r} must carry exact Charge-driver expectedRows"
+                )
+            _validate_recovery_drivers_rows(
+                record["expectedRows"], f"case {case_id!r} expectedRows"
+            )
+        elif acceptance_issue is not None or "expectedRows" in record:
+            raise ParityFormatError(
+                f"case {case_id!r} has unsupported issue-linked expectedRows metadata"
             )
         function = record.get("function")
         args = record.get("args", {})

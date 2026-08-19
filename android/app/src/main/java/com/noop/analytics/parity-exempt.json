@@ -3663,11 +3663,6 @@
       "issue": 17
     },
     {
-      "key": "android/app/src/main/java/com/noop/analytics/RecoveryDrivers.kt::chargeDrivers/8[defaults=8]#1",
-      "reason": "Bootstrap debt: no differential or declared platform coverage proof yet.",
-      "issue": 17
-    },
-    {
       "key": "android/app/src/main/java/com/noop/analytics/RecoveryDrivers.kt::hrvVerdict/3[defaults=-]#1",
       "reason": "Bootstrap debt: no differential or declared platform coverage proof yet.",
       "issue": 17

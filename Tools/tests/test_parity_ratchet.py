@@ -1158,10 +1158,16 @@ func constrained<T>()
             "RecoveryScorer.recoveryTrace/8=RecoveryScorerTrace.recoveryTrace/8",
         }
         heart_rate_recovery = {"HeartRateRecovery.calculate/4"}
-        expected = legacy | added | qualified_strain | strain | recovery | recovery_trace | heart_rate_recovery
+        recovery_drivers = {
+            "RecoveryScorer.chargeDrivers/8=RecoveryDrivers.chargeDrivers/8",
+        }
+        expected = (
+            legacy | added | qualified_strain | strain | recovery | recovery_trace
+            | heart_rate_recovery | recovery_drivers
+        )
         self.assertEqual(19, len(legacy))
         self.assertEqual(21, len(legacy | added))
-        self.assertEqual(45, len(expected))
+        self.assertEqual(46, len(expected))
         self.assertEqual(expected, registered)
         self.assertIn("StrainScorer.trimpToStrain/2", registered)
         self.assertNotIn("trimpToStrain", registered)
@@ -1181,6 +1187,31 @@ func constrained<T>()
         ):
             raw = json.loads(path.read_text())
             self.assertNotIn("differential", raw)
+
+    def test_recovery_drivers_pair_is_ratchet_registered_without_retiring_swift_only_skin_temp(self) -> None:
+        registered, errors = parity_ratchet.registered_differential(REPOSITORY)
+        self.assertEqual([], errors)
+        self.assertIn(
+            "RecoveryScorer.chargeDrivers/8=RecoveryDrivers.chargeDrivers/8", registered
+        )
+        self.assertFalse(any("skinTempRelative" in key for key in registered))
+
+        swift_path = REPOSITORY / "Packages/StrandAnalytics/Sources/StrandAnalytics/parity-exempt.json"
+        kotlin_path = REPOSITORY / "android/app/src/main/java/com/noop/analytics/parity-exempt.json"
+        swift_keys = {item["key"] for item in json.loads(swift_path.read_text())["exempt"]}
+        kotlin_keys = {item["key"] for item in json.loads(kotlin_path.read_text())["exempt"]}
+        self.assertNotIn(
+            "Packages/StrandAnalytics/Sources/StrandAnalytics/ChargeDrivers.swift::chargeDrivers/8[defaults=8]#1",
+            swift_keys,
+        )
+        self.assertNotIn(
+            "android/app/src/main/java/com/noop/analytics/RecoveryDrivers.kt::chargeDrivers/8[defaults=8]#1",
+            kotlin_keys,
+        )
+        self.assertIn(
+            "Packages/StrandAnalytics/Sources/StrandAnalytics/ChargeDrivers.swift::skinTempRelative/1[defaults=-]#1",
+            swift_keys,
+        )
 
     def test_parity_workflow_has_inverted_trigger_and_pinned_actions(self) -> None:
         workflow = (REPOSITORY / ".github/workflows/parity-ratchet.yml").read_text()
