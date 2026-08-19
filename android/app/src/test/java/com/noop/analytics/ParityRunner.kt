@@ -321,6 +321,26 @@ class ParityRunner {
                     hrSamples(args), args.getLong("start"), args.getLong("end"),
                 )
             }
+            "HeartRateRecovery.calculate/4" -> {
+                require(comparison == "exact") { "invalid HeartRateRecovery.calculate/4 case $caseId" }
+                var value = HeartRateRecovery.calculate(
+                    hrSamples(args, "samples"), args.getLong("workoutStart"),
+                    args.getLong("workoutEnd"), args.getDouble("maxHR"),
+                )
+                if (negativeSide == "kotlin" && caseId == "heart_rate_recovery_negative_probe") {
+                    val current = requireNotNull(value)
+                    value = current.copy(after1Minute = current.after1Minute?.plus(1))
+                    result["negativeSide"] = "kotlin"
+                }
+                result["valueBits"] = value?.let {
+                    sortedMapOf(
+                        "endHR" to it.endHr,
+                        "after1Minute" to it.after1Minute,
+                        "after2Minutes" to it.after2Minutes,
+                        "after5Minutes" to it.after5Minutes,
+                    )
+                }
+            }
             "RecoveryScorer.recoveryIndexSlope/3" -> {
                 require(comparison == "epsilon") { "invalid recoveryIndexSlope case $caseId" }
                 result["value"] = finiteOrNull(
@@ -719,8 +739,8 @@ class ParityRunner {
         "wSleep" to exactBit(RecoveryScorer.wSleep),
     )
 
-    private fun hrSamples(args: JSONObject): List<HrSample> {
-        val rows = args.getJSONArray("hr")
+    private fun hrSamples(args: JSONObject, key: String = "hr"): List<HrSample> {
+        val rows = args.getJSONArray(key)
         return (0 until rows.length()).map { index ->
             val row = rows.getJSONObject(index)
             HrSample(deviceId = "parity", ts = row.getLong("ts"), bpm = row.getInt("bpm"))

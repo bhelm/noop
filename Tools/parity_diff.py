@@ -49,6 +49,7 @@ RECOVERY_TRACE_KEY = (
     "RecoveryScorer.recoveryTrace/8=RecoveryScorerTrace.recoveryTrace/8"
 )
 RECOVERY_FORECAST_KEY = "RecoveryForecaster.forecast/6"
+HEART_RATE_RECOVERY_KEY = "HeartRateRecovery.calculate/4"
 RAW_ANALYZE_KEY = "HRVAnalyzer.analyze/2=HrvAnalyzer.analyzeRaw/2"
 HRV_MEDIAN_KEY = "HRVAnalyzer.median/1=HrvAnalyzer.median/1"
 EPSILON = 1e-9
@@ -338,6 +339,35 @@ def _render_payload(kind: str, value: Any, comparison: str) -> str:
     return _canonical_json(value)
 
 
+def _known_behavior_expected(record: dict[str, Any]) -> dict[str, Any] | None:
+    """Return the exact #55 characterization payload, rejecting inert/malformed metadata."""
+
+    if record.get("knownBehaviorIssue") != "bhelm/noop#55":
+        return None
+    if record.get("function") != HEART_RATE_RECOVERY_KEY or record.get("comparison") != "exact":
+        raise ParityFormatError(
+            f"case {record.get('id')!r} bhelm/noop#55 must characterize "
+            f"{HEART_RATE_RECOVERY_KEY} with exact comparison"
+        )
+    expected = record.get("expected")
+    keys = {"endHR", "after1Minute", "after2Minutes", "after5Minutes"}
+    if not isinstance(expected, dict) or set(expected) != keys:
+        raise ParityFormatError(
+            f"case {record.get('id')!r} bhelm/noop#55 expected must contain exactly {sorted(keys)}"
+        )
+    if not _is_signed_integer(expected["endHR"], INT32_MIN, INT32_MAX):
+        raise ParityFormatError(
+            f"case {record.get('id')!r} bhelm/noop#55 expected.endHR must fit Int32"
+        )
+    for key in ("after1Minute", "after2Minutes", "after5Minutes"):
+        value = expected[key]
+        if value is not None and not _is_signed_integer(value, INT32_MIN, INT32_MAX):
+            raise ParityFormatError(
+                f"case {record.get('id')!r} bhelm/noop#55 expected.{key} must be null or fit Int32"
+            )
+    return expected
+
+
 def compare_files(input_path: Path, swift_path: Path, kotlin_path: Path) -> list[str]:
     """Validate all contracts and return one stable diff line per differing case."""
 
@@ -372,6 +402,19 @@ def compare_files(input_path: Path, swift_path: Path, kotlin_path: Path) -> list
         _validate_function_output(
             expected, comparison, kotlin_kind, kotlin_value, f"kotlin id={case_id} valueBits"
         )
+        known_expected = _known_behavior_expected(expected)
+        if known_expected is not None:
+            for side, kind, value in (
+                ("swift", swift_kind, swift_value),
+                ("kotlin", kotlin_kind, kotlin_value),
+            ):
+                if kind != "value" or value != known_expected:
+                    diffs.append(
+                        f"KNOWN_BEHAVIOR id={case_id} function={function} "
+                        f"known_behavior=bhelm/noop#55 side={side} "
+                        f"expected=bits:{known_expected} "
+                        f"actual={_render_payload(kind, value, comparison)}"
+                    )
         equal = swift_kind == kotlin_kind
         if equal and swift_kind == "value" and comparison == "epsilon":
             equal = _epsilon_equal(swift_value, kotlin_value)
@@ -850,6 +893,32 @@ def _seeded_cases() -> list[dict[str, Any]]:
                 "source": f"seeded:splitmix64:{GENERATOR_SEED:#018x}",
             }
         )
+    for index in range(2):
+        workout_end = 80_000 + index * 1_000
+        samples = [
+            {"ts": workout_end - 120 + offset * 10, "bpm": 145 + (rng.bounded(3) - 1)}
+            for offset in range(13)
+        ]
+        samples.extend(
+            {"ts": workout_end + 59 + offset, "bpm": 118 + rng.bounded(9)}
+            for offset in range(3)
+        )
+        if index:
+            samples = list(reversed(samples)) + [dict(samples[-1])]
+        records.append(
+            {
+                "args": {
+                    "samples": samples,
+                    "workoutStart": workout_end - 300,
+                    "workoutEnd": workout_end,
+                    "maxHR": 200.0,
+                },
+                "comparison": "exact",
+                "function": HEART_RATE_RECOVERY_KEY,
+                "id": f"seeded_heart_rate_recovery_{index:02d}",
+                "source": f"seeded:splitmix64:{GENERATOR_SEED:#018x}",
+            }
+        )
     return records
 
 
@@ -918,6 +987,50 @@ def _validate_recovery_window(args: dict[str, Any], record: dict[str, Any]) -> d
         raise ParityFormatError(
             f"case {record.get('id')!r} {record.get('function')} bin-end addition overflows signed Int64"
         )
+    return dict(args)
+
+
+def _validate_heart_rate_recovery(args: dict[str, Any], record: dict[str, Any]) -> dict[str, Any]:
+    function = HEART_RATE_RECOVERY_KEY
+    allowed = {"samples", "workoutStart", "workoutEnd", "maxHR"}
+    unknown = sorted(set(args) - allowed)
+    if unknown:
+        raise ParityFormatError(f"case {record.get('id')!r} {function} has unknown fields {unknown}")
+    if set(args) != allowed:
+        raise ParityFormatError(f"case {record.get('id')!r} {function} requires exactly {sorted(allowed)}")
+    samples = args["samples"]
+    if not isinstance(samples, list) or len(samples) > 4096:
+        raise ParityFormatError(f"case {record.get('id')!r} {function} samples must be a bounded array")
+    for index, sample in enumerate(samples):
+        if not isinstance(sample, dict) or set(sample) != {"ts", "bpm"}:
+            raise ParityFormatError(f"case {record.get('id')!r} {function} samples[{index}] has invalid keys")
+        if not _is_signed_integer(sample["ts"], INT64_MIN, INT64_MAX):
+            raise ParityFormatError(f"case {record.get('id')!r} {function} sample timestamp must fit Int64")
+        if not _is_signed_integer(sample["bpm"], INT32_MIN, INT32_MAX):
+            raise ParityFormatError(f"case {record.get('id')!r} {function} sample bpm must fit Int32")
+    start, end, max_hr = args["workoutStart"], args["workoutEnd"], args["maxHR"]
+    if not _is_signed_integer(start, INT64_MIN, INT64_MAX) or not _is_signed_integer(
+        end, INT64_MIN, INT64_MAX
+    ):
+        raise ParityFormatError(f"case {record.get('id')!r} {function} workout bounds must fit Int64")
+    if start <= 0 or end <= start:
+        raise ParityFormatError(f"case {record.get('id')!r} {function} requires 0 < workoutStart < workoutEnd")
+    if not _is_number(max_hr) or not math.isfinite(max_hr) or not 30.0 <= max_hr <= 250.0:
+        raise ParityFormatError(f"case {record.get('id')!r} {function} maxHR is outside [30, 250]")
+    _checked_subtract(end, start, record, "workout duration subtraction")
+    _checked_subtract(end, 300, record, "lookback subtraction")
+    _checked_subtract(end, 30, record, "cessation subtraction")
+    upper = _checked_add(end, 315, record, "upper-bound addition")
+    targets = [_checked_add(end, offset, record, "target addition") for offset in (60, 120, 300)]
+    for sample in samples:
+        for target in targets:
+            delta = _checked_subtract(sample["ts"], target, record, "target subtraction")
+            if delta == INT64_MIN:
+                raise ParityFormatError(
+                    f"case {record.get('id')!r} {function} absolute target difference overflows Int64"
+                )
+        _checked_subtract(sample["ts"], start, record, "sample/start subtraction")
+        _checked_subtract(upper, sample["ts"], record, "upper/sample subtraction")
     return dict(args)
 
 
@@ -1334,6 +1447,8 @@ def _effective_args(record: dict[str, Any]) -> dict[str, Any]:
         return _effective_recovery_call(args, record, "state")
     if function == RECOVERY_TRACE_KEY:
         return _validate_recovery_trace_args(args, record)
+    if function == HEART_RATE_RECOVERY_KEY:
+        return _validate_heart_rate_recovery(args, record)
     if function in {"rmssdRaw", "sdnnRaw"}:
         if not isinstance(args.get("nn"), list):
             raise ParityFormatError(f"case {record.get('id')!r} {function} requires args.nn")
@@ -1429,6 +1544,20 @@ def generate_cases(suite: str, nonce: str) -> list[dict[str, Any]]:
     if suite == "negative":
         raw = [
             {
+                "args": {
+                    "samples": [
+                        *({"ts": 880 + index * 10, "bpm": 145} for index in range(13)),
+                        {"ts": 1059, "bpm": 120}, {"ts": 1060, "bpm": 120},
+                        {"ts": 1061, "bpm": 120},
+                    ],
+                    "workoutStart": 500, "workoutEnd": 1000, "maxHR": 200.0,
+                },
+                "comparison": "exact",
+                "function": HEART_RATE_RECOVERY_KEY,
+                "id": "heart_rate_recovery_negative_probe",
+                "source": "negative-control",
+            },
+            {
                 "args": {"trimp": 100.0},
                 "comparison": "exact",
                 "function": "StrainScorer.trimpToStrain/2",
@@ -1489,7 +1618,7 @@ def generate_cases(suite: str, nonce: str) -> list[dict[str, Any]]:
             raise ParityFormatError(f"duplicate generated id: {case_id}")
         seen.add(case_id)
         known_issue = record.get("knownBehaviorIssue")
-        supported_known_issues = {"bhelm/noop#10", "bhelm/noop#12", "bhelm/noop#39", "bhelm/noop#40"}
+        supported_known_issues = {"bhelm/noop#10", "bhelm/noop#12", "bhelm/noop#39", "bhelm/noop#40", "bhelm/noop#55"}
         if known_issue is not None and known_issue not in supported_known_issues:
             raise ParityFormatError(
                 f"case {case_id!r} has unsupported knownBehaviorIssue {known_issue!r}"
@@ -1524,10 +1653,13 @@ def generate_cases(suite: str, nonce: str) -> list[dict[str, Any]]:
             expected_recovery_issue = "bhelm/noop#39"
         elif case_id == "recovery_driver_missing_hrv_baseline":
             expected_recovery_issue = "bhelm/noop#40"
+        elif case_id == "heart_rate_recovery_disconnected_segments_issue_55":
+            expected_recovery_issue = "bhelm/noop#55"
         if expected_recovery_issue is not None and known_issue != expected_recovery_issue:
             raise ParityFormatError(
                 f"case {case_id!r} characterizes shared Recovery behavior tracked by {expected_recovery_issue}"
             )
+        _known_behavior_expected(record)
         record["effectiveArgs"] = _effective_args(record)
         _validate_finite_tree(record["effectiveArgs"], f"case {case_id!r} effectiveArgs")
         record["nonce"] = nonce

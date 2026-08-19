@@ -81,6 +81,7 @@ final class ParityRunner: XCTestCase {
         let halfWindowSec: Int?
         let maxRowsPerSecond: Int?
         let maxRejectedFraction: Double?
+        let maxHR: Double?
         let minBeatsPerWindow: Int?
         let nn: [Double]?
         let pairs: [[Double]]?
@@ -100,6 +101,7 @@ final class ParityRunner: XCTestCase {
         let live: Double?
         let mean: Double?
         let score: Double?
+        let samples: [HRInput]?
         let spread: Double?
         let start: Int?
         let end: Int?
@@ -111,6 +113,8 @@ final class ParityRunner: XCTestCase {
         let windowEnd: Int?
         let windowSec: Int?
         let windowStart: Int?
+        let workoutEnd: Int?
+        let workoutStart: Int?
     }
 
     private struct InputRecord: Decodable {
@@ -437,6 +441,27 @@ final class ParityRunner: XCTestCase {
             result["valueBits"] = RecoveryScorer.restingHR(
                 hrSamples(input), start: start, end: end
             ) ?? NSNull()
+        case "HeartRateRecovery.calculate/4":
+            guard record.comparison == "exact", let input = record.args.samples,
+                  let workoutStart = record.args.workoutStart,
+                  let workoutEnd = record.args.workoutEnd, let maxHR = record.args.maxHR else {
+                throw RunnerError.invalidInput("invalid HeartRateRecovery.calculate/4 case \(record.id)")
+            }
+            var value = HeartRateRecovery.calculate(
+                samples: hrSamples(input), workoutStart: workoutStart,
+                workoutEnd: workoutEnd, maxHR: maxHR
+            )
+            if negativeSide == "swift", record.id == "heart_rate_recovery_negative_probe",
+               let current = value {
+                value = HeartRateRecovery.Result(
+                    endHR: current.endHR,
+                    after1Minute: current.after1Minute.map { $0 + 1 },
+                    after2Minutes: current.after2Minutes,
+                    after5Minutes: current.after5Minutes
+                )
+                result["negativeSide"] = "swift"
+            }
+            result["valueBits"] = value.map { heartRateRecoveryPayload($0) } ?? NSNull()
         case "RecoveryScorer.recoveryIndexSlope/3":
             guard record.comparison == "epsilon", let input = record.args.hr,
                   let start = record.args.start, let end = record.args.end else {
@@ -824,6 +849,15 @@ final class ParityRunner: XCTestCase {
 
     private func hrSamples(_ input: [HRInput]) -> [HRSample] {
         input.map { HRSample(ts: $0.ts, bpm: $0.bpm) }
+    }
+
+    private func heartRateRecoveryPayload(_ value: HeartRateRecovery.Result) -> [String: Any] {
+        [
+            "endHR": value.endHR,
+            "after1Minute": value.after1Minute.map { $0 as Any } ?? NSNull(),
+            "after2Minutes": value.after2Minutes.map { $0 as Any } ?? NSNull(),
+            "after5Minutes": value.after5Minutes.map { $0 as Any } ?? NSNull(),
+        ]
     }
 
     private func expandedHistory(_ input: HistoryInput) -> [Double] {
