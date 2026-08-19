@@ -70,6 +70,7 @@ class Declaration:
     line: int
     end_line: int
     coverable: bool = True
+    jvm_extension_receiver: bool = False
 
     @property
     def key(self) -> str:
@@ -460,6 +461,7 @@ def _function_declarations(
                 item.line,
                 _line(text, end),
                 coverable,
+                language == "kotlin" and "." in match.group(1),
             )
         )
     keyword_pattern = r"\bfunc\b" if language == "swift" else r"\bfun\b(?!\s+interface\b)"
@@ -1159,7 +1161,14 @@ def _function_executions(
                     and not item.name.startswith(f"{declaration.name}$default")
                 )
             )
-            and (item.arity is None or item.arity == declaration.arity)
+            and (
+                item.arity is None
+                or item.arity == declaration.arity
+                or (
+                    declaration.jvm_extension_receiver
+                    and item.arity == declaration.arity + 1
+                )
+            )
         ]
     candidates = [
         item
@@ -1388,16 +1397,36 @@ def compare_ratchet(root: Path, base: str, *, offline: bool) -> list[str]:
                     issues.add(issue)
         old_counters = old_baseline.get("counters", {})
         current_counters = current_baseline.get("counters", {})
+        counter_issues = current_baseline.get("counter_issues", {})
         if not isinstance(old_counters, dict) or not isinstance(current_counters, dict):
             errors.append(f"{LEDGER_BASELINE}: counters must be objects")
+        elif not isinstance(counter_issues, dict):
+            errors.append(f"{LEDGER_BASELINE}: counter_issues must be an object")
         else:
+            valid_counter_issues: set[str] = set()
+            for name, entry in counter_issues.items():
+                value = current_counters.get(name)
+                bound = entry.get("value") if isinstance(entry, dict) else None
+                issue = entry.get("issue") if isinstance(entry, dict) else None
+                reason = entry.get("reason") if isinstance(entry, dict) else None
+                if (not isinstance(value, int) or not isinstance(bound, int) or isinstance(bound, bool)
+                        or bound != value
+                        or not isinstance(issue, int) or isinstance(issue, bool) or issue <= 0
+                        or not isinstance(reason, str) or not reason.strip()):
+                    errors.append(
+                        f"{LEDGER_BASELINE}: counter_issues {name} needs exact value {value} + issue + reason"
+                    )
+                else:
+                    valid_counter_issues.add(name)
+                    issues.add(issue)
             for name, value in current_counters.items():
                 old_value = old_counters.get(name, 0)
                 if not isinstance(value, int) or not isinstance(old_value, int):
                     errors.append(f"{LEDGER_BASELINE}: counter {name} must be an integer")
-                elif value > old_value:
+                elif value > old_value and name not in valid_counter_issues:
                     errors.append(
-                        f"{LEDGER_BASELINE}: counter {name} increased {old_value}->{value}"
+                        f"{LEDGER_BASELINE}: counter {name} increased {old_value}->{value} "
+                        f"and needs counter_issues exact value {value} + issue + reason"
                     )
     validate_online = not offline and os.environ.get("CI", "").lower() == "true"
     if validate_online:

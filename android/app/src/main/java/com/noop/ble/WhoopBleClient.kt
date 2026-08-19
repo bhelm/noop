@@ -128,6 +128,10 @@ data class LiveState(
     val streamingLiveHR: Boolean = false,
     val heartRate: Int? = null,
     val rr: List<Int> = emptyList(),
+    /** Monotonic count of R-R packet arrivals, bumped by every [withRRIntervals] call. Consume
+     *  packets via `Flow<LiveState>.rrPackets()` (keyed on this), never by watching [rr] — see
+     *  LiveRrPackets.kt. Twin of macOS LiveState.rrSeq. */
+    val rrSeq: Long = 0,
     /** Rolling UI buffer of recent R-R intervals (capped, oldest dropped first). The standard BLE HR
      *  notification usually carries only one or two intervals per packet, so the Live console needs a
      *  short history to render a moving R-R strip / rolling RMSSD. Appended (never replaced) via
@@ -228,10 +232,10 @@ data class LiveState(
      *  Twin of macOS LiveState.setRRIntervals (PR#191). */
     fun withRRIntervals(intervals: List<Int>, recentLimit: Int = 60): LiveState {
         val valid = intervals.filter { it > 0 }
-        if (valid.isEmpty()) return copy(rr = intervals)
+        if (valid.isEmpty()) return copy(rr = intervals, rrSeq = rrSeq + 1)
         val merged = rrRecent + valid
         val capped = if (merged.size > recentLimit) merged.takeLast(recentLimit) else merged
-        return copy(rr = intervals, rrRecent = capped)
+        return copy(rr = intervals, rrSeq = rrSeq + 1, rrRecent = capped)
     }
 
     /** Blank all live biometric readouts (HR + R-R + the rolling buffer) so a stale heart rate or R-R
@@ -713,6 +717,21 @@ class WhoopBleClient(
          *  meanwhile, so this only delays sync (larger batches), never loses data. Gated on the discharging
          *  battery-% threshold; 0 = disabled → always [BACKFILL_INTERVAL_MS]. */
         private const val LOW_BATTERY_BACKFILL_INTERVAL_MS = 2_700_000L
+
+        /** Low-refresh cadence (60 min): the user-elected sub-option of Power saving. NOT battery-gated —
+         *  once chosen it is the BASE the other levers stretch from, at any strap charge. Same no-loss
+         *  property as the lever above: the strap banks to flash and only trims on our ack, so this delays
+         *  sync into larger batches, it never drops history. Cadence ONLY — deliberately does not touch the
+         *  keep-alive (that tick re-arms realtime and evaluates the stall fuse) or continuous HRV capture
+         *  (that is [setPauseCaptureOnPowerSave] / the overnight window). Twin of Swift
+         *  `BLEManager.lowRefreshBackfillIntervalSeconds`. */
+        internal const val LOW_REFRESH_BACKFILL_INTERVAL_MS = 3_600_000L
+
+        /** Pure baseline-cadence decision: low refresh swaps the 15-min BASE for the hourly one; every other
+         *  lever composes on top with `max`, so a lever can only make the cadence quieter, never restore a
+         *  faster one the user asked to slow down. Twin of Swift `BLEManager.baseBackfillInterval`. */
+        internal fun baseBackfillIntervalMs(lowRefresh: Boolean): Long =
+            if (lowRefresh) LOW_REFRESH_BACKFILL_INTERVAL_MS else BACKFILL_INTERVAL_MS
         /** How far back the inactivity check reads gravity on each offload completion (4 h comfortably
          *  spans the threshold + re-nudge cadence and a separating Active break for bout continuity). */
         private const val INACTIVITY_LOOKBACK_S = 4 * 3600L
@@ -1878,10 +1897,22 @@ class WhoopBleClient(
      *  OFF, so this ships dormant. The Settings picker offers 10/15/20/25/30. */
     @Volatile private var lowBatteryOffloadPct: Int = 0
 
+    /** User-elected hourly background-sync cadence (Settings -> Power saving -> "Low refresh"). Default
+     *  off. Like [lowBatteryOffloadPct] it takes effect on the NEXT re-arm. */
+    @Volatile private var lowRefreshMode: Boolean = false
+
     /** Opt into the low-battery offload-cadence stretch (#477). Applies on the NEXT re-arm; a live sync
      *  in flight is never interrupted. */
     fun setLowBatteryOffloadThrottle(thresholdPct: Int) {
         lowBatteryOffloadPct = thresholdPct
+    }
+
+    /** Settings sub-option of Power saving: the user-elected hourly background cadence. Applies on the
+     *  next re-arm like the battery lever above; a sync already in flight is never interrupted. Twin of
+     *  Swift `BLEManager.setLowRefreshMode`. */
+    fun setLowRefreshMode(enabled: Boolean) {
+        if (lowRefreshMode == enabled) return
+        lowRefreshMode = enabled
     }
 
     /** #477: pause BACKGROUND continuous-HRV capture while the STRAP's battery is low (own toggle,
@@ -1907,20 +1938,23 @@ class WhoopBleClient(
      *  quietThreshold = 2) at a fixed 45-min floor that stacks with it. Twin of iOS
      *  `BLEManager.nextBackfillInterval`. Resets with [whoop5EmptyOffload] on disconnect. */
     private fun nextBackfillDelayMs(): Long {
+        // Low refresh moves the BASE the other levers stretch from; each composes with `max`, so the
+        // cadence can only get quieter, never faster than the user asked for.
+        val base = baseBackfillIntervalMs(lowRefreshMode)
         // #battery: known-empty-history 5/MG → stretch to the 45-min floor before any battery lever.
         if (connectedFamily == DeviceFamily.WHOOP5) {
             val stretched = whoop5EmptyHistoryBackfillIntervalMs(
-                baseMs = BACKFILL_INTERVAL_MS,
-                lowBatteryMs = LOW_BATTERY_BACKFILL_INTERVAL_MS,
+                baseMs = base,
+                lowBatteryMs = maxOf(base, LOW_BATTERY_BACKFILL_INTERVAL_MS),
                 historyEmpty = whoop5EmptyOffload.historyEmpty,
             )
-            if (stretched != BACKFILL_INTERVAL_MS) return stretched
+            if (stretched != base) return stretched
         }
-        if (lowBatteryOffloadPct <= 0) return BACKFILL_INTERVAL_MS   // dormant: no battery read, unchanged cadence
+        if (lowBatteryOffloadPct <= 0) return base   // dormant: no battery read, unchanged cadence
         val (batteryPct, charging) = batteryPctAndCharging()
         return offloadIntervalMsFor(
-            baseMs = BACKFILL_INTERVAL_MS,
-            lowBatteryMs = LOW_BATTERY_BACKFILL_INTERVAL_MS,
+            baseMs = base,
+            lowBatteryMs = maxOf(base, LOW_BATTERY_BACKFILL_INTERVAL_MS),
             batteryPct = batteryPct,
             charging = charging,
             thresholdPct = lowBatteryOffloadPct,
@@ -2538,6 +2572,11 @@ class WhoopBleClient(
     /** Newest unix the strap reports having (from GET_DATA_RANGE); refreshed each connect. */
     @Volatile
     private var strapNewestTs: Long? = null
+    /** Wall-clock (unix s) captured at the SAME instant [strapNewestTs] was read from a GET_DATA_RANGE
+     *  reply. The backfiller clock correlation must pair the strap's device time with the wall time of
+     *  that same reading — pairing it with a later `now` inflates the offset by all the elapsed wall time
+     *  since the fetch (WHOOP4 doesn't re-fetch the range at each offload). */
+    private var strapNewestTsWall: Long? = null
 
     // --- Live-persistence buffer (port of Swift Collector: custom realtime/event/battery frames) ---
 
@@ -5368,6 +5407,9 @@ class WhoopBleClient(
                         }
                         dataRangeNewestUnix(frame)?.let {
                             strapNewestTs = it
+                            // Capture the wall clock of THIS reading so the backfiller correlation pairs
+                            // the strap's device time with the wall time of the same instant (see field doc).
+                            strapNewestTsWall = System.currentTimeMillis() / 1000L
                             // #34: persist the strap's newest banked record so the debug export can flag a reset clock.
                             runCatching { NoopPrefs.of(context).edit().putLong("strap.newestRecordTs", it).apply() }
                             // #928: flag an implausibly FUTURE "newest" (strap clock set ahead) right where
@@ -6995,7 +7037,12 @@ class WhoopBleClient(
         // mis-date nights when the strap's RTC has drifted. No-op when strapNewestTs is null (no Data
         // Range received yet) — the Backfiller keeps its identity default, same as today.
         strapNewestTs?.let { newest ->
-            val wall = (System.currentTimeMillis() / 1000L).toInt()
+            // Pair the strap's newest-record device time with the wall clock CAPTURED WHEN IT WAS READ,
+            // not `now`. WHOOP4 doesn't re-fetch the Data Range at each offload, so `now` inflated the
+            // offset by all the elapsed wall time since the last fetch (observed 46s → ~3700s over 30 min).
+            // Pairing with the capture wall keeps the offset at the strap's true RTC skew regardless of how
+            // stale [strapNewestTs] is. Fallback to now only if we somehow have the ts without its wall.
+            val wall = (strapNewestTsWall ?: (System.currentTimeMillis() / 1000L)).toInt()
             backfiller.clockRef = ClockRef(device = newest.toInt(), wall = wall)
             log("Clock: seeded backfiller correlation from Data Range (device=$newest wall=$wall, offset ${wall - newest}s)")
         }
@@ -7420,6 +7467,9 @@ class WhoopBleClient(
             backfiller.sessionNights,
         )?.let {
             log(it)
+            // #1008/#1118: the pre-storage R-R census for this offload, next to the persisted tally so one
+            // line pair says what the decoder OFFERED and what the store KEPT. Twin of the Swift emit.
+            backfiller.sessionRrEmissionLine()?.let { rrLine -> log(rrLine) }
             // #990: fold this session's drained rows into the persisted ALL-TIME tally at the single
             // summary emit point, so the Connection readout can show install-lifetime progress beside
             // the per-session count (which resets on every reconnect). Unconditional, like the summary
@@ -7981,6 +8031,7 @@ class WhoopBleClient(
         backfilling = false
         backfillDrain.reset()
         strapNewestTs = null
+        strapNewestTsWall = null
         offloadFramesThisSession = 0
         lastOffloadFrameAtMs = 0L   // #174: don't carry a stale cooldown reference into the next session
         historicalKickSent = false

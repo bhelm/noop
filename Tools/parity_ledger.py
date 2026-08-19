@@ -85,10 +85,21 @@ TEST_GLOBS = (
 REFERENCE_GLOBS = (
     "Packages/**/*.swift",
     "Strand/**/*.swift",
+    "StrandTests/**/*.swift",
     "StrandiOS*/**/*.swift",
     "NOOPWatch*/**/*.swift",
     "android/**/*.kt",
 )
+
+# These constants intentionally describe different platform-local persistence schemas. Their normalized
+# names happen to match, but their migration generations do not and must not be compared as parity twins.
+# Keep the exclusion exact so unrelated schema constants still go through the normal pairing audit.
+CONSTANT_NON_TWIN_PAIRS = frozenset({
+    (
+        "Packages/WhoopStore/Sources/WhoopStore/WhoopStore.swift::schemaVersion",
+        "android/app/src/main/java/com/noop/data/WhoopDatabase.kt::SCHEMA_VERSION",
+    ),
+})
 
 
 @dataclass(frozen=True)
@@ -852,7 +863,12 @@ def _constant_pairing(
 
         def consume(predicate) -> None:
             nonlocal left, right
-            edges = [(sw, kt) for sw in left for kt in right if predicate(sw, kt)]
+            edges = [
+                (sw, kt)
+                for sw in left
+                for kt in right
+                if predicate(sw, kt) and (sw.key, kt.key) not in CONSTANT_NON_TWIN_PAIRS
+            ]
             left_degree = Counter(id(sw) for sw, _ in edges)
             right_degree = Counter(id(kt) for _, kt in edges)
             chosen = [(sw, kt) for sw, kt in edges if left_degree[id(sw)] == 1 and right_degree[id(kt)] == 1]
@@ -864,10 +880,23 @@ def _constant_pairing(
 
         consume(lambda sw, kt: _normal_name(sw.owner) == _normal_name(kt.owner))
         consume(lambda sw, kt: (sw.path, kt.path) in file_pairs)
-        if len(left) == 1 and len(right) == 1:
+        if (len(left) == 1 and len(right) == 1
+                and (left[0].key, right[0].key) not in CONSTANT_NON_TWIN_PAIRS):
             pairs.append((left.pop(), right.pop()))
-        if left and right:
-            ambiguous.append((name, sorted(left, key=lambda item: item.key), sorted(right, key=lambda item: item.key)))
+        allowed_edges = [
+            (sw, kt)
+            for sw in left
+            for kt in right
+            if (sw.key, kt.key) not in CONSTANT_NON_TWIN_PAIRS
+        ]
+        if allowed_edges:
+            allowed_left = {id(sw) for sw, _ in allowed_edges}
+            allowed_right = {id(kt) for _, kt in allowed_edges}
+            ambiguous.append((
+                name,
+                sorted((item for item in left if id(item) in allowed_left), key=lambda item: item.key),
+                sorted((item for item in right if id(item) in allowed_right), key=lambda item: item.key),
+            ))
     return sorted(pairs, key=lambda pair: (pair[0].key, pair[1].key)), ambiguous
 
 
@@ -1390,7 +1419,7 @@ def _baseline(result: ScanResult, existing: dict | None = None) -> dict:
         for item in (existing or {}).get("findings", [])
         if isinstance(item, dict) and isinstance(item.get("identity"), str)
     }
-    return {
+    baseline = {
         "schema_version": 2,
         "findings": [
             {
@@ -1405,6 +1434,15 @@ def _baseline(result: ScanResult, existing: dict | None = None) -> dict:
         ],
         "counters": result.counters,
     }
+    counter_issues = (existing or {}).get("counter_issues")
+    if isinstance(counter_issues, dict):
+        baseline["counter_issues"] = {
+            name: entry
+            for name, entry in counter_issues.items()
+            if (name in result.counters and isinstance(entry, dict)
+                and entry.get("value") == result.counters[name])
+        }
+    return baseline
 
 
 def _summary(result: ScanResult) -> str:

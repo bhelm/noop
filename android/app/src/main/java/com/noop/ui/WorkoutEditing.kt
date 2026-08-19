@@ -327,6 +327,11 @@ object WorkoutEditing {
             zonesJSON = old.zonesJSON,
             notes = old.notes,
             routePolyline = old.routePolyline,
+            // #1444: `row` here is the sheet-built row, NOT the stored one, so copy() alone does not
+            // carry this — buildManualRow has no steps input and leaves it null. Per-session steps
+            // (#1058) is a captured field the sheet never exposes, so it is restored from `old` like
+            // the rest. Twin of Swift WorkoutSource.preservingCaptured.
+            steps = old.steps,
         )
     }
 
@@ -497,6 +502,11 @@ object WorkoutMerge {
         val energyKcal = if (kcals.isEmpty()) null else kcals.sum()
         val dists = rows.mapNotNull { it.distanceM }
         val distanceM = if (dists.isEmpty()) null else dists.sum()
+        // #1444: steps is cumulative per session exactly like distance, so a merge sums it too. It was
+        // silently dropped here (copy() does not help: this builds a NEW row), which the Swift twin's
+        // explicit-field audit surfaced.
+        val stepCounts = rows.mapNotNull { it.steps }
+        val mergedSteps = if (stepCounts.isEmpty()) null else stepCounts.sum()
 
         var hrWeight = 0.0
         var hrSum = 0.0
@@ -529,6 +539,7 @@ object WorkoutMerge {
             zonesJSON = null,
             notes = mergedNotes,
             routePolyline = null,
+            steps = mergedSteps,
         )
     }
 }
