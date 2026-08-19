@@ -633,7 +633,7 @@ object AnalyticsEngine {
         // ── Rest (sleep_performance composite, 0–100) ─────────────────────────
         // Replaces the bare efficiency proxy: duration-vs-personal-need 0.50 + efficiency 0.20 +
         // restorative (deep+REM)/asleep 0.20 + consistency 0.10. Stored under the sleep_performance
-        // key. null when no in-bed session. (Charge/Effort/Rest)
+        // key. null when there is no asleep time. (Charge/Effort/Rest)
         val rest: Double? = if (matched.isEmpty()) null else RestScorer.rest(
             asleepSeconds = tstS,
             efficiency = efficiency,
@@ -1281,7 +1281,8 @@ object RestScorer {
         if (asleepSeconds <= 0.0) return null
 
         val asleepHours = asleepSeconds / 3600.0
-        val needHours = (sleepNeedHours ?: defaultSleepNeedHours).coerceAtLeast(1e-9)
+        // Parity: Swift Rest.composite and Kotlin's own subScoreLine both floor need at 0.1 h (not 1e-9).
+        val needHours = (sleepNeedHours ?: defaultSleepNeedHours).coerceAtLeast(0.1)
 
         // Duration vs personal need (clamped at 100 — sleeping past need does not over-credit).
         val durationScore = min(100.0, asleepHours / needHours * 100.0)

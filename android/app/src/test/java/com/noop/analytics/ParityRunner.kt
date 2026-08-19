@@ -477,8 +477,8 @@ class ParityRunner {
                         ts,
                         rr,
                         src,
-                        effective.getInt("halfWindowSec"),
-                        effective.getInt("maxRowsPerSecond"),
+                        halfWindowSec = effective.getInt("halfWindowSec"),
+                        maxRowsPerSecond = effective.getInt("maxRowsPerSecond"),
                     )
                 }
                 result["valueBits"] = sortedMapOf("text" to value)
