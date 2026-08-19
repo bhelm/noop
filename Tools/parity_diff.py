@@ -22,6 +22,7 @@ the named runner mutates its declared negative probes.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import math
 import re
@@ -65,9 +66,22 @@ SLEEP_STAGE_TOTALS_KEYS = {
     "SleepStageTotals.mainNightIndex/3", "SleepStageTotals.mainNightSelection/3",
     "SleepStageTotals.dailyAggregateHonoringEdits/6", "SleepStageTotals.habitualMidsleepSec/3",
 }
+SLEEP_STAGER_DETECT_KEY = "SleepStager.detectSleep/10"
+SLEEP_STAGER_V1_KEY = "SleepStager.stageSession/6"
+SLEEP_STAGER_MOTION_KEY = "SleepStager.sessionEpochMotion/3"
+SLEEP_STAGER_STATE_KEY = "SleepStager.sessionEpochSleepState/3"
+SLEEP_STAGER_REM_KEY = "SleepStager.remFunnelDiagnostic/6"
+SLEEP_STAGER_METRICS_KEY = "SleepStager.hypnogramMetrics/1"
+SLEEP_STAGER_V2_KEY = "SleepStagerV2.stageSession/6"
+SLEEP_STAGER_KEYS = {
+    SLEEP_STAGER_DETECT_KEY, SLEEP_STAGER_V1_KEY, SLEEP_STAGER_MOTION_KEY,
+    SLEEP_STAGER_STATE_KEY, SLEEP_STAGER_REM_KEY, SLEEP_STAGER_METRICS_KEY,
+    SLEEP_STAGER_V2_KEY,
+}
 SLEEP_FUNCTIONS = {
     SLEEP_CREDIT_KEY, SLEEP_LEDGER_KEY, SLEEP_AUTO_BED_KEY, SLEEP_DISJOINT_KEY,
     SLEEP_CLAMP_KEY, SLEEP_WAKE_KEY, SLEEP_RECLIP_KEY, *SLEEP_STAGE_TOTALS_KEYS,
+    *SLEEP_STAGER_KEYS,
 }
 SLEEP_DEFAULT_NEED_HOURS = 8.0
 SLEEP_DEFAULT_WINDOW = 14
@@ -75,6 +89,7 @@ SLEEP_DEFAULT_SLACK_SEC = 300
 SLEEP_MAX_ROWS = 256
 SLEEP_MAX_TEXT_BYTES = 16_384
 SLEEP_STAGE_TOTALS_SEED = GENERATOR_SEED ^ 0x534C_4545_5053_5447
+SLEEP_STAGER_SEED = GENERATOR_SEED ^ 0x534C_5354_4147_4552
 SLEEP_SEEDS = {
     SLEEP_CREDIT_KEY: (0x534C_4352_4544_0001, 0x534C_4352_4544_0002),
     SLEEP_LEDGER_KEY: (0x534C_4C45_4447_0001, 0x534C_4C45_4447_0002),
@@ -107,6 +122,12 @@ SLEEP_REGRESSION_FIXTURES = {
             "sessionStart": 100, "oldEnd": 300, "newStart": 100, "newEnd": 300,
         },
     },
+}
+SLEEP_STAGER_REGRESSION_DIGESTS = {
+    "sleep_stager_issue_66_detect_cache_aba": "d0a077f171c00db014930a430f4456167a38b1f349024320f1f09ee9113bc955",
+    "sleep_stager_issue_66_v1_cache_aba": "e1da2afe59844b86b366da8ae905890f54d7561a044259bc49716de55796674c",
+    "sleep_stager_issue_66_v2_cache_aba": "8e4d91f4430459108eadac436e77ecc8da7df73953eea0470bc5cd675c78f186",
+    "sleep_stager_issue_67_v2_sorted_shuffled": "6094fa8432fa2c1d59bdb7c6664b4d1512f0698c547b8a597d76bacc032368c1",
 }
 RECOVERY_DRIVERS_KEY = (
     "RecoveryScorer.chargeDrivers/8=RecoveryDrivers.chargeDrivers/8"
@@ -488,6 +509,112 @@ def _validate_sleep_output(value: Any, expected: dict[str, Any], path: str) -> N
             if type(obj["editApplied"]) is not bool: raise ParityFormatError(f"{path}.editApplied invalid")
             if obj["sleep"] is None: raise ParityFormatError(f"{path}.sleep must be non-null")
             daily_payload(obj["sleep"], f"{path}.sleep")
+        return
+    if function in SLEEP_STAGER_KEYS:
+        calls = expected["effectiveArgs"]["calls"]
+        if not isinstance(value, list) or len(value) != len(calls) or len(value) > 4:
+            raise ParityFormatError(f"{path} must contain exactly one bounded result per call")
+
+        def text(raw: Any, where: str, allowed: set[str] | None = None) -> str:
+            obj = _validate_exact_object_keys(raw, {"text"}, where)
+            if not isinstance(obj["text"], str) or (allowed is not None and obj["text"] not in allowed):
+                raise ParityFormatError(f"{where}.text is outside the canonical vocabulary")
+            return obj["text"]
+
+        def segments(raw: Any, call: dict[str, Any], where: str) -> None:
+            if not isinstance(raw, list) or not raw or len(raw) > 4096:
+                raise ParityFormatError(f"{where} must be a non-empty bounded segment array")
+            previous_end: int | None = None
+            for index, item in enumerate(raw):
+                segment = _validate_exact_object_keys(
+                    item, {"start", "end", "stage"}, f"{where}[{index}]"
+                )
+                start, end = segment["start"], segment["end"]
+                if type(start) is not int or type(end) is not int or not (
+                    call["start"] <= start < end <= call["end"]
+                ):
+                    raise ParityFormatError(f"{where}[{index}] has invalid bounds")
+                if previous_end is not None and start != previous_end:
+                    raise ParityFormatError(f"{where}[{index}] does not tile contiguously")
+                previous_end = end
+                text(segment["stage"], f"{where}[{index}].stage", {"wake", "light", "deep", "rem"})
+            if raw[0]["start"] != call["start"] or previous_end != call["end"]:
+                raise ParityFormatError(f"{where} must tile the complete window")
+
+        for index, (raw, call) in enumerate(zip(value, calls)):
+            where = f"{path}[{index}]"
+            if function == SLEEP_STAGER_DETECT_KEY:
+                if not isinstance(raw, list) or len(raw) > 32:
+                    raise ParityFormatError(f"{where} must be a bounded session array")
+                for session_index, item in enumerate(raw):
+                    session_path = f"{where}[{session_index}]"
+                    session = _validate_exact_object_keys(
+                        item, {"start", "end", "efficiency", "stages", "restingHR", "avgHRV"},
+                        session_path,
+                    )
+                    if type(session["start"]) is not int or type(session["end"]) is not int or session["end"] <= session["start"]:
+                        raise ParityFormatError(f"{session_path} has invalid session bounds")
+                    _validate_exact_bits(session["efficiency"], f"{session_path}.efficiency")
+                    if session["restingHR"] is not None and type(session["restingHR"]) is not int:
+                        raise ParityFormatError(f"{session_path}.restingHR must be integer or null")
+                    if session["avgHRV"] is not None:
+                        _validate_exact_bits(session["avgHRV"], f"{session_path}.avgHRV")
+                    segments(session["stages"], {"start": session["start"], "end": session["end"]}, f"{session_path}.stages")
+            elif function in {SLEEP_STAGER_V1_KEY, SLEEP_STAGER_V2_KEY}:
+                segments(raw, call, where)
+            elif function == SLEEP_STAGER_MOTION_KEY:
+                if not isinstance(raw, list) or len(raw) > 4096:
+                    raise ParityFormatError(f"{where} must be a bounded motion array")
+                for item_index, item in enumerate(raw):
+                    _validate_exact_bits(item, f"{where}[{item_index}]")
+            elif function == SLEEP_STAGER_STATE_KEY:
+                if not isinstance(raw, list) or len(raw) > 4096 or not all(type(item) is int and 0 <= item <= 3 for item in raw):
+                    raise ParityFormatError(f"{where} must be a bounded band-state array")
+            elif function == SLEEP_STAGER_REM_KEY:
+                if raw is None:
+                    continue
+                fields = {
+                    "sleepEpochs", "remAtClassify", "remAfterReimpose",
+                    "remStrippedByOnsetGuard", "respChannelPresent", "blockedNotStill",
+                    "blockedNoCardiacActivation", "blockedRespRegular",
+                    "blockedNoRespFallbackBar", "wonOtherStage", "isZeroREM",
+                }
+                diagnostic = _validate_exact_object_keys(raw, fields, where)
+                for field in fields - {"respChannelPresent", "isZeroREM"}:
+                    if type(diagnostic[field]) is not int or not 0 <= diagnostic[field] <= 4096:
+                        raise ParityFormatError(f"{where}.{field} must be a bounded non-negative integer")
+                if type(diagnostic["respChannelPresent"]) is not bool or type(diagnostic["isZeroREM"]) is not bool:
+                    raise ParityFormatError(f"{where} diagnostic flags must be boolean")
+                if diagnostic["isZeroREM"] != (diagnostic["remAfterReimpose"] == 0):
+                    raise ParityFormatError(f"{where}.isZeroREM contradicts remAfterReimpose")
+                classified = sum(diagnostic[field] for field in {
+                    "remAtClassify", "blockedNotStill", "blockedNoCardiacActivation",
+                    "blockedRespRegular", "blockedNoRespFallbackBar", "wonOtherStage",
+                })
+                if classified != diagnostic["sleepEpochs"] or (
+                    diagnostic["remAfterReimpose"] + diagnostic["remStrippedByOnsetGuard"]
+                    > diagnostic["sleepEpochs"]
+                ):
+                    raise ParityFormatError(f"{where} diagnostic counts contradict the public funnel")
+            else:
+                fields = {
+                    "tibS", "tstS", "sptS", "solS", "remLatencyS", "wasoS",
+                    "efficiency", "disturbances", "deepMin", "remMin", "lightMin",
+                    "deepPct", "remPct", "lightPct",
+                }
+                metrics = _validate_exact_object_keys(raw, fields, where)
+                for field in fields - {"disturbances"}:
+                    _validate_exact_bits(metrics[field], f"{where}.{field}")
+                if type(metrics["disturbances"]) is not int or not 0 <= metrics["disturbances"] <= 4096:
+                    raise ParityFormatError(f"{where}.disturbances must be a bounded non-negative integer")
+
+        if expected.get("regressionIssue") == "bhelm/noop#66":
+            if len(value) != 3 or value[0] != value[2] or value[0] == value[1]:
+                raise ParityFormatError(f"{path} must prove observable A→B→A cache isolation for #66")
+        if expected.get("regressionIssue") == "bhelm/noop#67":
+            oracle = [{"start": calls[0]["start"], "end": calls[0]["end"], "stage": {"text": "light"}}]
+            if len(value) != 2 or value[0] != oracle or value[1] != oracle:
+                raise ParityFormatError(f"{path} must preserve the frozen sorted/shuffled #67 oracle")
         return
     if function == SLEEP_CREDIT_KEY:
         if value is not None:
@@ -1118,6 +1245,79 @@ def _seeded_sleep_stage_totals_cases(
     return records
 
 
+def _seeded_sleep_stager_cases(
+    seed_base: int = SLEEP_STAGER_SEED,
+) -> list[dict[str, Any]]:
+    """Exactly two operation-local structured seeds for every public S3 entry point."""
+
+    records: list[dict[str, Any]] = []
+    for function in sorted(SLEEP_STAGER_KEYS):
+        function_seed = seed_base ^ _stable_fnv1a64(function)
+        for strategy in ("splitmix64", "affine"):
+            strategy_seed = function_seed ^ _stable_fnv1a64(f"strategy:{strategy}")
+            rng = SplitMix64(strategy_seed)
+            marker = int(strategy_seed & 0x3fff) + int(rng.bounded(300))
+            start = 1_760_000_000 + marker * 10
+            duration = 600 + int(rng.bounded(11)) * 30
+            order = "sorted" if strategy == "splitmix64" else "odd-even"
+
+            def gravity(count: int, pattern: str = "still-z") -> dict[str, Any]:
+                return {"startTs": start, "count": count, "stepSec": 1,
+                        "pattern": pattern, "order": order}
+
+            def heart_rate(count: int) -> dict[str, Any]:
+                return {"startTs": start, "count": count, "stepSec": 1,
+                        "base": 48 + int(rng.bounded(8)), "pattern": "minute-wave", "order": order}
+
+            def rr(count: int) -> dict[str, Any]:
+                return {"startTs": start, "count": count, "stepSec": 1,
+                        "base": 960 + int(rng.bounded(81)), "pattern": "four-wave", "order": order}
+
+            def resp(count: int) -> dict[str, Any]:
+                return {"startTs": start, "count": count, "stepSec": 1,
+                        "base": 1000 + int(rng.bounded(51)), "pattern": "four-wave", "order": order}
+
+            if function == SLEEP_STAGER_DETECT_KEY:
+                call = {
+                    "gravity": gravity(duration, "still-z" if strategy == "splitmix64" else "gentle-wave"),
+                    "hr": heart_rate(duration), "rr": rr(duration), "resp": resp(duration),
+                    "tzOffsetSeconds": marker % 3_600, "wristOff": [], "bandSleepState": [],
+                    "useSleepStagerV2": strategy == "affine", "sleepHRBaseline": None,
+                    "useDefaults": False,
+                }
+            elif function in {SLEEP_STAGER_V1_KEY, SLEEP_STAGER_V2_KEY, SLEEP_STAGER_REM_KEY}:
+                call = {
+                    "start": start, "end": start + duration,
+                    "gravity": gravity(duration, "still-z" if strategy == "splitmix64" else "gentle-wave"),
+                    "hr": heart_rate(duration), "rr": rr(duration), "resp": resp(duration),
+                }
+            elif function == SLEEP_STAGER_MOTION_KEY:
+                call = {"start": start, "end": start + duration,
+                        "gravity": gravity(duration, "gentle-wave")}
+            elif function == SLEEP_STAGER_STATE_KEY:
+                call = {"start": start, "end": start + duration, "sleepState": [
+                    {"ts": start + marker % 20, "state": int(rng.bounded(4))},
+                    {"ts": start + duration // 2, "state": int(rng.bounded(4))},
+                ]}
+            elif function == SLEEP_STAGER_METRICS_KEY:
+                seam = start + duration // 3
+                call = {"session": {"start": start, "end": start + duration,
+                    "efficiency": 0.75, "restingHR": 50, "avgHRV": 42.0,
+                    "stages": [
+                        {"start": start, "end": seam, "stage": "wake"},
+                        {"start": seam, "end": start + duration, "stage":
+                         "deep" if strategy == "splitmix64" else "rem"},
+                    ]}}
+            else:
+                raise AssertionError(function)
+            records.append({
+                "args": {"calls": [call]}, "comparison": "exact", "function": function,
+                "id": f"seeded_sleep_stager_{function.replace('.', '_').replace('/', '_')}_{strategy}",
+                "source": f"seeded:{function}:{strategy}:{strategy_seed:#018x}",
+            })
+    return records
+
+
 def _seeded_sleep_cases() -> list[dict[str, Any]]:
     """Two function-local deterministic streams per Sleep helper; never share RNG state."""
 
@@ -1539,6 +1739,7 @@ def _seeded_cases() -> list[dict[str, Any]]:
     records.extend(_seeded_watch_recovery_cases())
     records.extend(_seeded_sleep_cases())
     records.extend(_seeded_sleep_stage_totals_cases())
+    records.extend(_seeded_sleep_stager_cases())
     return records
 
 
@@ -2140,6 +2341,148 @@ def _sst_stages(value: Any, record: dict[str, Any], label: str) -> None:
     )
 
 
+def _validate_sleep_stager_args(args: dict[str, Any], record: dict[str, Any]) -> dict[str, Any]:
+    """Validate compact, deterministic stream recipes for the public Sleep-stager surface."""
+
+    function, case_id = record["function"], record.get("id")
+    if set(args) != {"calls"} or not isinstance(args["calls"], list) or not 1 <= len(args["calls"]) <= 4:
+        raise ParityFormatError(f"case {case_id!r} {function} requires one to four calls")
+
+    def exact(raw: Any, fields: set[str], where: str) -> dict[str, Any]:
+        if not isinstance(raw, dict) or set(raw) != fields:
+            raise ParityFormatError(f"case {case_id!r} {function} {where} requires exactly {sorted(fields)}")
+        return raw
+
+    def integer(value: Any, where: str) -> int:
+        return _sleep_int(value, record, where)
+
+    def series(raw: Any, kind: str, where: str) -> dict[str, Any]:
+        fields = {"startTs", "count", "stepSec", "pattern", "order"}
+        if kind != "gravity": fields.add("base")
+        value = exact(raw, fields, where)
+        start = integer(value["startTs"], f"{where}.startTs")
+        count = value["count"]
+        step = value["stepSec"]
+        if not _is_signed_integer(count, 0, 21_600) or not _is_signed_integer(step, 1, 3_600):
+            raise ParityFormatError(f"case {case_id!r} {function} {where} count/step is outside the bounded domain")
+        if count:
+            _checked_add(start, (count - 1) * step, record, f"{where} final timestamp")
+        if value["order"] not in {"sorted", "odd-even"}:
+            raise ParityFormatError(f"case {case_id!r} {function} {where}.order is invalid")
+        patterns = {
+            "gravity": {"still-z", "alternating-same-sum", "pulse-same-sum", "gentle-wave"},
+            "hr": {"flat", "minute-wave"}, "rr": {"flat", "four-wave"},
+            "resp": {"flat", "four-wave"},
+        }
+        if value["pattern"] not in patterns[kind]:
+            raise ParityFormatError(f"case {case_id!r} {function} {where}.pattern is invalid")
+        if kind != "gravity":
+            base = value["base"]
+            bounds = {"hr": (20, 250), "rr": (300, 2_000), "resp": (-1_000_000, 1_000_000)}[kind]
+            if not _is_signed_integer(base, *bounds):
+                raise ParityFormatError(f"case {case_id!r} {function} {where}.base is invalid")
+        return dict(value)
+
+    def window(call: dict[str, Any], where: str) -> tuple[int, int]:
+        start, end = integer(call["start"], f"{where}.start"), integer(call["end"], f"{where}.end")
+        duration = _checked_subtract(end, start, record, f"{where} duration")
+        if not 0 < duration <= 86_400:
+            raise ParityFormatError(f"case {case_id!r} {function} {where} window must be within one day")
+        return start, end
+
+    def state_rows(raw: Any, where: str) -> list[dict[str, Any]]:
+        if not isinstance(raw, list) or len(raw) > 21_600:
+            raise ParityFormatError(f"case {case_id!r} {function} {where} must be bounded")
+        rows: list[dict[str, Any]] = []
+        for index, item in enumerate(raw):
+            row = exact(item, {"ts", "state"}, f"{where}[{index}]")
+            integer(row["ts"], f"{where}[{index}].ts")
+            if not _is_signed_integer(row["state"], 0, 3):
+                raise ParityFormatError(f"case {case_id!r} {function} {where}[{index}].state is invalid")
+            rows.append(dict(row))
+        return rows
+
+    effective_calls: list[dict[str, Any]] = []
+    for index, raw_call in enumerate(args["calls"]):
+        where = f"calls[{index}]"
+        if not isinstance(raw_call, dict):
+            raise ParityFormatError(f"case {case_id!r} {function} {where} must be an object")
+        call = dict(raw_call)
+        if function == SLEEP_STAGER_DETECT_KEY:
+            use_defaults = call.get("useDefaults")
+            if type(use_defaults) is not bool:
+                raise ParityFormatError(f"case {case_id!r} {function} {where}.useDefaults must be boolean")
+            if use_defaults:
+                exact(call, {"gravity", "useDefaults"}, where)
+            else:
+                exact(call, {"gravity", "hr", "rr", "resp", "tzOffsetSeconds", "wristOff",
+                             "bandSleepState", "useSleepStagerV2", "sleepHRBaseline", "useDefaults"}, where)
+            effective = dict(call)
+            effective["gravity"] = series(call["gravity"], "gravity", f"{where}.gravity")
+            if use_defaults:
+                effective.update({"hr": None, "rr": None, "resp": None, "tzOffsetSeconds": 0,
+                                  "wristOff": [], "bandSleepState": [], "useSleepStagerV2": False,
+                                  "sleepHRBaseline": None})
+            else:
+                for key, kind in (("hr", "hr"), ("rr", "rr"), ("resp", "resp")):
+                    effective[key] = series(call[key], kind, f"{where}.{key}")
+                offset = integer(call["tzOffsetSeconds"], f"{where}.tzOffsetSeconds")
+                if abs(offset) > 172_800:
+                    raise ParityFormatError(f"case {case_id!r} {function} {where}.tzOffsetSeconds is unsafe")
+                wrist = call["wristOff"]
+                if not isinstance(wrist, list) or len(wrist) > 64:
+                    raise ParityFormatError(f"case {case_id!r} {function} {where}.wristOff must be bounded")
+                for row_index, raw in enumerate(wrist):
+                    row = exact(raw, {"start", "end"}, f"{where}.wristOff[{row_index}]")
+                    if integer(row["end"], "wristOff.end") <= integer(row["start"], "wristOff.start"):
+                        raise ParityFormatError(f"case {case_id!r} {function} wrist-off interval is empty")
+                effective["bandSleepState"] = state_rows(call["bandSleepState"], f"{where}.bandSleepState")
+                if type(call["useSleepStagerV2"]) is not bool:
+                    raise ParityFormatError(f"case {case_id!r} {function} {where}.useSleepStagerV2 must be boolean")
+                baseline = call["sleepHRBaseline"]
+                if baseline is not None and not (_is_number(baseline) and 20.0 <= baseline <= 250.0):
+                    raise ParityFormatError(f"case {case_id!r} {function} {where}.sleepHRBaseline is invalid")
+            effective_calls.append(effective)
+            continue
+        if function in {SLEEP_STAGER_V1_KEY, SLEEP_STAGER_V2_KEY, SLEEP_STAGER_REM_KEY}:
+            exact(call, {"start", "end", "gravity", "hr", "rr", "resp"}, where)
+            window(call, where)
+            for key, kind in (("gravity", "gravity"), ("hr", "hr"), ("rr", "rr"), ("resp", "resp")):
+                call[key] = series(call[key], kind, f"{where}.{key}")
+        elif function == SLEEP_STAGER_MOTION_KEY:
+            exact(call, {"start", "end", "gravity"}, where); window(call, where)
+            call["gravity"] = series(call["gravity"], "gravity", f"{where}.gravity")
+        elif function == SLEEP_STAGER_STATE_KEY:
+            exact(call, {"start", "end", "sleepState"}, where); window(call, where)
+            call["sleepState"] = state_rows(call["sleepState"], f"{where}.sleepState")
+        elif function == SLEEP_STAGER_METRICS_KEY:
+            exact(call, {"session"}, where)
+            session = exact(call["session"], {"start", "end", "efficiency", "stages", "restingHR", "avgHRV"}, f"{where}.session")
+            start, end = window(session, f"{where}.session")
+            if not _is_number(session["efficiency"]) or not 0.0 <= session["efficiency"] <= 1.0:
+                raise ParityFormatError(f"case {case_id!r} {function} session efficiency is invalid")
+            if session["restingHR"] is not None and not _is_signed_integer(session["restingHR"], 20, 250):
+                raise ParityFormatError(f"case {case_id!r} {function} restingHR is invalid")
+            if session["avgHRV"] is not None and not (_is_number(session["avgHRV"]) and 0.0 <= session["avgHRV"] <= 1_000.0):
+                raise ParityFormatError(f"case {case_id!r} {function} avgHRV is invalid")
+            stages = session["stages"]
+            if not isinstance(stages, list) or len(stages) > 4096:
+                raise ParityFormatError(f"case {case_id!r} {function} stages must be bounded")
+            previous = start
+            for stage_index, raw in enumerate(stages):
+                row = exact(raw, {"start", "end", "stage"}, f"{where}.session.stages[{stage_index}]")
+                row_start = integer(row["start"], "stage.start"); row_end = integer(row["end"], "stage.end")
+                if row_start != previous or not row_start < row_end <= end or row["stage"] not in {"wake", "light", "deep", "rem"}:
+                    raise ParityFormatError(f"case {case_id!r} {function} stages must be canonical contiguous segments")
+                previous = row_end
+            if stages and previous != end:
+                raise ParityFormatError(f"case {case_id!r} {function} stages must tile the session")
+        else:
+            raise AssertionError(function)
+        effective_calls.append(call)
+    return {"calls": effective_calls}
+
+
 def _validate_sst_args(args: dict[str, Any], record: dict[str, Any]) -> dict[str, Any]:
     f, cid = record["function"], record.get("id")
     def exact(required: set[str], optional: set[str] = set()) -> None:
@@ -2248,6 +2591,8 @@ def _validate_sleep_args(args: dict[str, Any], record: dict[str, Any]) -> dict[s
 
     function = record.get("function")
     case_id = record.get("id")
+    if function in SLEEP_STAGER_KEYS:
+        return _validate_sleep_stager_args(args, record)
     if function in SLEEP_STAGE_TOTALS_KEYS:
         return _validate_sst_args(args, record)
     if function == SLEEP_CREDIT_KEY:
@@ -2750,6 +3095,13 @@ def generate_cases(suite: str, nonce: str) -> list[dict[str, Any]]:
         raise ParityFormatError("nonce must not be empty")
     if suite == "negative":
         raw = [
+            {"args":{"calls":[{"gravity":{"startTs":1749520800,"count":5400,"stepSec":1,"pattern":"still-z","order":"sorted"},"hr":{"startTs":1749520800,"count":5400,"stepSec":1,"base":50,"pattern":"minute-wave","order":"sorted"},"rr":{"startTs":1749520800,"count":0,"stepSec":1,"base":1000,"pattern":"flat","order":"sorted"},"resp":{"startTs":1749520800,"count":0,"stepSec":1,"base":1000,"pattern":"flat","order":"sorted"},"tzOffsetSeconds":0,"wristOff":[],"bandSleepState":[],"useSleepStagerV2":False,"sleepHRBaseline":None,"useDefaults":False}]},"comparison":"exact","function":SLEEP_STAGER_DETECT_KEY,"id":"sleep_stager_negative_detect_probe","source":"negative-control"},
+            {"args":{"calls":[{"start":1750100000,"end":1750100600,"gravity":{"startTs":1750100000,"count":600,"stepSec":1,"pattern":"still-z","order":"sorted"},"hr":{"startTs":1750100000,"count":600,"stepSec":1,"base":50,"pattern":"minute-wave","order":"sorted"},"rr":{"startTs":1750100000,"count":0,"stepSec":1,"base":1000,"pattern":"flat","order":"sorted"},"resp":{"startTs":1750100000,"count":0,"stepSec":1,"base":1000,"pattern":"flat","order":"sorted"}}]},"comparison":"exact","function":SLEEP_STAGER_V1_KEY,"id":"sleep_stager_negative_v1_probe","source":"negative-control"},
+            {"args":{"calls":[{"start":1750200000,"end":1750200120,"gravity":{"startTs":1750200000,"count":120,"stepSec":1,"pattern":"gentle-wave","order":"sorted"}}]},"comparison":"exact","function":SLEEP_STAGER_MOTION_KEY,"id":"sleep_stager_negative_motion_probe","source":"negative-control"},
+            {"args":{"calls":[{"start":1750300000,"end":1750300120,"sleepState":[{"ts":1750300010,"state":1},{"ts":1750300070,"state":2}]}]},"comparison":"exact","function":SLEEP_STAGER_STATE_KEY,"id":"sleep_stager_negative_state_probe","source":"negative-control"},
+            {"args":{"calls":[{"start":1750400000,"end":1750400600,"gravity":{"startTs":1750400000,"count":600,"stepSec":1,"pattern":"still-z","order":"sorted"},"hr":{"startTs":1750400000,"count":600,"stepSec":1,"base":50,"pattern":"minute-wave","order":"sorted"},"rr":{"startTs":1750400000,"count":600,"stepSec":1,"base":1000,"pattern":"four-wave","order":"sorted"},"resp":{"startTs":1750400000,"count":600,"stepSec":1,"base":1000,"pattern":"four-wave","order":"sorted"}}]},"comparison":"exact","function":SLEEP_STAGER_REM_KEY,"id":"sleep_stager_negative_rem_probe","source":"negative-control"},
+            {"args":{"calls":[{"session":{"start":1750500000,"end":1750500600,"efficiency":0.8,"stages":[{"start":1750500000,"end":1750500120,"stage":"wake"},{"start":1750500120,"end":1750500600,"stage":"deep"}],"restingHR":50,"avgHRV":42.0}}]},"comparison":"exact","function":SLEEP_STAGER_METRICS_KEY,"id":"sleep_stager_negative_metrics_probe","source":"negative-control"},
+            {"args":{"calls":[{"start":1750600000,"end":1750600900,"gravity":{"startTs":1750600000,"count":900,"stepSec":1,"pattern":"still-z","order":"sorted"},"hr":{"startTs":1750600000,"count":900,"stepSec":1,"base":50,"pattern":"minute-wave","order":"sorted"},"rr":{"startTs":1750600000,"count":900,"stepSec":1,"base":1000,"pattern":"four-wave","order":"sorted"},"resp":{"startTs":1750600000,"count":0,"stepSec":1,"base":1000,"pattern":"flat","order":"sorted"}}]},"comparison":"exact","function":SLEEP_STAGER_V2_KEY,"id":"sleep_stager_negative_v2_probe","source":"negative-control"},
             {"args":{"stagesJSON":"[{\"start\":0,\"end\":3600,\"stage\":\"rem\"}]"},"comparison":"exact","function":"SleepStageTotals.minutes/1","id":"sleep_stage_totals_negative_decode_probe","source":"negative-control"},
             {"args":{"stagesJSON":"[{\"start\":0,\"end\":3600,\"stage\":\"light\"}]","onsetSec":1800},"comparison":"exact","function":"SleepStageTotals.clampStagesToOnset/2","id":"sleep_stage_totals_negative_clamp_probe","source":"negative-control"},
             {"args":{"stagesJSONs":["[{\"start\":0,\"end\":3600,\"stage\":\"light\"}]"],"interFragmentAwakeSeconds":3600.0},"comparison":"exact","function":"SleepStageTotals.dailyAggregate/2","id":"sleep_stage_totals_negative_daily_probe","source":"negative-control"},
@@ -2950,7 +3302,10 @@ def generate_cases(suite: str, nonce: str) -> list[dict[str, Any]]:
             "forecast_clamp_issue_56_negative_x_positive_upper_zero",
         }
         regression_issue = record.get("regressionIssue")
-        supported_regression_issues = {"bhelm/noop#41", "bhelm/noop#42", "bhelm/noop#56"}
+        supported_regression_issues = {
+            "bhelm/noop#41", "bhelm/noop#42", "bhelm/noop#56",
+            "bhelm/noop#66", "bhelm/noop#67",
+        }
         if regression_issue is not None and regression_issue not in supported_regression_issues:
             raise ParityFormatError(
                 f"case {case_id!r} has unsupported regressionIssue {regression_issue!r}"
@@ -2973,6 +3328,30 @@ def generate_cases(suite: str, nonce: str) -> list[dict[str, Any]]:
         elif regression_issue in {"bhelm/noop#41", "bhelm/noop#42"}:
             raise ParityFormatError(
                 f"case {case_id!r} may not reuse a Sleep regression issue outside its exact fixture"
+            )
+        sleep_stager_regressions = {
+            "sleep_stager_issue_66_detect_cache_aba": ("bhelm/noop#66", SLEEP_STAGER_DETECT_KEY, 3),
+            "sleep_stager_issue_66_v1_cache_aba": ("bhelm/noop#66", SLEEP_STAGER_V1_KEY, 3),
+            "sleep_stager_issue_66_v2_cache_aba": ("bhelm/noop#66", SLEEP_STAGER_V2_KEY, 3),
+            "sleep_stager_issue_67_v2_sorted_shuffled": ("bhelm/noop#67", SLEEP_STAGER_V2_KEY, 2),
+        }
+        if case_id in sleep_stager_regressions:
+            issue, expected_function, expected_calls = sleep_stager_regressions[case_id]
+            stager_args = record.get("args")
+            calls = stager_args.get("calls") if isinstance(stager_args, dict) else None
+            if regression_issue != issue or record.get("comparison") != "exact" or record.get("function") != expected_function or not isinstance(calls, list) or len(calls) != expected_calls:
+                raise ParityFormatError(
+                    f"case {case_id!r} must preserve its exact {issue} Sleep-stager regression shape"
+                )
+            locked = {key: record[key] for key in ("id", "function", "comparison", "regressionIssue", "args")}
+            digest = hashlib.sha256(_canonical_json(locked).encode("utf-8")).hexdigest()
+            if digest != SLEEP_STAGER_REGRESSION_DIGESTS[case_id]:
+                raise ParityFormatError(
+                    f"case {case_id!r} must preserve its exact issue-linked Sleep-stager fixture"
+                )
+        elif regression_issue in {"bhelm/noop#66", "bhelm/noop#67"}:
+            raise ParityFormatError(
+                f"case {case_id!r} may not reuse a Sleep-stager regression issue outside its exact fixture"
             )
         function = record.get("function")
         args = record.get("args", {})
