@@ -52,6 +52,21 @@ final class ParityRunner: XCTestCase {
         let day: String
         let totalSleepMin: Double?
     }
+    private struct SSTBlockInput: Decodable { let start: Int; let end: Int }
+    private struct SSTStagesInput: Decodable { let startTs: Int; let stagesJSON: String? }
+    private struct SSTOnsetInput: Decodable { let startTs: Int; let onset: Int }
+    private struct SSTHistoryInput: Decodable { let start: Int; let end: Int; let dayKey: String }
+    private enum HistoryArgument: Decodable {
+        case generated(HistoryInput)
+        case sleep([SSTHistoryInput])
+        init(from decoder: Decoder) throws {
+            let box = try decoder.singleValueContainer()
+            if let value = try? box.decode(HistoryInput.self) { self = .generated(value) }
+            else { self = .sleep(try box.decode([SSTHistoryInput].self)) }
+        }
+        var generated: HistoryInput? { if case .generated(let value) = self { return value }; return nil }
+        var sleep: [SSTHistoryInput]? { if case .sleep(let value) = self { return value }; return nil }
+    }
 
     private struct Arguments: Decodable {
         let age: Double?
@@ -92,7 +107,7 @@ final class ParityRunner: XCTestCase {
         let effortBaseline: BaselineInput?
         let priorDayEffort: Double?
         let useDefaults: Bool?
-        let history: HistoryInput?
+        let history: HistoryArgument?
         let hr: [HRInput]?
         let halfWindowSec: Int?
         let maxRowsPerSecond: Int?
@@ -120,6 +135,7 @@ final class ParityRunner: XCTestCase {
         let samples: [HRInput]?
         let spread: Double?
         let start: Int?
+        let ts: Int?
         let end: Int?
         let stored: Double?
         let strainCalls: [StrainCallInput]?
@@ -152,6 +168,18 @@ final class ParityRunner: XCTestCase {
         let stagesJSON: String?
         let sessionStart: Int?
         let oldEnd: Int?
+        let stagesJSONs: [String?]?
+        let onsetSec: Int?
+        let interFragmentAwakeSeconds: Double?
+        let spans: [SSTBlockInput]?
+        let blocks: [SSTBlockInput]?
+        let offsetSec: Int?
+        let habitualMidsleepSec: Int?
+        let detected: [SSTStagesInput]?
+        let edited: [SSTStagesInput]?
+        let manual: [SSTStagesInput]?
+        let onsetByStart: [SSTOnsetInput]?
+        let minDays: Int?
     }
 
     private struct InputRecord: Decodable {
@@ -240,6 +268,65 @@ final class ParityRunner: XCTestCase {
             ? "StrainScorer.trimpToStrain/2"
             : record.function
         switch dispatchFunction {
+        case "SleepStageTotals.minutes/1":
+            var payload = minutesPayload(SleepStageTotals.minutes(fromStagesJSON: record.args.stagesJSON))
+            if negativeSide == "swift", record.id == "sleep_stage_totals_negative_decode_probe" {
+                payload = minutesPayload(.init()); result["negativeSide"] = "swift"
+            }
+            result["valueBits"] = payload
+        case "SleepStageTotals.clampStagesToOnset/2":
+            let raw = SleepStageTotals.clampStagesToOnset(record.args.stagesJSON, onsetSec: try XCTUnwrap(record.args.onsetSec))
+            var payload: [String: Any] = ["returnedNull": raw == nil, "minutes": minutesPayload(SleepStageTotals.minutes(fromStagesJSON: raw))]
+            if negativeSide == "swift", record.id == "sleep_stage_totals_negative_clamp_probe" { payload["minutes"] = minutesPayload(SleepStageTotals.minutes(fromStagesJSON: record.args.stagesJSON)); result["negativeSide"] = "swift" }
+            result["valueBits"] = payload
+        case "SleepStageTotals.dailyAggregate/1":
+            result["valueBits"] = dailyPayload(SleepStageTotals.dailyAggregate(try XCTUnwrap(record.args.stagesJSONs)))
+        case "SleepStageTotals.dailyAggregate/2":
+            let stages = try XCTUnwrap(record.args.stagesJSONs)
+            let awake = try XCTUnwrap(record.args.interFragmentAwakeSeconds)
+            var value = SleepStageTotals.dailyAggregate(stages, interFragmentAwakeSeconds: awake)
+            if negativeSide == "swift", record.id == "sleep_stage_totals_negative_daily_probe" { value = SleepStageTotals.dailyAggregate(stages); result["negativeSide"] = "swift" }
+            result["valueBits"] = dailyPayload(value)
+        case "SleepStageTotals.interFragmentAwakeSeconds/1":
+            let spans = try XCTUnwrap(record.args.spans).map { (start: $0.start, end: $0.end) }
+            result["valueBits"] = exactBit(SleepStageTotals.interFragmentAwakeSeconds(spans))
+        case "SleepStageTotals.isOvernightOnset/2":
+            result["valueBits"] = SleepStageTotals.isOvernightOnset(try XCTUnwrap(record.args.ts), offsetSec: try XCTUnwrap(record.args.offsetSec))
+        case "SleepStageTotals.bridgedNightGroups/2":
+            let blocks = try sstBlocks(record.args.blocks)
+            var groups = SleepStageTotals.bridgedNightGroups(blocks, offsetSec: try XCTUnwrap(record.args.offsetSec))
+            if negativeSide == "swift", record.id == "sleep_stage_totals_negative_bridge_probe" { groups = groups.map { .init(indices: Array($0.indices.prefix(1)), gaps: []) }; result["negativeSide"] = "swift" }
+            result["valueBits"] = groups.map { ["indices":$0.indices,"gaps":$0.gaps.map { ["start":$0.start,"end":$0.end] }] }
+        case "SleepStageTotals.mainNightGroupIndices/3":
+            let blocks = try sstBlocks(record.args.blocks); let offset = try XCTUnwrap(record.args.offsetSec)
+            let value = record.args.useDefaults == true ? SleepStageTotals.mainNightGroupIndices(blocks, offsetSec: offset) : SleepStageTotals.mainNightGroupIndices(blocks, offsetSec: offset, habitualMidsleepSec: record.effectiveArgs.habitualMidsleepSec)
+            result["valueBits"] = value ?? NSNull()
+        case "SleepStageTotals.mainNightIndex/3":
+            let blocks = try sstBlocks(record.args.blocks); let offset = try XCTUnwrap(record.args.offsetSec)
+            let value = record.args.useDefaults == true ? SleepStageTotals.mainNightIndex(blocks, offsetSec: offset) : SleepStageTotals.mainNightIndex(blocks, offsetSec: offset, habitualMidsleepSec: record.effectiveArgs.habitualMidsleepSec)
+            result["valueBits"] = value ?? NSNull()
+        case "SleepStageTotals.mainNightSelection/3":
+            let blocks = try sstBlocks(record.args.blocks); let offset = try XCTUnwrap(record.args.offsetSec)
+            let value = record.args.useDefaults == true ? SleepStageTotals.mainNightSelection(blocks, offsetSec: offset) : SleepStageTotals.mainNightSelection(blocks, offsetSec: offset, habitualMidsleepSec: record.effectiveArgs.habitualMidsleepSec)
+            var payload: Any = value.map { ["index":$0.index,"reason":["text":$0.reason.rawValue],"asleepSeconds":$0.asleepSeconds] as [String:Any] } ?? NSNull()
+            if negativeSide == "swift", record.id == "sleep_stage_totals_negative_selection_probe", let value { payload = ["index":value.index,"reason":["text":"longest"],"asleepSeconds":value.asleepSeconds]; result["negativeSide"] = "swift" }
+            result["valueBits"] = payload
+        case "SleepStageTotals.dailyAggregateHonoringEdits/6":
+            let detected = try XCTUnwrap(record.args.detected).map { (startTs:$0.startTs, stagesJSON:$0.stagesJSON) }
+            let edited = Dictionary(uniqueKeysWithValues: try XCTUnwrap(record.args.edited).map { ($0.startTs,$0.stagesJSON) })
+            let effective = record.effectiveArgs
+            let value = record.args.useDefaults == true
+                ? SleepStageTotals.dailyAggregateHonoringEdits(detected: detected, edited: edited)
+                : SleepStageTotals.dailyAggregateHonoringEdits(detected: detected, edited: edited, manual: (effective.manual ?? []).map { ($0.startTs,$0.stagesJSON) }, onsetByStart: effective.onsetByStart.map { Dictionary(uniqueKeysWithValues:$0.map { ($0.startTs,$0.onset) }) }, offsetSec: try XCTUnwrap(effective.offsetSec), habitualMidsleepSec: effective.habitualMidsleepSec)
+            var payload: Any = value.map { ["sleep":dailyPayload($0.sleep),"editApplied":$0.editApplied] as [String:Any] } ?? NSNull()
+            if negativeSide == "swift", record.id == "sleep_stage_totals_negative_edits_probe" { let legacy=SleepStageTotals.dailyAggregate(detected.map{$0.stagesJSON}); payload=legacy.map{["sleep":dailyPayload($0),"editApplied":false] as [String:Any]} ?? NSNull(); result["negativeSide"]="swift" }
+            result["valueBits"] = payload
+        case "SleepStageTotals.habitualMidsleepSec/3":
+            let history = try XCTUnwrap(record.args.history?.sleep).map { SleepStageTotals.HistoryBlock(start:$0.start,end:$0.end,dayKey:$0.dayKey) }
+            let offset = try XCTUnwrap(record.args.offsetSec)
+            var value = record.args.useDefaults == true ? SleepStageTotals.habitualMidsleepSec(history, offsetSec:offset) : SleepStageTotals.habitualMidsleepSec(history, offsetSec:offset, minDays:try XCTUnwrap(record.effectiveArgs.minDays))
+            if negativeSide == "swift", record.id == "sleep_stage_totals_negative_history_probe" { value = 0; result["negativeSide"]="swift" }
+            result["valueBits"] = value ?? NSNull()
         case "SleepDebt.creditedSleepMin/2":
             guard record.comparison == "exact", let useDefaults = record.args.useDefaults else {
                 throw RunnerError.invalidInput("invalid creditedSleepMin case \(record.id)")
@@ -922,7 +1009,7 @@ final class ParityRunner: XCTestCase {
             }
             result["value"] = try finite(StrainScorer.percentile(values, pct), record: record)
         case "StrainScorer.estimateHRmax/2":
-            guard record.comparison == "epsilon", let history = record.args.history,
+            guard record.comparison == "epsilon", let history = record.args.history?.generated,
                   history.count >= 0 else {
                 throw RunnerError.invalidInput("invalid estimateHRmax case \(record.id)")
             }
@@ -1174,6 +1261,20 @@ final class ParityRunner: XCTestCase {
     private func baselineStateOptional(_ input: BaselineInput?, record: InputRecord) throws -> BaselineState? {
         guard let input else { return nil }
         return try baselineState(input, record: record)
+    }
+
+    private func sstBlocks(_ input: [SSTBlockInput]?) throws -> [SleepStageTotals.NightBlock] {
+        try XCTUnwrap(input).map { .init(start: $0.start, end: $0.end) }
+    }
+
+    private func minutesPayload(_ value: SleepStageTotals.Minutes?) -> Any {
+        guard let value else { return NSNull() }
+        return ["awake":exactBit(value.awake),"light":exactBit(value.light),"deep":exactBit(value.deep),"rem":exactBit(value.rem),"asleep":exactBit(value.asleep),"inBed":exactBit(value.inBed)]
+    }
+
+    private func dailyPayload(_ value: SleepStageTotals.DailySleep?) -> Any {
+        guard let value else { return NSNull() }
+        return ["totalSleepMin":exactBit(value.totalSleepMin),"efficiency":exactBit(value.efficiency),"deepMin":exactBit(value.deepMin),"remMin":exactBit(value.remMin),"lightMin":exactBit(value.lightMin)]
     }
 
     private func baselineState(_ input: BaselineInput, record: InputRecord) throws -> BaselineState {

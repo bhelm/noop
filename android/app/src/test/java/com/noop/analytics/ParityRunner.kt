@@ -72,6 +72,57 @@ class ParityRunner {
             function
         }
         when (dispatchFunction) {
+            "SleepStageTotals.minutes/1" -> {
+                var payload: Any? = minutesPayload(SleepStageTotals.minutes(nullableString(args,"stagesJSON")))
+                if (negativeSide == "kotlin" && caseId == "sleep_stage_totals_negative_decode_probe") { payload=minutesPayload(SleepStageTotals.Minutes()); result["negativeSide"]="kotlin" }
+                result["valueBits"]=payload
+            }
+            "SleepStageTotals.clampStagesToOnset/2" -> {
+                val original=nullableString(args,"stagesJSON"); val raw=SleepStageTotals.clampStagesToOnset(original,args.getLong("onsetSec"))
+                var payload=sortedMapOf<String,Any?>("returnedNull" to (raw==null),"minutes" to minutesPayload(SleepStageTotals.minutes(raw)))
+                if (negativeSide=="kotlin" && caseId=="sleep_stage_totals_negative_clamp_probe") { payload["minutes"]=minutesPayload(SleepStageTotals.minutes(original)); result["negativeSide"]="kotlin" }
+                result["valueBits"]=payload
+            }
+            "SleepStageTotals.dailyAggregate/1" -> {
+                val stages=jsonNullableStrings(args.getJSONArray("stagesJSONs"))
+                val value=SleepStageTotals.dailyAggregate(stages)
+                result["valueBits"]=dailyPayload(value)
+            }
+            "SleepStageTotals.dailyAggregate/2" -> {
+                val stages=jsonNullableStrings(args.getJSONArray("stagesJSONs"))
+                var value=SleepStageTotals.dailyAggregate(stages,args.getDouble("interFragmentAwakeSeconds"))
+                if(negativeSide=="kotlin"&&caseId=="sleep_stage_totals_negative_daily_probe") { value=SleepStageTotals.dailyAggregate(stages);result["negativeSide"]="kotlin" }
+                result["valueBits"]=dailyPayload(value)
+            }
+            "SleepStageTotals.interFragmentAwakeSeconds/1" -> result["valueBits"]=exactBit(SleepStageTotals.interFragmentAwakeSeconds(jsonBlocks(args.getJSONArray("spans")).map{it.start to it.end}))
+            "SleepStageTotals.isOvernightOnset/2" -> result["valueBits"]=SleepStageTotals.isOvernightOnset(args.getLong("ts"),args.getLong("offsetSec"))
+            "SleepStageTotals.bridgedNightGroups/2" -> {
+                var groups=SleepStageTotals.bridgedNightGroups(jsonBlocks(args.getJSONArray("blocks")),args.getLong("offsetSec"))
+                if(negativeSide=="kotlin"&&caseId=="sleep_stage_totals_negative_bridge_probe") { groups=groups.map{SleepStageTotals.BridgedNightGroup(it.indices.take(1),emptyList())};result["negativeSide"]="kotlin" }
+                result["valueBits"]=groups.map{g->sortedMapOf("indices" to g.indices,"gaps" to g.gaps.map{sortedMapOf("start" to it.first,"end" to it.second)})}
+            }
+            "SleepStageTotals.mainNightGroupIndices/3", "SleepStageTotals.mainNightIndex/3", "SleepStageTotals.mainNightSelection/3" -> {
+                val blocks=jsonBlocks(args.getJSONArray("blocks"));val offset=args.getLong("offsetSec");val defaults=args.getBoolean("useDefaults");val habitual=nullableLong(effective,"habitualMidsleepSec")
+                var payload:Any?=when(dispatchFunction){
+                    "SleepStageTotals.mainNightGroupIndices/3"->if(defaults)SleepStageTotals.mainNightGroupIndices(blocks,offset)else SleepStageTotals.mainNightGroupIndices(blocks,offset,habitual)
+                    "SleepStageTotals.mainNightIndex/3"->if(defaults)SleepStageTotals.mainNightIndex(blocks,offset)else SleepStageTotals.mainNightIndex(blocks,offset,habitual)
+                    else->{val v=if(defaults)SleepStageTotals.mainNightSelection(blocks,offset)else SleepStageTotals.mainNightSelection(blocks,offset,habitual);v?.let{sortedMapOf("index" to it.index,"reason" to sortedMapOf("text" to it.reason.name),"asleepSeconds" to it.asleepSec)}}
+                }
+                if(negativeSide=="kotlin"&&caseId=="sleep_stage_totals_negative_selection_probe"&&payload is Map<*,*>) { val p=payload as Map<String,Any?>;payload=sortedMapOf("index" to p["index"],"reason" to sortedMapOf("text" to "longest"),"asleepSeconds" to p["asleepSeconds"]);result["negativeSide"]="kotlin" }
+                result["valueBits"]=payload
+            }
+            "SleepStageTotals.dailyAggregateHonoringEdits/6" -> {
+                val detected=jsonStageRows(args.getJSONArray("detected"));val edited=jsonStageRows(args.getJSONArray("edited")).toMap();val defaults=args.getBoolean("useDefaults")
+                val value=if(defaults)SleepStageTotals.dailyAggregateHonoringEdits(detected,edited) else SleepStageTotals.dailyAggregateHonoringEdits(detected,edited,jsonStageRows(effective.getJSONArray("manual")),if(effective.isNull("onsetByStart"))null else jsonOnsets(effective.getJSONArray("onsetByStart")),effective.getLong("offsetSec"),nullableLong(effective,"habitualMidsleepSec"))
+                var payload:Any?=value?.let{sortedMapOf("sleep" to dailyPayload(it.sleep),"editApplied" to it.editApplied)}
+                if(negativeSide=="kotlin"&&caseId=="sleep_stage_totals_negative_edits_probe") { val legacy=SleepStageTotals.dailyAggregate(detected.map{it.second});payload=legacy?.let{sortedMapOf("sleep" to dailyPayload(it),"editApplied" to false)};result["negativeSide"]="kotlin" }
+                result["valueBits"]=payload
+            }
+            "SleepStageTotals.habitualMidsleepSec/3" -> {
+                val a=args.getJSONArray("history");val history=(0 until a.length()).map{val r=a.getJSONObject(it);SleepStageTotals.HistoryBlock(r.getLong("start"),r.getLong("end"),r.getString("dayKey"))};val offset=args.getLong("offsetSec")
+                var value=if(args.getBoolean("useDefaults"))SleepStageTotals.habitualMidsleepSec(history,offset)else SleepStageTotals.habitualMidsleepSec(history,offset,effective.getInt("minDays"))
+                if(negativeSide=="kotlin"&&caseId=="sleep_stage_totals_negative_history_probe"){value=0;result["negativeSide"]="kotlin"};result["valueBits"]=value
+            }
             "SleepDebt.creditedSleepMin/2" -> {
                 require(comparison == "exact") { "invalid creditedSleepMin case $caseId" }
                 val main = nullableDouble(args, "mainSleepMin")
@@ -940,6 +991,25 @@ class ParityRunner {
 
     private fun nullableDouble(value: JSONObject, key: String): Double? =
         if (!value.has(key) || value.isNull(key)) null else value.getDouble(key)
+
+    private fun nullableString(value: JSONObject, key: String): String? =
+        if (!value.has(key) || value.isNull(key)) null else value.getString(key)
+    private fun nullableLong(value: JSONObject, key: String): Long? =
+        if (!value.has(key) || value.isNull(key)) null else value.getLong(key)
+    private fun jsonNullableStrings(a: JSONArray): List<String?> =
+        (0 until a.length()).map { if (a.isNull(it)) null else a.getString(it) }
+    private fun jsonBlocks(a: JSONArray): List<SleepStageTotals.NightBlock> =
+        (0 until a.length()).map { val r=a.getJSONObject(it); SleepStageTotals.NightBlock(r.getLong("start"),r.getLong("end")) }
+    private fun jsonStageRows(a: JSONArray): List<Pair<Long,String?>> =
+        (0 until a.length()).map { val r=a.getJSONObject(it); r.getLong("startTs") to nullableString(r,"stagesJSON") }
+    private fun jsonOnsets(a: JSONArray): Map<Long,Long> =
+        (0 until a.length()).associate { val r=a.getJSONObject(it); r.getLong("startTs") to r.getLong("onset") }
+    private fun minutesPayload(v: SleepStageTotals.Minutes?): Any? = v?.let { sortedMapOf(
+        "awake" to exactBit(it.awake), "light" to exactBit(it.light), "deep" to exactBit(it.deep),
+        "rem" to exactBit(it.rem), "asleep" to exactBit(it.asleep), "inBed" to exactBit(it.inBed)) }
+    private fun dailyPayload(v: SleepStageTotals.DailySleep?): Any? = v?.let { sortedMapOf(
+        "totalSleepMin" to exactBit(it.totalSleepMin), "efficiency" to exactBit(it.efficiency),
+        "deepMin" to exactBit(it.deepMin), "remMin" to exactBit(it.remMin), "lightMin" to exactBit(it.lightMin)) }
 
     private fun driverBaseline(value: JSONObject, key: String): RecoveryScorer.DriverBaseline? {
         if (!value.has(key) || value.isNull(key)) return null

@@ -1274,7 +1274,7 @@ class ParityDiffTests(unittest.TestCase):
 
     def test_sleep_foundations_have_curated_boundaries_and_two_isolated_seeds_each(self):
         cases = parity_diff.generate_cases("pilot", "sleep-seeds")
-        for function in sorted(parity_diff.SLEEP_FUNCTIONS):
+        for function in sorted(parity_diff.SLEEP_FUNCTIONS - parity_diff.SLEEP_STAGE_TOTALS_KEYS):
             with self.subTest(function=function):
                 selected = [case for case in cases if case["function"] == function]
                 curated = [case for case in selected if case["source"] == "curated:sleep_foundations.json"]
@@ -1389,7 +1389,7 @@ class ParityDiffTests(unittest.TestCase):
             "id": case["id"], "nonce": case["nonce"],
             "valueBits": {"shape": {"text": "segments"}, "value": [{"start": 1, "end": 2}]},
         }
-        with self.assertRaisesRegex(parity_diff.ParityFormatError, "keys mismatch"):
+        with self.assertRaisesRegex(parity_diff.ParityFormatError, "raw|keys mismatch"):
             self.compare([case], [malformed], [malformed])
 
     def test_sleep_negative_suite_has_source_and_output_mutants(self):
@@ -1398,6 +1398,145 @@ class ParityDiffTests(unittest.TestCase):
         self.assertEqual({"sleep_negative_source_probe", "sleep_negative_output_probe"}, set(selected))
         self.assertEqual(parity_diff.SLEEP_WAKE_KEY, selected["sleep_negative_source_probe"]["function"])
         self.assertEqual(parity_diff.SLEEP_CREDIT_KEY, selected["sleep_negative_output_probe"]["function"])
+
+    def test_sleep_stage_totals_has_exactly_two_isolated_seeds_per_operation(self):
+        cases = parity_diff.generate_cases("pilot", "s2-seeds")
+        for function in parity_diff.SLEEP_STAGE_TOTALS_KEYS:
+            seeded = [case for case in cases if case["function"] == function and case["source"].startswith("seeded:SleepStageTotals.")]
+            self.assertEqual(2, len(seeded), function)
+            self.assertEqual({"splitmix64", "affine"}, {case["source"].split(":")[2] for case in seeded})
+
+    def test_sleep_stage_totals_seed_strategies_are_distinct_responsive_and_isolated(self):
+        base = parity_diff._seeded_sleep_stage_totals_cases()
+        perturbed = parity_diff._seeded_sleep_stage_totals_cases(
+            parity_diff.SLEEP_STAGE_TOTALS_SEED ^ 1
+        )
+        by_function = {
+            function: [case for case in base if case["function"] == function]
+            for function in parity_diff.SLEEP_STAGE_TOTALS_KEYS
+        }
+        perturbed_by_id = {case["id"]: case for case in perturbed}
+        for function, cases in by_function.items():
+            with self.subTest(function=function):
+                self.assertEqual(2, len(cases))
+                self.assertNotEqual(cases[0]["args"], cases[1]["args"])
+                for case in cases:
+                    self.assertNotEqual(case["args"], perturbed_by_id[case["id"]]["args"])
+
+        unrelated = parity_diff.SplitMix64(parity_diff.GENERATOR_SEED)
+        for _ in range(100):
+            unrelated.next_u64()
+        self.assertEqual(base, parity_diff._seeded_sleep_stage_totals_cases())
+
+    def test_sleep_stage_totals_materializes_defaults_and_rejects_bare_override(self):
+        cases = {case["id"]: case for case in parity_diff.generate_cases("pilot", "s2-defaults")}
+        self.assertIsNone(cases["sleep_stage_main_group_default"]["effectiveArgs"]["habitualMidsleepSec"])
+        bad = {"id":"bad","function":"SleepStageTotals.mainNightIndex/3","comparison":"exact",
+               "args":{"blocks":[],"offsetSec":0,"habitualMidsleepSec":None,"useDefaults":True}}
+        with self.assertRaisesRegex(parity_diff.ParityFormatError, "bare call"):
+            parity_diff._effective_args(bad)
+
+    def test_sleep_stage_totals_native_probe_candidates_are_not_in_pilot(self):
+        ids = {case["id"] for case in parity_diff.generate_cases("pilot", "s2-probes")}
+        removed = {
+            "sleep_drift_probe_imported_stage_min", "sleep_drift_probe_mixed_array",
+            "sleep_drift_probe_minutes_string_null_numeric", "sleep_drift_probe_clamp_string_null_numeric",
+        }
+        self.assertTrue(removed.isdisjoint(ids))
+        self.assertIn("sleep_stage_habitual_history_permutation", ids)
+        self.assertIn("sleep_stage_equal_start_bridged_sorting", ids)
+
+    def test_sleep_stage_totals_rejects_non_common_parsed_stage_shapes(self):
+        rejected = [
+            '[{"stage":"light","min":30}]',
+            '[{"start":0,"end":60,"stage":"light"},7]',
+            '{"awake":null,"light":"30"}',
+            '[{"start":"0","end":60,"stage":"light"}]',
+        ]
+        for index, stages in enumerate(rejected):
+            record = {"id":f"shape-{index}","function":"SleepStageTotals.minutes/1",
+                      "comparison":"exact","args":{"stagesJSON":stages}}
+            with self.subTest(stages=stages), self.assertRaises(parity_diff.ParityFormatError):
+                parity_diff._effective_args(record)
+
+    def test_sleep_stage_totals_preserves_malformed_raw_json_cases(self):
+        for stages in ("{", "not-json"):
+            record = {"id":"malformed","function":"SleepStageTotals.minutes/1",
+                      "comparison":"exact","args":{"stagesJSON":stages}}
+            self.assertEqual(stages, parity_diff._effective_args(record)["stagesJSON"])
+
+    def test_sleep_stage_totals_negative_suite_covers_independent_families(self):
+        cases = {case["id"] for case in parity_diff.generate_cases("negative", "s2-negative")}
+        expected = {"decode", "clamp", "daily", "bridge", "selection", "edits", "history"}
+        self.assertEqual(expected, {name for name in expected if f"sleep_stage_totals_negative_{name}_probe" in cases})
+
+    def test_sleep_stage_totals_rejects_unknown_duplicate_and_unsafe_inputs(self):
+        bad = [
+            {"id":"unknown","function":"SleepStageTotals.minutes/1","args":{"stagesJSON":None,"extra":1}},
+            {"id":"duplicate","function":"SleepStageTotals.dailyAggregateHonoringEdits/6","args":{"detected":[],"edited":[{"startTs":1,"stagesJSON":None},{"startTs":1,"stagesJSON":None}],"useDefaults":True}},
+            {"id":"offset","function":"SleepStageTotals.isOvernightOnset/2","args":{"ts":0,"offsetSec":172801}},
+        ]
+        for record in bad:
+            record["comparison"] = "exact"
+            with self.subTest(record=record["id"]), self.assertRaises(parity_diff.ParityFormatError):
+                parity_diff._effective_args(record)
+
+    def test_sleep_stage_totals_clamp_output_requires_normalized_schema(self):
+        case = next(case for case in parity_diff.generate_cases("pilot", "s2-schema") if case["id"] == "sleep_stage_clamp_null")
+        malformed = self.output_record(case["id"], nonce=case["nonce"], function=case["function"], valueBits={"returnedNull":True,"minutes":None,"raw":"null"})
+        with self.assertRaisesRegex(parity_diff.ParityFormatError, "raw|keys mismatch"):
+            self.compare([case], [malformed], [malformed])
+
+    def test_sleep_stage_totals_selection_reason_is_canonical(self):
+        case = next(case for case in parity_diff.generate_cases("pilot", "s2-reason") if case["id"] == "sleep_stage_main_selection_only")
+        value = {"index":0,"reason":{"text":"ONLY_BLOCK"},"asleepSeconds":3600}
+        malformed = self.output_record(case["id"], nonce=case["nonce"], function=case["function"], valueBits=value)
+        with self.assertRaisesRegex(parity_diff.ParityFormatError, "invalid"):
+            self.compare([case], [malformed], [malformed])
+
+    def test_sleep_stage_totals_honoring_edits_validates_habitual_range(self):
+        base = {"id":"habitual","function":"SleepStageTotals.dailyAggregateHonoringEdits/6",
+                "comparison":"exact","args":{"detected":[],"edited":[],"manual":[],
+                "onsetByStart":None,"offsetSec":0,"useDefaults":False}}
+        for value in (True, -1, 86_400):
+            record = {**base, "args":{**base["args"], "habitualMidsleepSec":value}}
+            with self.subTest(value=value), self.assertRaisesRegex(
+                parity_diff.ParityFormatError, "habitualMidsleepSec"
+            ):
+                parity_diff._effective_args(record)
+
+    def test_sleep_stage_totals_output_indices_and_ranges_are_bounded(self):
+        cases = {case["id"]:case for case in parity_diff.generate_cases("pilot", "s2-output-bounds")}
+        invalid = [
+            (cases["sleep_stage_main_index_empty"], 0, "index"),
+            (cases["sleep_stage_main_selection_only"],
+             {"index":1,"reason":{"text":"onlyBlock"},"asleepSeconds":3600}, "invalid"),
+            (cases["sleep_stage_habitual_default"], 86_400, "outside the day"),
+        ]
+        for case, value, message in invalid:
+            with self.subTest(case=case["id"]), self.assertRaisesRegex(
+                parity_diff.ParityFormatError, message
+            ):
+                parity_diff._validate_sleep_output(value, case, "valueBits")
+
+    def test_sleep_stage_totals_honored_output_requires_non_null_sleep(self):
+        case = next(case for case in parity_diff.generate_cases("pilot", "s2-honored")
+                    if case["id"] == "sleep_stage_edits_default")
+        with self.assertRaisesRegex(parity_diff.ParityFormatError, "sleep must be non-null"):
+            parity_diff._validate_sleep_output(
+                {"sleep":None,"editApplied":False}, case, "valueBits"
+            )
+
+    def test_sleep_stage_totals_selection_negative_probe_is_reason_changing(self):
+        case = next(case for case in parity_diff.generate_cases("negative", "s2-selection-mutant")
+                    if case["id"] == "sleep_stage_totals_negative_selection_probe")
+        blocks = case["args"]["blocks"]
+        self.assertEqual([5 * 3600, 4 * 3600], [row["end"] - row["start"] for row in blocks])
+        self.assertEqual(7200, case["args"]["habitualMidsleepSec"])
+        swift = (Path(__file__).parents[2] / "Packages/StrandAnalytics/Tests/StrandAnalyticsTests/ParityRunner.swift").read_text()
+        kotlin = (Path(__file__).parents[2] / "android/app/src/test/java/com/noop/analytics/ParityRunner.kt").read_text()
+        self.assertIn('sleep_stage_totals_negative_selection_probe', swift)
+        self.assertIn('sleep_stage_totals_negative_selection_probe', kotlin)
 
 
 if __name__ == "__main__":

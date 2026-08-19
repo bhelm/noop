@@ -57,15 +57,24 @@ SLEEP_DISJOINT_KEY = "SleepEditGuard.isDisjoint/4"
 SLEEP_CLAMP_KEY = "SleepEditGuard.clampedEditWindow/4"
 SLEEP_WAKE_KEY = "SleepStageVocabulary.isWake/1"
 SLEEP_RECLIP_KEY = "SleepWindowReclip.reclip/5"
+SLEEP_STAGE_TOTALS_KEYS = {
+    "SleepStageTotals.minutes/1", "SleepStageTotals.clampStagesToOnset/2",
+    "SleepStageTotals.dailyAggregate/1", "SleepStageTotals.dailyAggregate/2",
+    "SleepStageTotals.interFragmentAwakeSeconds/1", "SleepStageTotals.isOvernightOnset/2",
+    "SleepStageTotals.bridgedNightGroups/2", "SleepStageTotals.mainNightGroupIndices/3",
+    "SleepStageTotals.mainNightIndex/3", "SleepStageTotals.mainNightSelection/3",
+    "SleepStageTotals.dailyAggregateHonoringEdits/6", "SleepStageTotals.habitualMidsleepSec/3",
+}
 SLEEP_FUNCTIONS = {
     SLEEP_CREDIT_KEY, SLEEP_LEDGER_KEY, SLEEP_AUTO_BED_KEY, SLEEP_DISJOINT_KEY,
-    SLEEP_CLAMP_KEY, SLEEP_WAKE_KEY, SLEEP_RECLIP_KEY,
+    SLEEP_CLAMP_KEY, SLEEP_WAKE_KEY, SLEEP_RECLIP_KEY, *SLEEP_STAGE_TOTALS_KEYS,
 }
 SLEEP_DEFAULT_NEED_HOURS = 8.0
 SLEEP_DEFAULT_WINDOW = 14
 SLEEP_DEFAULT_SLACK_SEC = 300
 SLEEP_MAX_ROWS = 256
 SLEEP_MAX_TEXT_BYTES = 16_384
+SLEEP_STAGE_TOTALS_SEED = GENERATOR_SEED ^ 0x534C_4545_5053_5447
 SLEEP_SEEDS = {
     SLEEP_CREDIT_KEY: (0x534C_4352_4544_0001, 0x534C_4352_4544_0002),
     SLEEP_LEDGER_KEY: (0x534C_4C45_4447_0001, 0x534C_4C45_4447_0002),
@@ -422,6 +431,64 @@ def _validate_recovery_forecast_output(
 
 def _validate_sleep_output(value: Any, expected: dict[str, Any], path: str) -> None:
     function = expected["function"]
+    def minutes_payload(raw: Any, where: str) -> None:
+        if raw is None:
+            return
+        obj = _validate_exact_object_keys(raw, {"awake", "light", "deep", "rem", "asleep", "inBed"}, where)
+        for key in obj:
+            _validate_exact_bits(obj[key], f"{where}.{key}")
+    def daily_payload(raw: Any, where: str) -> None:
+        if raw is None:
+            return
+        obj = _validate_exact_object_keys(raw, {"totalSleepMin", "efficiency", "deepMin", "remMin", "lightMin"}, where)
+        for key in obj:
+            _validate_exact_bits(obj[key], f"{where}.{key}")
+    if function == "SleepStageTotals.minutes/1":
+        minutes_payload(value, path); return
+    if function == "SleepStageTotals.clampStagesToOnset/2":
+        obj = _validate_exact_object_keys(value, {"returnedNull", "minutes"}, path)
+        if type(obj["returnedNull"]) is not bool:
+            raise ParityFormatError(f"{path}.returnedNull must be boolean")
+        minutes_payload(obj["minutes"], f"{path}.minutes"); return
+    if function in {"SleepStageTotals.dailyAggregate/1", "SleepStageTotals.dailyAggregate/2"}:
+        daily_payload(value, path); return
+    if function == "SleepStageTotals.interFragmentAwakeSeconds/1":
+        _validate_exact_bits(value, path); return
+    if function == "SleepStageTotals.isOvernightOnset/2":
+        if type(value) is not bool: raise ParityFormatError(f"{path} must be boolean")
+        return
+    if function == "SleepStageTotals.bridgedNightGroups/2":
+        block_count = len(expected["effectiveArgs"]["blocks"])
+        if not isinstance(value, list) or len(value) > 4096: raise ParityFormatError(f"{path} must be a bounded array")
+        for i, raw in enumerate(value):
+            obj = _validate_exact_object_keys(raw, {"indices", "gaps"}, f"{path}[{i}]")
+            if not isinstance(obj["indices"], list) or len(obj["indices"]) > 4096 or not all(type(x) is int and 0 <= x < block_count for x in obj["indices"]): raise ParityFormatError(f"{path}[{i}].indices invalid")
+            if not isinstance(obj["gaps"], list) or len(obj["gaps"]) > 4096: raise ParityFormatError(f"{path}[{i}].gaps invalid")
+            for j, gap in enumerate(obj["gaps"]):
+                g = _validate_exact_object_keys(gap, {"start", "end"}, f"{path}[{i}].gaps[{j}]")
+                if not all(type(g[k]) is int for k in g) or g["end"] <= g["start"]: raise ParityFormatError(f"{path}[{i}].gaps[{j}] invalid")
+        return
+    if function in {"SleepStageTotals.mainNightGroupIndices/3", "SleepStageTotals.mainNightIndex/3", "SleepStageTotals.habitualMidsleepSec/3"}:
+        if value is not None:
+            if function.endswith("GroupIndices/3"):
+                count = len(expected["effectiveArgs"]["blocks"])
+                if not isinstance(value, list) or not all(type(x) is int and 0 <= x < count for x in value): raise ParityFormatError(f"{path} invalid")
+            elif type(value) is not int: raise ParityFormatError(f"{path} must be integer or null")
+            elif function.endswith("mainNightIndex/3") and not 0 <= value < len(expected["effectiveArgs"]["blocks"]): raise ParityFormatError(f"{path} index is outside input blocks")
+            elif function.endswith("habitualMidsleepSec/3") and not 0 <= value < 86_400: raise ParityFormatError(f"{path} habitual second is outside the day")
+        return
+    if function == "SleepStageTotals.mainNightSelection/3":
+        if value is not None:
+            obj = _validate_exact_object_keys(value, {"index", "reason", "asleepSeconds"}, path)
+            if type(obj["index"]) is not int or not 0 <= obj["index"] < len(expected["effectiveArgs"]["blocks"]) or type(obj["asleepSeconds"]) is not int or not isinstance(obj["reason"], dict) or set(obj["reason"]) != {"text"} or obj["reason"]["text"] not in {"onlyBlock","longest","longestNearUsual","alignedToUsual"}: raise ParityFormatError(f"{path} invalid")
+        return
+    if function == "SleepStageTotals.dailyAggregateHonoringEdits/6":
+        if value is not None:
+            obj = _validate_exact_object_keys(value, {"sleep", "editApplied"}, path)
+            if type(obj["editApplied"]) is not bool: raise ParityFormatError(f"{path}.editApplied invalid")
+            if obj["sleep"] is None: raise ParityFormatError(f"{path}.sleep must be non-null")
+            daily_payload(obj["sleep"], f"{path}.sleep")
+        return
     if function == SLEEP_CREDIT_KEY:
         if value is not None:
             _validate_exact_bits(value, path)
@@ -954,6 +1021,103 @@ def _seeded_watch_recovery_cases() -> list[dict[str, Any]]:
     ]
 
 
+def _stable_fnv1a64(text: str) -> int:
+    value = 0xcbf29ce484222325
+    for byte in text.encode("utf-8"):
+        value = ((value ^ byte) * 0x100000001b3) & _MASK64
+    return value
+
+
+def _seeded_sleep_stage_totals_cases(
+    seed_base: int = SLEEP_STAGE_TOTALS_SEED,
+) -> list[dict[str, Any]]:
+    """Exactly two independently seeded deterministic cases per public S2 operation."""
+    records: list[dict[str, Any]] = []
+    for function in sorted(SLEEP_STAGE_TOTALS_KEYS):
+        function_seed = seed_base ^ _stable_fnv1a64(function)
+
+        def seeded_arguments(strategy: str) -> tuple[int, dict[str, Any]]:
+            strategy_seed = function_seed ^ _stable_fnv1a64(f"strategy:{strategy}")
+            rng = SplitMix64(strategy_seed)
+            # This seed-derived marker changes under a one-bit seed perturbation, while the
+            # per-strategy RNG supplies the rest of the structured corpus independently.
+            marker = strategy_seed & 0x3fff
+            shift = marker + int(rng.bounded(300))
+            if strategy == "splitmix64":
+                first = 1_200 + int(rng.bounded(11)) * 60
+                second = 600 + int(rng.bounded(6)) * 60
+                third = 600 + int(rng.bounded(6)) * 60
+                stage_rows = [
+                    {"start": shift, "end": shift + first, "stage": "light"},
+                    {"start": shift + first, "end": shift + first + second, "stage": "deep"},
+                    {"start": shift + first + second, "end": shift + first + second + third,
+                     "stage": "rem"},
+                ]
+            else:
+                wake = 600 + int(rng.bounded(11)) * 60
+                light = 2_400 + int(rng.bounded(11)) * 60
+                stage_rows = [
+                    {"start": shift, "end": shift + wake, "stage": "wake"},
+                    {"start": shift + wake, "end": shift + wake + light, "stage": "light"},
+                ]
+            s = json.dumps(stage_rows, separators=(",", ":"))
+            history_shift = marker % 600
+            history = [
+                {
+                    "start": day * 86_400 + 79_200 + history_shift,
+                    "end": (day + 1) * 86_400 + 21_600 + history_shift,
+                    "dayKey": f"d{day:02d}",
+                }
+                for day in range(14)
+            ]
+            if function.endswith("minutes/1"): return strategy_seed, {"stagesJSON": s}
+            if function.endswith("clampStagesToOnset/2"): return strategy_seed, {"stagesJSON": s, "onsetSec": shift + 600}
+            if function.endswith("dailyAggregate/1"): return strategy_seed, {"stagesJSONs": [s, None]}
+            if function.endswith("dailyAggregate/2"): return strategy_seed, {"stagesJSONs": [s], "interFragmentAwakeSeconds": 300.0 + marker % 300}
+            if function.endswith("interFragmentAwakeSeconds/1"):
+                gap = 30 + int(rng.bounded(90))
+                return strategy_seed, {"spans": [
+                    {"start": marker, "end": marker + 100},
+                    {"start": marker + 100 + gap, "end": marker + 200 + gap},
+                    {"start": marker + 190 + gap, "end": marker + 260 + gap},
+                ]}
+            if function.endswith("isOvernightOnset/2"): return strategy_seed, {"ts": 72_000 + marker % 1_800, "offsetSec": 0}
+            base = 72_000 + marker
+            seam = 900 + int(rng.bounded(1_800))
+            blocks = [
+                {"start": base, "end": base + 10_800},
+                {"start": base + 10_800 + seam, "end": base + 23_400 + seam},
+                {"start": base + 57_600, "end": base + 64_800},
+            ]
+            if function.endswith("bridgedNightGroups/2"): return strategy_seed, {"blocks": blocks, "offsetSec": 0}
+            if function.endswith(("mainNightGroupIndices/3", "mainNightIndex/3", "mainNightSelection/3")):
+                args = {"blocks": blocks, "offsetSec": 0, "useDefaults": strategy == "splitmix64"}
+                if strategy != "splitmix64":
+                    args["habitualMidsleepSec"] = 12_600 + marker % 600
+                return strategy_seed, args
+            if function.endswith("dailyAggregateHonoringEdits/6"):
+                args = {"detected": [{"startTs": base, "stagesJSON": s}], "edited": [],
+                        "useDefaults": strategy == "splitmix64"}
+                if strategy != "splitmix64":
+                    args.update({"manual": [], "onsetByStart": [{"startTs": base, "onset": base}],
+                                 "offsetSec": 0, "habitualMidsleepSec": None})
+                return strategy_seed, args
+            if function.endswith("habitualMidsleepSec/3"):
+                args = {"history": history, "offsetSec": 0, "useDefaults": strategy == "splitmix64"}
+                if strategy != "splitmix64":
+                    args["minDays"] = 14
+                return strategy_seed, args
+            raise AssertionError(function)
+
+        slug = function.split(".",1)[1].replace("/","_")
+        for strategy in ("splitmix64", "affine"):
+            strategy_seed, args = seeded_arguments(strategy)
+            records.append({"args":args,"comparison":"exact","function":function,
+                            "id":f"seeded_sleep_stage_totals_{slug}_{strategy}",
+                            "source":f"seeded:{function}:{strategy}:{strategy_seed:#018x}"})
+    return records
+
+
 def _seeded_sleep_cases() -> list[dict[str, Any]]:
     """Two function-local deterministic streams per Sleep helper; never share RNG state."""
 
@@ -1374,6 +1538,7 @@ def _seeded_cases() -> list[dict[str, Any]]:
     records.extend(_seeded_recovery_forecast_cases())
     records.extend(_seeded_watch_recovery_cases())
     records.extend(_seeded_sleep_cases())
+    records.extend(_seeded_sleep_stage_totals_cases())
     return records
 
 
@@ -1911,11 +2076,180 @@ def _sleep_int(value: Any, record: dict[str, Any], label: str) -> int:
     return value
 
 
+def _sst_stages(value: Any, record: dict[str, Any], label: str) -> None:
+    if value is None:
+        return
+    if not isinstance(value, str) or len(value.encode("utf-8")) > 65_536:
+        raise ParityFormatError(f"case {record.get('id')!r} {record.get('function')} {label} must be null or bounded UTF-8")
+    try:
+        parsed = json.loads(value, parse_constant=lambda token: (_raise_non_finite(token)))
+    except (json.JSONDecodeError, ParityFormatError):
+        return                         # malformed JSON is intentional production input
+    def walk(node: Any, depth: int = 0) -> None:
+        if depth > 8: raise ParityFormatError(f"case {record.get('id')!r} {label} JSON is too deep")
+        if isinstance(node, bool) or node is None or isinstance(node, str): return
+        if _is_number(node):
+            if not math.isfinite(float(node)) or abs(float(node)) > 1e12: raise ParityFormatError(f"case {record.get('id')!r} {label} JSON number is unsafe")
+            return
+        if isinstance(node, list):
+            if len(node) > 256: raise ParityFormatError(f"case {record.get('id')!r} {label} JSON array too large")
+            for item in node: walk(item, depth + 1)
+            return
+        if isinstance(node, dict):
+            if len(node) > 64 or not all(isinstance(k, str) and len(k.encode('utf-8')) <= 128 for k in node): raise ParityFormatError(f"case {record.get('id')!r} {label} JSON object invalid")
+            for item in node.values(): walk(item, depth + 1)
+            return
+        raise ParityFormatError(f"case {record.get('id')!r} {label} JSON invalid")
+    walk(parsed)
+    if isinstance(parsed, dict):
+        unknown = set(parsed) - {"awake", "light", "deep", "rem"}
+        if unknown:
+            raise ParityFormatError(
+                f"case {record.get('id')!r} {label} minute dictionary has unknown fields {sorted(unknown)}"
+            )
+        if not all(_is_number(item) and math.isfinite(float(item)) for item in parsed.values()):
+            raise ParityFormatError(
+                f"case {record.get('id')!r} {label} minute dictionary totals must be finite numbers"
+            )
+        return
+    if isinstance(parsed, list):
+        for index, segment in enumerate(parsed):
+            if not isinstance(segment, dict):
+                raise ParityFormatError(
+                    f"case {record.get('id')!r} {label}[{index}] must be a segment object"
+                )
+            unknown = set(segment) - {"start", "end", "stage"}
+            if unknown:
+                raise ParityFormatError(
+                    f"case {record.get('id')!r} {label}[{index}] has unknown fields {sorted(unknown)}"
+                )
+            for bound in ("start", "end"):
+                if bound in segment and not (
+                    _is_number(segment[bound]) and math.isfinite(float(segment[bound]))
+                ):
+                    raise ParityFormatError(
+                        f"case {record.get('id')!r} {label}[{index}].{bound} must be a finite number"
+                    )
+            if "stage" in segment and not isinstance(segment["stage"], str):
+                raise ParityFormatError(
+                    f"case {record.get('id')!r} {label}[{index}].stage must be text"
+                )
+        return
+    raise ParityFormatError(
+        f"case {record.get('id')!r} {label} must contain a segment array or minute dictionary"
+    )
+
+
+def _validate_sst_args(args: dict[str, Any], record: dict[str, Any]) -> dict[str, Any]:
+    f, cid = record["function"], record.get("id")
+    def exact(required: set[str], optional: set[str] = set()) -> None:
+        unknown = set(args) - required - optional
+        if unknown or not required <= set(args): raise ParityFormatError(f"case {cid!r} {f} invalid fields unknown={sorted(unknown)}")
+    def rows(key: str, fields: set[str]) -> list[dict[str, Any]]:
+        value = args.get(key)
+        if not isinstance(value, list) or len(value) > 4096: raise ParityFormatError(f"case {cid!r} {f} {key} must be bounded array")
+        for i, row in enumerate(value):
+            if not isinstance(row, dict) or set(row) != fields: raise ParityFormatError(f"case {cid!r} {f} {key}[{i}] invalid fields")
+        return value
+    def blocks(key: str = "blocks") -> list[dict[str, Any]]:
+        value = rows(key, {"start", "end"})
+        for i, row in enumerate(value):
+            _sleep_int(row["start"], record, f"{key}[{i}].start"); _sleep_int(row["end"], record, f"{key}[{i}].end")
+            duration = _checked_subtract(row["end"], row["start"], record, "block duration")
+            _checked_add(row["start"], int(duration / 2), record, "block midpoint")
+        ordered=sorted(value,key=lambda row:row["start"])
+        total_gap=0
+        for left,right in zip(ordered,ordered[1:]):
+            gap=_checked_subtract(right["start"],left["end"],record,"sorted-neighbor gap")
+            if gap>0: total_gap=_checked_add(total_gap,gap,record,"positive-gap accumulation")
+        return value
+    if f == "SleepStageTotals.minutes/1":
+        exact({"stagesJSON"}); _sst_stages(args["stagesJSON"], record, "stagesJSON"); return dict(args)
+    if f == "SleepStageTotals.clampStagesToOnset/2":
+        exact({"stagesJSON", "onsetSec"}); _sst_stages(args["stagesJSON"], record, "stagesJSON"); _sleep_int(args["onsetSec"], record, "onsetSec"); return dict(args)
+    if f in {"SleepStageTotals.dailyAggregate/1", "SleepStageTotals.dailyAggregate/2"}:
+        exact({"stagesJSONs"} | ({"interFragmentAwakeSeconds"} if f.endswith("/2") else set()))
+        values=args["stagesJSONs"]
+        if not isinstance(values,list) or len(values)>4096: raise ParityFormatError(f"case {cid!r} {f} stagesJSONs invalid")
+        for i,v in enumerate(values): _sst_stages(v,record,f"stagesJSONs[{i}]")
+        if f.endswith("/2") and (not _is_number(args["interFragmentAwakeSeconds"]) or not math.isfinite(float(args["interFragmentAwakeSeconds"])) or abs(float(args["interFragmentAwakeSeconds"]))>1e12): raise ParityFormatError(f"case {cid!r} {f} awake seconds invalid")
+        return dict(args)
+    if f == "SleepStageTotals.interFragmentAwakeSeconds/1": exact({"spans"}); blocks("spans"); return dict(args)
+    if f == "SleepStageTotals.isOvernightOnset/2":
+        exact({"ts", "offsetSec"}); _sleep_int(args["ts"],record,"ts"); _sleep_int(args["offsetSec"],record,"offsetSec")
+        if abs(args["offsetSec"]) > 172800: raise ParityFormatError(f"case {cid!r} {f} offsetSec outside safe bound")
+        _checked_add(args["ts"],args["offsetSec"],record,"timestamp offset"); return dict(args)
+    if f in {"SleepStageTotals.bridgedNightGroups/2", "SleepStageTotals.mainNightGroupIndices/3", "SleepStageTotals.mainNightIndex/3", "SleepStageTotals.mainNightSelection/3"}:
+        defaults = not f.endswith("/2")
+        exact({"blocks","offsetSec"} | ({"useDefaults"} if defaults else set()), {"habitualMidsleepSec"} if defaults else set()); bs=blocks(); _sleep_int(args["offsetSec"],record,"offsetSec")
+        if abs(args["offsetSec"]) > 172800: raise ParityFormatError(f"case {cid!r} {f} offsetSec outside safe bound")
+        for row in bs: _checked_add(row["start"],args["offsetSec"],record,"block local timestamp")
+        effective=dict(args)
+        if defaults:
+            if not isinstance(args["useDefaults"],bool): raise ParityFormatError(f"case {cid!r} {f} useDefaults invalid")
+            if args["useDefaults"] and "habitualMidsleepSec" in args: raise ParityFormatError(f"case {cid!r} {f} bare call cannot override arg3")
+            habitual=args.get("habitualMidsleepSec")
+            if habitual is not None: _sleep_int(habitual,record,"habitualMidsleepSec")
+            effective["habitualMidsleepSec"]=habitual
+        return effective
+    if f == "SleepStageTotals.dailyAggregateHonoringEdits/6":
+        exact({"detected","edited","useDefaults"},{"manual","onsetByStart","offsetSec","habitualMidsleepSec"})
+        for key in ("detected","manual"):
+            vals=args.get(key,[])
+            if not isinstance(vals,list) or len(vals)>4096: raise ParityFormatError(f"case {cid!r} {f} {key} invalid")
+            for i,row in enumerate(vals):
+                if not isinstance(row,dict) or set(row)!={"startTs","stagesJSON"}: raise ParityFormatError(f"case {cid!r} {f} {key}[{i}] invalid")
+                _sleep_int(row["startTs"],record,f"{key}[{i}].startTs"); _sst_stages(row["stagesJSON"],record,f"{key}[{i}].stagesJSON")
+        edited=rows("edited",{"startTs","stagesJSON"}); seen=set()
+        for i,row in enumerate(edited):
+            ts=_sleep_int(row["startTs"],record,f"edited[{i}].startTs"); _sst_stages(row["stagesJSON"],record,f"edited[{i}].stagesJSON")
+            if ts in seen: raise ParityFormatError(f"case {cid!r} {f} duplicate edited key")
+            seen.add(ts)
+        onset=args.get("onsetByStart")
+        if onset is not None:
+            if not isinstance(onset,list) or len(onset)>4096: raise ParityFormatError(f"case {cid!r} {f} onsetByStart invalid")
+            seen=set()
+            for i,row in enumerate(onset):
+                if not isinstance(row,dict) or set(row)!={"startTs","onset"}: raise ParityFormatError(f"case {cid!r} {f} onsetByStart[{i}] invalid")
+                ts=_sleep_int(row["startTs"],record,"onset key"); _sleep_int(row["onset"],record,"onset")
+                if ts in seen: raise ParityFormatError(f"case {cid!r} {f} duplicate onset key")
+                seen.add(ts)
+        if not isinstance(args["useDefaults"],bool): raise ParityFormatError(f"case {cid!r} {f} useDefaults invalid")
+        controls={"manual","onsetByStart","offsetSec","habitualMidsleepSec"}
+        if args["useDefaults"] and controls & set(args): raise ParityFormatError(f"case {cid!r} {f} bare call cannot override defaults")
+        effective={**args,"manual":args.get("manual",[]),"onsetByStart":onset,"offsetSec":args.get("offsetSec",0),"habitualMidsleepSec":args.get("habitualMidsleepSec")}
+        _sleep_int(effective["offsetSec"],record,"offsetSec")
+        if abs(effective["offsetSec"]) > 172800: raise ParityFormatError(f"case {cid!r} {f} offsetSec outside safe bound")
+        habitual = effective["habitualMidsleepSec"]
+        if habitual is not None and not _is_signed_integer(habitual, 0, 86_399):
+            raise ParityFormatError(f"case {cid!r} {f} habitualMidsleepSec must be null or in [0, 86399]")
+        return effective
+    if f == "SleepStageTotals.habitualMidsleepSec/3":
+        exact({"history","offsetSec","useDefaults"},{"minDays"}); history=rows("history",{"start","end","dayKey"})
+        for i,row in enumerate(history):
+            _sleep_int(row["start"],record,"history start"); _sleep_int(row["end"],record,"history end")
+            if not isinstance(row["dayKey"],str) or not 1<=len(row["dayKey"].encode())<=128: raise ParityFormatError(f"case {cid!r} {f} dayKey invalid")
+        _sleep_int(args["offsetSec"],record,"offsetSec")
+        if abs(args["offsetSec"]) > 172800: raise ParityFormatError(f"case {cid!r} {f} offsetSec outside safe bound")
+        for row in history:
+            duration=_checked_subtract(row["end"],row["start"],record,"history duration")
+            midpoint=_checked_add(row["start"],int(duration/2),record,"history midpoint")
+            _checked_add(midpoint,args["offsetSec"],record,"history local midpoint")
+        if not isinstance(args["useDefaults"],bool): raise ParityFormatError(f"case {cid!r} {f} useDefaults invalid")
+        if args["useDefaults"] and "minDays" in args: raise ParityFormatError(f"case {cid!r} {f} bare call cannot override arg3")
+        minimum=args.get("minDays",14)
+        if not _is_signed_integer(minimum,-4096,4096): raise ParityFormatError(f"case {cid!r} {f} minDays invalid")
+        return {**args,"minDays":minimum}
+    raise AssertionError(f"unhandled SleepStageTotals function {f}")
+
+
 def _validate_sleep_args(args: dict[str, Any], record: dict[str, Any]) -> dict[str, Any]:
     """Validate the deliberately bounded, platform-neutral Sleep differential domain."""
 
     function = record.get("function")
     case_id = record.get("id")
+    if function in SLEEP_STAGE_TOTALS_KEYS:
+        return _validate_sst_args(args, record)
     if function == SLEEP_CREDIT_KEY:
         allowed = {"mainSleepMin", "napSleepMin", "useDefaults"}
         if set(args) - allowed or not {"mainSleepMin", "useDefaults"} <= set(args):
@@ -2416,6 +2750,13 @@ def generate_cases(suite: str, nonce: str) -> list[dict[str, Any]]:
         raise ParityFormatError("nonce must not be empty")
     if suite == "negative":
         raw = [
+            {"args":{"stagesJSON":"[{\"start\":0,\"end\":3600,\"stage\":\"rem\"}]"},"comparison":"exact","function":"SleepStageTotals.minutes/1","id":"sleep_stage_totals_negative_decode_probe","source":"negative-control"},
+            {"args":{"stagesJSON":"[{\"start\":0,\"end\":3600,\"stage\":\"light\"}]","onsetSec":1800},"comparison":"exact","function":"SleepStageTotals.clampStagesToOnset/2","id":"sleep_stage_totals_negative_clamp_probe","source":"negative-control"},
+            {"args":{"stagesJSONs":["[{\"start\":0,\"end\":3600,\"stage\":\"light\"}]"],"interFragmentAwakeSeconds":3600.0},"comparison":"exact","function":"SleepStageTotals.dailyAggregate/2","id":"sleep_stage_totals_negative_daily_probe","source":"negative-control"},
+            {"args":{"blocks":[{"start":72000,"end":75600},{"start":79200,"end":82800}],"offsetSec":0},"comparison":"exact","function":"SleepStageTotals.bridgedNightGroups/2","id":"sleep_stage_totals_negative_bridge_probe","source":"negative-control"},
+            {"args":{"blocks":[{"start":43200,"end":61200},{"start":86400,"end":100800}],"offsetSec":0,"habitualMidsleepSec":7200,"useDefaults":False},"comparison":"exact","function":"SleepStageTotals.mainNightSelection/3","id":"sleep_stage_totals_negative_selection_probe","source":"negative-control"},
+            {"args":{"detected":[{"startTs":72000,"stagesJSON":"{\"light\":60}"}],"edited":[{"startTs":72000,"stagesJSON":"{\"deep\":60}"}],"manual":[],"onsetByStart":None,"offsetSec":0,"habitualMidsleepSec":None,"useDefaults":False},"comparison":"exact","function":"SleepStageTotals.dailyAggregateHonoringEdits/6","id":"sleep_stage_totals_negative_edits_probe","source":"negative-control"},
+            {"args":{"history":[{"start":i*86400+82800,"end":(i+1)*86400+18000,"dayKey":f"d{i}"} for i in range(14)],"offsetSec":0,"useDefaults":True},"comparison":"exact","function":"SleepStageTotals.habitualMidsleepSec/3","id":"sleep_stage_totals_negative_history_probe","source":"negative-control"},
             {
                 "args": {"stage": "wake"},
                 "comparison": "exact",
