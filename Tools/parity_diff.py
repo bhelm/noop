@@ -53,6 +53,17 @@ HEART_RATE_RECOVERY_KEY = "HeartRateRecovery.calculate/4"
 RECOVERY_DRIVERS_KEY = (
     "RecoveryScorer.chargeDrivers/8=RecoveryDrivers.chargeDrivers/8"
 )
+RECOVERY_FORECAST_FUNCTIONS = (
+    RECOVERY_FORECAST_KEY,
+    "RecoveryForecaster.mean/1",
+    "RecoveryForecaster.sampleSD/1",
+    "RecoveryForecaster.leastSquaresSlope/1",
+    "RecoveryForecaster.clamp/3",
+)
+RECOVERY_FORECAST_MAX_VALUES = 4096
+RECOVERY_FORECAST_HELPER_ABS_MAX = 1e100
+RECOVERY_FORECAST_SLEEP_HOURS_MAX = 24.0
+RECOVERY_FORECAST_SEED = GENERATOR_SEED ^ 0x5246_4F52_4543_4153
 RAW_ANALYZE_KEY = "HRVAnalyzer.analyze/2=HrvAnalyzer.analyzeRaw/2"
 HRV_MEDIAN_KEY = "HRVAnalyzer.median/1=HrvAnalyzer.median/1"
 EPSILON = 1e-9
@@ -692,6 +703,71 @@ def _curated_cases() -> list[dict[str, Any]]:
     return records + _hrv_curated_cases()
 
 
+def _seeded_recovery_forecast_cases() -> list[dict[str, Any]]:
+    """Return the module-local Forecast corpus, independent of earlier seed consumers."""
+
+    rng = SplitMix64(RECOVERY_FORECAST_SEED)
+    records: list[dict[str, Any]] = []
+    seeded_forecasts = (
+        (
+            "splitmix64",
+            [40.0 + float(rng.bounded(41)) for _ in range(14)],
+            [20.0 + float(rng.bounded(61)) for _ in range(14)],
+            20.0 + float(rng.bounded(61)),
+            5.0 + float(rng.bounded(40)) / 10.0,
+        ),
+        (
+            "affine",
+            [44.0 + index * 2.25 for index in range(14)],
+            [30.0 + index * 1.5 for index in range(14)],
+            63.0,
+            7.75,
+        ),
+    )
+    for strategy, charges, efforts, today, planned in seeded_forecasts:
+        source = f"seeded:{strategy}:{RECOVERY_FORECAST_SEED:#018x}"
+        records.extend(
+            (
+                {
+                    "args": {
+                        "recentCharge": charges,
+                        "recentEffort": efforts,
+                        "todayEffort": today,
+                        "plannedSleepHours": planned,
+                        "needHours": 8.0,
+                        "needNights": 7,
+                        "useDefaults": False,
+                    },
+                    "comparison": "exact",
+                    "function": RECOVERY_FORECAST_KEY,
+                    "id": f"seeded_recovery_forecast_{strategy}",
+                    "source": source,
+                },
+                {
+                    "args": {"values": charges}, "comparison": "epsilon",
+                    "function": "RecoveryForecaster.mean/1",
+                    "id": f"seeded_recovery_forecast_mean_{strategy}", "source": source,
+                },
+                {
+                    "args": {"values": charges}, "comparison": "epsilon",
+                    "function": "RecoveryForecaster.sampleSD/1",
+                    "id": f"seeded_recovery_forecast_sample_sd_{strategy}", "source": source,
+                },
+                {
+                    "args": {"values": charges}, "comparison": "epsilon",
+                    "function": "RecoveryForecaster.leastSquaresSlope/1",
+                    "id": f"seeded_recovery_forecast_slope_{strategy}", "source": source,
+                },
+                {
+                    "args": {"x": today, "lo": 25.0, "hi": 75.0}, "comparison": "exact",
+                    "function": "RecoveryForecaster.clamp/3",
+                    "id": f"seeded_recovery_forecast_clamp_{strategy}", "source": source,
+                },
+            )
+        )
+    return records
+
+
 def _seeded_cases() -> list[dict[str, Any]]:
     rng = SplitMix64(GENERATOR_SEED)
     records: list[dict[str, Any]] = []
@@ -1037,6 +1113,7 @@ def _seeded_cases() -> list[dict[str, Any]]:
                  "verdict": {"text": "at baseline"}},
             ]
         records.append(record)
+    records.extend(_seeded_recovery_forecast_cases())
     return records
 
 
@@ -1533,6 +1610,122 @@ def _effective_args(record: dict[str, Any]) -> dict[str, Any]:
     if not isinstance(args, dict):
         raise ParityFormatError(f"case {record.get('id')!r} args must be an object")
     function = record.get("function")
+    if function == RECOVERY_FORECAST_KEY:
+        allowed = {
+            "characterizeForecastConstants", "needHours", "needNights",
+            "plannedSleepHours", "recentCharge", "recentEffort", "todayEffort",
+            "useDefaults",
+        }
+        if set(args) - allowed:
+            raise ParityFormatError(
+                f"case {record.get('id')!r} {function} contains unsupported arguments"
+            )
+        required = {"recentCharge", "todayEffort", "plannedSleepHours", "useDefaults"}
+        if not required <= set(args):
+            raise ParityFormatError(
+                f"case {record.get('id')!r} {function} is missing required arguments"
+            )
+        if not isinstance(args["recentCharge"], list) or not (
+            len(args["recentCharge"]) <= RECOVERY_FORECAST_MAX_VALUES
+            and all(
+                _is_number(value) and 0.0 <= value <= 100.0
+                for value in args["recentCharge"]
+            )
+        ):
+            raise ParityFormatError(
+                f"case {record.get('id')!r} {function} recentCharge must contain at most "
+                f"{RECOVERY_FORECAST_MAX_VALUES} values in [0, 100]"
+            )
+        if args["todayEffort"] is not None and not (
+            _is_number(args["todayEffort"]) and 0.0 <= args["todayEffort"] <= 100.0
+        ):
+            raise ParityFormatError(
+                f"case {record.get('id')!r} {function} todayEffort must be null or in [0, 100]"
+            )
+        if not (
+            _is_number(args["plannedSleepHours"])
+            and -RECOVERY_FORECAST_SLEEP_HOURS_MAX
+            <= args["plannedSleepHours"]
+            <= RECOVERY_FORECAST_SLEEP_HOURS_MAX
+        ):
+            raise ParityFormatError(
+                f"case {record.get('id')!r} {function} plannedSleepHours must be in "
+                f"[-{RECOVERY_FORECAST_SLEEP_HOURS_MAX:g}, "
+                f"{RECOVERY_FORECAST_SLEEP_HOURS_MAX:g}]"
+            )
+        use_defaults = args["useDefaults"]
+        controls = {"recentEffort", "needHours", "needNights"}
+        if not isinstance(use_defaults, bool):
+            raise ParityFormatError(
+                f"case {record.get('id')!r} {function} useDefaults must be boolean"
+            )
+        if use_defaults and controls & set(args):
+            raise ParityFormatError(
+                f"case {record.get('id')!r} {function} bare calls cannot override defaults"
+            )
+        if not use_defaults and not controls <= set(args):
+            raise ParityFormatError(
+                f"case {record.get('id')!r} {function} explicit calls require every control"
+            )
+        effort = args.get("recentEffort", [])
+        need = args.get("needHours")
+        need_nights = args.get("needNights", 0)
+        if not isinstance(effort, list) or not (
+            len(effort) <= RECOVERY_FORECAST_MAX_VALUES
+            and all(_is_number(value) and 0.0 <= value <= 100.0 for value in effort)
+        ):
+            raise ParityFormatError(
+                f"case {record.get('id')!r} {function} recentEffort must contain at most "
+                f"{RECOVERY_FORECAST_MAX_VALUES} values in [0, 100]"
+            )
+        if need is not None and not (
+            _is_number(need) and 0.0 <= need <= RECOVERY_FORECAST_SLEEP_HOURS_MAX
+        ):
+            raise ParityFormatError(
+                f"case {record.get('id')!r} {function} needHours must be null or in "
+                f"[0, {RECOVERY_FORECAST_SLEEP_HOURS_MAX:g}]"
+            )
+        if not _is_signed_integer(need_nights, 0, INT32_MAX):
+            raise ParityFormatError(
+                f"case {record.get('id')!r} {function} needNights must fit non-negative Int32"
+            )
+        characterize = args.get("characterizeForecastConstants", False)
+        if not isinstance(characterize, bool):
+            raise ParityFormatError(
+                f"case {record.get('id')!r} {function} characterizeForecastConstants must be boolean"
+            )
+        return {
+            "characterizeForecastConstants": characterize,
+            "needHours": need,
+            "needNights": need_nights,
+            "plannedSleepHours": args["plannedSleepHours"],
+            "recentCharge": args["recentCharge"],
+            "recentEffort": effort,
+            "todayEffort": args["todayEffort"],
+            "useDefaults": use_defaults,
+        }
+    if function in RECOVERY_FORECAST_FUNCTIONS[1:4]:
+        if set(args) != {"values"} or not isinstance(args["values"], list) or not (
+            len(args["values"]) <= RECOVERY_FORECAST_MAX_VALUES
+            and all(
+                _is_number(value) and abs(value) <= RECOVERY_FORECAST_HELPER_ABS_MAX
+                for value in args["values"]
+            )
+        ):
+            raise ParityFormatError(
+                f"case {record.get('id')!r} {function} requires at most "
+                f"{RECOVERY_FORECAST_MAX_VALUES} values with absolute magnitude <= "
+                f"{RECOVERY_FORECAST_HELPER_ABS_MAX:g}"
+            )
+        return dict(args)
+    if function == "RecoveryForecaster.clamp/3":
+        if set(args) != {"x", "lo", "hi"} or not all(
+            _is_number(args.get(key)) for key in ("x", "lo", "hi")
+        ) or args["lo"] > args["hi"]:
+            raise ParityFormatError(
+                f"case {record.get('id')!r} {function} requires numeric x and ordered lo/hi"
+            )
+        return dict(args)
     if function == "rollingRmssd":
         if not isinstance(args.get("rr"), list):
             raise ParityFormatError(f"case {record.get('id')!r} rollingRmssd requires args.rr")
@@ -1778,6 +1971,28 @@ def generate_cases(suite: str, nonce: str) -> list[dict[str, Any]]:
                 "source": "negative-control",
             },
             {
+                "args": {"values": [2.0, 4.0, 6.0]},
+                "comparison": "epsilon",
+                "function": "RecoveryForecaster.mean/1",
+                "id": "recovery_forecast_negative_source_probe",
+                "source": "negative-control",
+            },
+            {
+                "args": {
+                    "recentCharge": [50.0] * 10,
+                    "recentEffort": [],
+                    "todayEffort": None,
+                    "plannedSleepHours": 8.0,
+                    "needHours": 8.0,
+                    "needNights": 7,
+                    "useDefaults": False,
+                },
+                "comparison": "exact",
+                "function": RECOVERY_FORECAST_KEY,
+                "id": "recovery_forecast_negative_output_probe",
+                "source": "negative-control",
+            },
+            {
                 "args": {"trimp": 100.0},
                 "comparison": "exact",
                 "function": "StrainScorer.trimpToStrain/2",
@@ -1889,6 +2104,21 @@ def generate_cases(suite: str, nonce: str) -> list[dict[str, Any]]:
         elif acceptance_issue is not None or "expectedRows" in record:
             raise ParityFormatError(
                 f"case {case_id!r} has unsupported issue-linked expectedRows metadata"
+            )
+        issue_56_cases = {
+            "forecast_clamp_issue_56_positive_x_negative_lower_zero",
+            "forecast_clamp_issue_56_negative_x_positive_lower_zero",
+            "forecast_clamp_issue_56_positive_x_negative_upper_zero",
+            "forecast_clamp_issue_56_negative_x_positive_upper_zero",
+        }
+        regression_issue = record.get("regressionIssue")
+        if regression_issue is not None and regression_issue != "bhelm/noop#56":
+            raise ParityFormatError(
+                f"case {case_id!r} has unsupported regressionIssue {regression_issue!r}"
+            )
+        if (case_id in issue_56_cases) != (regression_issue == "bhelm/noop#56"):
+            raise ParityFormatError(
+                f"case {case_id!r} must bind the signed-zero regression to bhelm/noop#56"
             )
         function = record.get("function")
         args = record.get("args", {})

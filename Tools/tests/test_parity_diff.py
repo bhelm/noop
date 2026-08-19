@@ -755,6 +755,180 @@ class ParityDiffTests(unittest.TestCase):
         self.assertIn('format: "%.1f br/min"', swift)
         self.assertIn('format: "%+.1f C vs baseline"', swift)
 
+    def test_recovery_forecast_frozen_audit_and_exactly_two_seed_strategies(self):
+        cases = parity_diff.generate_cases("pilot", "forecast-audit")
+        for function in parity_diff.RECOVERY_FORECAST_FUNCTIONS:
+            selected = [case for case in cases if case["function"] == function]
+            curated = [case for case in selected if case["source"] == "curated:recovery_forecast.json"]
+            seeded = [case for case in selected if case["source"].startswith("seeded:")]
+            self.assertTrue(curated, function)
+            self.assertEqual(2, len(seeded), function)
+            self.assertEqual(
+                {"splitmix64", "affine"},
+                {case["source"].split(":", 2)[1] for case in seeded},
+                function,
+            )
+        by_id = {case["id"]: case for case in cases}
+        for required in (
+            "forecast_four_nights_nil", "forecast_five_nights",
+            "forecast_nine_nights_thin", "forecast_ten_nights_trusted",
+            "forecast_thirteen_window", "forecast_fourteen_window",
+            "forecast_fifteen_trails_fourteen", "forecast_negative_sleep",
+            "forecast_zero_sleep", "forecast_need_zero_floor", "forecast_need_point_one",
+            "forecast_sleep_cap_entry", "forecast_sleep_above_cap",
+            "forecast_need_six_building", "forecast_need_seven_solid",
+            "forecast_band_half_tie", "forecast_score_low_clamp",
+            "forecast_score_high_clamp", "forecast_strain_positive_cap",
+            "forecast_strain_negative_cap", "forecast_reversion_cap",
+            "forecast_clamp_issue_56_positive_x_negative_lower_zero",
+            "forecast_clamp_issue_56_negative_x_positive_lower_zero",
+            "forecast_clamp_issue_56_positive_x_negative_upper_zero",
+            "forecast_clamp_issue_56_negative_x_positive_upper_zero",
+        ):
+            self.assertIn(required, by_id)
+        omitted = by_id["forecast_default_omitted"]
+        explicit = by_id["forecast_default_explicit"]
+        self.assertNotIn("needHours", omitted["args"])
+        self.assertNotIn("recentEffort", omitted["args"])
+        self.assertIsNone(explicit["args"]["needHours"])
+        constants = by_id["forecast_ten_nights_trusted"]
+        self.assertTrue(constants["effectiveArgs"]["characterizeForecastConstants"])
+        issue_56 = [
+            by_id["forecast_clamp_issue_56_positive_x_negative_lower_zero"],
+            by_id["forecast_clamp_issue_56_negative_x_positive_lower_zero"],
+            by_id["forecast_clamp_issue_56_positive_x_negative_upper_zero"],
+            by_id["forecast_clamp_issue_56_negative_x_positive_upper_zero"],
+        ]
+        self.assertTrue(all(case["regressionIssue"] == "bhelm/noop#56" for case in issue_56))
+        self.assertEqual(
+            [(1.0, -1.0), (-1.0, 1.0), (1.0, -1.0), (-1.0, 1.0)],
+            [
+                (math.copysign(1.0, case["args"]["x"]), math.copysign(
+                    1.0, case["args"]["lo"] if index < 2 else case["args"]["hi"]
+                ))
+                for index, case in enumerate(issue_56)
+            ],
+        )
+
+    def test_recovery_forecast_payloads_fail_closed_before_native_dispatch(self):
+        good = {
+            "recentCharge": [50.0] * 5, "todayEffort": None,
+            "plannedSleepHours": 8.0, "useDefaults": True,
+        }
+        malformed = [
+            {**good, "recentCharge": [50.0, "bad"]},
+            {**good, "needHours": 8.0},
+            {**good, "useDefaults": False},
+            {**good, "needNights": -1, "useDefaults": False,
+             "recentEffort": [], "needHours": 8.0},
+            {**good, "surprise": 1},
+            {"values": [1.0], "extra": 2.0},
+            {"x": 0.0, "lo": 1.0, "hi": 0.0},
+        ]
+        functions = [parity_diff.RECOVERY_FORECAST_KEY] * 5 + [
+            "RecoveryForecaster.mean/1", "RecoveryForecaster.clamp/3",
+        ]
+        for index, (function, args) in enumerate(zip(functions, malformed)):
+            with self.subTest(index=index), self.assertRaises(parity_diff.ParityFormatError):
+                parity_diff._effective_args(
+                    {"id": f"bad-forecast-{index}", "function": function, "args": args}
+                )
+
+    def test_recovery_forecast_numeric_domains_and_array_caps_fail_closed(self):
+        base = {
+            "recentCharge": [50.0] * 5, "recentEffort": [], "todayEffort": None,
+            "plannedSleepHours": 8.0, "needHours": 8.0, "needNights": 7,
+            "useDefaults": False,
+        }
+        malformed_forecasts = [
+            {**base, "recentCharge": [-0.1] * 5},
+            {**base, "recentCharge": [100.1] * 5},
+            {**base, "recentCharge": [50.0] * 4097},
+            {**base, "recentEffort": [100.1]},
+            {**base, "recentEffort": [50.0] * 4097},
+            {**base, "todayEffort": -0.1},
+            {**base, "plannedSleepHours": -24.1},
+            {**base, "plannedSleepHours": 24.1},
+            {**base, "needHours": -0.1},
+            {**base, "needHours": 24.1},
+        ]
+        for index, args in enumerate(malformed_forecasts):
+            with self.subTest(kind="forecast", index=index), self.assertRaises(
+                parity_diff.ParityFormatError
+            ):
+                parity_diff._effective_args({
+                    "id": f"bad-forecast-domain-{index}",
+                    "function": parity_diff.RECOVERY_FORECAST_KEY,
+                    "args": args,
+                })
+
+        for index, values in enumerate(([0.0] * 4097, [1e101, -1e101])):
+            with self.subTest(kind="helper", index=index), self.assertRaises(
+                parity_diff.ParityFormatError
+            ):
+                parity_diff._effective_args({
+                    "id": f"bad-forecast-helper-{index}",
+                    "function": "RecoveryForecaster.sampleSD/1",
+                    "args": {"values": values},
+                })
+
+    def test_recovery_forecast_seed_corpus_is_module_local_and_frozen(self):
+        first = parity_diff._seeded_recovery_forecast_cases()
+        unrelated = parity_diff.SplitMix64(parity_diff.GENERATOR_SEED)
+        for _ in range(10_000):
+            unrelated.next_u64()
+        second = parity_diff._seeded_recovery_forecast_cases()
+
+        self.assertEqual(first, second)
+        self.assertEqual(
+            [
+                "seeded_recovery_forecast_splitmix64",
+                "seeded_recovery_forecast_mean_splitmix64",
+                "seeded_recovery_forecast_sample_sd_splitmix64",
+                "seeded_recovery_forecast_slope_splitmix64",
+                "seeded_recovery_forecast_clamp_splitmix64",
+                "seeded_recovery_forecast_affine",
+                "seeded_recovery_forecast_mean_affine",
+                "seeded_recovery_forecast_sample_sd_affine",
+                "seeded_recovery_forecast_slope_affine",
+                "seeded_recovery_forecast_clamp_affine",
+            ],
+            [case["id"] for case in first],
+        )
+
+    def test_recovery_forecast_exact_payload_covers_every_normalized_field(self):
+        input_record = self.input_record("forecast")
+        input_record["function"] = parity_diff.RECOVERY_FORECAST_KEY
+        value = {
+            "score": "4059000000000000", "band": "4020000000000000",
+            "baseline": "4049000000000000", "planned": "4020000000000000",
+            "need": "4020000000000000", "low": "4051000000000000",
+            "high": "4061000000000000", "nights": 10,
+            "confidence": {"text": "solid"},
+        }
+        kotlin_value = dict(value)
+        kotlin_value["low"] = "4051000000000001"
+        swift = [self.output_record(
+            "forecast", function=parity_diff.RECOVERY_FORECAST_KEY, valueBits=value,
+        )]
+        kotlin = [self.output_record(
+            "forecast", function=parity_diff.RECOVERY_FORECAST_KEY, valueBits=kotlin_value,
+        )]
+        diffs = self.compare([input_record], swift, kotlin)
+        self.assertEqual(1, len(diffs))
+        self.assertIn("class=exact", diffs[0])
+
+    def test_recovery_forecast_negative_suite_has_source_and_output_mutants(self):
+        cases = {
+            case["id"]: case for case in parity_diff.generate_cases("negative", "forecast-negative")
+        }
+        source = cases["recovery_forecast_negative_source_probe"]
+        output = cases["recovery_forecast_negative_output_probe"]
+        self.assertEqual("RecoveryForecaster.mean/1", source["function"])
+        self.assertEqual("epsilon", source["comparison"])
+        self.assertEqual(parity_diff.RECOVERY_FORECAST_KEY, output["function"])
+        self.assertEqual("exact", output["comparison"])
+
     def test_recovery_payloads_fail_closed_before_native_dispatch(self):
         int64_max = (1 << 63) - 1
         malformed = [

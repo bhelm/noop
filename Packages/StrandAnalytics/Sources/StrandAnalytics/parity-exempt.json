@@ -3318,31 +3318,6 @@
       "issue": 17
     },
     {
-      "key": "Packages/StrandAnalytics/Sources/StrandAnalytics/RecoveryForecast.swift::forecast/6[defaults=2,5,6]#1",
-      "reason": "Bootstrap debt: no differential or declared platform coverage proof yet.",
-      "issue": 17
-    },
-    {
-      "key": "Packages/StrandAnalytics/Sources/StrandAnalytics/RecoveryForecast.swift::mean/1[defaults=-]#1",
-      "reason": "Bootstrap debt: no differential or declared platform coverage proof yet.",
-      "issue": 17
-    },
-    {
-      "key": "Packages/StrandAnalytics/Sources/StrandAnalytics/RecoveryForecast.swift::sampleSD/1[defaults=-]#1",
-      "reason": "Bootstrap debt: no differential or declared platform coverage proof yet.",
-      "issue": 17
-    },
-    {
-      "key": "Packages/StrandAnalytics/Sources/StrandAnalytics/RecoveryForecast.swift::leastSquaresSlope/1[defaults=-]#1",
-      "reason": "Bootstrap debt: no differential or declared platform coverage proof yet.",
-      "issue": 17
-    },
-    {
-      "key": "Packages/StrandAnalytics/Sources/StrandAnalytics/RecoveryForecast.swift::clamp/3[defaults=-]#1",
-      "reason": "Bootstrap debt: no differential or declared platform coverage proof yet.",
-      "issue": 17
-    },
-    {
       "key": "Packages/StrandAnalytics/Sources/StrandAnalytics/RecoveryScorer.swift::wHRV@property-initializer#1",
       "reason": "Bootstrap debt: no differential or declared platform coverage proof yet.",
       "issue": 17

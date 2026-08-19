@@ -55,6 +55,7 @@ final class ParityRunner: XCTestCase {
         let bpm: Double?
         let characterizeZones: Bool?
         let characterizeRecoveryConstants: Bool?
+        let characterizeForecastConstants: Bool?
         let collapsed: Double?
         let contiguous: [Bool]?
         let coverage: Double?
@@ -73,6 +74,12 @@ final class ParityRunner: XCTestCase {
         let skinTempDev: Double?
         let hrvBaselineUsable: Bool?
         let recoveryIndexSlope: Double?
+        let recentCharge: [Double]?
+        let recentEffort: [Double]?
+        let todayEffort: Double?
+        let plannedSleepHours: Double?
+        let needHours: Double?
+        let needNights: Int?
         let effortBaseline: BaselineInput?
         let priorDayEffort: Double?
         let useDefaults: Bool?
@@ -115,6 +122,9 @@ final class ParityRunner: XCTestCase {
         let windowStart: Int?
         let workoutEnd: Int?
         let workoutStart: Int?
+        let x: Double?
+        let lo: Double?
+        let hi: Double?
     }
 
     private struct InputRecord: Decodable {
@@ -650,6 +660,67 @@ final class ParityRunner: XCTestCase {
                 "score": emittedScore.map(exactBit) ?? NSNull(),
                 "trace": emittedTrace.map { ["text": $0] },
             ] as [String: Any]
+        case "RecoveryForecaster.forecast/6":
+            guard record.comparison == "exact", let recentCharge = record.args.recentCharge,
+                  let planned = record.args.plannedSleepHours,
+                  let useDefaults = record.args.useDefaults else {
+                throw RunnerError.invalidInput("invalid RecoveryForecast case \(record.id)")
+            }
+            let value: RecoveryForecast?
+            if useDefaults {
+                value = RecoveryForecaster.forecast(
+                    recentCharge: recentCharge, todayEffort: record.args.todayEffort,
+                    plannedSleepHours: planned
+                )
+            } else {
+                guard let recentEffort = record.effectiveArgs.recentEffort,
+                      let needNights = record.effectiveArgs.needNights else {
+                    throw RunnerError.invalidInput("invalid explicit RecoveryForecast controls \(record.id)")
+                }
+                value = RecoveryForecaster.forecast(
+                    recentCharge: recentCharge, recentEffort: recentEffort,
+                    todayEffort: record.args.todayEffort, plannedSleepHours: planned,
+                    needHours: record.effectiveArgs.needHours, needNights: needNights
+                )
+            }
+            var encoded: Any = value.map(recoveryForecastBits) ?? NSNull()
+            if negativeSide == "swift", record.id == "recovery_forecast_negative_output_probe",
+               var forecast = encoded as? [String: Any] {
+                forecast["low"] = exactBit(1.0)
+                encoded = forecast
+                result["negativeSide"] = "swift"
+            }
+            if var forecast = encoded as? [String: Any],
+               record.args.characterizeForecastConstants == true {
+                forecast["constants"] = recoveryForecastConstants()
+                encoded = forecast
+            }
+            result["valueBits"] = encoded
+        case "RecoveryForecaster.mean/1":
+            guard record.comparison == "epsilon", var values = record.args.values else {
+                throw RunnerError.invalidInput("invalid RecoveryForecast mean case \(record.id)")
+            }
+            if negativeSide == "swift", record.id == "recovery_forecast_negative_source_probe" {
+                values.append(100.0)
+                result["negativeSide"] = "swift"
+            }
+            result["value"] = try finite(RecoveryForecaster.mean(values), record: record)
+        case "RecoveryForecaster.sampleSD/1":
+            guard record.comparison == "epsilon", let values = record.args.values else {
+                throw RunnerError.invalidInput("invalid RecoveryForecast sampleSD case \(record.id)")
+            }
+            result["value"] = try finite(RecoveryForecaster.sampleSD(values), record: record)
+        case "RecoveryForecaster.leastSquaresSlope/1":
+            guard record.comparison == "epsilon", let values = record.args.values else {
+                throw RunnerError.invalidInput("invalid RecoveryForecast slope case \(record.id)")
+            }
+            result["value"] = try finite(RecoveryForecaster.leastSquaresSlope(values), record: record)
+        case "RecoveryForecaster.clamp/3":
+            guard record.comparison == "exact", let x = record.args.x,
+                  let lo = record.args.lo, let hi = record.args.hi else {
+                throw RunnerError.invalidInput("invalid RecoveryForecast clamp case \(record.id)")
+            }
+            result["valueBits"] = exactBit(RecoveryForecaster.clamp(x, lo, hi))
         case "StrainScorer.trimpToStrain/2":
             guard record.comparison == "exact", let trimp = record.args.trimp else {
                 throw RunnerError.invalidInput("invalid trimpToStrain case \(record.id)")
@@ -866,6 +937,36 @@ final class ParityRunner: XCTestCase {
             "wResp": exactBit(RecoveryScorer.wResp),
             "wSkinTemp": exactBit(RecoveryScorer.wSkinTemp),
             "wSleep": exactBit(RecoveryScorer.wSleep),
+        ]
+    }
+
+    private func recoveryForecastBits(_ value: RecoveryForecast) -> [String: Any] {
+        [
+            "band": exactBit(value.band), "baseline": exactBit(value.baseline),
+            "confidence": ["text": value.confidence.rawValue],
+            "high": exactBit(value.high), "low": exactBit(value.low),
+            "need": exactBit(value.needHours), "nights": value.nights,
+            "planned": exactBit(value.plannedSleepHours), "score": exactBit(value.charge),
+        ]
+    }
+
+    private func recoveryForecastConstants() -> [String: Any] {
+        [
+            "baselineWindow": RecoveryForecaster.baselineWindow,
+            "defaultNeedHours": exactBit(RecoveryForecaster.defaultNeedHours),
+            "effortSpread": exactBit(RecoveryForecaster.effortSpread),
+            "effortWindow": RecoveryForecaster.effortWindow,
+            "minBandPoints": exactBit(RecoveryForecaster.minBandPoints),
+            "minBaselineNights": RecoveryForecaster.minBaselineNights,
+            "reversionAdjCap": exactBit(RecoveryForecaster.reversionAdjCap),
+            "reversionWeight": exactBit(RecoveryForecaster.reversionWeight),
+            "sleepOverCap": exactBit(RecoveryForecaster.sleepOverCap),
+            "sleepWeight": exactBit(RecoveryForecaster.sleepWeight),
+            "solidNeedNights": RecoveryForecaster.solidNeedNights,
+            "strainAdjCap": exactBit(RecoveryForecaster.strainAdjCap),
+            "strainWeight": exactBit(RecoveryForecaster.strainWeight),
+            "thinBandPoints": exactBit(RecoveryForecaster.thinBandPoints),
+            "trustedNights": RecoveryForecaster.trustedNights,
         ]
     }
 
