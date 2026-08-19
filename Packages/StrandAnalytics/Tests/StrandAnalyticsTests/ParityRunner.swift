@@ -48,6 +48,11 @@ final class ParityRunner: XCTestCase {
         let status: String?
     }
 
+    private struct SleepNightInput: Decodable {
+        let day: String
+        let totalSleepMin: Double?
+    }
+
     private struct Arguments: Decodable {
         let age: Double?
         let ageInt: Int?
@@ -129,6 +134,24 @@ final class ParityRunner: XCTestCase {
         let x: Double?
         let lo: Double?
         let hi: Double?
+        let mainSleepMin: Double?
+        let napSleepMin: Double?
+        let series: [SleepNightInput]?
+        let window: Int?
+        let previousBed: Int?
+        let candidateBed: Int?
+        let originalWake: Int?
+        let now: Int?
+        let zone: String?
+        let newStart: Int?
+        let newEnd: Int?
+        let coverageStart: Int?
+        let coverageEnd: Int?
+        let slackSec: Int?
+        let stage: String?
+        let stagesJSON: String?
+        let sessionStart: Int?
+        let oldEnd: Int?
     }
 
     private struct InputRecord: Decodable {
@@ -217,6 +240,116 @@ final class ParityRunner: XCTestCase {
             ? "StrainScorer.trimpToStrain/2"
             : record.function
         switch dispatchFunction {
+        case "SleepDebt.creditedSleepMin/2":
+            guard record.comparison == "exact", let useDefaults = record.args.useDefaults else {
+                throw RunnerError.invalidInput("invalid creditedSleepMin case \(record.id)")
+            }
+            let value = useDefaults
+                ? SleepDebt.creditedSleepMin(mainSleepMin: record.args.mainSleepMin)
+                : SleepDebt.creditedSleepMin(
+                    mainSleepMin: record.args.mainSleepMin,
+                    napSleepMin: try XCTUnwrap(record.effectiveArgs.napSleepMin)
+                )
+            var encoded: Any = value.map(exactBit) ?? NSNull()
+            if negativeSide == "swift", record.id == "sleep_negative_output_probe", let value {
+                encoded = exactBit(value + 1.0)
+                result["negativeSide"] = "swift"
+            }
+            result["valueBits"] = encoded
+        case "SleepDebt.ledger/3":
+            guard record.comparison == "exact", let input = record.args.series,
+                  let useDefaults = record.args.useDefaults else {
+                throw RunnerError.invalidInput("invalid SleepDebt ledger case \(record.id)")
+            }
+            let series = input.map { (day: $0.day, totalSleepMin: $0.totalSleepMin) }
+            let value = useDefaults
+                ? SleepDebt.ledger(series: series)
+                : SleepDebt.ledger(
+                    series: series,
+                    needHours: try XCTUnwrap(record.effectiveArgs.needHours),
+                    window: try XCTUnwrap(record.effectiveArgs.window)
+                )
+            result["valueBits"] = [
+                "balanceMin": exactBit(value.balanceMin),
+                "needMin": exactBit(value.needMin),
+                "nights": value.nights.map { night in
+                    [
+                        "day": ["text": night.day],
+                        "sleptMin": exactBit(night.sleptMin),
+                        "deltaMin": exactBit(night.deltaMin),
+                    ] as [String: Any]
+                },
+            ] as [String: Any]
+        case "SleepEditGuard.autoCorrectedBed/5":
+            guard record.comparison == "exact", let previous = record.args.previousBed,
+                  let candidate = record.args.candidateBed, let now = record.args.now,
+                  let useDefaults = record.args.useDefaults else {
+                throw RunnerError.invalidInput("invalid autoCorrectedBed case \(record.id)")
+            }
+            let wake = record.args.originalWake.map { Date(timeIntervalSince1970: Double($0)) }
+            let value: Date
+            if useDefaults {
+                value = SleepEditGuard.autoCorrectedBed(
+                    previousBed: Date(timeIntervalSince1970: Double(previous)),
+                    candidateBed: Date(timeIntervalSince1970: Double(candidate)),
+                    originalWake: wake, now: Date(timeIntervalSince1970: Double(now))
+                )
+            } else {
+                guard record.effectiveArgs.zone == "UTC" else {
+                    throw RunnerError.invalidInput("explicit autoCorrectedBed zone must be UTC \(record.id)")
+                }
+                var calendar = Calendar(identifier: .gregorian)
+                calendar.timeZone = TimeZone(secondsFromGMT: 0)!
+                value = SleepEditGuard.autoCorrectedBed(
+                    previousBed: Date(timeIntervalSince1970: Double(previous)),
+                    candidateBed: Date(timeIntervalSince1970: Double(candidate)),
+                    originalWake: wake, now: Date(timeIntervalSince1970: Double(now)), calendar: calendar
+                )
+            }
+            result["valueBits"] = Int(value.timeIntervalSince1970)
+        case "SleepEditGuard.isDisjoint/4":
+            guard record.comparison == "exact", let newStart = record.args.newStart,
+                  let newEnd = record.args.newEnd, let coverageStart = record.args.coverageStart,
+                  let coverageEnd = record.args.coverageEnd else {
+                throw RunnerError.invalidInput("invalid isDisjoint case \(record.id)")
+            }
+            result["valueBits"] = SleepEditGuard.isDisjoint(
+                newStart: newStart, newEnd: newEnd,
+                coverageStart: coverageStart, coverageEnd: coverageEnd
+            )
+        case "SleepEditGuard.clampedEditWindow/4":
+            guard record.comparison == "exact", let start = record.args.start,
+                  let end = record.args.end, let now = record.args.now,
+                  let useDefaults = record.args.useDefaults else {
+                throw RunnerError.invalidInput("invalid clampedEditWindow case \(record.id)")
+            }
+            let value = useDefaults
+                ? SleepEditGuard.clampedEditWindow(start: start, end: end, now: now)
+                : SleepEditGuard.clampedEditWindow(
+                    start: start, end: end, now: now,
+                    slackSec: try XCTUnwrap(record.effectiveArgs.slackSec)
+                )
+            result["valueBits"] = value.map { ["start": $0.start, "end": $0.end] } ?? NSNull()
+        case "SleepStageVocabulary.isWake/1":
+            guard record.comparison == "exact", var stage = record.args.stage else {
+                throw RunnerError.invalidInput("invalid isWake case \(record.id)")
+            }
+            if negativeSide == "swift", record.id == "sleep_negative_source_probe" {
+                stage = "asleep"
+                result["negativeSide"] = "swift"
+            }
+            result["valueBits"] = SleepStageVocabulary.isWake(stage)
+        case "SleepWindowReclip.reclip/5":
+            guard record.comparison == "exact", let sessionStart = record.args.sessionStart,
+                  let oldEnd = record.args.oldEnd, let newStart = record.args.newStart,
+                  let newEnd = record.args.newEnd else {
+                throw RunnerError.invalidInput("invalid reclip case \(record.id)")
+            }
+            let value = SleepWindowReclip.reclip(
+                stagesJSON: record.args.stagesJSON, sessionStart: sessionStart,
+                oldEnd: oldEnd, newStart: newStart, newEnd: newEnd
+            )
+            result["valueBits"] = try value.map(normalizedSleepJSON) ?? NSNull()
         case "rmssdRaw":
             guard record.comparison == "epsilon", let nn = record.args.nn else {
                 throw RunnerError.invalidInput("invalid rmssdRaw case \(record.id)")
@@ -937,6 +1070,39 @@ final class ParityRunner: XCTestCase {
 
     private func exactBit(_ value: Double) -> String {
         String(format: "%016llx", value.bitPattern)
+    }
+
+    private func normalizedSleepJSON(_ text: String) throws -> [String: Any] {
+        guard let data = text.data(using: .utf8),
+              let object = try? JSONSerialization.jsonObject(with: data) else {
+            throw RunnerError.invalidInput("Sleep reclip returned invalid JSON")
+        }
+        if let segments = object as? [[String: Any]] {
+            let value: [[String: Any]] = try segments.map { segment in
+                guard Set(segment.keys) == ["start", "end", "stage"],
+                      let start = (segment["start"] as? NSNumber)?.intValue,
+                      let end = (segment["end"] as? NSNumber)?.intValue,
+                      let stage = segment["stage"] as? String else {
+                    throw RunnerError.invalidInput("Sleep reclip returned an invalid segment")
+                }
+                return ["start": start, "end": end, "stage": ["text": stage]]
+            }
+            return ["shape": ["text": "segments"], "value": value]
+        }
+        if let minutes = object as? [String: Any] {
+            guard Set(minutes.keys) == ["awake", "light", "deep", "rem"] else {
+                throw RunnerError.invalidInput("Sleep reclip returned unexpected minutes fields")
+            }
+            var value: [String: String] = [:]
+            for key in ["awake", "light", "deep", "rem"] {
+                guard let number = minutes[key] as? NSNumber else {
+                    throw RunnerError.invalidInput("Sleep reclip returned incomplete minutes")
+                }
+                value[key] = exactBit(number.doubleValue)
+            }
+            return ["shape": ["text": "minutes"], "value": value]
+        }
+        throw RunnerError.invalidInput("Sleep reclip returned an unsupported JSON shape")
     }
 
     private func recoveryConstants() -> [String: Any] {

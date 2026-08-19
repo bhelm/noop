@@ -72,6 +72,98 @@ class ParityRunner {
             function
         }
         when (dispatchFunction) {
+            "SleepDebt.creditedSleepMin/2" -> {
+                require(comparison == "exact") { "invalid creditedSleepMin case $caseId" }
+                val main = nullableDouble(args, "mainSleepMin")
+                val value = if (args.getBoolean("useDefaults")) {
+                    SleepDebt.creditedSleepMin(main)
+                } else {
+                    SleepDebt.creditedSleepMin(main, effective.getDouble("napSleepMin"))
+                }
+                var encoded: Any? = value?.let(::exactBit)
+                if (negativeSide == "kotlin" && caseId == "sleep_negative_output_probe" && value != null) {
+                    encoded = exactBit(value + 1.0)
+                    result["negativeSide"] = "kotlin"
+                }
+                result["valueBits"] = encoded
+            }
+            "SleepDebt.ledger/3" -> {
+                require(comparison == "exact") { "invalid SleepDebt ledger case $caseId" }
+                val rows = args.getJSONArray("series")
+                val series = (0 until rows.length()).map { index ->
+                    val row = rows.getJSONObject(index)
+                    row.getString("day") to nullableDouble(row, "totalSleepMin")
+                }
+                val value = if (args.getBoolean("useDefaults")) {
+                    SleepDebt.ledger(series)
+                } else {
+                    SleepDebt.ledger(series, effective.getDouble("needHours"), effective.getInt("window"))
+                }
+                result["valueBits"] = sortedMapOf(
+                    "balanceMin" to exactBit(value.balanceMin),
+                    "needMin" to exactBit(value.needMin),
+                    "nights" to value.nights.map { night -> sortedMapOf(
+                        "day" to sortedMapOf("text" to night.day),
+                        "deltaMin" to exactBit(night.deltaMin),
+                        "sleptMin" to exactBit(night.sleptMin),
+                    ) },
+                )
+            }
+            "SleepEditGuard.autoCorrectedBed/5" -> {
+                require(comparison == "exact") { "invalid autoCorrectedBed case $caseId" }
+                val previous = args.getLong("previousBed")
+                val candidate = args.getLong("candidateBed")
+                val wake = if (args.isNull("originalWake")) null else args.getLong("originalWake")
+                val now = args.getLong("now")
+                val value = if (args.getBoolean("useDefaults")) {
+                    SleepEditGuard.autoCorrectedBed(previous, candidate, wake, now)
+                } else {
+                    require(effective.getString("zone") == "UTC") { "explicit autoCorrectedBed zone must be UTC" }
+                    SleepEditGuard.autoCorrectedBed(
+                        previous, candidate, wake, now, java.time.ZoneId.of("UTC")
+                    )
+                }
+                result["valueBits"] = value
+            }
+            "SleepEditGuard.isDisjoint/4" -> {
+                require(comparison == "exact") { "invalid isDisjoint case $caseId" }
+                result["valueBits"] = SleepEditGuard.isDisjoint(
+                    args.getLong("newStart"), args.getLong("newEnd"),
+                    args.getLong("coverageStart"), args.getLong("coverageEnd"),
+                )
+            }
+            "SleepEditGuard.clampedEditWindow/4" -> {
+                require(comparison == "exact") { "invalid clampedEditWindow case $caseId" }
+                val value = if (args.getBoolean("useDefaults")) {
+                    SleepEditGuard.clampedEditWindow(
+                        args.getLong("start"), args.getLong("end"), args.getLong("now"),
+                    )
+                } else {
+                    SleepEditGuard.clampedEditWindow(
+                        args.getLong("start"), args.getLong("end"), args.getLong("now"),
+                        effective.getLong("slackSec"),
+                    )
+                }
+                result["valueBits"] = value?.let { sortedMapOf("start" to it.first, "end" to it.second) }
+            }
+            "SleepStageVocabulary.isWake/1" -> {
+                require(comparison == "exact") { "invalid isWake case $caseId" }
+                var stage = args.getString("stage")
+                if (negativeSide == "kotlin" && caseId == "sleep_negative_source_probe") {
+                    stage = "asleep"
+                    result["negativeSide"] = "kotlin"
+                }
+                result["valueBits"] = SleepStageVocabulary.isWake(stage)
+            }
+            "SleepWindowReclip.reclip/5" -> {
+                require(comparison == "exact") { "invalid reclip case $caseId" }
+                val stages = if (args.isNull("stagesJSON")) null else args.getString("stagesJSON")
+                val value = SleepWindowReclip.reclip(
+                    stages, args.getLong("sessionStart"), args.getLong("oldEnd"),
+                    args.getLong("newStart"), args.getLong("newEnd"),
+                )
+                result["valueBits"] = value?.let(::normalizedSleepJson)
+            }
             "rmssdRaw" -> {
                 require(comparison == "epsilon") { "invalid rmssdRaw case $caseId" }
                 result["value"] = finiteOrNull(HrvAnalyzer.rmssdRaw(doubleList(args, "nn")), function, caseId)
@@ -816,6 +908,35 @@ class ParityRunner {
 
     private fun exactBit(value: Double): String =
         java.lang.Long.toHexString(value.toRawBits()).padStart(16, '0')
+
+    private fun normalizedSleepJson(text: String): Map<String, Any> {
+        val trimmed = text.trimStart()
+        if (trimmed.startsWith("[")) {
+            val array = JSONArray(text)
+            val segments = (0 until array.length()).map { index ->
+                val segment = array.getJSONObject(index)
+                require(segment.keys().asSequence().toSet() == setOf("start", "end", "stage")) {
+                    "Sleep reclip returned unexpected segment fields"
+                }
+                sortedMapOf<String, Any>(
+                    "end" to segment.getLong("end"),
+                    "stage" to sortedMapOf("text" to segment.getString("stage")),
+                    "start" to segment.getLong("start"),
+                )
+            }
+            return sortedMapOf("shape" to sortedMapOf("text" to "segments"), "value" to segments)
+        }
+        require(trimmed.startsWith("{")) { "Sleep reclip returned unsupported JSON" }
+        val minutes = JSONObject(text)
+        require(minutes.keys().asSequence().toSet() == setOf("awake", "light", "deep", "rem")) {
+            "Sleep reclip returned unexpected minutes fields"
+        }
+        val value = sortedMapOf<String, Any>()
+        for (key in listOf("awake", "light", "deep", "rem")) {
+            value[key] = exactBit(minutes.getDouble(key))
+        }
+        return sortedMapOf("shape" to sortedMapOf("text" to "minutes"), "value" to value)
+    }
 
     private fun nullableDouble(value: JSONObject, key: String): Double? =
         if (!value.has(key) || value.isNull(key)) null else value.getDouble(key)

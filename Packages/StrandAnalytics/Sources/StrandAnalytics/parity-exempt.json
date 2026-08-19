@@ -3908,16 +3908,6 @@
       "issue": 17
     },
     {
-      "key": "Packages/StrandAnalytics/Sources/StrandAnalytics/SleepDebt.swift::creditedSleepMin/2[defaults=2]#1",
-      "reason": "Bootstrap debt: no differential or declared platform coverage proof yet.",
-      "issue": 17
-    },
-    {
-      "key": "Packages/StrandAnalytics/Sources/StrandAnalytics/SleepDebt.swift::ledger/3[defaults=2,3]#1",
-      "reason": "Bootstrap debt: no differential or declared platform coverage proof yet.",
-      "issue": 17
-    },
-    {
       "key": "Packages/StrandAnalytics/Sources/StrandAnalytics/SleepDebt.swift::round1/1[defaults=-]#1",
       "reason": "Bootstrap debt: no differential or declared platform coverage proof yet.",
       "issue": 17
@@ -3928,22 +3918,7 @@
       "issue": 17
     },
     {
-      "key": "Packages/StrandAnalytics/Sources/StrandAnalytics/SleepEditGuard.swift::autoCorrectedBed/5[defaults=5]#1",
-      "reason": "Bootstrap debt: no differential or declared platform coverage proof yet.",
-      "issue": 17
-    },
-    {
-      "key": "Packages/StrandAnalytics/Sources/StrandAnalytics/SleepEditGuard.swift::isDisjoint/4[defaults=-]#1",
-      "reason": "Bootstrap debt: no differential or declared platform coverage proof yet.",
-      "issue": 17
-    },
-    {
       "key": "Packages/StrandAnalytics/Sources/StrandAnalytics/SleepEditGuard.swift::maxEditWindowSec@property-initializer#1",
-      "reason": "Bootstrap debt: no differential or declared platform coverage proof yet.",
-      "issue": 17
-    },
-    {
-      "key": "Packages/StrandAnalytics/Sources/StrandAnalytics/SleepEditGuard.swift::clampedEditWindow/4[defaults=4]#1",
       "reason": "Bootstrap debt: no differential or declared platform coverage proof yet.",
       "issue": 17
     },
@@ -4229,11 +4204,6 @@
     },
     {
       "key": "Packages/StrandAnalytics/Sources/StrandAnalytics/SleepStageTotals.swift::circularMeanSec/1[defaults=-]#1",
-      "reason": "Bootstrap debt: no differential or declared platform coverage proof yet.",
-      "issue": 17
-    },
-    {
-      "key": "Packages/StrandAnalytics/Sources/StrandAnalytics/SleepStageVocabulary.swift::isWake/1[defaults=-]#1",
       "reason": "Bootstrap debt: no differential or declared platform coverage proof yet.",
       "issue": 17
     },
@@ -5084,11 +5054,6 @@
     },
     {
       "key": "Packages/StrandAnalytics/Sources/StrandAnalytics/SleepStagerV2.swift::stageEpochs/1[defaults=-]#1",
-      "reason": "Bootstrap debt: no differential or declared platform coverage proof yet.",
-      "issue": 17
-    },
-    {
-      "key": "Packages/StrandAnalytics/Sources/StrandAnalytics/SleepWindowReclip.swift::reclip/5[defaults=-]#1",
       "reason": "Bootstrap debt: no differential or declared platform coverage proof yet.",
       "issue": 17
     },

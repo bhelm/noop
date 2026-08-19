@@ -4363,16 +4363,6 @@
       "issue": 17
     },
     {
-      "key": "android/app/src/main/java/com/noop/analytics/SleepDebt.kt::creditedSleepMin/2[defaults=2]#1",
-      "reason": "Bootstrap debt: no differential or declared platform coverage proof yet.",
-      "issue": 17
-    },
-    {
-      "key": "android/app/src/main/java/com/noop/analytics/SleepDebt.kt::ledger/3[defaults=2,3]#1",
-      "reason": "Bootstrap debt: no differential or declared platform coverage proof yet.",
-      "issue": 17
-    },
-    {
       "key": "android/app/src/main/java/com/noop/analytics/SleepDebt.kt::round1/1[defaults=-]#1",
       "reason": "Bootstrap debt: no differential or declared platform coverage proof yet.",
       "issue": 17
@@ -4383,22 +4373,7 @@
       "issue": 17
     },
     {
-      "key": "android/app/src/main/java/com/noop/analytics/SleepEditGuard.kt::autoCorrectedBed/5[defaults=5]#1",
-      "reason": "Bootstrap debt: no differential or declared platform coverage proof yet.",
-      "issue": 17
-    },
-    {
-      "key": "android/app/src/main/java/com/noop/analytics/SleepEditGuard.kt::isDisjoint/4[defaults=-]#1",
-      "reason": "Bootstrap debt: no differential or declared platform coverage proof yet.",
-      "issue": 17
-    },
-    {
       "key": "android/app/src/main/java/com/noop/analytics/SleepEditGuard.kt::MAX_EDIT_WINDOW_SEC@property-initializer#1",
-      "reason": "Bootstrap debt: no differential or declared platform coverage proof yet.",
-      "issue": 17
-    },
-    {
-      "key": "android/app/src/main/java/com/noop/analytics/SleepEditGuard.kt::clampedEditWindow/4[defaults=4]#1",
       "reason": "Bootstrap debt: no differential or declared platform coverage proof yet.",
       "issue": 17
     },
@@ -4729,11 +4704,6 @@
     },
     {
       "key": "android/app/src/main/java/com/noop/analytics/SleepStageTotals.kt::circularMeanSec/1[defaults=-]#1",
-      "reason": "Bootstrap debt: no differential or declared platform coverage proof yet.",
-      "issue": 17
-    },
-    {
-      "key": "android/app/src/main/java/com/noop/analytics/SleepStageVocabulary.kt::isWake/1[defaults=-]#1",
       "reason": "Bootstrap debt: no differential or declared platform coverage proof yet.",
       "issue": 17
     },
@@ -5574,11 +5544,6 @@
     },
     {
       "key": "android/app/src/main/java/com/noop/analytics/SleepStagerV2.kt::stageEpochs/1[defaults=-]#1",
-      "reason": "Bootstrap debt: no differential or declared platform coverage proof yet.",
-      "issue": 17
-    },
-    {
-      "key": "android/app/src/main/java/com/noop/analytics/SleepWindowReclip.kt::reclip/5[defaults=-]#1",
       "reason": "Bootstrap debt: no differential or declared platform coverage proof yet.",
       "issue": 17
     },
