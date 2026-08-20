@@ -198,6 +198,15 @@
       "text": "cannot fully evaluate coveragePlausibleFloor=1.0 - (coveragePlausibleCeiling - 1.0) against Kotlin COVERAGE_PLAUSIBLE_FLOOR=1.0 - (COVERAGE_PLAUSIBLE_CEILING - 1.0) (android/app/src/main/java/com/noop/analytics/HrvAnalyzer.kt:365)"
     },
     {
+      "identity": "test-only-callsite|Packages/StrandAnalytics/Sources/StrandAnalytics/HRVAnalyzer.swift::msToInt/1#1",
+      "rule": "test-only-callsite",
+      "path": "Packages/StrandAnalytics/Sources/StrandAnalytics/HRVAnalyzer.swift",
+      "line": 740,
+      "text": "HRVAnalyzer.msToInt/1 has 5 test callsite(s) and no production callsite",
+      "issue": 17,
+      "provenance": "upstream #1331/#1008 / 6ed51633; helper is exercised through deliveryHistogram but the lexical callsite scanner does not resolve unqualified sibling calls"
+    },
+    {
       "identity": "test-only-callsite|Packages/StrandAnalytics/Sources/StrandAnalytics/LabBookProjection.swift::project/2#1",
       "rule": "test-only-callsite",
       "path": "Packages/StrandAnalytics/Sources/StrandAnalytics/LabBookProjection.swift",
@@ -1117,6 +1126,24 @@
       "path": "android/app/src/main/java/com/noop/analytics/HrvAnalyzer.kt",
       "line": 265,
       "text": "HrvAnalyzer.analyze/3 has 3 test callsite(s) and no production callsite"
+    },
+    {
+      "identity": "test-only-callsite|android/app/src/main/java/com/noop/analytics/HrvAnalyzer.kt::msToInt/1#1",
+      "rule": "test-only-callsite",
+      "path": "android/app/src/main/java/com/noop/analytics/HrvAnalyzer.kt",
+      "line": 675,
+      "text": "HrvAnalyzer.msToInt/1 has 5 test callsite(s) and no production callsite",
+      "issue": 17,
+      "provenance": "upstream #1331/#1008 / 6ed51633; helper is exercised through deliveryHistogram but the lexical callsite scanner does not resolve unqualified sibling calls"
+    },
+    {
+      "identity": "test-only-callsite|android/app/src/main/java/com/noop/analytics/HrvAnalyzer.kt::pct/2#1",
+      "rule": "test-only-callsite",
+      "path": "android/app/src/main/java/com/noop/analytics/HrvAnalyzer.kt",
+      "line": 678,
+      "text": "HrvAnalyzer.pct/2 has 3 test callsite(s) and no production callsite",
+      "issue": 17,
+      "provenance": "upstream #1331/#1008 / 6ed51633; helper is exercised through deliveryHistogram but the lexical callsite scanner does not resolve unqualified sibling calls"
     },
     {
       "identity": "test-only-callsite|android/app/src/main/java/com/noop/analytics/ImportTrace.kt::fileMetaLine/3#1",

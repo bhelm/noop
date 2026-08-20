@@ -6740,6 +6740,36 @@
   ],
   "platform-test": [
     {
+        "key": "android/app/src/main/java/com/noop/analytics/HrvAnalyzer.kt::knownRows@property-initializer#1",
+        "test": "com.noop.analytics.HrvAnalyzerSampleOrdTest delivery histogram matrix; upstream #1331/#1008 / 6ed51633",
+        "issue": 17
+    },
+    {
+        "key": "android/app/src/main/java/com/noop/analytics/HrvAnalyzer.kt::ms@property-initializer#1",
+        "test": "com.noop.analytics.HrvAnalyzerSampleOrdTest delivery histogram matrix; upstream #1331/#1008 / 6ed51633",
+        "issue": 17
+    },
+    {
+        "key": "android/app/src/main/java/com/noop/analytics/HrvAnalyzer.kt::deliveries@property-initializer#1",
+        "test": "com.noop.analytics.HrvAnalyzerSampleOrdTest delivery histogram matrix; upstream #1331/#1008 / 6ed51633",
+        "issue": 17
+    },
+    {
+        "key": "android/app/src/main/java/com/noop/analytics/HrvAnalyzer.kt::deliveryHistogram/3[defaults=-]#1",
+        "test": "com.noop.analytics.HrvAnalyzerSampleOrdTest delivery histogram matrix; upstream #1331/#1008 / 6ed51633",
+        "issue": 17
+    },
+    {
+        "key": "android/app/src/main/java/com/noop/analytics/HrvAnalyzer.kt::msToInt/1[defaults=-]#1",
+        "test": "com.noop.analytics.HrvAnalyzerSampleOrdTest.msRoundsHalfUpWithoutStdlibRounding; upstream #1331/#1008 / 6ed51633",
+        "issue": 17
+    },
+    {
+        "key": "android/app/src/main/java/com/noop/analytics/HrvAnalyzer.kt::pct/2[defaults=-]#1",
+        "test": "com.noop.analytics.HrvAnalyzerSampleOrdTest.percentIsIntegerHalfUp; upstream #1331/#1008 / 6ed51633",
+        "issue": 17
+    },
+    {
         "key": "android/app/src/main/java/com/noop/analytics/StepsEstimateEngine.kt::isUsableCalibrationPoint/1[defaults=-]#1",
         "test": "com.noop.analytics.StepsEstimateEngineTest.manualOverrideCountsOnlyUsableCalibrationDays; upstream #1469 / 3e3bff81",
         "issue": 17

@@ -661,6 +661,21 @@
       "evidence": "declared twin reference; upstream #1417 / 5749d285"
     },
     {
+      "swift": "Packages/StrandAnalytics/Sources/StrandAnalytics/HRVAnalyzer.swift::deliveryHistogram/3#1",
+      "kotlin": "android/app/src/main/java/com/noop/analytics/HrvAnalyzer.kt::deliveryHistogram/3#1",
+      "evidence": "audited byte-parity diagnostic twins; upstream #1331/#1008 / 6ed51633"
+    },
+    {
+      "swift": "Packages/StrandAnalytics/Sources/StrandAnalytics/HRVAnalyzer.swift::msToInt/1#1",
+      "kotlin": "android/app/src/main/java/com/noop/analytics/HrvAnalyzer.kt::msToInt/1#1",
+      "evidence": "audited half-up helper twins; upstream #1331/#1008 / 6ed51633"
+    },
+    {
+      "swift": "Packages/StrandAnalytics/Sources/StrandAnalytics/HRVAnalyzer.swift::pct/2#1",
+      "kotlin": "android/app/src/main/java/com/noop/analytics/HrvAnalyzer.kt::pct/2#1",
+      "evidence": "audited integer-percent helper twins; upstream #1331/#1008 / 6ed51633"
+    },
+    {
       "swift": "Packages/WhoopStore/Sources/WhoopStore/BackupProvenance.swift::json/5#1",
       "kotlin": "android/app/src/main/java/com/noop/data/BackupProvenance.kt::json/5#1",
       "evidence": "declared twin reference; upstream f40897ac71a0..140c8b3c44bf"

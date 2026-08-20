@@ -148,9 +148,52 @@ class UpstreamSyncGovernanceTests(unittest.TestCase):
         }
         identities = {item["identity"] for item in self.baseline["findings"]}
         self.assertEqual(13, len(removed))
-        self.assertEqual(272, len(self.baseline["findings"]),
-                         "only the thirteen reviewed #1468 improvements may be removed")
+        self.assertEqual(275, len(self.baseline["findings"]),
+                         "#1468 removes only thirteen identities; #1331/#1008 adds exactly three audited entries")
         self.assertTrue(identities.isdisjoint(removed))
+
+    def test_6ed51633_delivery_histogram_inventory_pins_twins_tests_and_provenance(self) -> None:
+        swift_file = "Packages/StrandAnalytics/Sources/StrandAnalytics/HRVAnalyzer.swift"
+        kotlin_file = "android/app/src/main/java/com/noop/analytics/HrvAnalyzer.kt"
+        pairs = {(item["swift"], item["kotlin"]): item for item in self.twin_map["function_pairs"]}
+        for name, arity in (("deliveryHistogram", 3), ("msToInt", 1), ("pct", 2)):
+            pair = (f"{swift_file}::{name}/{arity}#1", f"{kotlin_file}::{name}/{arity}#1")
+            self.assertIn(pair, pairs)
+            self.assertIn("6ed51633", pairs[pair]["evidence"])
+
+        expected = {
+            "swift": {
+                f"{swift_file}::knownRows@property-initializer#1",
+                f"{swift_file}::ms@property-initializer#1",
+                f"{swift_file}::deliveries@property-initializer#1",
+                f"{swift_file}::deliveryHistogram/3[defaults=-]#1",
+                f"{swift_file}::msToInt/1[defaults=-]#1",
+                f"{swift_file}::pct/2[defaults=-]#1",
+            },
+            "kotlin": {
+                f"{kotlin_file}::knownRows@property-initializer#1",
+                f"{kotlin_file}::ms@property-initializer#1",
+                f"{kotlin_file}::deliveries@property-initializer#1",
+                f"{kotlin_file}::deliveryHistogram/3[defaults=-]#1",
+                f"{kotlin_file}::msToInt/1[defaults=-]#1",
+                f"{kotlin_file}::pct/2[defaults=-]#1",
+            },
+        }
+        for platform, shard in (("swift", self.swift_shard), ("kotlin", self.kotlin_shard)):
+            actual = {item["key"]: item for item in shard["platform-test"]}
+            for key in expected[platform]:
+                self.assertEqual(17, actual[key]["issue"])
+                self.assertIn("6ed51633", actual[key]["test"])
+
+        baseline = {item["identity"]: item for item in self.baseline["findings"]}
+        test_only = {
+            f"test-only-callsite|{swift_file}::msToInt/1#1",
+            f"test-only-callsite|{kotlin_file}::msToInt/1#1",
+            f"test-only-callsite|{kotlin_file}::pct/2#1",
+        }
+        for identity in test_only:
+            self.assertEqual(17, baseline[identity]["issue"])
+            self.assertIn("6ed51633", baseline[identity]["provenance"])
 
     def test_1466_kotlin_test_comment_resolves_the_exact_swift_test_spelling(self) -> None:
         source = (ROOT / "android/app/src/test/java/com/noop/ble/TimeoutSyncErrorTest.kt").read_text()

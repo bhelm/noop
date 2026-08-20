@@ -6215,6 +6215,36 @@
   ],
   "platform-test": [
     {
+        "key": "Packages/StrandAnalytics/Sources/StrandAnalytics/HRVAnalyzer.swift::knownRows@property-initializer#1",
+        "test": "StrandAnalyticsTests.HRVAnalyzerSampleOrdTests delivery histogram matrix; upstream #1331/#1008 / 6ed51633",
+        "issue": 17
+    },
+    {
+        "key": "Packages/StrandAnalytics/Sources/StrandAnalytics/HRVAnalyzer.swift::ms@property-initializer#1",
+        "test": "StrandAnalyticsTests.HRVAnalyzerSampleOrdTests delivery histogram matrix; upstream #1331/#1008 / 6ed51633",
+        "issue": 17
+    },
+    {
+        "key": "Packages/StrandAnalytics/Sources/StrandAnalytics/HRVAnalyzer.swift::deliveries@property-initializer#1",
+        "test": "StrandAnalyticsTests.HRVAnalyzerSampleOrdTests delivery histogram matrix; upstream #1331/#1008 / 6ed51633",
+        "issue": 17
+    },
+    {
+        "key": "Packages/StrandAnalytics/Sources/StrandAnalytics/HRVAnalyzer.swift::deliveryHistogram/3[defaults=-]#1",
+        "test": "StrandAnalyticsTests.HRVAnalyzerSampleOrdTests delivery histogram matrix; upstream #1331/#1008 / 6ed51633",
+        "issue": 17
+    },
+    {
+        "key": "Packages/StrandAnalytics/Sources/StrandAnalytics/HRVAnalyzer.swift::msToInt/1[defaults=-]#1",
+        "test": "StrandAnalyticsTests.HRVAnalyzerSampleOrdTests.testMsRoundsHalfUpWithoutStdlibRounding; upstream #1331/#1008 / 6ed51633",
+        "issue": 17
+    },
+    {
+        "key": "Packages/StrandAnalytics/Sources/StrandAnalytics/HRVAnalyzer.swift::pct/2[defaults=-]#1",
+        "test": "StrandAnalyticsTests.HRVAnalyzerSampleOrdTests.testPercentIsIntegerHalfUp; upstream #1331/#1008 / 6ed51633",
+        "issue": 17
+    },
+    {
         "key": "Packages/StrandAnalytics/Sources/StrandAnalytics/StepsEstimateEngine.swift::isUsableCalibrationPoint/1[defaults=-]#1",
         "test": "StrandAnalyticsTests.StepsEstimateEngineTests.testManualOverrideCountsOnlyUsableCalibrationDays; upstream #1469 / 3e3bff81",
         "issue": 17
