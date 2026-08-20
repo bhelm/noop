@@ -95,7 +95,9 @@ Pre-built apps you can run right now:
 
 Prefer to build it yourself? See [`docs/BUILD.md`](docs/BUILD.md).
 
-Everything runs **offline**. The only feature that ever uses the network is the optional **AI Coach**, and only with your own API key.
+Everything is **offline by default**. Network access is limited to features you explicitly enable:
+the **AI Coach**, the compile-time-optional Oura history import, and Android's Experimental one-way
+push to an endpoint you own. NOOP operates no server, account, or telemetry service.
 
 ---
 
@@ -187,7 +189,7 @@ shared cross-platform code.
 | **Data Sources** | One-tap import of a WHOOP CSV export, an Apple Health export, or a **nutrition CSV** (Cronometer / MacroFactor), plus live-strap status. "Bring your history in once, then it's yours." |
 | **Notifications** | Configure local notifications and thresholds (`Strand/Data/NotificationSettingsStore.swift`). |
 | **Automations** | Turn the strap's physical inputs and live biometrics into Mac actions — all on-device (see below). |
-| **Coach** | An optional **AI Coach** you can ask about your data in plain language. It's the one feature that can ever use the network: off until you add your own key — Anthropic, OpenAI, or any OpenAI-compatible endpoint including a local/self-hosted model (Ollama, LM Studio) — and it sends only a short text summary of recent metrics plus your question, never raw streams or identifiers. With a local model the conversation never leaves your machine. Available on macOS, Android, and iOS. See [`docs/PRIVACY_SECURITY.md`](docs/PRIVACY_SECURITY.md). |
+| **Coach** | An optional **AI Coach** you can ask about your data in plain language. It is off until you add your own key — Anthropic, OpenAI, or any OpenAI-compatible endpoint including a local/self-hosted model (Ollama, LM Studio) — and it sends only a short text summary of recent metrics plus your question, never raw streams or identifiers. With a local model the conversation never leaves your machine. Available on macOS, Android, and iOS. See [`docs/PRIVACY_SECURITY.md`](docs/PRIVACY_SECURITY.md). |
 | **Settings** | Profile, preferences, **step calibration** (tune the stride/step estimate to your own walking), unit choices, the in-app **What's new** changelog, and an opt-in **Experimental** section (WHOOP 5/MG protocol probes). On **iOS**, also **Export for Shortcuts** — a HealthKit-free path that hands your metrics to Apple Health via the Shortcuts app. |
 
 There is also a **menu-bar extra** (`Strand/MenuBar/MenuBarContent.swift`) with a
@@ -521,9 +523,11 @@ Every arrow stays on your machine.
 
 ## Privacy
 
-**Offline by design.** NOOP has no server, no telemetry, and no account. Your
-strap data, imports, and computed metrics live in a local SQLite database on your
-device and never leave it.
+**Offline by default.** NOOP has no server, no telemetry, and no account. Your strap data, imports,
+and computed metrics live in a local SQLite database on your device. They leave only through an
+export or optional network feature you deliberately configure, including Android's default-off
+Experimental one-way push to your own endpoint; see
+[`docs/PRIVACY_SECURITY.md`](docs/PRIVACY_SECURITY.md).
 
 ---
 

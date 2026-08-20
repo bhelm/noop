@@ -429,10 +429,13 @@ class WhoopBleClient(
      * call site unchanged.
      */
     private val gattOpsFactory: (BluetoothGatt) -> GattOps = ::RealGattOps,
+    /** Fire-and-forget notification after a true HISTORY_COMPLETE only. The sink must only enqueue. */
+    private val successfulOffloadSink: () -> Unit = {},
 ) {
 
     companion object {
         private const val TAG = "WhoopBleClient"
+        internal fun shouldNotifySuccessfulOffload(reason: String): Boolean = reason == "HISTORY_COMPLETE"
         /**
          * Cap on the in-app strap-log ring buffer (for the "Share strap log" diagnostics export).
          * Raised from the old ~1h (2,000 lines) to retain a rolling ~24h of activity (#510 —
@@ -7530,7 +7533,10 @@ class WhoopBleClient(
         log("Backfill: session ended — reason=$reason")
         // Inactivity reminder (#419): read-only hook on the natural offload completion (no cadence
         // change). Only on a true HISTORY_COMPLETE — a timeout/disconnect didn't bring a fresh window.
-        if (reason == "HISTORY_COMPLETE") {
+        if (shouldNotifySuccessfulOffload(reason)) {
+            // Self-hosted push is downstream of a successful offload. Queueing is deliberately
+            // isolated: a WorkManager failure can neither fail nor delay the BLE completion path.
+            runCatching { successfulOffloadSink() }
             maybeBuzzInactivity()
             // L3 stress check-in (v5): same read-only hook — fire the StressOnsetDetector over the live
             // R-R buffer. Self-gates on the BiofeedbackPrefs master/auto toggles (inert when off).
