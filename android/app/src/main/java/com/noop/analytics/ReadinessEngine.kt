@@ -1,7 +1,8 @@
 package com.noop.analytics
 
+import androidx.annotation.StringRes
+import com.noop.R
 import com.noop.data.DailyMetric
-import java.util.Locale
 import kotlin.math.exp
 import kotlin.math.ln
 import kotlin.math.sqrt
@@ -45,20 +46,33 @@ object ReadinessEngine {
 
     enum class Flag { GOOD, NEUTRAL, WATCH, BAD }
 
+    enum class MetricUnit { MS, BPM, RPM }
+
+    sealed interface Evidence {
+        data class MetricVsBaseline(
+            val value: Double,
+            val baseline: Double,
+            val decimals: Int,
+            val unit: MetricUnit,
+        ) : Evidence
+        data class Monotony(val value: Double) : Evidence
+        data class TrainingLoad(val acute: Double, val chronic: Double) : Evidence
+    }
+
     data class Signal(
         val key: String,            // "hrv" | "rhr" | "respRate" | "acwr" | "monotony"
-        val label: String,          // short human label
-        val detail: String,         // one-line plain-English read
+        @StringRes val labelRes: Int,
+        @StringRes val detailRes: Int,
         val flag: Flag,
         // The numbers behind the signal, e.g. "48 vs 55 ms" or "7d 12.1 / 28d 9.4". Optional and
         // backward-compatible (defaults null); rendered as a small caption under the signal in the UI.
-        val evidence: String? = null,
+        val evidence: Evidence? = null,
     )
 
     data class Readiness(
         val level: Level,
-        val headline: String,
-        val summary: String,
+        @StringRes val headlineRes: Int,
+        @StringRes val summaryRes: Int,
         val signals: List<Signal>,
         /** Acute:chronic workload ratio (null if not enough strain history). */
         val acwr: Double?,
@@ -160,8 +174,8 @@ object ReadinessEngine {
         if (latest == null) {
             return Readiness(
                 level = Level.INSUFFICIENT,
-                headline = "Readiness",
-                summary = "Wear the strap for a few nights and your readiness read will appear here.",
+                headlineRes = R.string.today_readiness_title,
+                summaryRes = R.string.today_readiness_wear_for_nights,
                 signals = emptyList(), acwr = null, monotony = null,
             )
         }
@@ -173,15 +187,15 @@ object ReadinessEngine {
         val hrvSignal = zSignal(
             value = latest.avgHrv,
             baseline = history.takeLast(baselineWindow).mapNotNull { it.avgHrv },
-            key = "hrv", label = "HRV",
-            unit = "ms", decimals = 0,
+            key = "hrv", labelRes = R.string.today_readiness_signal_hrv,
+            unit = MetricUnit.MS, decimals = 0,
             higherIsBetter = true,
             cfg = Baselines.readinessHRVLnCfg,   // RD2: ln-space spine, reject off
             logDomain = true,   // RD1: lnRMSSD — HRV is right-skewed
-            goodText = "above your baseline - well recovered",
-            neutralText = "in your normal range",
-            watchText = "a touch below baseline",
-            badText = "suppressed - a sign of autonomic fatigue",
+            goodTextRes = R.string.today_readiness_hrv_good,
+            neutralTextRes = R.string.today_readiness_normal_range,
+            watchTextRes = R.string.today_readiness_hrv_watch,
+            badTextRes = R.string.today_readiness_hrv_bad,
         )
         if (hrvSignal != null) signals.add(hrvSignal)
 
@@ -189,14 +203,14 @@ object ReadinessEngine {
         val rhrSignal = zSignal(
             value = latest.restingHr?.toDouble(),
             baseline = history.takeLast(baselineWindow).mapNotNull { it.restingHr?.toDouble() },
-            key = "rhr", label = "Resting HR",
-            unit = "bpm", decimals = 0,
+            key = "rhr", labelRes = R.string.today_readiness_signal_resting_hr,
+            unit = MetricUnit.BPM, decimals = 0,
             higherIsBetter = false,
             cfg = Baselines.restingHRCfg,   // RD2: raw-bpm spine, reject off
-            goodText = "at or below baseline",
-            neutralText = "in your normal range",
-            watchText = "running a little high",
-            badText = "elevated - overtraining or illness can do this",
+            goodTextRes = R.string.today_readiness_rhr_good,
+            neutralTextRes = R.string.today_readiness_normal_range,
+            watchTextRes = R.string.today_readiness_rhr_watch,
+            badTextRes = R.string.today_readiness_rhr_bad,
         )
         if (rhrSignal != null) signals.add(rhrSignal)
 
@@ -213,20 +227,20 @@ object ReadinessEngine {
             val sd = sampleSD(base)
             if (base.size >= minBaseline && m != null && m in respPlausibleRange && sd != null && sd > 0) {
                 val z = (rr - m) / sd
-                val respEvidence = "${fmt(rr, 1)} vs ${fmt(m, 1)} rpm"
+                val respEvidence = Evidence.MetricVsBaseline(rr, m, 1, MetricUnit.RPM)
                 if (z >= respZBad) {
                     signals.add(
                         Signal(
-                            key = "respRate", label = "Respiratory rate",
-                            detail = "up vs baseline - sometimes an early sign of getting sick", flag = Flag.BAD,
+                            key = "respRate", labelRes = R.string.today_readiness_signal_respiratory,
+                            detailRes = R.string.today_readiness_resp_bad, flag = Flag.BAD,
                             evidence = respEvidence,
                         )
                     )
                 } else if (z >= respZWatch) {
                     signals.add(
                         Signal(
-                            key = "respRate", label = "Respiratory rate",
-                            detail = "slightly raised vs baseline", flag = Flag.WATCH,
+                            key = "respRate", labelRes = R.string.today_readiness_signal_respiratory,
+                            detailRes = R.string.today_readiness_resp_watch, flag = Flag.WATCH,
                             evidence = respEvidence,
                         )
                     )
@@ -256,16 +270,16 @@ object ReadinessEngine {
                 if (mono >= 2.0) {
                     signals.add(
                         Signal(
-                            key = "monotony", label = "Training variety",
-                            detail = "low - similar strain every day raises strain/illness risk", flag = Flag.WATCH,
-                            evidence = "monotony ${fmt(mono, 1)}",
+                            key = "monotony", labelRes = R.string.today_readiness_signal_training_variety,
+                            detailRes = R.string.today_readiness_monotony_watch, flag = Flag.WATCH,
+                            evidence = Evidence.Monotony(mono),
                         )
                     )
                 }
             }
         }
 
-        val (level, headline, summary) = synthesize(
+        val (level, headlineRes, summaryRes) = synthesize(
             signals = signals,
             hasHistory = history.isNotEmpty() || acwr != null,
         )
@@ -279,7 +293,7 @@ object ReadinessEngine {
             fullWindow = baselineWindow,
         )
         return Readiness(
-            level = level, headline = headline, summary = summary,
+            level = level, headlineRes = headlineRes, summaryRes = summaryRes,
             signals = signals, acwr = acwr, monotony = monotony,
             confidence = confidence,
         )
@@ -290,11 +304,11 @@ object ReadinessEngine {
     /** Build a z-score signal for a metric where the baseline is the trailing window. */
     private fun zSignal(
         value: Double?, baseline: List<Double>,
-        key: String, label: String, unit: String, decimals: Int, higherIsBetter: Boolean,
+        key: String, @StringRes labelRes: Int, unit: MetricUnit, decimals: Int, higherIsBetter: Boolean,
         cfg: MetricCfg,
         logDomain: Boolean = false,
-        goodText: String, neutralText: String,
-        watchText: String, badText: String,
+        @StringRes goodTextRes: Int, @StringRes neutralTextRes: Int,
+        @StringRes watchTextRes: Int, @StringRes badTextRes: Int,
     ): Signal? {
         if (value == null || baseline.size < minBaseline) return null
         // RD1: right-skewed metrics (HRV/RMSSD) are z-scored in the LOG domain — lnRMSSD is closer to
@@ -321,18 +335,18 @@ object ReadinessEngine {
         // Orient z so positive always means "better".
         val z = (if (higherIsBetter) (tv - m) else (m - tv)) / sigma
         val flag: Flag
-        val text: String
+        val detailRes: Int
         when {
-            z >= 0.5 -> { flag = Flag.GOOD; text = goodText }
-            z >= -0.5 -> { flag = Flag.NEUTRAL; text = neutralText }
-            z >= -1.0 -> { flag = Flag.WATCH; text = watchText }
-            else -> { flag = Flag.BAD; text = badText }
+            z >= 0.5 -> { flag = Flag.GOOD; detailRes = goodTextRes }
+            z >= -0.5 -> { flag = Flag.NEUTRAL; detailRes = neutralTextRes }
+            z >= -1.0 -> { flag = Flag.WATCH; detailRes = watchTextRes }
+            else -> { flag = Flag.BAD; detailRes = badTextRes }
         }
         // The numbers behind the read: today's value vs the baseline mean, in the metric's units. In the
         // log domain the baseline shown is the geometric mean (exp of the log-mean), not arithmetic.
         val baselineShown = if (logDomain) exp(m) else m
-        val evidence = "${fmt(value, decimals)} vs ${fmt(baselineShown, decimals)} $unit"
-        return Signal(key = key, label = label, detail = text, flag = flag, evidence = evidence)
+        val evidence = Evidence.MetricVsBaseline(value, baselineShown, decimals, unit)
+        return Signal(key = key, labelRes = labelRes, detailRes = detailRes, flag = flag, evidence = evidence)
     }
 
     /**
@@ -342,36 +356,30 @@ object ReadinessEngine {
      * uses "%.Nf" (round-half-to-even) to match Swift's `String(format:)`. Locale.US so the separator
      * is always ".".
      */
-    private fun fmt(x: Double, decimals: Int): String =
-        if (decimals == 0) Math.round(x).toString()
-        else String.format(Locale.US, "%.${decimals}f", x)
-
     private fun acwrSignal(ratio: Double, acute: Double, chronic: Double): Signal {
         // #1033 (ryanbr): route the acute:chronic ratio through the Locale.US-pinned [fmt] helper (matching
         // the evidence line below) so a comma-decimal device locale can't render "1,15" — iOS's
         // String(format:) is already locale-independent. Pure separator fix, no behavior change.
-        val pct = fmt(ratio, 2)
-        // Evidence: the two strain loads the ratio is built from, 1 dp each.
-        val evidence = "7d ${fmt(acute, 1)} / 28d ${fmt(chronic, 1)}"
+        val evidence = Evidence.TrainingLoad(acute, chronic)
         return when {
             ratio < 0.8 -> Signal(
-                key = "acwr", label = "Training load",
-                detail = "ramping down (acute:chronic $pct) - room to build", flag = Flag.WATCH,
+                key = "acwr", labelRes = R.string.today_readiness_signal_training_load,
+                detailRes = R.string.today_readiness_load_ramping_down, flag = Flag.WATCH,
                 evidence = evidence,
             )
             ratio < 1.3 -> Signal(
-                key = "acwr", label = "Training load",
-                detail = "in the sweet spot (acute:chronic $pct)", flag = Flag.GOOD,
+                key = "acwr", labelRes = R.string.today_readiness_signal_training_load,
+                detailRes = R.string.today_readiness_load_sweet_spot, flag = Flag.GOOD,
                 evidence = evidence,
             )
             ratio < 1.5 -> Signal(
-                key = "acwr", label = "Training load",
-                detail = "building fast (acute:chronic $pct) - watch fatigue", flag = Flag.WATCH,
+                key = "acwr", labelRes = R.string.today_readiness_signal_training_load,
+                detailRes = R.string.today_readiness_load_building_fast, flag = Flag.WATCH,
                 evidence = evidence,
             )
             else -> Signal(
-                key = "acwr", label = "Training load",
-                detail = "spiking (acute:chronic $pct) - higher injury risk", flag = Flag.BAD,
+                key = "acwr", labelRes = R.string.today_readiness_signal_training_load,
+                detailRes = R.string.today_readiness_load_spiking, flag = Flag.BAD,
                 evidence = evidence,
             )
         }
@@ -379,11 +387,11 @@ object ReadinessEngine {
 
     // MARK: Synthesis
 
-    private fun synthesize(signals: List<Signal>, hasHistory: Boolean): Triple<Level, String, String> {
+    private fun synthesize(signals: List<Signal>, hasHistory: Boolean): Triple<Level, Int, Int> {
         if (!hasHistory || signals.isEmpty()) {
             return Triple(
-                Level.INSUFFICIENT, "Readiness",
-                "A few more nights of data and your readiness read will sharpen.",
+                Level.INSUFFICIENT, R.string.today_readiness_title,
+                R.string.today_readiness_more_nights,
             )
         }
         val bad = signals.filter { it.flag == Flag.BAD }
@@ -394,25 +402,25 @@ object ReadinessEngine {
 
         if (bad.size >= 2 || (recoveryDown && loadHigh)) {
             return Triple(
-                Level.RUNDOWN, "Run down",
-                "Several signals are down at once. Treat today as recovery - easy movement, real sleep tonight.",
+                Level.RUNDOWN, R.string.today_readiness_run_down,
+                R.string.today_readiness_run_down_summary,
             )
         }
         if (recoveryDown || loadHigh || bad.size >= 1) {
             return Triple(
-                Level.STRAINED, "Strained",
-                "One of your signals is flagging. You can train, but keep it controlled and bank the recovery.",
+                Level.STRAINED, R.string.today_readiness_strained,
+                R.string.today_readiness_strained_summary,
             )
         }
         if (good.size >= 2 && watch.isEmpty()) {
             return Triple(
-                Level.PRIMED, "Primed",
-                "Your signals are aligned and your load is supported. A harder session is well backed today.",
+                Level.PRIMED, R.string.today_readiness_primed,
+                R.string.today_readiness_primed_summary,
             )
         }
         return Triple(
-            Level.BALANCED, "Balanced",
-            "Nothing's flagging. Train to feel - your body's holding steady.",
+            Level.BALANCED, R.string.today_readiness_balanced,
+            R.string.today_readiness_balanced_summary,
         )
     }
 

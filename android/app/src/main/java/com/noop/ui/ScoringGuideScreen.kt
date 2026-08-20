@@ -1,6 +1,7 @@
 package com.noop.ui
 
 import com.noop.R
+import androidx.annotation.StringRes
 import androidx.compose.ui.res.stringResource
 import android.content.Context
 import androidx.compose.animation.animateColorAsState
@@ -91,11 +92,12 @@ enum class ScoreSection {
             REST -> Icons.Filled.Bedtime
         }
 
-    val label: String
+    @get:StringRes
+    val labelRes: Int
         get() = when (this) {
-            CHARGE -> "Charge"
-            EFFORT -> "Effort"
-            REST -> "Rest"
+            CHARGE -> R.string.today_metric_charge
+            EFFORT -> R.string.today_metric_effort
+            REST -> R.string.today_metric_rest
         }
 
     /** A representative sample fraction (0–1) for the section's illustrative gauge — a
@@ -307,7 +309,7 @@ private fun LegendDot(section: ScoreSection) {
                 .clip(CircleShape)
                 .background(section.accent),
         )
-        Text(section.label, style = NoopType.caption, color = Palette.textSecondary)
+        Text(stringResource(section.labelRes), style = NoopType.caption, color = Palette.textSecondary)
     }
 }
 
@@ -361,7 +363,7 @@ private fun ScoreCard(
                             modifier = Modifier.size(16.dp),
                         )
                         Text(
-                            section.label.uppercase(),
+                            stringResource(section.labelRes).uppercase(),
                             style = NoopType.overline,
                             color = section.accent,
                         )
@@ -411,7 +413,7 @@ private fun SampleRing(section: ScoreSection) {
             lineWidth = 8.dp,
         )
         Text(
-            section.label.uppercase(),
+            stringResource(section.labelRes).uppercase(),
             style = NoopType.overline,
             color = Palette.textTertiary,
         )
