@@ -24,13 +24,25 @@ object StepsCounter {
     internal fun shouldCountDelta(activityClass: Int?, hasActivityClasses: Boolean): Boolean =
         !hasActivityClasses || activityClass in LOCOMOTION_ACTIVITY_CLASSES
 
-    /**
-     * The largest wrap-aware increment treated as real motion between two adjacent 1 Hz records. A delta
-     * at/above this is a big time-gap / disconnect boundary between sync sessions (or a firmware reboot,
-     * byte-indistinguishable from a u16 wrap), NOT real steps — dropped so gaps don't inflate the total.
-     * Real 1 Hz motion never ticks this fast between adjacent records. (#132/#276/#316)
-     */
+    /** Absolute reboot/wrap guard retained independently from the rate plausibility gate below. */
     const val MAX_STEP_DELTA = 512
+
+    /** Four ticks/second is already 240 steps/minute. A larger one-second increment is wrist motion,
+     * corruption or delayed counter publication, not plausible gait. The allowance scales with the real
+     * timestamp gap so seven ticks across two seconds survive a missing 1 Hz record. */
+    const val MAX_TICKS_PER_SECOND = 4
+
+    internal fun isPlausibleDelta(previousTs: Long, currentTs: Long, delta: Int): Boolean {
+        if (delta !in 1 until MAX_STEP_DELTA) return false
+        val elapsed = currentTs - previousTs
+        if (elapsed <= 0L) return false
+        val rateAllowance = if (elapsed >= MAX_STEP_DELTA / MAX_TICKS_PER_SECOND) {
+            MAX_STEP_DELTA - 1L
+        } else {
+            elapsed * MAX_TICKS_PER_SECOND
+        }
+        return delta.toLong() <= rateAllowance
+    }
 
     /**
      * Raw wrap-aware locomotion-tick total across [samples]. When any sample carries [StepSample.activityClass],
@@ -46,7 +58,7 @@ object StepsCounter {
         for (i in 1 until sorted.size) {
             val delta = (sorted[i].counter - sorted[i - 1].counter) and 0xFFFF // wrap-aware u16 increment
             val isLocomotion = shouldCountDelta(sorted[i].activityClass, hasActivityClasses)
-            if (isLocomotion && delta in 1 until MAX_STEP_DELTA) total += delta // >=512 is a gap/reset
+            if (isLocomotion && isPlausibleDelta(sorted[i - 1].ts, sorted[i].ts, delta)) total += delta
         }
         return if (total > 0) total else null
     }

@@ -279,13 +279,67 @@ object LogExport {
         }
         val dir = File(context.cacheDir, "logs").apply { mkdirs() }
         val out = File(dir, "noop-raw-capture-${timestamp()}.jsonl")
-        out.outputStream().bufferedWriter().use { w ->
-            w.write(header)
-            // Oldest first: previous generation (if rotated), then the live file.
-            for (f in listOf(prev, main)) if (f.exists()) f.bufferedReader().use { r -> r.copyTo(w) }
-        }
+        combineRotatedJsonl(main, out, header)
         return out
     }
+
+    /** Stream a rolling JSONL generation into one shareable file, oldest first. Deep IMU captures can
+     * be tens of MB, so diagnostics must not materialize them as ByteArrays on the app heap. */
+    internal fun combineRotatedJsonl(main: File, out: File, header: String = "") {
+        val prev = File(main.parentFile, "${main.name}.1")
+        out.outputStream().bufferedWriter().use { w ->
+            w.write(header)
+            for (f in listOf(prev, main)) if (f.exists()) {
+                f.bufferedReader().use { r -> r.copyTo(w) }
+            }
+        }
+    }
+
+    /** High-rate 5/MG buffers were stored separately but omitted from the UI's matched-pair export. */
+    private fun writeDeepBufferFile(context: Context): File? {
+        val main = File(context.filesDir, com.noop.ble.WhoopBleClient.WHOOP5_DEEPBUFFER_FILE)
+        val prev = File(context.filesDir, "${com.noop.ble.WhoopBleClient.WHOOP5_DEEPBUFFER_FILE}.1")
+        if (!main.exists() && !prev.exists()) return null
+        val out = File(File(context.cacheDir, "logs").apply { mkdirs() }, "noop-deep-buffers-${timestamp()}.jsonl")
+        val header = buildString {
+            appendLine("# NOOP 5/MG high-rate deep buffers (raw optical/100 Hz IMU when supplied by firmware)")
+            appendLine("# App: ${BuildConfig.VERSION_NAME} (${BuildConfig.TIER})")
+            appendLine("# NOTE: contains raw biometric and motion data. Share only with informed consent.")
+        }
+        combineRotatedJsonl(main, out, header)
+        return out
+    }
+
+    /** File-backed ZIP export with bounded heap use. */
+    private suspend fun exportFileBundle(
+        context: Context,
+        entries: List<Pair<String, File>>,
+        suggestedName: String,
+    ): File? = runCatching {
+        val file = withContext(Dispatchers.IO) {
+            if (entries.isEmpty()) return@withContext null
+            val dir = File(context.cacheDir, "logs").apply { mkdirs() }
+            File(dir, suggestedName).also { target ->
+                java.util.zip.ZipOutputStream(target.outputStream().buffered()).use { zip ->
+                    for ((name, source) in entries) {
+                        zip.putNextEntry(java.util.zip.ZipEntry(name))
+                        source.inputStream().buffered().use { it.copyTo(zip) }
+                        zip.closeEntry()
+                    }
+                }
+            }
+        } ?: return null
+        val send = Intent(Intent.ACTION_SEND).apply {
+            type = "application/zip"
+            putExtra(Intent.EXTRA_STREAM, fileUri(context, file))
+            putExtra(Intent.EXTRA_SUBJECT, suggestedName)
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        }
+        context.startActivity(Intent.createChooser(send, "Share report bundle"))
+        file
+    }.onFailure {
+        Toast.makeText(context, "Couldn't export the bundle: ${it.message}", Toast.LENGTH_LONG).show()
+    }.getOrNull()
 
     /**
      * Share the opt-in "detailed capture" rolling strap-log file (#1121) — the adb-like long-run log the
@@ -399,31 +453,31 @@ object LogExport {
     }
 
     /**
-     * One-tap matched-pair export (#510): share BOTH the raw 5/MG capture AND the strap log together. Now
-     * a 2-entry case of [exportBundle] so the pair rides in one `.zip` (mobile GitHub can attach a zip,
+     * One-tap matched-pair export (#510): share raw history, high-rate deep buffers (when present), and
+     * the strap log together in one `.zip` (mobile GitHub can attach a zip,
      * not loose .txt files). If there's no capture yet, falls back to just the log so the tap isn't a dead
      * end. Reuses the same file-builders the single-share paths use; both entries are already redacted by
      * their writers.
      *
-     * Building the files AND reading them back into memory (`readBytes`) is blocking file IO (#646/#651):
-     * it runs on [Dispatchers.IO], off the caller's dispatcher (Main, from the Settings/Test Centre share
-     * buttons), so a large raw capture doesn't stall the UI. Only the "no capture" toast and the
-     * [exportBundle] call (which does its own IO hop for the zip) run back on the caller's dispatcher.
+     * All large inputs are streamed from files into the ZIP on [Dispatchers.IO]; they are never duplicated
+     * into raw and compressed in-memory byte arrays.
      */
     suspend fun shareRawAndLog(context: Context, logText: String, whoop5Connected: Boolean) {
         runCatching {
             val (entries, hasCapture) = withContext(Dispatchers.IO) {
                 val logFile = writeStrapLogFile(context, logText)
                 val capture = writeCaptureFile(context)
-                val entries = arrayListOf("report.txt" to logFile.readBytes())
-                if (capture != null) entries.add(0, "raw-capture.jsonl" to capture.readBytes())
-                entries to (capture != null)
+                val deep = writeDeepBufferFile(context)
+                val entries = arrayListOf("report.txt" to logFile)
+                if (deep != null) entries.add(0, "deep-buffers.jsonl" to deep)
+                if (capture != null) entries.add(0, "raw-capture.jsonl" to capture)
+                entries to (capture != null || deep != null)
             }
             if (!hasCapture) {
                 Toast.makeText(context, noCaptureMsg(context, whoop5Connected, sharingLog = true), Toast.LENGTH_LONG).show()
             }
             val name = "noop-export-${timestamp()}.zip"
-            exportBundle(context, entries, name)
+            exportFileBundle(context, entries, name)
         }.onFailure {
             Toast.makeText(context, "Couldn't export the pair: ${it.message}", Toast.LENGTH_LONG).show()
         }

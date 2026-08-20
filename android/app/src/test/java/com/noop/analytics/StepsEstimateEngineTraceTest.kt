@@ -1,6 +1,8 @@
 package com.noop.analytics
 
 import com.noop.data.StepSample
+import com.noop.data.GravitySample
+import com.noop.data.V18AuxRow
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
@@ -68,9 +70,46 @@ class StepsEstimateEngineTraceTest {
         assertTrue(lines.first { it.startsWith("stepsRaw total ") }.contains("scaledSteps=$production"))
     }
 
+    @Test fun oneSecondTickSpikeIsReportedAndExcludedFromProduction() {
+        val samples = listOf(step(0, 100, 1), step(1, 107, 1), step(2, 109, 1))
+        val production = AnalyticsEngine.analyzeDay(day = dayUtc, steps = samples, profile = profile).daily.steps
+        assertEquals(2, production)
+        val lines = StepsEstimateEngineTrace.rawCounterTrace(
+            daySteps = samples, dayKey = dayUtc, tzOffsetSeconds = 0L, ticksPerStep = 1.0,
+        )
+        assertTrue(lines.any { it.contains("rateOutliers=1") })
+        assertTrue(lines.first { it.startsWith("stepsRaw total ") }.contains("rawTicks=2"))
+    }
+
+    @Test fun shadowCandidateUsesCadenceAndDynAccelWithoutChangingProduction() {
+        val samples = listOf(
+            step(0, 100, 1), step(1, 102, 1), step(2, 104, 1), step(3, 106, 1), step(4, 108, 2),
+        )
+        val gravity = listOf(
+            GravitySample("my-whoop", noonUtc + 1, 0.0, 0.0, 1.0, dynAccel = 0.10),
+            GravitySample("my-whoop", noonUtc + 2, 0.0, 0.0, 1.0, dynAccel = 0.30),
+            GravitySample("my-whoop", noonUtc + 3, 0.0, 0.0, 1.0, dynAccel = 0.10),
+            GravitySample("my-whoop", noonUtc + 4, 0.0, 0.0, 1.0, dynAccel = 0.80),
+        )
+        val aux = listOf(
+            V18AuxRow(noonUtc + 1, stepCadence = 120),
+            V18AuxRow(noonUtc + 2, stepCadence = 120),
+            V18AuxRow(noonUtc + 3, stepCadence = 200),
+            V18AuxRow(noonUtc + 4, stepCadence = 250),
+        )
+        val lines = StepsEstimateEngineTrace.shadowCandidateTrace(
+            daySteps = samples, gravity = gravity, aux = aux,
+            dayKey = dayUtc, tzOffsetSeconds = 0L,
+        )
+        assertTrue(lines.any { it.contains("productionTicks=8 shadowTicks=4") })
+        assertTrue(lines.any { it.contains("dynRejectedTicks=2 cadenceRejectedTicks=2") })
+        assertTrue(lines.any { it.contains("instrumentationOnly=true") })
+        assertEquals(8, StepsCounter.stepsInWindow(samples))
+    }
+
     @Test fun activityFilterTraceMatchesProduction() {
         val samples = listOf(
-            step(0, 100, 0), step(1, 110, 0), step(2, 130, 1), step(3, 145, 2), step(4, 170, null),
+            step(0, 100, 0), step(10, 110, 0), step(20, 130, 1), step(30, 145, 2), step(40, 170, null),
         )
         val production = AnalyticsEngine.analyzeDay(day = dayUtc, steps = samples, profile = profile).daily.steps
         assertEquals(35, production)

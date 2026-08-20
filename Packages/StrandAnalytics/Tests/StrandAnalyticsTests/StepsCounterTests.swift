@@ -46,8 +46,14 @@ final class StepsCounterTests: XCTestCase {
 
     func testMaxStepDeltaBoundaryIsExclusive() {
         // Exactly maxStepDelta (512) is dropped; 511 counts.
-        XCTAssertEqual(StepsCounter.stepsInWindow([step(0, 0), step(60, 512)]), nil)   // 512 dropped => no movement
-        XCTAssertEqual(StepsCounter.stepsInWindow([step(0, 0), step(60, 511)]), 511)   // 511 kept
+        XCTAssertEqual(StepsCounter.stepsInWindow([step(0, 0), step(128, 512)]), nil)   // absolute guard
+        XCTAssertEqual(StepsCounter.stepsInWindow([step(0, 0), step(128, 511)]), 511)
+    }
+
+    func testRejectsPhysicallyImpossibleOneSecondSpikeButAllowsSameTicksAcrossTime() {
+        XCTAssertNil(StepsCounter.stepsInWindow([step(0, 100), step(1, 107)]))
+        XCTAssertEqual(StepsCounter.stepsInWindow([step(0, 100), step(2, 107)]), 7)
+        XCTAssertEqual(StepsCounter.stepsInWindow([step(0, 100), step(1, 104)]), 4)
     }
 
     func testClassedStreamCountsOnlyWalkAndRunDeltas() {
@@ -55,17 +61,17 @@ final class StepsCounterTests: XCTestCase {
         // still: +10 ignored; walk: +20; run: +15; unknown: +25 ignored => 35 locomotion ticks.
         XCTAssertEqual(StepsCounter.stepsInWindow([
             step(0, 100, 0),
-            step(1, 110, 0),
-            step(2, 130, 1),
-            step(3, 145, 2),
-            step(4, 170, nil),
+            step(10, 110, 0),
+            step(20, 130, 1),
+            step(30, 145, 2),
+            step(40, 170, nil),
         ]), 35)
     }
 
     func testLegacyUnclassedStreamKeepsCounterFallback() {
         // Rows written before activityClass existed must retain their historical estimate.
         XCTAssertEqual(StepsCounter.stepsInWindow([
-            step(0, 100), step(1, 140), step(2, 170),
+            step(0, 100), step(10, 140), step(20, 170),
         ]), 70)
     }
 }

@@ -976,6 +976,24 @@ object IntelligenceEngine {
                 )) {
                     stepsTraceSink(line)
                 }
+                // Shadow-only refinement study: join the already-loaded gravity/dynAccel rows with the
+                // compact cadence stream only while Steps test mode is active. A read/decode failure is
+                // diagnostics-only and must never disturb scoring or history completion.
+                val shadowFrom = daySteps.minOf { it.ts }
+                val shadowTo = daySteps.maxOf { it.ts }
+                val auxForShadow = runCatching {
+                    repo.v18AuxSamples(owner, shadowFrom, shadowTo, STREAM_LIMIT)
+                }
+                    .getOrElse {
+                        stepsTraceSink("stepsShadow day=$day unavailable=${it.javaClass.simpleName}")
+                        emptyList()
+                    }
+                for (line in StepsEstimateEngineTrace.shadowCandidateTrace(
+                    daySteps = daySteps, gravity = grav, aux = auxForShadow,
+                    dayKey = day, tzOffsetSeconds = tzOffsetSeconds,
+                )) {
+                    stepsTraceSink(line)
+                }
             }
 
             // Harvest the baseline-independent nightly aggregates (a day with no detected

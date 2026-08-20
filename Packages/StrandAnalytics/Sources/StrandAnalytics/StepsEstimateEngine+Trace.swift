@@ -12,9 +12,9 @@ import WhoopProtocol
 //     "Need N more days" reason), the same status the tile renders.
 //
 //  2. rawCounterTrace(...) - the WHOOP 5/MG raw path. Reports the cumulative step_motion_counter series and
-//     its WRAP-AWARE deltas (cur - prev) & 0xFFFF, the dropped deltas (>= 512, a sync-gap / reboot boundary,
-//     not real steps), and the same total AnalyticsEngine.analyzeDay sums, with the SAME maxStepDelta gate
-//     and the SAME ticks-per-step scaling, so the trace and the daily steps_est value can never diverge.
+//     its WRAP-AWARE deltas (cur - prev) & 0xFFFF, absolute-boundary and per-second rate outliers, and the
+//     same total AnalyticsEngine.analyzeDay sums, with the SAME plausibility gate and ticks-per-step scaling,
+//     so the trace and the daily steps_est value can never diverge.
 //
 // No clock, no I/O, no PII (counts and ratios only). A fixture pins the exact lines. The Steps test mode
 // gates each call behind TestCentre.active(.steps) at the call site (IntelligenceEngine); when the mode is
@@ -87,9 +87,6 @@ extension StepsEstimateEngine {
                                        dayKey: String,
                                        tzOffsetSeconds: Int,
                                        ticksPerStep: Double) -> [String] {
-        // The SAME maxStepDelta gate AnalyticsEngine.analyzeDay uses for the daily steps total.
-        let maxStepDelta = 512
-
         // The SAME filter + sort: keep only this LOCAL day's samples, time-ordered.
         let sorted = daySteps
             .filter { AnalyticsEngine.dayString($0.ts, offsetSec: tzOffsetSeconds) == dayKey }
@@ -123,13 +120,16 @@ extension StepsEstimateEngine {
         var rawTotal = 0
         var keptDeltas = 0
         var droppedDeltas = 0
+        var rateOutliers = 0
         var nonLocomotionDeltas = 0
         var minDelta = Int.max
         var maxDelta = Int.min
         let hasActivityClasses = StepsCounter.hasActivityClasses(sorted)
         for i in 1..<sorted.count {
             let delta = (sorted[i].counter - sorted[i - 1].counter) & 0xFFFF  // wrap-aware u16 increment
-            if delta >= 1 && delta < maxStepDelta
+            let plausible = StepsCounter.isPlausibleDelta(
+                previousTs: sorted[i - 1].ts, currentTs: sorted[i].ts, delta: delta)
+            if plausible
                 && StepsCounter.shouldCountDelta(
                     activityClass: sorted[i].activityClass,
                     hasActivityClasses: hasActivityClasses) {
@@ -137,10 +137,12 @@ extension StepsEstimateEngine {
                 keptDeltas += 1
                 minDelta = Swift.min(minDelta, delta)
                 maxDelta = Swift.max(maxDelta, delta)
-            } else if delta >= 1 && delta < maxStepDelta {
+            } else if plausible {
                 nonLocomotionDeltas += 1
-            } else if delta >= maxStepDelta {
-                droppedDeltas += 1   // a sync-gap / reboot boundary, not real steps (>= 512)
+            } else if delta >= StepsCounter.maxStepDelta {
+                droppedDeltas += 1
+            } else if delta > 0 {
+                rateOutliers += 1
             }
         }
 
@@ -148,8 +150,8 @@ extension StepsEstimateEngine {
         let lastCounter = sorted.last!.counter
         lines.append("stepsRaw day=\(dayKey) counterSamples=\(sorted.count) "
             + "firstCounter=\(firstCounter) lastCounter=\(lastCounter) (cumulative u16 @57)")
-        lines.append("stepsRaw deltas kept=\(keptDeltas) dropped=\(droppedDeltas) "
-            + "(dropped = delta>=\(maxStepDelta), a sync-gap/reboot boundary)")
+        lines.append("stepsRaw deltas kept=\(keptDeltas) dropped=\(droppedDeltas) rateOutliers=\(rateOutliers) "
+            + "(absolute delta>=\(StepsCounter.maxStepDelta); rate >\(StepsCounter.maxTicksPerSecond) ticks/s)")
         lines.append("stepsRaw activityFilter=\(hasActivityClasses ? "walk-run" : "legacy-unclassed") "
             + "nonLocomotion=\(nonLocomotionDeltas)")
         if keptDeltas > 0 {

@@ -59,9 +59,19 @@ final class StepsEstimateEngineTraceTests: XCTestCase {
         XCTAssertTrue(lines.first { $0.hasPrefix("stepsRaw total ") }!.contains("scaledSteps=\(production!)"))
     }
 
+    func testOneSecondTickSpikeIsReportedAndExcludedFromProduction() {
+        let samples = [step(0, 100, 1), step(1, 107, 1), step(2, 109, 1)]
+        let production = AnalyticsEngine.analyzeDay(day: dayUtc, steps: samples, profile: profile).daily.steps
+        XCTAssertEqual(production, 2)
+        let lines = StepsEstimateEngine.rawCounterTrace(
+            daySteps: samples, dayKey: dayUtc, tzOffsetSeconds: 0, ticksPerStep: 1.0)
+        XCTAssertTrue(lines.contains { $0.contains("rateOutliers=1") })
+        XCTAssertTrue(lines.first { $0.hasPrefix("stepsRaw total ") }!.contains("rawTicks=2"))
+    }
+
     func testActivityFilterTraceMatchesProduction() {
         let samples = [
-            step(0, 100, 0), step(1, 110, 0), step(2, 130, 1), step(3, 145, 2), step(4, 170, nil),
+            step(0, 100, 0), step(10, 110, 0), step(20, 130, 1), step(30, 145, 2), step(40, 170, nil),
         ]
         let production = AnalyticsEngine.analyzeDay(day: dayUtc, steps: samples, profile: profile).daily.steps
         XCTAssertEqual(production, 35)

@@ -23,11 +23,19 @@ public enum StepsCounter {
         !hasActivityClasses || activityClass.map(locomotionActivityClasses.contains) == true
     }
 
-    /// The largest wrap-aware increment treated as real motion between two adjacent 1 Hz records. A delta
-    /// at/above this is a big time-gap / disconnect boundary between sync sessions (or a firmware reboot,
-    /// byte-indistinguishable from a u16 wrap), NOT real steps — dropped so gaps don't inflate the total.
-    /// Real 1 Hz motion never ticks this fast between adjacent records. (#132/#276/#316)
+    /// Absolute reboot/wrap guard, independent from the per-second plausibility gate below.
     public static let maxStepDelta = 512
+    public static let maxTicksPerSecond = 4
+
+    static func isPlausibleDelta(previousTs: Int, currentTs: Int, delta: Int) -> Bool {
+        guard delta >= 1, delta < maxStepDelta else { return false }
+        let elapsed = currentTs - previousTs
+        guard elapsed > 0 else { return false }
+        let rateAllowance = elapsed >= maxStepDelta / maxTicksPerSecond
+            ? maxStepDelta - 1
+            : elapsed * maxTicksPerSecond
+        return delta <= rateAllowance
+    }
 
     /// Raw wrap-aware locomotion-tick total across `samples`. When any sample carries `activityClass`, each
     /// positive increment is attributed to the later sample and retained only for walk/run. When the whole
@@ -43,7 +51,10 @@ public enum StepsCounter {
             let isLocomotion = shouldCountDelta(
                 activityClass: sorted[i].activityClass,
                 hasActivityClasses: hasActivityClasses)
-            if isLocomotion && delta >= 1 && delta < maxStepDelta { total += delta }  // >=512 is a gap/reset
+            if isLocomotion && isPlausibleDelta(
+                previousTs: sorted[i - 1].ts, currentTs: sorted[i].ts, delta: delta) {
+                total += delta
+            }
         }
         return total > 0 ? total : nil
     }

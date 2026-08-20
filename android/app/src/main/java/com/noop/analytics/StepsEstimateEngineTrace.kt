@@ -1,6 +1,8 @@
 package com.noop.analytics
 
 import com.noop.data.StepSample
+import com.noop.data.GravitySample
+import com.noop.data.V18AuxRow
 import kotlin.math.max
 
 // StepsEstimateEngineTrace.kt - Kotlin twin of StepsEstimateEngine+Trace.swift. The Steps test-mode traces.
@@ -14,10 +16,9 @@ import kotlin.math.max
 //     reason), the same status the tile renders.
 //
 //  2. rawCounterTrace(...) - the WHOOP 5/MG raw path. Reports the cumulative step_motion_counter series and
-//     its WRAP-AWARE deltas (cur - prev) and 0xFFFF, the dropped deltas (>= 512, a sync-gap / reboot
-//     boundary, not real steps), and the same total AnalyticsEngine.analyzeDay sums, with the SAME
-//     maxStepDelta gate and the SAME ticks-per-step scaling, so the trace and the daily steps_est can never
-//     diverge.
+//     its WRAP-AWARE deltas (cur - prev) and 0xFFFF, absolute-boundary and per-second rate outliers, and
+//     the same total AnalyticsEngine.analyzeDay sums, with the SAME plausibility gate and ticks-per-step
+//     scaling, so the trace and the daily steps_est can never diverge.
 //
 // No clock, no IO, no PII (counts and ratios only). The Steps test mode gates each call behind
 // TestCentre.active(STEPS) at the call site (IntelligenceEngine); when the mode is off neither is ever
@@ -97,9 +98,6 @@ object StepsEstimateEngineTrace {
         tzOffsetSeconds: Long,
         ticksPerStep: Double,
     ): List<String> {
-        // The SAME maxStepDelta gate AnalyticsEngine.analyzeDay uses for the daily steps total.
-        val maxStepDelta = 512
-
         // The SAME filter + sort: keep only this LOCAL day's samples, time-ordered.
         val sorted = daySteps
             .filter { AnalyticsEngine.dayString(it.ts, tzOffsetSeconds) == dayKey }
@@ -137,22 +135,26 @@ object StepsEstimateEngineTrace {
         var rawTotal = 0
         var keptDeltas = 0
         var droppedDeltas = 0
+        var rateOutliers = 0
         var nonLocomotionDeltas = 0
         var minDelta = Int.MAX_VALUE
         var maxDelta = Int.MIN_VALUE
         val hasActivityClasses = StepsCounter.hasActivityClasses(sorted)
         for (i in 1 until sorted.size) {
             val delta = (sorted[i].counter - sorted[i - 1].counter) and 0xFFFF // wrap-aware u16 increment
-            if (delta in 1 until maxStepDelta &&
+            val plausible = StepsCounter.isPlausibleDelta(sorted[i - 1].ts, sorted[i].ts, delta)
+            if (plausible &&
                 StepsCounter.shouldCountDelta(sorted[i].activityClass, hasActivityClasses)) {
                 rawTotal += delta
                 keptDeltas += 1
                 minDelta = minOf(minDelta, delta)
                 maxDelta = maxOf(maxDelta, delta)
-            } else if (delta in 1 until maxStepDelta) {
+            } else if (plausible) {
                 nonLocomotionDeltas += 1
-            } else if (delta >= maxStepDelta) {
-                droppedDeltas += 1 // a sync-gap / reboot boundary, not real steps (>= 512)
+            } else if (delta >= StepsCounter.MAX_STEP_DELTA) {
+                droppedDeltas += 1
+            } else if (delta > 0) {
+                rateOutliers += 1
             }
         }
 
@@ -163,8 +165,8 @@ object StepsEstimateEngineTrace {
                 "firstCounter=$firstCounter lastCounter=$lastCounter (cumulative u16 @57)",
         )
         lines.add(
-            "stepsRaw deltas kept=$keptDeltas dropped=$droppedDeltas " +
-                "(dropped = delta>=$maxStepDelta, a sync-gap/reboot boundary)",
+            "stepsRaw deltas kept=$keptDeltas dropped=$droppedDeltas rateOutliers=$rateOutliers " +
+                "(absolute delta>=${StepsCounter.MAX_STEP_DELTA}; rate >${StepsCounter.MAX_TICKS_PER_SECOND} ticks/s)",
         )
         lines.add(
             "stepsRaw activityFilter=${if (hasActivityClasses) "walk-run" else "legacy-unclassed"} " +
@@ -194,6 +196,66 @@ object StepsEstimateEngineTrace {
         )
         return lines
     }
+
+    /**
+     * Instrumentation-only candidate derived from the 2026-08-20 controlled walk/household capture.
+     * It never feeds [StepsCounter], a score, storage or UI. Missing auxiliary samples fail open and are
+     * counted explicitly, so old history cannot silently look better. Run-class rows stay untouched;
+     * only walk-class rows are screened by the strap's orientation-independent dynamic-acceleration
+     * magnitude and cadence-like byte.
+     */
+    fun shadowCandidateTrace(
+        daySteps: List<StepSample>,
+        gravity: List<GravitySample>,
+        aux: List<V18AuxRow>,
+        dayKey: String,
+        tzOffsetSeconds: Long,
+    ): List<String> {
+        val sorted = daySteps
+            .filter { AnalyticsEngine.dayString(it.ts, tzOffsetSeconds) == dayKey }
+            .sortedBy { it.ts }
+        if (sorted.size < 2) return emptyList()
+        val dynByTs = gravity.asSequence().mapNotNull { g -> g.dynAccel?.let { g.ts to it } }.toMap()
+        val cadenceByTs = aux.asSequence().mapNotNull { a -> a.stepCadence?.let { a.ts to it.toInt() } }.toMap()
+        val hasClasses = StepsCounter.hasActivityClasses(sorted)
+        var productionTicks = 0
+        var shadowTicks = 0
+        var dynRejectedTicks = 0
+        var cadenceRejectedTicks = 0
+        var missingDyn = 0
+        var missingCadence = 0
+        for (i in 1 until sorted.size) {
+            val cur = sorted[i]
+            val delta = (cur.counter - sorted[i - 1].counter) and 0xFFFF
+            if (!StepsCounter.isPlausibleDelta(sorted[i - 1].ts, cur.ts, delta)) continue
+            if (!StepsCounter.shouldCountDelta(cur.activityClass, hasClasses)) continue
+            productionTicks += delta
+            if (cur.activityClass == 2) {
+                shadowTicks += delta
+                continue
+            }
+            val dyn = dynByTs[cur.ts]
+            val cadence = cadenceByTs[cur.ts]
+            if (dyn == null) missingDyn++
+            if (cadence == null) missingCadence++
+            when {
+                dyn != null && dyn > SHADOW_MAX_DYN_ACCEL_G -> dynRejectedTicks += delta
+                cadence != null && cadence !in SHADOW_CADENCE_RANGE -> cadenceRejectedTicks += delta
+                else -> shadowTicks += delta
+            }
+        }
+        return listOf(
+            "stepsShadow day=$dayKey productionTicks=$productionTicks shadowTicks=$shadowTicks " +
+                "instrumentationOnly=true",
+            "stepsShadow thresholds walkDynMax=$SHADOW_MAX_DYN_ACCEL_G " +
+                "walkCadence=${SHADOW_CADENCE_RANGE.first}..${SHADOW_CADENCE_RANGE.last} runPassThrough=true",
+            "stepsShadow rejected dynRejectedTicks=$dynRejectedTicks cadenceRejectedTicks=$cadenceRejectedTicks " +
+                "missingDyn=$missingDyn missingCadence=$missingCadence (missing fails open)",
+        )
+    }
+
+    private const val SHADOW_MAX_DYN_ACCEL_G = 0.19
+    private val SHADOW_CADENCE_RANGE = 110..180
 }
 
 /**
