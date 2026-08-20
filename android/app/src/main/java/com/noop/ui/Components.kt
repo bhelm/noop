@@ -484,6 +484,7 @@ internal fun AutoSizeValue(
     color: Color,
     modifier: Modifier = Modifier,
     minScale: Float = 0.6f,
+    textAlign: TextAlign = TextAlign.Start,
 ) {
     var scale by remember(text, style) { mutableStateOf(1f) }
     Text(
@@ -494,6 +495,7 @@ internal fun AutoSizeValue(
         maxLines = 1,
         softWrap = false,
         overflow = TextOverflow.Ellipsis,
+        textAlign = textAlign,
         modifier = modifier,
         onTextLayout = { result ->
             if (result.didOverflowWidth && scale > minScale) {

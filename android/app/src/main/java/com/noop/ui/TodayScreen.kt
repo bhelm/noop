@@ -2589,7 +2589,7 @@ private fun ScoreHeroRow(
                             showsValue = strain != null,
                             format = { if (effortScale == EffortScale.WHOOP) String.format(Locale.getDefault(), "%.1f", it) else it.toInt().toString() },
                         )
-                        if (strain == null) RingNoData()
+                        if (strain == null) RingNoData(diameter = ring)
                     }
                 }
                 // REST, sleep composite 0–100. Its fixed-width box also anchors the card-level source badge:
@@ -2616,7 +2616,7 @@ private fun ScoreHeroRow(
                             // NOT fabricate a Rest number , an aggregate genuinely has no scored night. A day with
                             // no Charge either (truly empty) keeps the plain "No Data". Mirrors iOS restRing.
                             if (restScore == null) {
-                                if (recovery != null) RingNeedsTrackedNight() else RingNoData()
+                                if (recovery != null) RingNeedsTrackedNight() else RingNoData(diameter = ring)
                             }
                         }
                     }
@@ -2709,16 +2709,26 @@ private fun HeroRingColumn(
                 .padding(vertical = 2.dp),
             contentAlignment = Alignment.Center,
         ) {
-            // #74: never wrap the hero label onto a second line — at a larger font/screen-zoom (Samsung
-            // One UI defaults) "REST" could wrap, growing the whole hero card. One line, ellipsis if forced.
-            Text(domainLabel.uppercase(), style = NoopType.overline, color = Palette.textSecondary,
-                 maxLines = 1, overflow = TextOverflow.Ellipsis,
-                 modifier = Modifier.padding(horizontal = 16.dp))
+            // Keep the word centred on the vessel independently of the trailing chevron. Giving the label
+            // the complete fixed score-column width prevents longer translations (for example ERHOLUNG)
+            // from pushing the third column right or being clipped at the screen edge.
+            AutoSizeValue(
+                text = domainLabel.uppercase(),
+                style = NoopType.overline,
+                color = Palette.textSecondary,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 18.dp),
+                minScale = 0.7f,
+                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+            )
             Icon(
                 Icons.AutoMirrored.Filled.KeyboardArrowRight,
                 contentDescription = uiString(R.string.l10n_today_screen_how_domain_label_is_calculated_8897768c, domainLabel),
                 tint = Palette.textSecondary.copy(alpha = 0.6f),
-                modifier = Modifier.align(Alignment.CenterEnd).size(14.dp),
+                modifier = Modifier
+                    .align(Alignment.CenterEnd)
+                    .size(14.dp),
             )
         }
     }
@@ -2973,13 +2983,22 @@ private fun RingEmptyOverlay(
             )
         }
     } else {
-        RingNoData()
+        RingNoData(diameter = diameter)
     }
 }
 
 @Composable
-private fun RingNoData() {
-    Text(uiString(R.string.today_no_data), style = NoopType.headline, color = Palette.textTertiary, maxLines = 1)
+private fun RingNoData(diameter: Dp) {
+    Box(modifier = Modifier.size(diameter), contentAlignment = Alignment.Center) {
+        AutoSizeValue(
+            text = uiString(R.string.today_no_data),
+            style = NoopType.headline,
+            color = Palette.textTertiary,
+            modifier = Modifier.width(diameter * 0.78f),
+            minScale = 0.65f,
+            textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+        )
+    }
 }
 
 /** #898: the Rest ring's overlay when a Charge exists for the day but there's no scored sleep (the
