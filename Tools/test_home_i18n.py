@@ -249,6 +249,13 @@ class HomeLocalizationTest(unittest.TestCase):
         ]
         self.assertEqual([], findings, "Raw Android score-explainer copy:\n" + _format_findings(findings))
 
+    def test_android_home_score_labels_and_empty_states_fit_localized_copy(self) -> None:
+        source = (ROOT / "android/app/src/main/java/com/noop/ui/TodayScreen.kt").read_text(encoding="utf-8")
+        self.assertIn("text = domainLabel.uppercase()", source)
+        self.assertIn("private fun RingNoData(diameter: Dp)", source)
+        self.assertNotIn("Text(domainLabel.uppercase()", source)
+        self.assertNotIn("private fun RingNoData()", source)
+
     def test_android_today_source_counts_use_two_plural_resources(self) -> None:
         relative = "android/app/src/main/java/com/noop/ui/TodayScreen.kt"
         source = audit._mask_comments((ROOT / relative).read_text(encoding="utf-8"))

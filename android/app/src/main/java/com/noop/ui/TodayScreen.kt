@@ -2509,6 +2509,7 @@ private fun ScoreHeroRow(
                 // empty / calibrating overlay; badges its recovery winner.
                 HeroRingColumn(
                     domain = DomainTheme.Charge,
+                    columnWidth = ring,
                     onInfo = { onScoreInfo(ScoreSection.CHARGE) },
                     onRingTap = onChargeTap,
                 ) {
@@ -2546,7 +2547,7 @@ private fun ScoreHeroRow(
                     }
                 }
                 // EFFORT, strain on the gauge, on the user's selected scale, as a liquid vessel.
-                HeroRingColumn(domain = DomainTheme.Effort, onInfo = { onScoreInfo(ScoreSection.EFFORT) }) {
+                HeroRingColumn(domain = DomainTheme.Effort, columnWidth = ring, onInfo = { onScoreInfo(ScoreSection.EFFORT) }) {
                     Box(contentAlignment = Alignment.Center) {
                         HeroScoreVessel(
                             fraction = if (effortOutOf > 0) effortVal / effortOutOf else 0.0,
@@ -2557,7 +2558,7 @@ private fun ScoreHeroRow(
                             showsValue = strain != null,
                             format = { if (effortScale == EffortScale.WHOOP) String.format(Locale.getDefault(), "%.1f", it) else it.toInt().toString() },
                         )
-                        if (strain == null) RingNoData()
+                        if (strain == null) RingNoData(diameter = ring)
                     }
                 }
                 // REST, sleep composite 0–100. Its fixed-width box also anchors the card-level source badge:
@@ -2565,6 +2566,7 @@ private fun ScoreHeroRow(
                 Box(modifier = Modifier.width(ring)) {
                     HeroRingColumn(
                         domain = DomainTheme.Rest,
+                        columnWidth = ring,
                         onInfo = { onScoreInfo(ScoreSection.REST) },
                     ) {
                         Box(contentAlignment = Alignment.Center) {
@@ -2583,7 +2585,7 @@ private fun ScoreHeroRow(
                             // NOT fabricate a Rest number , an aggregate genuinely has no scored night. A day with
                             // no Charge either (truly empty) keeps the plain "No Data". Mirrors iOS restRing.
                             if (restScore == null) {
-                                if (recovery != null) RingNeedsTrackedNight() else RingNoData()
+                                if (recovery != null) RingNeedsTrackedNight() else RingNoData(diameter = ring)
                             }
                         }
                     }
@@ -2616,6 +2618,7 @@ private fun ScoreHeroRow(
 @Composable
 private fun HeroRingColumn(
     domain: DomainTheme,
+    columnWidth: Dp,
     onInfo: () -> Unit,
     // A1: when non-null (Charge), the ring is tappable and opens the breakdown sheet. The chevron cue is
     // overlaid by the caller INSIDE the ring box so it adds no stacked height (#762 self-sizing parity).
@@ -2652,38 +2655,34 @@ private fun HeroRingColumn(
         } else {
             ring()
         }
-        Row(
+        Box(
             modifier = Modifier
+                .width(columnWidth)
                 .clip(RoundedCornerShape(50))
                 .clickable { onInfo() }
-                .padding(horizontal = 6.dp, vertical = 2.dp),
-            horizontalArrangement = Arrangement.spacedBy(3.dp),
-            verticalAlignment = Alignment.CenterVertically,
+                .padding(vertical = 2.dp),
+            contentAlignment = Alignment.Center,
         ) {
-            // #937 parity: an invisible LEADING twin of the trailing chevron. The word + chevron used to
-            // centre as ONE block, which sat the word visibly off the ring's axis (worst on short labels
-            // like REST). Balancing the row with a same-sized alpha-0 chevron re-centres the WORD itself
-            // under the ring while the real chevron stays on the trailing side. alpha(0f) keeps its layout
-            // slot, the clickable Row (the tap target) only ever grows, and the Row stays plain
-            // start-to-end content, no offset maths, so RTL mirrors identically (the icon is AutoMirrored
-            // anyway). Null description keeps it out of TalkBack: it is a spacer, not content.
-            Icon(
-                Icons.AutoMirrored.Filled.KeyboardArrowRight,
-                contentDescription = null,
-                tint = Palette.textSecondary.copy(alpha = 0.6f),
+            // Keep the word centred on the vessel independently of the trailing chevron. Giving the label
+            // the complete fixed score-column width prevents longer translations (for example ERHOLUNG)
+            // from pushing the third column right or being clipped at the screen edge.
+            AutoSizeValue(
+                text = domainLabel.uppercase(),
+                style = NoopType.overline,
+                color = Palette.textSecondary,
                 modifier = Modifier
-                    .size(14.dp)
-                    .alpha(0f),
+                    .fillMaxWidth()
+                    .padding(horizontal = 18.dp),
+                minScale = 0.7f,
+                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
             )
-            // #74: never wrap the hero label onto a second line — at a larger font/screen-zoom (Samsung
-            // One UI defaults) "REST" could wrap, growing the whole hero card. One line, ellipsis if forced.
-            Text(domainLabel.uppercase(), style = NoopType.overline, color = Palette.textSecondary,
-                 maxLines = 1, overflow = TextOverflow.Ellipsis)
             Icon(
                 Icons.AutoMirrored.Filled.KeyboardArrowRight,
                 contentDescription = uiString(R.string.l10n_today_screen_how_domain_label_is_calculated_8897768c, domainLabel),
                 tint = Palette.textSecondary.copy(alpha = 0.6f),
-                modifier = Modifier.size(14.dp),
+                modifier = Modifier
+                    .align(Alignment.CenterEnd)
+                    .size(14.dp),
             )
         }
     }
@@ -2938,13 +2937,22 @@ private fun RingEmptyOverlay(
             )
         }
     } else {
-        RingNoData()
+        RingNoData(diameter = diameter)
     }
 }
 
 @Composable
-private fun RingNoData() {
-    Text(uiString(R.string.today_no_data), style = NoopType.headline, color = Palette.textTertiary, maxLines = 1)
+private fun RingNoData(diameter: Dp) {
+    Box(modifier = Modifier.size(diameter), contentAlignment = Alignment.Center) {
+        AutoSizeValue(
+            text = uiString(R.string.today_no_data),
+            style = NoopType.headline,
+            color = Palette.textTertiary,
+            modifier = Modifier.width(diameter * 0.78f),
+            minScale = 0.65f,
+            textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+        )
+    }
 }
 
 /** #898: the Rest ring's overlay when a Charge exists for the day but there's no scored sleep (the
