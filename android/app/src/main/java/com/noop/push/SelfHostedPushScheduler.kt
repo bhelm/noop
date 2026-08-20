@@ -56,6 +56,8 @@ object SelfHostedPushScheduler {
 
     fun enqueueLaunchCatchUp(context: Context) = enqueueExternal(context)
 
+    fun enqueueManualCatchUp(context: Context) = enqueueExternal(context)
+
     /** Queue the next healthy pagination/device slice without WorkManager's failure backoff. */
     internal suspend fun enqueueContinuation(
         context: Context,

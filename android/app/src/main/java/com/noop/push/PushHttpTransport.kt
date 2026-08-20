@@ -23,8 +23,46 @@ class PushHttpTransport(
     private val endpoint: PushEndpointPolicy.ValidEndpoint,
     private val bearerToken: String,
     private val client: OkHttpClient = defaultClient(),
+    private val onBatchStart: (PushBatch) -> Unit = {},
 ) : PushTransport {
+    override suspend fun capabilities(): PushCapabilitiesResult {
+        val request = Request.Builder()
+            .url(endpoint.url)
+            .header("Authorization", "Bearer $bearerToken")
+            .header("Accept", "application/json")
+            .get()
+            .build()
+        val response = try {
+            executeRequest(request)
+        } catch (cancelled: kotlinx.coroutines.CancellationException) {
+            throw cancelled
+        } catch (failure: PushTransportException) {
+            return PushCapabilitiesResult.Rejected(
+                failure.failure.safeCode,
+                failure.failure.retryable,
+                failure.failure,
+            )
+        } catch (_: Throwable) {
+            val failure = PushFailure(PushFailureCode.NETWORK_IO)
+            return PushCapabilitiesResult.Rejected(failure.safeCode, failure.retryable, failure)
+        }
+        if (response.statusCode == 404 || response.statusCode == 405) {
+            return PushCapabilitiesResult.Available(PushCapabilities.ALL)
+        }
+        if (response.statusCode !in 200..299) {
+            val failure = PushFailure.http(response.statusCode)
+            return PushCapabilitiesResult.Rejected(failure.safeCode, failure.retryable, failure)
+        }
+        return try {
+            PushCapabilitiesResult.Available(PushCapabilities.parse(response.body))
+        } catch (invalid: PushProtocolException) {
+            val failure = PushFailure(PushFailureCode.CAPABILITIES_INVALID)
+            PushCapabilitiesResult.Rejected(failure.safeCode, failure.retryable, failure)
+        }
+    }
+
     override suspend fun post(batch: PushBatch): PushTransportResponse {
+        runCatching { onBatchStart(batch) }
         val compressedBody = gzip(batch.body)
         val compressed = execute(compressedBody, contentEncoding = "gzip")
         if (compressed.statusCode != 415) return compressed
@@ -41,18 +79,30 @@ class PushHttpTransport(
             .apply { if (contentEncoding != null) header("Content-Encoding", contentEncoding) }
             .post(FixedRequestBody(body))
             .build()
-        return client.newCall(request).await().use { response ->
-            val bytes = response.body?.byteStream()?.use { input ->
-                val bounded = ByteArray(PushProtocol.MAX_ACK_BYTES + 1)
-                var total = 0
-                while (total < bounded.size) {
-                    val read = input.read(bounded, total, bounded.size - total)
-                    if (read < 0) break
-                    total += read
-                }
-                bounded.copyOf(total)
-            } ?: ByteArray(0)
-            PushTransportResponse(response.code, bytes)
+        return executeRequest(request)
+    }
+
+    private suspend fun executeRequest(request: Request): PushTransportResponse {
+        try {
+            return client.newCall(request).await().use { response ->
+                val bytes = response.body?.byteStream()?.use { input ->
+                    val bounded = ByteArray(PushProtocol.MAX_ACK_BYTES + 1)
+                    var total = 0
+                    while (total < bounded.size) {
+                        val read = input.read(bounded, total, bounded.size - total)
+                        if (read < 0) break
+                        total += read
+                    }
+                    bounded.copyOf(total)
+                } ?: ByteArray(0)
+                PushTransportResponse(response.code, bytes)
+            }
+        } catch (cancelled: kotlinx.coroutines.CancellationException) {
+            throw cancelled
+        } catch (failure: PushTransportException) {
+            throw failure
+        } catch (io: IOException) {
+            throw PushTransportException(classifyPushTransportFailure(io), io)
         }
     }
 

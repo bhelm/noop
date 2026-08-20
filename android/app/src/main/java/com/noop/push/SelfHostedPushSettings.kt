@@ -22,6 +22,9 @@ class SelfHostedPushSettings private constructor(
         val runState: RunState,
         val acceptedBatches: Int,
         val acceptedRecords: Long,
+        val currentStream: String?,
+        val supportedStreams: List<String>?,
+        val capabilitiesCheckedAt: Long?,
     ) {
         val ready: Boolean get() = enabled && endpoint != null && hasToken
     }
@@ -29,6 +32,7 @@ class SelfHostedPushSettings private constructor(
     fun snapshot(): Snapshot {
         val enabled = prefs.getBoolean(KEY_ENABLED, false)
         val endpoint = (PushEndpointPolicy.validate(prefs.getString(KEY_ENDPOINT, "").orEmpty()) as? PushEndpointPolicy.Result.Valid)?.endpoint
+        val capabilities = capabilitiesFor(endpoint)
         return Snapshot(
             enabled = enabled,
             endpoint = endpoint,
@@ -40,6 +44,10 @@ class SelfHostedPushSettings private constructor(
             }.getOrDefault(RunState.IDLE),
             acceptedBatches = prefs.getInt(KEY_ACCEPTED_BATCHES, 0).coerceAtLeast(0),
             acceptedRecords = prefs.getLong(KEY_ACCEPTED_RECORDS, 0L).coerceAtLeast(0L),
+            currentStream = prefs.getString(KEY_CURRENT_STREAM, null),
+            supportedStreams = capabilities,
+            capabilitiesCheckedAt = prefs.getLong(KEY_CAPABILITIES_AT, 0L)
+                .takeIf { it > 0 && capabilities != null },
         )
     }
 
@@ -68,21 +76,30 @@ class SelfHostedPushSettings private constructor(
         val validation = PushEndpointPolicy.validate(raw)
         val normalized = (validation as? PushEndpointPolicy.Result.Valid)?.endpoint?.url
             ?: return validation
-        prefs.edit().putString(KEY_ENDPOINT, normalized).apply()
+        val edit = prefs.edit().putString(KEY_ENDPOINT, normalized)
+        if (prefs.getString(KEY_CAPABILITIES_ENDPOINT, null) != normalized) {
+            edit.remove(KEY_CAPABILITIES_ENDPOINT)
+                .remove(KEY_CAPABILITIES_STREAMS)
+                .remove(KEY_CAPABILITIES_AT)
+        }
+        edit.apply()
         return validation
     }
 
     fun saveToken(token: String) {
         val trimmed = token.trim()
+        val changed = secrets.value.getString(KEY_TOKEN, null).orEmpty() != trimmed
         secrets.value.edit().let { edit ->
             if (trimmed.isEmpty()) edit.remove(KEY_TOKEN) else edit.putString(KEY_TOKEN, trimmed)
         }.apply()
+        if (changed) clearCapabilities()
     }
 
     fun setEnabled(enabled: Boolean): Boolean = synchronized(statusLock) {
         if (enabled && !snapshot().copy(enabled = true).ready) return@synchronized false
         val edit = prefs.edit().putBoolean(KEY_ENABLED, enabled)
-        if (!enabled) edit.putString(KEY_RUN_STATE, RunState.IDLE.name).remove(KEY_LAST_ERROR)
+        if (!enabled) edit.putString(KEY_RUN_STATE, RunState.IDLE.name)
+            .remove(KEY_LAST_ERROR).remove(KEY_CURRENT_STREAM)
         check(edit.commit()) { "Could not persist push enabled state" }
         true
     }
@@ -93,6 +110,7 @@ class SelfHostedPushSettings private constructor(
 
     fun recordSuccess(atMillis: Long = System.currentTimeMillis()) = updateWhileEnabled {
         it.putLong(KEY_LAST_SUCCESS, atMillis).remove(KEY_LAST_ERROR)
+            .remove(KEY_CURRENT_STREAM)
             .putString(KEY_RUN_STATE, RunState.COMPLETE.name)
     }
 
@@ -104,11 +122,30 @@ class SelfHostedPushSettings private constructor(
     /** Starts a new logical catch-up. Continuation workers deliberately do not reset these counters. */
     fun recordPushStarted() = updateWhileEnabled {
         it.remove(KEY_LAST_ERROR)
+            .remove(KEY_CURRENT_STREAM)
             .putInt(KEY_ACCEPTED_BATCHES, 0).putLong(KEY_ACCEPTED_RECORDS, 0L)
             .putString(KEY_RUN_STATE, RunState.QUEUED.name)
     }
 
     fun recordRunning() = updateWhileEnabled { it.putString(KEY_RUN_STATE, RunState.RUNNING.name) }
+
+    fun recordCurrentStream(stream: String) = updateWhileEnabled {
+        require(stream in PushCapabilities.ALL.wireNames) { "unknown push stream" }
+        if (prefs.getString(KEY_CURRENT_STREAM, null) == stream) return@updateWhileEnabled it
+        it.putString(KEY_CURRENT_STREAM, stream)
+    }
+
+    fun recordCapabilities(
+        endpoint: PushEndpointPolicy.ValidEndpoint,
+        capabilities: PushCapabilities,
+        atMillis: Long = System.currentTimeMillis(),
+    ) = synchronized(statusLock) {
+        check(prefs.edit()
+            .putString(KEY_CAPABILITIES_ENDPOINT, endpoint.url)
+            .putString(KEY_CAPABILITIES_STREAMS, capabilities.wireNames.joinToString(","))
+            .putLong(KEY_CAPABILITIES_AT, atMillis)
+            .commit()) { "Could not persist receiver capabilities" }
+    }
 
     @Synchronized
     fun recordAcceptedBatches(batches: Int, records: Long = 0L) = synchronized(statusLock) {
@@ -128,7 +165,8 @@ class SelfHostedPushSettings private constructor(
 
     /** Pagination and device rotation are healthy progress, never an error. */
     fun recordContinuation() = updateWhileEnabled {
-        it.remove(KEY_LAST_ERROR).putString(KEY_RUN_STATE, RunState.CONTINUING.name)
+        it.remove(KEY_LAST_ERROR).remove(KEY_CURRENT_STREAM)
+            .putString(KEY_RUN_STATE, RunState.CONTINUING.name)
     }
 
     fun recordRetrying(message: String) = updateWhileEnabled {
@@ -141,6 +179,21 @@ class SelfHostedPushSettings private constructor(
             if (!prefs.getBoolean(KEY_ENABLED, false)) return@synchronized
             check(change(prefs.edit()).commit()) { "Could not persist push status" }
         }
+
+    private fun capabilitiesFor(endpoint: PushEndpointPolicy.ValidEndpoint?): List<String>? {
+        if (endpoint == null || prefs.getString(KEY_CAPABILITIES_ENDPOINT, null) != endpoint.url) return null
+        if (!prefs.contains(KEY_CAPABILITIES_STREAMS)) return null
+        val encoded = prefs.getString(KEY_CAPABILITIES_STREAMS, "").orEmpty()
+        if (encoded.isEmpty()) return emptyList()
+        val names = encoded.split(',')
+        val known = PushCapabilities.ALL.wireNames.toSet()
+        return names.takeIf { it.size == it.distinct().size && it.all(known::contains) }
+    }
+
+    private fun clearCapabilities() {
+        prefs.edit().remove(KEY_CAPABILITIES_ENDPOINT)
+            .remove(KEY_CAPABILITIES_STREAMS).remove(KEY_CAPABILITIES_AT).apply()
+    }
 
     fun nextDeviceIndex(namespace: String): Int = prefs.getInt("$KEY_NEXT_DEVICE.$namespace", 0).coerceAtLeast(0)
 
@@ -162,6 +215,30 @@ class SelfHostedPushSettings private constructor(
         prefs.edit().putBoolean("$KEY_CYCLE_REJECTED.$namespace", rejected).apply()
     }
 
+    /** Persists only a safe category/status, never an exception message or response body. */
+    fun cycleFailure(namespace: String): PushFailure? {
+        val code = prefs.getString("$KEY_CYCLE_FAILURE_CODE.$namespace", null)
+            ?.let { stored -> PushFailureCode.entries.firstOrNull { it.name == stored } }
+            ?: return null
+        val status = prefs.getInt("$KEY_CYCLE_FAILURE_STATUS.$namespace", 0)
+            .takeIf { it in 100..599 }
+        return PushFailure(code, status)
+    }
+
+    fun saveCycleFailure(namespace: String, failure: PushFailure?) {
+        val editor = prefs.edit()
+        if (failure == null) {
+            editor.remove("$KEY_CYCLE_FAILURE_CODE.$namespace")
+                .remove("$KEY_CYCLE_FAILURE_STATUS.$namespace")
+        } else {
+            editor.putString("$KEY_CYCLE_FAILURE_CODE.$namespace", failure.code.name)
+            failure.httpStatus?.let {
+                editor.putInt("$KEY_CYCLE_FAILURE_STATUS.$namespace", it)
+            } ?: editor.remove("$KEY_CYCLE_FAILURE_STATUS.$namespace")
+        }
+        check(editor.commit()) { "Could not persist push failure category" }
+    }
+
     companion object {
         private const val PREFS = "self_hosted_push"
         private const val SECRETS = "self_hosted_push_secrets"
@@ -174,9 +251,15 @@ class SelfHostedPushSettings private constructor(
         private const val KEY_RUN_STATE = "run_state"
         private const val KEY_ACCEPTED_BATCHES = "accepted_batches"
         private const val KEY_ACCEPTED_RECORDS = "accepted_records"
+        private const val KEY_CURRENT_STREAM = "current_stream"
+        private const val KEY_CAPABILITIES_ENDPOINT = "capabilities_endpoint"
+        private const val KEY_CAPABILITIES_STREAMS = "capabilities_streams"
+        private const val KEY_CAPABILITIES_AT = "capabilities_at"
         private const val KEY_NEXT_DEVICE = "next_device"
         private const val KEY_CYCLE_MORE = "cycle_more"
         private const val KEY_CYCLE_REJECTED = "cycle_rejected"
+        private const val KEY_CYCLE_FAILURE_CODE = "cycle_failure_code"
+        private const val KEY_CYCLE_FAILURE_STATUS = "cycle_failure_status"
         private const val MAX_STATUS_CHARS = 300
         private val statusLock = Any()
 

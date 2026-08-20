@@ -92,6 +92,8 @@ data class PushBatch(
 data class PushTransportResponse(val statusCode: Int, val body: ByteArray)
 
 interface PushTransport {
+    suspend fun capabilities(): PushCapabilitiesResult =
+        PushCapabilitiesResult.Available(PushCapabilities.ALL)
     suspend fun post(batch: PushBatch): PushTransportResponse
 }
 
@@ -106,7 +108,7 @@ interface PushProgressStore {
 
 /** All methods return bounded snapshots and close their database transaction before returning. */
 interface PushSnapshotSource {
-    suspend fun knownDeviceIds(): List<String>
+    suspend fun knownDeviceIds(capabilities: PushCapabilities = PushCapabilities.ALL): List<String>
 
     suspend fun appendRecordAt(table: PushAppendTable, deviceId: String, rowId: Long): PushAppendRecord?
 
@@ -135,7 +137,11 @@ sealed interface PushResult {
 
     data object NoData : PushResult
 
-    data class Rejected(val reason: String, val retryable: Boolean) : PushResult
+    data class Rejected(
+        val reason: String,
+        val retryable: Boolean,
+        val failure: PushFailure? = null,
+    ) : PushResult
 }
 
 data class PushRunResult(
@@ -146,4 +152,5 @@ data class PushRunResult(
     val hasRetryableFailure: Boolean = false,
     val nextDeviceIndex: Int = 0,
     val hasMoreDevices: Boolean = false,
+    val failure: PushFailure? = null,
 )

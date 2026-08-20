@@ -52,8 +52,10 @@ and configures. It remains in scope only while all of these boundaries hold:
   screens, scores, or local behaviour.
 - It runs in an independent background job after a successful strap offload. Receiver latency,
   failure, or misconfiguration must never delay or interfere with the strap sync path.
-- It only sends. NOOP does not fetch rows, commands, settings, or conflict decisions from the
-  receiver; the local on-device database remains the sole authority.
+- It only exports rows. NOOP does not fetch rows, commands, settings, URLs, schemas, or conflict
+  decisions from the receiver; the local on-device database remains the sole authority. The receiver
+  may advertise only a subset of the client's fixed versioned stream registry so unsupported data is
+  not read or sent.
 - Identity is local to the installation and device. There is no NOOP account, hosted service,
   third-party destination, or telemetry channel. Endpoint and bearer credential are user supplied.
 - This repository ships the client and the versioned [push format](PUSH_PROTOCOL.md), not a server.

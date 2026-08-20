@@ -1,6 +1,7 @@
 package com.noop.push
 
 import org.junit.Assert.assertTrue
+import org.junit.Assert.assertFalse
 import org.junit.Test
 
 class PushDaoPreflightTest {
@@ -24,5 +25,15 @@ class PushDaoPreflightTest {
         assertTrue(sql.contains("FROM (SELECT ts, kind, payloadJSON FROM event"))
         assertTrue(sql.contains("WHERE deviceId = ? AND rowid > ? ORDER BY rowid ASC LIMIT ?)"))
         assertTrue(sql.startsWith("SELECT COALESCE(SUM("))
+    }
+
+    @Test fun deviceDiscoveryTouchesOnlyAdvertisedWireTables() {
+        val sql = PushDeviceDiscovery.query(listOf("hrSample", "journal"))
+
+        assertTrue(sql.contains("FROM device"))
+        assertTrue(sql.contains("FROM hrSample"))
+        assertTrue(sql.contains("FROM journal"))
+        assertFalse(sql.contains("FROM rrInterval"))
+        assertFalse(sql.contains("FROM dailyMetric"))
     }
 }
