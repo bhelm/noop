@@ -2660,6 +2660,14 @@ private fun HeroRingColumn(
     onRingTap: (() -> Unit)? = null,
     ring: @Composable () -> Unit,
 ) {
+    val domainLabel = uiString(
+        when (domain) {
+            DomainTheme.Charge -> R.string.today_metric_charge
+            DomainTheme.Effort -> R.string.today_metric_effort
+            DomainTheme.Rest -> R.string.today_metric_rest
+            DomainTheme.Stress -> R.string.today_card_stress
+        },
+    )
     Column(
         modifier = modifier,
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -2676,7 +2684,7 @@ private fun HeroRingColumn(
                     .clickable(
                         interactionSource = ringInteraction,
                         indication = null,
-                        onClickLabel = uiString(R.string.today_action_see_what_shaped, domain.label),
+                        onClickLabel = uiString(R.string.today_action_see_what_shaped, domainLabel),
                         onClick = onRingTap,
                     ),
             ) { ring() }
@@ -2703,12 +2711,12 @@ private fun HeroRingColumn(
         ) {
             // #74: never wrap the hero label onto a second line — at a larger font/screen-zoom (Samsung
             // One UI defaults) "REST" could wrap, growing the whole hero card. One line, ellipsis if forced.
-            Text(domain.label.uppercase(), style = NoopType.overline, color = Palette.textSecondary,
+            Text(domainLabel.uppercase(), style = NoopType.overline, color = Palette.textSecondary,
                  maxLines = 1, overflow = TextOverflow.Ellipsis,
                  modifier = Modifier.padding(horizontal = 16.dp))
             Icon(
                 Icons.AutoMirrored.Filled.KeyboardArrowRight,
-                contentDescription = uiString(R.string.l10n_today_screen_how_domain_label_is_calculated_8897768c, domain.label),
+                contentDescription = uiString(R.string.l10n_today_screen_how_domain_label_is_calculated_8897768c, domainLabel),
                 tint = Palette.textSecondary.copy(alpha = 0.6f),
                 modifier = Modifier.align(Alignment.CenterEnd).size(14.dp),
             )
