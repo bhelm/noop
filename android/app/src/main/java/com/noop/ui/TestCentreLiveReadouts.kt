@@ -58,7 +58,7 @@ internal object TestCentreLiveReadouts {
         "hrDensityNow", "gravityCoverageNow", "lastNightGateFired",
         "connectionUptime", "reconnectCount", "lastOffloadResult",
         "lastSessionSummary", "deviceMetricsNow", "lastImportSummary",
-        "stepsToday", "calibrationState",
+        "stepsToday", "shadowSteps", "calibrationState",
         "currentSoc", "estimateDaysLeft", "slopeSource",
         "lastChargeBreakdown", "lastHrvComputation",
     )
@@ -106,7 +106,10 @@ internal object TestCentreLiveReadouts {
                     id, "Last import", ImportReadout.lastImportSummary(tail) ?: "no import yet",
                 )
                 "stepsToday" -> LiveReadoutRow(
-                    id, "Steps today", StepsReadout.stepsToday(tail)?.toString() ?: "no estimate yet",
+                    id, "Current algorithm", StepsReadout.stepsToday(tail)?.toString() ?: "no estimate yet",
+                )
+                "shadowSteps" -> LiveReadoutRow(
+                    id, "Shadow candidate", StepsReadout.shadowSteps(tail)?.toString() ?: "no candidate yet",
                 )
                 "calibrationState" -> LiveReadoutRow(
                     id, "Calibration", StepsReadout.calibrationState(tail) ?: "no calibration yet",

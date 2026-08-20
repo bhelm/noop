@@ -210,6 +210,7 @@ object StepsEstimateEngineTrace {
         aux: List<V18AuxRow>,
         dayKey: String,
         tzOffsetSeconds: Long,
+        ticksPerStep: Double,
     ): List<String> {
         val sorted = daySteps
             .filter { AnalyticsEngine.dayString(it.ts, tzOffsetSeconds) == dayKey }
@@ -244,8 +245,12 @@ object StepsEstimateEngineTrace {
                 else -> shadowTicks += delta
             }
         }
+        val safeTicksPerStep = max(ticksPerStep, 0.5)
+        val productionSteps = Math.round(productionTicks.toDouble() / safeTicksPerStep).toInt()
+        val shadowSteps = Math.round(shadowTicks.toDouble() / safeTicksPerStep).toInt()
         return listOf(
             "stepsShadow day=$dayKey productionTicks=$productionTicks shadowTicks=$shadowTicks " +
+                "productionSteps=$productionSteps shadowSteps=$shadowSteps " +
                 "instrumentationOnly=true",
             "stepsShadow thresholds walkDynMax=$SHADOW_MAX_DYN_ACCEL_G " +
                 "walkCadence=${SHADOW_CADENCE_RANGE.first}..${SHADOW_CADENCE_RANGE.last} runPassThrough=true",
@@ -275,6 +280,16 @@ object StepsReadout {
                 val e = intField(line, "steps=")
                 if (e != null) return e
             }
+        }
+        return null
+    }
+
+    /** Instrumentation-only candidate in the same scaled step unit as [stepsToday]. */
+    fun shadowSteps(taggedTail: List<String>): Int? {
+        for (line in taggedTail.asReversed()) {
+            if (!line.contains("stepsShadow ")) continue
+            val n = intField(line, "shadowSteps=")
+            if (n != null) return n
         }
         return null
     }

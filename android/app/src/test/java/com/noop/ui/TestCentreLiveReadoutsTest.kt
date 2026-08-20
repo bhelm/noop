@@ -43,7 +43,7 @@ class TestCentreLiveReadoutsTest {
 
     @Test fun everyRegistryDeclaredIdHasExactlyOnePresentationMapping() {
         val declared = TestModeRegistry.all.flatMap { it.liveReadout }.toSet()
-        assertEquals(16, declared.size)
+        assertEquals(17, declared.size)
         assertEquals(declared, TestCentreLiveReadouts.mappedIds)
 
         TestModeRegistry.all.forEach { mode ->
@@ -56,6 +56,26 @@ class TestCentreLiveReadoutsTest {
                 ).map { it.id },
             )
         }
+    }
+
+    @Test fun stepsShowsProductionAndScaledShadowCandidateSideBySide() {
+        val mode = requireNotNull(TestModeRegistry.mode(TestDomain.STEPS))
+        val rows = TestCentreLiveReadouts.rows(
+            mode = mode,
+            active = true,
+            snapshot = TestCentreLiveSnapshot(
+                logLines = listOf(
+                    "[steps] stepsRaw total rawTicks=8400 ticksPerStep=2.0 scaledSteps=4200",
+                    "[steps] stepsShadow productionTicks=8400 shadowTicks=7600 " +
+                        "productionSteps=4200 shadowSteps=3800 instrumentationOnly=true",
+                ),
+            ),
+        )
+
+        assertEquals("Current algorithm", rows[0].label)
+        assertEquals("4200", rows[0].value)
+        assertEquals("Shadow candidate", rows[1].label)
+        assertEquals("3800", rows[1].value)
     }
 
     @Test fun inactiveRowIsCompactAndDoesNotResolveEvenAnUnknownReadout() {

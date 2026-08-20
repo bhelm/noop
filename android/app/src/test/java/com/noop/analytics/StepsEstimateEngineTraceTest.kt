@@ -99,9 +99,11 @@ class StepsEstimateEngineTraceTest {
         )
         val lines = StepsEstimateEngineTrace.shadowCandidateTrace(
             daySteps = samples, gravity = gravity, aux = aux,
-            dayKey = dayUtc, tzOffsetSeconds = 0L,
+            dayKey = dayUtc, tzOffsetSeconds = 0L, ticksPerStep = 2.0,
         )
-        assertTrue(lines.any { it.contains("productionTicks=8 shadowTicks=4") })
+        assertTrue(lines.any {
+            it.contains("productionTicks=8 shadowTicks=4 productionSteps=4 shadowSteps=2")
+        })
         assertTrue(lines.any { it.contains("dynRejectedTicks=2 cadenceRejectedTicks=2") })
         assertTrue(lines.any { it.contains("instrumentationOnly=true") })
         assertEquals(8, StepsCounter.stepsInWindow(samples))
@@ -264,6 +266,19 @@ class StepsEstimateEngineTraceTest {
                 listOf("[steps] stepsEst day=2026-01-02 steps=8421 motion=4123.5 (motion-volume estimate)"),
             ),
         )
+    }
+
+    @Test fun shadowStepsReadoutUsesTheScaledCandidateInsteadOfRawTicks() {
+        assertEquals(
+            321,
+            StepsReadout.shadowSteps(
+                listOf(
+                    "[steps] stepsShadow day=2026-08-20 productionTicks=900 shadowTicks=700 " +
+                        "productionSteps=410 shadowSteps=321 instrumentationOnly=true",
+                ),
+            ),
+        )
+        assertEquals(null, StepsReadout.shadowSteps(listOf("[steps] stepsShadow shadowTicks=700")))
     }
 
     @Test fun calibrationStateReadoutParsesFitAndWithheld() {

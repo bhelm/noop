@@ -145,7 +145,7 @@ object TestModeRegistry {
         questionnaire = listOf(
             Question("otherTrackerSteps", "What did your phone or another tracker report for the same day?", Question.Kind.TEXT),
         ),
-        liveReadout = listOf("stepsToday", "calibrationState"),
+        liveReadout = listOf("stepsToday", "shadowSteps", "calibrationState"),
         capture = CaptureKind.Toggle,
         includesScreenshot = false, requires5MG = false,
     )

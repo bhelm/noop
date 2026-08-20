@@ -991,6 +991,7 @@ object IntelligenceEngine {
                 for (line in StepsEstimateEngineTrace.shadowCandidateTrace(
                     daySteps = daySteps, gravity = grav, aux = auxForShadow,
                     dayKey = day, tzOffsetSeconds = tzOffsetSeconds,
+                    ticksPerStep = profile.stepTicksPerStep,
                 )) {
                     stepsTraceSink(line)
                 }

@@ -180,7 +180,7 @@ class TestModeRegistryParityTest {
             TestModeRegistry.mode(TestDomain.DISPLAY)?.liveReadout)
         assertEquals(listOf("lastImportSummary"),
             TestModeRegistry.mode(TestDomain.IMPORT)?.liveReadout)
-        assertEquals(listOf("stepsToday", "calibrationState"),
+        assertEquals(listOf("stepsToday", "shadowSteps", "calibrationState"),
             TestModeRegistry.mode(TestDomain.STEPS)?.liveReadout)
         assertEquals(listOf("lastChargeBreakdown"),
             TestModeRegistry.mode(TestDomain.RECOVERY)?.liveReadout)
