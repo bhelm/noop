@@ -1,7 +1,5 @@
 package com.noop.analytics
 
-import androidx.annotation.StringRes
-import com.noop.R
 import com.noop.data.DailyMetric
 import kotlin.math.exp
 import kotlin.math.ln
@@ -48,6 +46,24 @@ object ReadinessEngine {
 
     enum class MetricUnit { MS, BPM, RPM }
 
+    /** Semantic display-copy identifiers; Android resources are resolved only in the UI layer. */
+    enum class Copy {
+        TODAY_READINESS_BALANCED, TODAY_READINESS_BALANCED_SUMMARY,
+        TODAY_READINESS_HRV_BAD, TODAY_READINESS_HRV_GOOD, TODAY_READINESS_HRV_WATCH,
+        TODAY_READINESS_LOAD_BUILDING_FAST, TODAY_READINESS_LOAD_RAMPING_DOWN,
+        TODAY_READINESS_LOAD_SPIKING, TODAY_READINESS_LOAD_SWEET_SPOT,
+        TODAY_READINESS_MONOTONY_WATCH, TODAY_READINESS_MORE_NIGHTS,
+        TODAY_READINESS_NORMAL_RANGE, TODAY_READINESS_PRIMED, TODAY_READINESS_PRIMED_SUMMARY,
+        TODAY_READINESS_RESP_BAD, TODAY_READINESS_RESP_WATCH,
+        TODAY_READINESS_RHR_BAD, TODAY_READINESS_RHR_GOOD, TODAY_READINESS_RHR_WATCH,
+        TODAY_READINESS_RUN_DOWN, TODAY_READINESS_RUN_DOWN_SUMMARY,
+        TODAY_READINESS_SIGNAL_HRV, TODAY_READINESS_SIGNAL_RESPIRATORY,
+        TODAY_READINESS_SIGNAL_RESTING_HR, TODAY_READINESS_SIGNAL_TRAINING_LOAD,
+        TODAY_READINESS_SIGNAL_TRAINING_VARIETY, TODAY_READINESS_STRAINED,
+        TODAY_READINESS_STRAINED_SUMMARY, TODAY_READINESS_TITLE,
+        TODAY_READINESS_WEAR_FOR_NIGHTS,
+    }
+
     sealed interface Evidence {
         data class MetricVsBaseline(
             val value: Double,
@@ -61,8 +77,8 @@ object ReadinessEngine {
 
     data class Signal(
         val key: String,            // "hrv" | "rhr" | "respRate" | "acwr" | "monotony"
-        @StringRes val labelRes: Int,
-        @StringRes val detailRes: Int,
+        val labelRes: Copy,
+        val detailRes: Copy,
         val flag: Flag,
         // The numbers behind the signal, e.g. "48 vs 55 ms" or "7d 12.1 / 28d 9.4". Optional and
         // backward-compatible (defaults null); rendered as a small caption under the signal in the UI.
@@ -71,8 +87,8 @@ object ReadinessEngine {
 
     data class Readiness(
         val level: Level,
-        @StringRes val headlineRes: Int,
-        @StringRes val summaryRes: Int,
+        val headlineRes: Copy,
+        val summaryRes: Copy,
         val signals: List<Signal>,
         /** Acute:chronic workload ratio (null if not enough strain history). */
         val acwr: Double?,
@@ -174,8 +190,8 @@ object ReadinessEngine {
         if (latest == null) {
             return Readiness(
                 level = Level.INSUFFICIENT,
-                headlineRes = R.string.today_readiness_title,
-                summaryRes = R.string.today_readiness_wear_for_nights,
+                headlineRes = Copy.TODAY_READINESS_TITLE,
+                summaryRes = Copy.TODAY_READINESS_WEAR_FOR_NIGHTS,
                 signals = emptyList(), acwr = null, monotony = null,
             )
         }
@@ -187,15 +203,15 @@ object ReadinessEngine {
         val hrvSignal = zSignal(
             value = latest.avgHrv,
             baseline = history.takeLast(baselineWindow).mapNotNull { it.avgHrv },
-            key = "hrv", labelRes = R.string.today_readiness_signal_hrv,
+            key = "hrv", labelRes = Copy.TODAY_READINESS_SIGNAL_HRV,
             unit = MetricUnit.MS, decimals = 0,
             higherIsBetter = true,
             cfg = Baselines.readinessHRVLnCfg,   // RD2: ln-space spine, reject off
             logDomain = true,   // RD1: lnRMSSD — HRV is right-skewed
-            goodTextRes = R.string.today_readiness_hrv_good,
-            neutralTextRes = R.string.today_readiness_normal_range,
-            watchTextRes = R.string.today_readiness_hrv_watch,
-            badTextRes = R.string.today_readiness_hrv_bad,
+            goodTextRes = Copy.TODAY_READINESS_HRV_GOOD,
+            neutralTextRes = Copy.TODAY_READINESS_NORMAL_RANGE,
+            watchTextRes = Copy.TODAY_READINESS_HRV_WATCH,
+            badTextRes = Copy.TODAY_READINESS_HRV_BAD,
         )
         if (hrvSignal != null) signals.add(hrvSignal)
 
@@ -203,14 +219,14 @@ object ReadinessEngine {
         val rhrSignal = zSignal(
             value = latest.restingHr?.toDouble(),
             baseline = history.takeLast(baselineWindow).mapNotNull { it.restingHr?.toDouble() },
-            key = "rhr", labelRes = R.string.today_readiness_signal_resting_hr,
+            key = "rhr", labelRes = Copy.TODAY_READINESS_SIGNAL_RESTING_HR,
             unit = MetricUnit.BPM, decimals = 0,
             higherIsBetter = false,
             cfg = Baselines.restingHRCfg,   // RD2: raw-bpm spine, reject off
-            goodTextRes = R.string.today_readiness_rhr_good,
-            neutralTextRes = R.string.today_readiness_normal_range,
-            watchTextRes = R.string.today_readiness_rhr_watch,
-            badTextRes = R.string.today_readiness_rhr_bad,
+            goodTextRes = Copy.TODAY_READINESS_RHR_GOOD,
+            neutralTextRes = Copy.TODAY_READINESS_NORMAL_RANGE,
+            watchTextRes = Copy.TODAY_READINESS_RHR_WATCH,
+            badTextRes = Copy.TODAY_READINESS_RHR_BAD,
         )
         if (rhrSignal != null) signals.add(rhrSignal)
 
@@ -231,16 +247,16 @@ object ReadinessEngine {
                 if (z >= respZBad) {
                     signals.add(
                         Signal(
-                            key = "respRate", labelRes = R.string.today_readiness_signal_respiratory,
-                            detailRes = R.string.today_readiness_resp_bad, flag = Flag.BAD,
+                            key = "respRate", labelRes = Copy.TODAY_READINESS_SIGNAL_RESPIRATORY,
+                            detailRes = Copy.TODAY_READINESS_RESP_BAD, flag = Flag.BAD,
                             evidence = respEvidence,
                         )
                     )
                 } else if (z >= respZWatch) {
                     signals.add(
                         Signal(
-                            key = "respRate", labelRes = R.string.today_readiness_signal_respiratory,
-                            detailRes = R.string.today_readiness_resp_watch, flag = Flag.WATCH,
+                            key = "respRate", labelRes = Copy.TODAY_READINESS_SIGNAL_RESPIRATORY,
+                            detailRes = Copy.TODAY_READINESS_RESP_WATCH, flag = Flag.WATCH,
                             evidence = respEvidence,
                         )
                     )
@@ -270,8 +286,8 @@ object ReadinessEngine {
                 if (mono >= 2.0) {
                     signals.add(
                         Signal(
-                            key = "monotony", labelRes = R.string.today_readiness_signal_training_variety,
-                            detailRes = R.string.today_readiness_monotony_watch, flag = Flag.WATCH,
+                            key = "monotony", labelRes = Copy.TODAY_READINESS_SIGNAL_TRAINING_VARIETY,
+                            detailRes = Copy.TODAY_READINESS_MONOTONY_WATCH, flag = Flag.WATCH,
                             evidence = Evidence.Monotony(mono),
                         )
                     )
@@ -304,11 +320,11 @@ object ReadinessEngine {
     /** Build a z-score signal for a metric where the baseline is the trailing window. */
     private fun zSignal(
         value: Double?, baseline: List<Double>,
-        key: String, @StringRes labelRes: Int, unit: MetricUnit, decimals: Int, higherIsBetter: Boolean,
+        key: String, labelRes: Copy, unit: MetricUnit, decimals: Int, higherIsBetter: Boolean,
         cfg: MetricCfg,
         logDomain: Boolean = false,
-        @StringRes goodTextRes: Int, @StringRes neutralTextRes: Int,
-        @StringRes watchTextRes: Int, @StringRes badTextRes: Int,
+        goodTextRes: Copy, neutralTextRes: Copy,
+        watchTextRes: Copy, badTextRes: Copy,
     ): Signal? {
         if (value == null || baseline.size < minBaseline) return null
         // RD1: right-skewed metrics (HRV/RMSSD) are z-scored in the LOG domain — lnRMSSD is closer to
@@ -335,7 +351,7 @@ object ReadinessEngine {
         // Orient z so positive always means "better".
         val z = (if (higherIsBetter) (tv - m) else (m - tv)) / sigma
         val flag: Flag
-        val detailRes: Int
+        val detailRes: Copy
         when {
             z >= 0.5 -> { flag = Flag.GOOD; detailRes = goodTextRes }
             z >= -0.5 -> { flag = Flag.NEUTRAL; detailRes = neutralTextRes }
@@ -363,23 +379,23 @@ object ReadinessEngine {
         val evidence = Evidence.TrainingLoad(acute, chronic)
         return when {
             ratio < 0.8 -> Signal(
-                key = "acwr", labelRes = R.string.today_readiness_signal_training_load,
-                detailRes = R.string.today_readiness_load_ramping_down, flag = Flag.WATCH,
+                key = "acwr", labelRes = Copy.TODAY_READINESS_SIGNAL_TRAINING_LOAD,
+                detailRes = Copy.TODAY_READINESS_LOAD_RAMPING_DOWN, flag = Flag.WATCH,
                 evidence = evidence,
             )
             ratio < 1.3 -> Signal(
-                key = "acwr", labelRes = R.string.today_readiness_signal_training_load,
-                detailRes = R.string.today_readiness_load_sweet_spot, flag = Flag.GOOD,
+                key = "acwr", labelRes = Copy.TODAY_READINESS_SIGNAL_TRAINING_LOAD,
+                detailRes = Copy.TODAY_READINESS_LOAD_SWEET_SPOT, flag = Flag.GOOD,
                 evidence = evidence,
             )
             ratio < 1.5 -> Signal(
-                key = "acwr", labelRes = R.string.today_readiness_signal_training_load,
-                detailRes = R.string.today_readiness_load_building_fast, flag = Flag.WATCH,
+                key = "acwr", labelRes = Copy.TODAY_READINESS_SIGNAL_TRAINING_LOAD,
+                detailRes = Copy.TODAY_READINESS_LOAD_BUILDING_FAST, flag = Flag.WATCH,
                 evidence = evidence,
             )
             else -> Signal(
-                key = "acwr", labelRes = R.string.today_readiness_signal_training_load,
-                detailRes = R.string.today_readiness_load_spiking, flag = Flag.BAD,
+                key = "acwr", labelRes = Copy.TODAY_READINESS_SIGNAL_TRAINING_LOAD,
+                detailRes = Copy.TODAY_READINESS_LOAD_SPIKING, flag = Flag.BAD,
                 evidence = evidence,
             )
         }
@@ -387,11 +403,11 @@ object ReadinessEngine {
 
     // MARK: Synthesis
 
-    private fun synthesize(signals: List<Signal>, hasHistory: Boolean): Triple<Level, Int, Int> {
+    private fun synthesize(signals: List<Signal>, hasHistory: Boolean): Triple<Level, Copy, Copy> {
         if (!hasHistory || signals.isEmpty()) {
             return Triple(
-                Level.INSUFFICIENT, R.string.today_readiness_title,
-                R.string.today_readiness_more_nights,
+                Level.INSUFFICIENT, Copy.TODAY_READINESS_TITLE,
+                Copy.TODAY_READINESS_MORE_NIGHTS,
             )
         }
         val bad = signals.filter { it.flag == Flag.BAD }
@@ -402,25 +418,25 @@ object ReadinessEngine {
 
         if (bad.size >= 2 || (recoveryDown && loadHigh)) {
             return Triple(
-                Level.RUNDOWN, R.string.today_readiness_run_down,
-                R.string.today_readiness_run_down_summary,
+                Level.RUNDOWN, Copy.TODAY_READINESS_RUN_DOWN,
+                Copy.TODAY_READINESS_RUN_DOWN_SUMMARY,
             )
         }
         if (recoveryDown || loadHigh || bad.size >= 1) {
             return Triple(
-                Level.STRAINED, R.string.today_readiness_strained,
-                R.string.today_readiness_strained_summary,
+                Level.STRAINED, Copy.TODAY_READINESS_STRAINED,
+                Copy.TODAY_READINESS_STRAINED_SUMMARY,
             )
         }
         if (good.size >= 2 && watch.isEmpty()) {
             return Triple(
-                Level.PRIMED, R.string.today_readiness_primed,
-                R.string.today_readiness_primed_summary,
+                Level.PRIMED, Copy.TODAY_READINESS_PRIMED,
+                Copy.TODAY_READINESS_PRIMED_SUMMARY,
             )
         }
         return Triple(
-            Level.BALANCED, R.string.today_readiness_balanced,
-            R.string.today_readiness_balanced_summary,
+            Level.BALANCED, Copy.TODAY_READINESS_BALANCED,
+            Copy.TODAY_READINESS_BALANCED_SUMMARY,
         )
     }
 

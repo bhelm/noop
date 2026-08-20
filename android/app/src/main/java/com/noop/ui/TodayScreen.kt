@@ -2706,7 +2706,7 @@ private fun HeroRingColumn(
                 .fillMaxWidth()
                 .clip(RoundedCornerShape(50))
                 .clickable { onInfo() }
-                .padding(vertical = 2.dp),
+                .padding(vertical = Metrics.space2),
             contentAlignment = Alignment.Center,
         ) {
             // Keep the word centred on the vessel independently of the trailing chevron. Giving the label
@@ -2718,7 +2718,7 @@ private fun HeroRingColumn(
                 color = Palette.textSecondary,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 18.dp),
+                    .padding(horizontal = Metrics.space18),
                 minScale = 0.7f,
                 textAlign = androidx.compose.ui.text.style.TextAlign.Center,
             )
@@ -2728,7 +2728,7 @@ private fun HeroRingColumn(
                 tint = Palette.textSecondary.copy(alpha = 0.6f),
                 modifier = Modifier
                     .align(Alignment.CenterEnd)
-                    .size(14.dp),
+                    .size(Metrics.space14),
             )
         }
     }
@@ -6314,12 +6314,57 @@ private fun readinessEvidenceText(evidence: ReadinessEngine.Evidence): String {
 }
 
 @Composable
+private fun readinessCopy(copy: ReadinessEngine.Copy): String = uiString(
+    when (copy) {
+        ReadinessEngine.Copy.TODAY_READINESS_BALANCED -> R.string.today_readiness_balanced
+        ReadinessEngine.Copy.TODAY_READINESS_BALANCED_SUMMARY -> R.string.today_readiness_balanced_summary
+        ReadinessEngine.Copy.TODAY_READINESS_HRV_BAD -> R.string.today_readiness_hrv_bad
+        ReadinessEngine.Copy.TODAY_READINESS_HRV_GOOD -> R.string.today_readiness_hrv_good
+        ReadinessEngine.Copy.TODAY_READINESS_HRV_WATCH -> R.string.today_readiness_hrv_watch
+        ReadinessEngine.Copy.TODAY_READINESS_LOAD_BUILDING_FAST -> R.string.today_readiness_load_building_fast
+        ReadinessEngine.Copy.TODAY_READINESS_LOAD_RAMPING_DOWN -> R.string.today_readiness_load_ramping_down
+        ReadinessEngine.Copy.TODAY_READINESS_LOAD_SPIKING -> R.string.today_readiness_load_spiking
+        ReadinessEngine.Copy.TODAY_READINESS_LOAD_SWEET_SPOT -> R.string.today_readiness_load_sweet_spot
+        ReadinessEngine.Copy.TODAY_READINESS_MONOTONY_WATCH -> R.string.today_readiness_monotony_watch
+        ReadinessEngine.Copy.TODAY_READINESS_MORE_NIGHTS -> R.string.today_readiness_more_nights
+        ReadinessEngine.Copy.TODAY_READINESS_NORMAL_RANGE -> R.string.today_readiness_normal_range
+        ReadinessEngine.Copy.TODAY_READINESS_PRIMED -> R.string.today_readiness_primed
+        ReadinessEngine.Copy.TODAY_READINESS_PRIMED_SUMMARY -> R.string.today_readiness_primed_summary
+        ReadinessEngine.Copy.TODAY_READINESS_RESP_BAD -> R.string.today_readiness_resp_bad
+        ReadinessEngine.Copy.TODAY_READINESS_RESP_WATCH -> R.string.today_readiness_resp_watch
+        ReadinessEngine.Copy.TODAY_READINESS_RHR_BAD -> R.string.today_readiness_rhr_bad
+        ReadinessEngine.Copy.TODAY_READINESS_RHR_GOOD -> R.string.today_readiness_rhr_good
+        ReadinessEngine.Copy.TODAY_READINESS_RHR_WATCH -> R.string.today_readiness_rhr_watch
+        ReadinessEngine.Copy.TODAY_READINESS_RUN_DOWN -> R.string.today_readiness_run_down
+        ReadinessEngine.Copy.TODAY_READINESS_RUN_DOWN_SUMMARY -> R.string.today_readiness_run_down_summary
+        ReadinessEngine.Copy.TODAY_READINESS_SIGNAL_HRV -> R.string.today_readiness_signal_hrv
+        ReadinessEngine.Copy.TODAY_READINESS_SIGNAL_RESPIRATORY -> R.string.today_readiness_signal_respiratory
+        ReadinessEngine.Copy.TODAY_READINESS_SIGNAL_RESTING_HR -> R.string.today_readiness_signal_resting_hr
+        ReadinessEngine.Copy.TODAY_READINESS_SIGNAL_TRAINING_LOAD -> R.string.today_readiness_signal_training_load
+        ReadinessEngine.Copy.TODAY_READINESS_SIGNAL_TRAINING_VARIETY -> R.string.today_readiness_signal_training_variety
+        ReadinessEngine.Copy.TODAY_READINESS_STRAINED -> R.string.today_readiness_strained
+        ReadinessEngine.Copy.TODAY_READINESS_STRAINED_SUMMARY -> R.string.today_readiness_strained_summary
+        ReadinessEngine.Copy.TODAY_READINESS_TITLE -> R.string.today_readiness_title
+        ReadinessEngine.Copy.TODAY_READINESS_WEAR_FOR_NIGHTS -> R.string.today_readiness_wear_for_nights
+    },
+)
+
+@Composable
 private fun readinessSignalDetail(signal: ReadinessEngine.Signal): String {
     val load = signal.evidence as? ReadinessEngine.Evidence.TrainingLoad
     return if (load != null && load.chronic > 0.0) {
-        uiString(signal.detailRes, String.format(Locale.getDefault(), "%.2f", load.acute / load.chronic))
+        uiString(
+            when (signal.detailRes) {
+                ReadinessEngine.Copy.TODAY_READINESS_LOAD_RAMPING_DOWN -> R.string.today_readiness_load_ramping_down
+                ReadinessEngine.Copy.TODAY_READINESS_LOAD_SWEET_SPOT -> R.string.today_readiness_load_sweet_spot
+                ReadinessEngine.Copy.TODAY_READINESS_LOAD_BUILDING_FAST -> R.string.today_readiness_load_building_fast
+                ReadinessEngine.Copy.TODAY_READINESS_LOAD_SPIKING -> R.string.today_readiness_load_spiking
+                else -> error("Training-load evidence requires a training-load detail")
+            },
+            String.format(Locale.getDefault(), "%.2f", load.acute / load.chronic),
+        )
     } else {
-        uiString(signal.detailRes)
+        readinessCopy(signal.detailRes)
     }
 }
 
@@ -6352,7 +6397,7 @@ private fun ReadinessSection(days: List<DailyMetric>, carriedDay: DailyMetric? =
                 )
                 Spacer(Modifier.width(10.dp))
                 Text(
-                    uiString(readiness.headlineRes),
+                    readinessCopy(readiness.headlineRes),
                     style = NoopType.headline,
                     color = Palette.textPrimary,
                     modifier = Modifier.weight(1f),
@@ -6377,7 +6422,7 @@ private fun ReadinessSection(days: List<DailyMetric>, carriedDay: DailyMetric? =
 
             // Plain-English summary.
             Text(
-                uiString(readiness.summaryRes),
+                readinessCopy(readiness.summaryRes),
                 style = NoopType.subhead,
                 color = Palette.textSecondary,
             )
@@ -6401,7 +6446,7 @@ private fun ReadinessSection(days: List<DailyMetric>, carriedDay: DailyMetric? =
                         )
                         Spacer(Modifier.width(8.dp))
                         Text(
-                            uiString(signal.labelRes),
+                            readinessCopy(signal.labelRes),
                             style = NoopType.caption,
                             color = Palette.textSecondary,
                             modifier = Modifier.width(104.dp),

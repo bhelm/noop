@@ -1578,7 +1578,7 @@
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "%@ Anstrengung"
+            "value": "%@ Belastung"
           }
         },
         "es": {
@@ -6647,7 +6647,7 @@
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "%1$@: %2$@ der Ladung"
+            "value": "%1$@: %2$@ der Energie"
           }
         },
         "en": {
@@ -13372,7 +13372,7 @@
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "%lld%% Ladung"
+            "value": "%lld%% Energie"
           }
         },
         "es": {
@@ -20666,7 +20666,7 @@
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Eine niedrigere Ruheherzfrequenz bedeutet meist eine höhere Ladung."
+            "value": "Eine niedrigere Ruheherzfrequenz bedeutet meist eine höhere Energie."
           }
         },
         "es": {
@@ -21478,7 +21478,7 @@
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Einmal täglich ein Hinweis, wenn deine Anstrengung das untere Ende des heutigen optimalen Bereichs erreicht, berechnet aus deiner Erholung."
+            "value": "Einmal täglich ein Hinweis, wenn deine Belastung das untere Ende des heutigen optimalen Bereichs erreicht, berechnet aus deiner Erholung."
           }
         },
         "es": {
@@ -21815,7 +21815,7 @@
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ein Read-Only Plews / Altini am kleinsten Wert während der Änderung Ihrer nächtlichen HRV: Es zeigt an, ob Ihre 7-Nächte-HRV-Basislinie über, innerhalb oder unter Ihrem persönlichen normalen Band liegt. Es ändert nichts anderes - der Ladungsring ist identisch, ob dieser ein- oder ausgeschaltet ist. Dies ist eine grobe / frühe Prüfung, die noch nicht gegen unterschiedliche reale Daten (n = 1) validiert wurde."
+            "value": "Ein Read-Only Plews / Altini am kleinsten Wert während der Änderung Ihrer nächtlichen HRV: Es zeigt an, ob Ihre 7-Nächte-HRV-Basislinie über, innerhalb oder unter Ihrem persönlichen normalen Band liegt. Es ändert nichts anderes - der Energiering ist identisch, ob dieser ein- oder ausgeschaltet ist. Dies ist eine grobe / frühe Prüfung, die noch nicht gegen unterschiedliche reale Daten (n = 1) validiert wurde."
           }
         },
         "es": {
@@ -22197,7 +22197,7 @@
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ein einfaches Ziel, das sich deiner Anstrengung anpasst. Allgemeine Wellness-Orientierung, kein medizinischer Rat."
+            "value": "Ein einfaches Ziel, das sich deiner Belastung anpasst. Allgemeine Wellness-Orientierung, kein medizinischer Rat."
           }
         },
         "es": {
@@ -22644,7 +22644,7 @@
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Eine Uhr misst deine Herzfrequenzvariabilität stichprobenartig, statt sie die ganze Nacht zu streamen, daher braucht dein Ladungswert etwa sieben Nächte zum Kalibrieren. Bis dahin zeigt NOOP „braucht mehr Daten“, nie eine geratene Zahl."
+            "value": "Eine Uhr misst deine Herzfrequenzvariabilität stichprobenartig, statt sie die ganze Nacht zu streamen, daher braucht dein Energiewert etwa sieben Nächte zum Kalibrieren. Bis dahin zeigt NOOP „braucht mehr Daten“, nie eine geratene Zahl."
           }
         },
         "es": {
@@ -25928,7 +25928,7 @@
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Fügt ein einfaches Flüssigkeitsprotokoll mit einem Tagesziel hinzu, das sich deiner Anstrengung anpasst. Tippe, um einen Schluck, eine Tasse oder eine Flasche zu erfassen, und sieh zu, wie sich der Fortschrittsring füllt. Nur auf %@. Nichts wird synchronisiert."
+            "value": "Fügt ein einfaches Flüssigkeitsprotokoll mit einem Tagesziel hinzu, das sich deiner Belastung anpasst. Tippe, um einen Schluck, eine Tasse oder eine Flasche zu erfassen, und sieh zu, wie sich der Fortschrittsring füllt. Nur auf %@. Nichts wird synchronisiert."
           }
         },
         "es": {
@@ -29472,7 +29472,7 @@
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Apples eigene Schlafphasen fließen direkt in Ruhe ein. Das ist eine der Stärken der Uhr."
+            "value": "Apples eigene Schlafphasen fließen direkt in die Erholung ein. Das ist eine der Stärken der Uhr."
           }
         },
         "es": {
@@ -29530,7 +29530,7 @@
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Apples Schlafphasen sind stark und fließen direkt in deinen Ruhewert ein."
+            "value": "Apples Schlafphasen sind zuverlässig und fließen direkt in deinen Erholungswert ein."
           }
         },
         "es": {
@@ -30026,7 +30026,7 @@
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Frage nach deiner Ladung, Anstrengung, Ruhe und deinen Workouts, basierend auf deinen eigenen Zahlen."
+            "value": "Frage nach deiner Energie, Belastung, Erholung und deinen Workouts, basierend auf deinen eigenen Zahlen."
           }
         },
         "es": {
@@ -32078,7 +32078,7 @@
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Die Ø-HF wird wie eingegeben angezeigt. HF-Graph, Zonen und Anstrengung bleiben aus der aufgezeichneten Sitzung."
+            "value": "Die Ø-HF wird wie eingegeben angezeigt. HF-Graph, Zonen und Belastung bleiben aus der aufgezeichneten Sitzung."
           }
         },
         "es": {
@@ -43191,7 +43191,7 @@
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ladung"
+            "value": "Energie"
           }
         },
         "en": {
@@ -43255,7 +43255,7 @@
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ladung %@%%"
+            "value": "Energie %@%%"
           }
         },
         "es": {
@@ -43371,7 +43371,7 @@
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ladung (gesamter Verlauf)"
+            "value": "Energie (gesamter Verlauf)"
           }
         },
         "es": {
@@ -43429,7 +43429,7 @@
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ladung (letztes Jahr)"
+            "value": "Energie (letztes Jahr)"
           }
         },
         "es": {
@@ -43487,7 +43487,7 @@
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ladungs-Basislinie wird kalibriert. %1$@, %2$@. %3$@."
+            "value": "Energie-Basislinie wird kalibriert. %1$@, %2$@. %3$@."
           }
         },
         "en": {
@@ -43551,7 +43551,7 @@
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ladungs-Basislinie wird neu kalibriert"
+            "value": "Energie-Basislinie wird neu kalibriert"
           }
         },
         "es": {
@@ -43609,7 +43609,7 @@
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Die Ladung ist niedrig und der Schlaf war konsistent."
+            "value": "Die Energie ist niedrig und der Schlaf war konsistent."
           }
         },
         "es": {
@@ -43667,7 +43667,7 @@
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Die Ladung ist niedrig, aber der Schlaf war zu kurz."
+            "value": "Die Energie ist niedrig, aber der Schlaf war zu kurz."
           }
         },
         "es": {
@@ -43725,7 +43725,7 @@
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Die Ladung ist niedrig."
+            "value": "Die Energie ist niedrig."
           }
         },
         "es": {
@@ -43783,7 +43783,7 @@
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Die Ladung ist stabil und der Schlaf war konsistent."
+            "value": "Die Energie ist stabil und der Schlaf war konsistent."
           }
         },
         "es": {
@@ -43841,7 +43841,7 @@
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Die Ladung ist stabil, aber der Schlaf war zu kurz."
+            "value": "Die Energie ist stabil, aber der Schlaf war zu kurz."
           }
         },
         "es": {
@@ -43899,7 +43899,7 @@
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Die Ladung ist stabil."
+            "value": "Die Energie ist stabil."
           }
         },
         "es": {
@@ -43957,7 +43957,7 @@
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Die Ladung ist stark und der Schlaf war konsistent."
+            "value": "Die Energie ist stark und der Schlaf war konsistent."
           }
         },
         "es": {
@@ -44015,7 +44015,7 @@
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Die Ladung ist stark, aber der Schlaf war zu kurz."
+            "value": "Die Energie ist stark, aber der Schlaf war zu kurz."
           }
         },
         "es": {
@@ -44073,7 +44073,7 @@
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Die Ladung ist stark."
+            "value": "Die Energie ist stark."
           }
         },
         "es": {
@@ -44131,7 +44131,7 @@
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ladungsmodell"
+            "value": "Energiemodell"
           }
         },
         "es": {
@@ -44247,7 +44247,7 @@
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ladungstrend"
+            "value": "Energietrend"
           }
         },
         "es": {
@@ -44305,7 +44305,7 @@
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ladung wiegt Ihre HRV gegen Ihre persönliche Grundlinie (~ 55%%), Ruheherzfrequenz (~ 20%%), Ruhequalität (~ 15%%), Atmung (~ 5%%) und Hauttemperaturabweichung (~ 5%%). Anstrengung ist eine 0-%lld kardiovaskuläre Belastung aus der Zeit in Herzfrequenzzonen. Ruhe wird von Bewegung und Herzfrequenz inszeniert. Alles wird hier aus den Rohdaten des Bandes berechnet. Es funktioniert für jeden Tag, an dem NOOP Rohströme gesammelt hat."
+            "value": "Energie gewichtet Ihre HRV gegenüber Ihrer persönlichen Basislinie (~55%%), Ruheherzfrequenz (~20%%), Erholungsqualität (~15%%), Atmung (~5%%) und Hauttemperaturabweichung (~5%%). Belastung ist eine kardiovaskuläre Belastung von 0–%lld aus der Zeit in Herzfrequenzzonen. Erholung wird aus Bewegung und Herzfrequenz in Schlafphasen eingeteilt. Alles wird hier aus den Rohdaten des Straps berechnet."
           }
         },
         "es": {
@@ -44339,7 +44339,7 @@
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Die Ladung gewichtet deine HRV gegenüber deiner persönlichen Basislinie (~55%%), Ruheherzfrequenz (~20%%), Ruhequalität (~15%%), Atmung (~5%%) und Hauttemperatur-Abweichung (~5%%). Anstrengung ist eine kardiovaskuläre Last von 0–%@ aus der Zeit in Herzfrequenzzonen. Ruhe wird aus Bewegung und Herzfrequenz in Phasen eingeteilt. Alles wird hier aus den Rohdaten des Straps berechnet. Es funktioniert für jeden Tag, an dem NOOP Roh-Streams gesammelt hat."
+            "value": "Die Energie gewichtet deine HRV gegenüber deiner persönlichen Basislinie (~55%%), Ruheherzfrequenz (~20%%), Erholungsqualität (~15%%), Atmung (~5%%) und Hauttemperatur-Abweichung (~5%%). Belastung ist eine kardiovaskuläre Last von 0–%@ aus der Zeit in Herzfrequenzzonen. Erholung wird aus Bewegung und Herzfrequenz in Schlafphasen eingeteilt. Alles wird hier aus den Rohdaten des Straps berechnet. Es funktioniert für jeden Tag, an dem NOOP Roh-Streams gesammelt hat."
           }
         },
         "es": {
@@ -44455,7 +44455,7 @@
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ladung · %@ Pkt."
+            "value": "Energie · %@ Pkt."
           }
         },
         "es": {
@@ -44513,7 +44513,7 @@
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ladung · Anstrengung · Ruhe"
+            "value": "Energie · Belastung · Erholung"
           }
         },
         "es": {
@@ -44571,7 +44571,7 @@
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ladung → Ladung am Folgetag"
+            "value": "Energie → Energie am Folgetag"
           }
         },
         "es": {
@@ -44629,7 +44629,7 @@
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ladung, Anstrengung und Ruhe (und wie sie sich von WHOOP unterscheiden)."
+            "value": "Energie, Belastung und Erholung (und wie sie sich von WHOOP unterscheiden)."
           }
         },
         "es": {
@@ -44687,7 +44687,7 @@
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ladung, Anstrengung und Ruhe werden auf deinem eigenen Gerät aus deinen Strap-Daten berechnet. Die Ladung braucht etwa vier Nächte Schlaf, um deine Basislinie zu lernen (das ist „Kalibrierung“, auf dem Ring als Nächte von 4 gezählt), und wird über deine ersten Wochen immer genauer. Auf einem WHOOP 5 oder MG speichert der Strap wenig Verlauf, dieser Zähler kann also auf 0 von 4 stehen, bis du ihn ein paar Nächte getragen hast. Das ist die Sync-Grenze des Straps, kein Fehler. Bevor es eine Zahl gibt, zeigt NOOP, was es kann, ohne eine zu erfinden."
+            "value": "Energie, Belastung und Erholung werden auf deinem eigenen Gerät aus deinen Strap-Daten berechnet. Die Energie braucht etwa vier Nächte Schlaf, um deine Basislinie zu lernen (das ist „Kalibrierung“, auf dem Ring als Nächte von 4 gezählt), und wird über deine ersten Wochen immer genauer. Auf einem WHOOP 5 oder MG speichert der Strap wenig Verlauf, dieser Zähler kann also auf 0 von 4 stehen, bis du ihn ein paar Nächte getragen hast. Das ist die Sync-Grenze des Straps, kein Fehler. Bevor es eine Zahl gibt, zeigt NOOP, was es kann, ohne eine zu erfinden."
           }
         },
         "es": {
@@ -44745,7 +44745,7 @@
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ladung, Anstrengung und Ruhe werden nach ein paar Nächten Tragen persönlich."
+            "value": "Energie, Belastung und Erholung werden nach ein paar Nächten Tragen persönlich."
           }
         },
         "es": {
@@ -44803,7 +44803,7 @@
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ladung, Anstrengung und Ruhe bauen sich über die nächsten Nächte am Handgelenk auf."
+            "value": "Energie, Belastung und Erholung bauen sich über die nächsten Nächte am Handgelenk auf."
           }
         },
         "es": {
@@ -44861,7 +44861,7 @@
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ladung, Anstrengung, Ruhe, HRV, Ruhe- und Live-Herzfrequenz sowie Strap-Akku auf einen Blick."
+            "value": "Energie, Belastung, Erholung, HRV, Ruhe- und Live-Herzfrequenz sowie Strap-Akku auf einen Blick."
           }
         },
         "es": {
@@ -44919,7 +44919,7 @@
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ladung: Wie erholt bist du?"
+            "value": "Energie: Wie gut bist du erholt?"
           }
         },
         "es": {
@@ -46033,7 +46033,7 @@
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Wähle, wie Distanzen, Gewichte, Größen, Temperaturen und Anstrengung angezeigt werden. Deine Daten werden immer gleich gespeichert. Das ändert nur die Anzeige."
+            "value": "Wähle, wie Distanzen, Gewichte, Größen, Temperaturen und Belastung angezeigt werden. Deine Daten werden immer gleich gespeichert. Das ändert nur die Anzeige."
           }
         },
         "es": {
@@ -53285,7 +53285,7 @@
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Aktuelle Ladung"
+            "value": "Aktuelle Energie"
           }
         },
         "es": {
@@ -62627,7 +62627,7 @@
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Anstrengung"
+            "value": "Belastung"
           }
         },
         "en": {
@@ -62691,7 +62691,7 @@
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Anstrengung (0–100)"
+            "value": "Belastung (0–100)"
           }
         },
         "es": {
@@ -62749,7 +62749,7 @@
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Anstrengungsskala"
+            "value": "Belastungsskala"
           }
         },
         "es": {
@@ -62807,7 +62807,7 @@
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Anstrengung · %@"
+            "value": "Belastung · %@"
           }
         },
         "es": {
@@ -62865,7 +62865,7 @@
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Anstrengung: Wie hart hat dein Herz gearbeitet?"
+            "value": "Belastung: Wie stark hat dein Herz gearbeitet?"
           }
         },
         "es": {
@@ -64270,7 +64270,7 @@
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Schätzung aus der heutigen Anstrengung, deinem typischen Schlaf und deiner Erholungs-Basislinie aus %lld Nächten, keine Messung. Deine echte Ladung wird aus der HRV von morgen berechnet, wenn du aufwachst."
+            "value": "Schätzung aus der heutigen Belastung, deinem typischen Schlaf und deiner Erholungs-Basislinie aus %lld Nächten, keine Messung. Deine echte Energie wird aus der HRV von morgen berechnet, wenn du aufwachst."
           }
         },
         "es": {
@@ -73161,7 +73161,7 @@
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "HF %@ · Anstrengung %@"
+            "value": "HF %@ · Belastung %@"
           }
         },
         "es": {
@@ -74777,7 +74777,7 @@
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "HRV ↔ Ladung"
+            "value": "HRV ↔ Energie"
           }
         },
         "es": {
@@ -76834,7 +76834,7 @@
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Herzfrequenzvariabilität als Motor hinter deinem Ladungswert."
+            "value": "Herzfrequenzvariabilität als Motor hinter deinem Energiewert."
           }
         },
         "es": {
@@ -78418,7 +78418,7 @@
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "So wird Ladung berechnet"
+            "value": "So wird Energie berechnet"
           }
         },
         "en": {
@@ -78482,7 +78482,7 @@
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "So wird Ladung berechnet. Die Methode hinter dem Wert."
+            "value": "So wird Energie berechnet. Die Methode hinter dem Wert."
           }
         },
         "es": {
@@ -78540,7 +78540,7 @@
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "So werden Ladung, Anstrengung und Ruhe berechnet, und so unterscheiden sie sich von WHOOP."
+            "value": "So werden Energie, Belastung und Erholung berechnet, und so unterscheiden sie sich von WHOOP."
           }
         },
         "es": {
@@ -78598,7 +78598,7 @@
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "So wird Anstrengung berechnet"
+            "value": "So wird Belastung berechnet"
           }
         },
         "en": {
@@ -78778,7 +78778,7 @@
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "So wird Ruhe berechnet"
+            "value": "So wird Erholung berechnet"
           }
         },
         "en": {
@@ -79203,7 +79203,7 @@
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Wie eng eine gute Nacht der Ladung am nächsten Morgen folgt."
+            "value": "Wie eng eine gute Nacht der Energie am nächsten Morgen folgt."
           }
         },
         "es": {
@@ -79261,7 +79261,7 @@
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Wie viel der Ladung eines Tages in den nächsten hinüberträgt."
+            "value": "Wie viel der Energie eines Tages in den nächsten hinüberträgt."
           }
         },
         "es": {
@@ -80177,7 +80177,7 @@
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Wie entwickelt sich meine Ladung?"
+            "value": "Wie entwickelt sich meine Energie?"
           }
         },
         "es": {
@@ -82816,7 +82816,7 @@
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Importiere deinen Krafttrainings-Verlauf aus einem Hevy-CSV-Export oder einem Liftosaur-JSON-Export. Jedes Workout wird eine Kraftsitzung mit einer Trainingsvolumen-Schätzung (Gewicht × Wiederholungen). Es ist eine Volumenzahl, keine gemessene Belastung. Sie ändert nie deine Anstrengung."
+            "value": "Importiere deinen Krafttrainings-Verlauf aus einem Hevy-CSV-Export oder einem Liftosaur-JSON-Export. Jedes Workout wird eine Kraftsitzung mit einer Trainingsvolumen-Schätzung (Gewicht × Wiederholungen). Es ist eine Volumenzahl, keine gemessene Belastung. Sie ändert nie deine Belastung."
           }
         },
         "es": {
@@ -87285,7 +87285,7 @@
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Letzte Ladungs-Aufschlüsselung"
+            "value": "Letzte Energie-Aufschlüsselung"
           }
         },
         "es": {
@@ -89421,7 +89421,7 @@
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Angeführt von deiner Herzfrequenzvariabilität (HRV) gegenüber deiner persönlichen Basislinie, plus Ruheherzfrequenz, Ruhe der letzten Nacht, Atemfrequenz und einem Hauttemperatur-Signal (ein frühes Zeichen für Krankheit oder Überlastung). Höhere HRV gegenüber deiner Basislinie bedeutet mehr Ladung. NOOP braucht zuerst ein paar Nächte, um deine Basislinie zu lernen. Bis dahin siehst du „Kalibrierung“."
+            "value": "Angeführt von deiner Herzfrequenzvariabilität (HRV) gegenüber deiner persönlichen Basislinie, plus Ruheherzfrequenz, Erholung der letzten Nacht, Atemfrequenz und einem Hauttemperatur-Signal (ein frühes Zeichen für Krankheit oder Überlastung). Höhere HRV gegenüber deiner Basislinie bedeutet mehr Energie. NOOP braucht zuerst ein paar Nächte, um deine Basislinie zu lernen. Bis dahin siehst du „Kalibrierung“."
           }
         },
         "es": {
@@ -91474,7 +91474,7 @@
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Live-Gerätedaten über Bluetooth FTMS. Kein Schlaf, keine Erholung, keine Hauttemperatur, kein SpO₂. Anstrengung braucht die Herzfrequenz des Geräts; ohne sie protokolliert die Sitzung nur die Gerätemetriken."
+            "value": "Live-Gerätedaten über Bluetooth FTMS. Kein Schlaf, keine Erholung, keine Hauttemperatur, kein SpO₂. Belastung braucht die Herzfrequenz des Geräts; ohne sie protokolliert die Sitzung nur die Gerätemetriken."
           }
         },
         "es": {
@@ -92728,7 +92728,7 @@
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Erfasse oben Verhaltensweisen. Nach ein paar Tagen mit Antworten stuft NOOP ein, wie jedes davon deine Ladung, HRV und Ruhe bewegt. Der Import eines WHOOP-Exports (der sein Tagebuch enthält) füllt den Verlauf sofort rückwirkend."
+            "value": "Erfasse oben Verhaltensweisen. Nach ein paar Tagen mit Antworten stuft NOOP ein, wie jedes davon deine Energie, HRV und Erholung bewegt. Der Import eines WHOOP-Exports (der sein Tagebuch enthält) füllt den Verlauf sofort rückwirkend."
           }
         },
         "es": {
@@ -100221,7 +100221,7 @@
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "NOOP-Ladung"
+            "value": "NOOP-Energie"
           }
         },
         "es": {
@@ -100337,7 +100337,7 @@
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "NOOP kann allein mit einer Apple Watch laufen, kein Brustgurt nötig. Die Uhr ist der Sensor; NOOP übernimmt das Denken auf deinem Telefon und berechnet Ladung, Ruhe, Anstrengung und dein Fitnessalter aus deinen Health-Daten, alles auf dem Gerät."
+            "value": "NOOP kann allein mit einer Apple Watch laufen, kein Brustgurt nötig. Die Uhr ist der Sensor; NOOP übernimmt das Denken auf deinem Telefon und berechnet Energie, Erholung, Belastung und dein Fitnessalter aus deinen Health-Daten, alles auf dem Gerät."
           }
         },
         "es": {
@@ -100603,7 +100603,7 @@
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "NOOP gibt dir drei Tageswerte (Ladung, Anstrengung und Ruhe), jeweils auf einer Skala von 0–100. Sie entstehen aus den Rohsignalen deines Straps mit veröffentlichter, begutachteter Sportwissenschaft und werden vollständig auf deinem Gerät berechnet. Es sind NICHT WHOOPs Werte: Wir haben WHOOPs private Algorithmen nicht und tun auch nicht so. Sie zielen mit offener Wissenschaft auf dieselben drei Fragen, folgen WHOOPs Werten also meist in der Richtung, stimmen aber nicht Zahl für Zahl überein. Und genau das ist der Punkt."
+            "value": "NOOP gibt dir drei Tageswerte (Energie, Belastung und Erholung), jeweils auf einer Skala von 0–100. Sie entstehen aus den Rohsignalen deines Straps mit veröffentlichter, begutachteter Sportwissenschaft und werden vollständig auf deinem Gerät berechnet. Es sind NICHT WHOOPs Werte: Wir haben WHOOPs private Algorithmen nicht und tun auch nicht so. Sie zielen mit offener Wissenschaft auf dieselben drei Fragen, folgen WHOOPs Werten also meist in der Richtung, stimmen aber nicht Zahl für Zahl überein. Und genau das ist der Punkt."
           }
         },
         "es": {
@@ -101826,7 +101826,7 @@
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "NOOP berechnet deine Ladung, Anstrengung und Ruhe selbst: auf dem Gerät, keine Cloud."
+            "value": "NOOP berechnet deine Energie, Belastung und Erholung selbst: auf dem Gerät, keine Cloud."
           }
         },
         "es": {
@@ -102466,7 +102466,7 @@
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "NOOPs eigene Ladung, Anstrengung und Ruhe, berechnet auf deinem Gerät nach veröffentlichten Methoden."
+            "value": "NOOPs eigene Energie, Belastung und Erholung, berechnet auf deinem Gerät nach veröffentlichten Methoden."
           }
         },
         "es": {
@@ -104528,7 +104528,7 @@
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Noch keine Ladungs-Aufschlüsselung"
+            "value": "Noch keine Energie-Aufschlüsselung"
           }
         },
         "es": {
@@ -105230,7 +105230,7 @@
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Noch keine Cardio-Last. Anstrengung baut sich auf, sobald deine Herzfrequenz in deine Anstrengungszone steigt (etwa 50 % deiner Herzfrequenzreserve). Ein ruhiger Tag liest sich ehrlich nahe null."
+            "value": "Noch keine Cardio-Last. Belastung baut sich auf, sobald deine Herzfrequenz in deine Belastungszone steigt (etwa 50 % deiner Herzfrequenzreserve). Ein ruhiger Tag liest sich ehrlich nahe null."
           }
         },
         "es": {
@@ -105288,7 +105288,7 @@
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Kein Brustgurt? Kein Problem. NOOP kann allein mit deiner Apple Watch laufen. Es liest die Daten deiner Uhr über Apple Health und berechnet deine Ladung, Ruhe, Anstrengung und dein Fitnessalter direkt hier auf deinem Telefon. Alles bleibt auf dem Gerät."
+            "value": "Kein Brustgurt? Kein Problem. NOOP kann allein mit deiner Apple Watch laufen. Es liest die Daten deiner Uhr über Apple Health und berechnet deine Energie, Erholung, Belastung und dein Fitnessalter direkt hier auf deinem Telefon. Alles bleibt auf dem Gerät."
           }
         },
         "es": {
@@ -111863,7 +111863,7 @@
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Benachrichtigen, wenn die optimale Anstrengung erreicht ist"
+            "value": "Benachrichtigen, wenn die optimale Belastung erreicht ist"
           }
         },
         "es": {
@@ -113801,7 +113801,7 @@
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "An: Deine Ladung, Ruhe, HRV und Workouts werden für maßgeschneidertes Coaching mit dem Anbieter geteilt."
+            "value": "An: Deine Energie, Erholung, HRV und Workouts werden für maßgeschneidertes Coaching mit dem Anbieter geteilt."
           }
         },
         "es": {
@@ -115490,7 +115490,7 @@
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Optimale Anstrengung erreicht"
+            "value": "Optimale Belastung erreicht"
           }
         },
         "es": {
@@ -119452,7 +119452,7 @@
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Wähle eine Sportart. NOOP zeichnet HF, Spitze, Durchschnitt und Anstrengung aus dem Live-Feed auf."
+            "value": "Wähle eine Sportart. NOOP zeichnet HF, Spitze, Durchschnitt und Belastung aus dem Live-Feed auf."
           }
         },
         "es": {
@@ -119510,7 +119510,7 @@
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Wähle ein Wearable-Signal (Ruhe-HF, HRV, Schlaf, Ladung, Gewicht …), um es gegen diesen Marker zu stellen. NOOP mittelt das Signal über die %@ vor jeder Messung."
+            "value": "Wähle ein Wearable-Signal (Ruhe-HF, HRV, Schlaf, Energie, Gewicht …), um es gegen diesen Marker zu stellen. NOOP mittelt das Signal über die %@ vor jeder Messung."
           }
         },
         "es": {
@@ -120714,7 +120714,7 @@
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Speist Ladung, Anstrengung, Ruhe und Schlaf"
+            "value": "Speist Energie, Belastung, Erholung und Schlaf"
           }
         },
         "es": {
@@ -120772,7 +120772,7 @@
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Speist Ladung, Anstrengung, Ruhe, Schlaf + Gesundheitsmonitor"
+            "value": "Speist Energie, Belastung, Erholung, Schlaf + Gesundheitsmonitor"
           }
         },
         "es": {
@@ -120830,7 +120830,7 @@
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Speist jetzt Anstrengung; Ladung und Ruhe, sobald genug Nächte und die Dekodierung bestätigt sind"
+            "value": "Speist jetzt Belastung; Energie und Erholung, sobald genug Nächte und die Dekodierung bestätigt sind"
           }
         },
         "es": {
@@ -120888,7 +120888,7 @@
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Speist Ruhe, Anstrengung, Fitnessalter und Schritte, plus Ladung, sobald die Erholung kalibriert ist"
+            "value": "Speist Erholung, Belastung, Fitnessalter und Schritte sowie Energie, sobald die Basislinie kalibriert ist"
           }
         },
         "es": {
@@ -120946,7 +120946,7 @@
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Speist die Live-Konsole + Anstrengung. Keine Ladung, keine Ruhe, kein Schlaf"
+            "value": "Speist die Live-Konsole + Belastung. Keine Energie, keine Erholung, kein Schlaf"
           }
         },
         "es": {
@@ -124445,7 +124445,7 @@
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Eingestuft, mit Zeitversatz: welche deiner Gewohnheiten deine Ladung wirklich bewegen, plus deine persönliche Alkohol-/Koffein-Dosis-Wirkung."
+            "value": "Eingestuft, mit Zeitversatz: welche deiner Gewohnheiten deine Energie wirklich bewegen, plus deine persönliche Alkohol-/Koffein-Dosis-Wirkung."
           }
         },
         "es": {
@@ -124678,7 +124678,7 @@
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Verankert jede Basislinie, die in die Ladung einfließt, neu an deinen letzten Nächten. Kein gespeicherter Tag wird gelöscht."
+            "value": "Verankert jede Basislinie, die in die Energie einfließt, neu an deinen letzten Nächten. Kein gespeicherter Tag wird gelöscht."
           }
         },
         "es": {
@@ -126424,7 +126424,7 @@
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Bereit für eine deutliche Anstrengung."
+            "value": "Bereit für eine deutliche Belastung."
           }
         },
         "es": {
@@ -126870,7 +126870,7 @@
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ladungs-Basislinie neu kalibrieren"
+            "value": "Energie-Basislinie neu kalibrieren"
           }
         },
         "es": {
@@ -126928,7 +126928,7 @@
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Deine Ladungs-Basislinie neu kalibrieren?"
+            "value": "Deine Energie-Basislinie neu kalibrieren?"
           }
         },
         "es": {
@@ -128106,7 +128106,7 @@
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Zeichnet ein Live-Geräte-Workout auf, Anstrengung aus der HF bewertet, wenn das Gerät sie meldet"
+            "value": "Zeichnet ein Live-Geräte-Workout auf, Belastung aus der HF bewertet, wenn das Gerät sie meldet"
           }
         },
         "es": {
@@ -128228,7 +128228,7 @@
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Erholung / Ladung"
+            "value": "Erholung / Energie"
           }
         },
         "es": {
@@ -128443,7 +128443,7 @@
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Die Erholung, NOOPs Ladungswert, wird von deiner Herzfrequenzvariabilität gegenüber deiner persönlichen Basislinie angeführt. Ein Brustgurt streamt Schlag-zu-Schlag-Daten die ganze Nacht dicht, er kann diese Basislinie also schnell lernen. Eine Apple Watch misst HRV dagegen stichprobenartig, eine Handvoll Messungen über den Tag plus nachts – das Signal ist echt, aber dünner."
+            "value": "Die Erholung, NOOPs Energiewert, wird von deiner Herzfrequenzvariabilität gegenüber deiner persönlichen Basislinie angeführt. Ein Brustgurt streamt Schlag-zu-Schlag-Daten die ganze Nacht dicht, er kann diese Basislinie also schnell lernen. Eine Apple Watch misst HRV dagegen stichprobenartig, eine Handvoll Messungen über den Tag plus nachts – das Signal ist echt, aber dünner."
           }
         },
         "es": {
@@ -128559,7 +128559,7 @@
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Erholung, Anstrengung und Schlaf auf einen Blick"
+            "value": "Erholung, Belastung und Schlaf auf einen Blick"
           }
         },
         "es": {
@@ -132045,7 +132045,7 @@
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ruhe"
+            "value": "Erholung"
           }
         },
         "en": {
@@ -132341,7 +132341,7 @@
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ruhe ↔ Ladung"
+            "value": "Ruhe ↔ Energie"
           }
         },
         "es": {
@@ -132399,7 +132399,7 @@
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ruhe: Wie erholsam war dein Schlaf?"
+            "value": "Erholung: Wie erholsam war dein Schlaf?"
           }
         },
         "es": {
@@ -132669,7 +132669,7 @@
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Startet den etwa 4-nächtigen Aufbau für Ladung und deine HRV-Basislinie ab heute Nacht neu. Nutze es, wenn eine schlechte erste Woche deine Basislinie verzerrt hat. Dein Verlauf bleibt."
+            "value": "Startet den etwa 4-nächtigen Aufbau für Energie und deine HRV-Basislinie ab heute Nacht neu. Nutze es, wenn eine schlechte erste Woche deine Basislinie verzerrt hat. Dein Verlauf bleibt."
           }
         },
         "es": {
@@ -132849,7 +132849,7 @@
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ruhe-HF ↔ Ladung"
+            "value": "Ruhe-HF ↔ Energie"
           }
         },
         "es": {
@@ -133145,7 +133145,7 @@
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Die Ruheherzfrequenz läuft hoch gegenüber deiner Norm. Dein Körper steht heute unter Last. Halte die Anstrengung leicht."
+            "value": "Die Ruheherzfrequenz läuft hoch gegenüber deiner Norm. Dein Körper steht heute unter Last. Halte die Belastung leicht."
           }
         },
         "es": {
@@ -139227,7 +139227,7 @@
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Sieh, wie Ladung, Anstrengung und Ruhe berechnet werden und wie sie sich von WHOOP unterscheiden."
+            "value": "Sieh, wie Energie, Belastung und Erholung berechnet werden und wie sie sich von WHOOP unterscheiden."
           }
         },
         "es": {
@@ -139343,7 +139343,7 @@
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Sieh, was deine Ladung geprägt hat"
+            "value": "Sieh, was deine Energie geprägt hat"
           }
         },
         "es": {
@@ -145089,7 +145089,7 @@
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Schlafstetigkeit: Ruhe schwankte ±%@ Pkt. von Nacht zu Nacht."
+            "value": "Schlafstabilität: Erholung schwankte von Nacht zu Nacht um ±%@ Punkte."
           }
         },
         "es": {
@@ -147635,7 +147635,7 @@
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Starte ein Workout, wenn der Stream zählt. NOOP zeichnet Intervall, HF, Spitze, Durchschnitt und Anstrengung aus demselben Live-Feed auf."
+            "value": "Starte ein Workout, wenn der Stream zählt. NOOP zeichnet Intervall, HF, Spitze, Durchschnitt und Belastung aus demselben Live-Feed auf."
           }
         },
         "es": {
@@ -149051,7 +149051,7 @@
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Schritte, aktive Energie und erfasste Workouts fließen in die Anstrengung ein. Dicht und verlässlich."
+            "value": "Schritte, aktive Energie und erfasste Workouts fließen in die Belastung ein. Dicht und verlässlich."
           }
         },
         "es": {
@@ -149109,7 +149109,7 @@
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Schritte, aktive Energie und erfasste Workouts fließen in deine Anstrengung ein. Dicht und verlässlich."
+            "value": "Schritte, aktive Energie und erfasste Workouts fließen in deine Belastung ein. Dicht und verlässlich."
           }
         },
         "es": {
@@ -150229,7 +150229,7 @@
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Anstrengungsziel"
+            "value": "Belastungsziel"
           }
         },
         "es": {
@@ -156627,7 +156627,7 @@
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Deshalb beginnt eine Watch-Only-Ladung mit \"Kalibrieren\". NOOP benötigt etwa sieben Nächte Ihrer HRV, um zu erfahren, wie normal für Sie aussieht. Bis es sie hat, hält es die Punktzahl zurück, anstatt zu erraten. Sobald die Basislinie festgelegt ist, erscheint Ihre Ladung mit ihrem Vertrauen auf der gleichen 0-100-Skala wie ein Gurt."
+            "value": "Deshalb beginnt eine Watch-Only-Energie mit \"Kalibrieren\". NOOP benötigt etwa sieben Nächte Ihrer HRV, um zu erfahren, wie normal für Sie aussieht. Bis es sie hat, hält es die Punktzahl zurück, anstatt zu erraten. Sobald die Basislinie festgelegt ist, erscheint Ihre Energie mit ihrem Vertrauen auf der gleichen 0-100-Skala wie ein Gurt."
           }
         },
         "es": {
@@ -156661,7 +156661,7 @@
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Deshalb startet eine Nur-Uhr-Ladung als „Kalibrierung“. NOOP braucht etwa sieben Nächte deiner HRV, um zu lernen, was für dich normal ist. Bis dahin hält es den Wert zurück, statt zu raten. Sobald die Basislinie steht, erscheint deine Ladung mit ihrer Konfidenz, auf derselben Skala von 0–100 wie bei einem Strap."
+            "value": "Deshalb startet eine Nur-Uhr-Energie als „Kalibrierung“. NOOP braucht etwa sieben Nächte deiner HRV, um zu lernen, was für dich normal ist. Bis dahin hält es den Wert zurück, statt zu raten. Sobald die Basislinie steht, erscheint deine Energie mit ihrer Konfidenz, auf derselben Skala von 0–100 wie bei einem Strap."
           }
         },
         "es": {
@@ -156869,7 +156869,7 @@
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Der Durchschnitt oben wurde bearbeitet. Graph, Zonen und Anstrengung bleiben aus der aufgezeichneten Sitzung."
+            "value": "Der Durchschnitt oben wurde bearbeitet. Graph, Zonen und Belastung bleiben aus der aufgezeichneten Sitzung."
           }
         },
         "es": {
@@ -158916,7 +158916,7 @@
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Das baut sich aus dem Strap auf, während er synchronisiert. Anstrengung und Ruhe erscheinen, nachdem du ihn getragen und eine Nacht geschlafen hast. Die Ladung braucht etwa vier Nächte Schlaf, um deine Basislinie zu lernen (bis dahin siehst du „Kalibrierung“), und wird über deine ersten Wochen immer genauer. Auf einem WHOOP 5 oder MG speichert der Strap wenig Verlauf, der Nachtzähler kann also langsam steigen oder auf 0 von 4 stehen, bis du ihn ein paar Nächte getragen hast. Das ist seine Sync-Grenze, kein Fehler. Importiere deinen WHOOP-Export, um die Wartezeit zu überspringen."
+            "value": "Das baut sich aus dem Strap auf, während er synchronisiert. Belastung und Erholung erscheinen, nachdem du ihn getragen und eine Nacht geschlafen hast. Die Energie braucht etwa vier Nächte Schlaf, um deine Basislinie zu lernen (bis dahin siehst du „Kalibrierung“), und wird über deine ersten Wochen immer genauer. Auf einem WHOOP 5 oder MG speichert der Strap wenig Verlauf, der Nachtzähler kann also langsam steigen oder auf 0 von 4 stehen, bis du ihn ein paar Nächte getragen hast. Das ist seine Sync-Grenze, kein Fehler. Importiere deinen WHOOP-Export, um die Wartezeit zu überspringen."
           }
         },
         "es": {
@@ -160202,7 +160202,7 @@
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Das startet den etwa 4-nächtigen Aufbau für Ladung und deine HRV-Basislinie neu. Dein Verlauf bleibt."
+            "value": "Das startet den etwa 4-nächtigen Aufbau für Energie und deine HRV-Basislinie neu. Dein Verlauf bleibt."
           }
         },
         "es": {
@@ -160260,7 +160260,7 @@
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Das startet den etwa 4-nächtigen Aufbau für Ladung und deine HRV-Basislinie neu. Dein Verlauf bleibt. Nutze es, wenn eine schlechte erste Woche, etwa krank getragen, deine Basislinie verzerrt hat."
+            "value": "Das startet den etwa 4-nächtigen Aufbau für Energie und deine HRV-Basislinie neu. Dein Verlauf bleibt. Nutze es, wenn eine schlechte erste Woche, etwa krank getragen, deine Basislinie verzerrt hat."
           }
         },
         "es": {
@@ -160376,7 +160376,7 @@
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Der Beitrag dieser Sitzung zur Tages-Anstrengung, wie während des Workouts erfasst."
+            "value": "Der Beitrag dieser Sitzung zur Tages-Belastung, wie während des Workouts erfasst."
           }
         },
         "es": {
@@ -162586,7 +162586,7 @@
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ladung von morgen"
+            "value": "Energie von morgen"
           }
         },
         "es": {
@@ -162644,7 +162644,7 @@
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ladungs-Schätzung für morgen %1$lld plus/minus %2$lld"
+            "value": "Energie-Schätzung für morgen %1$lld plus/minus %2$lld"
           }
         },
         "en": {
@@ -163370,7 +163370,7 @@
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Zeichne ein Workout manuell auf. Erfasst Herzfrequenz und Anstrengung, bis du es beendest."
+            "value": "Zeichne ein Workout manuell auf. Erfasst Herzfrequenz und Belastung, bis du es beendest."
           }
         },
         "es": {
@@ -172915,7 +172915,7 @@
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Was deine Ladung geprägt hat"
+            "value": "Was deine Energie geprägt hat"
           }
         },
         "es": {
@@ -177245,7 +177245,7 @@
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Du wachst voraussichtlich mit etwa %1$lld ± %2$lld Ladung auf, wenn du heute Nacht ungefähr %3$@ schläfst."
+            "value": "Du wachst voraussichtlich mit etwa %1$lld ± %2$lld Energie auf, wenn du heute Nacht ungefähr %3$@ schläfst."
           }
         },
         "en": {
@@ -177495,7 +177495,7 @@
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Du bist verbunden. NOOP liest jetzt deine Apple-Watch-Daten. Dein Ladungswert kalibriert etwa in der ersten Woche, dann pendelt er sich ein."
+            "value": "Du bist verbunden. NOOP liest jetzt deine Apple-Watch-Daten. Dein Energiewert kalibriert etwa in der ersten Woche, dann pendelt er sich ein."
           }
         },
         "es": {
@@ -178023,7 +178023,7 @@
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Du hast dein heutiges optimales Anstrengungsziel von %lld erreicht. Stark — deine Erholung hat es ermöglicht."
+            "value": "Du hast dein heutiges optimales Belastungsziel von %lld erreicht. Stark — deine Erholung hat es ermöglicht."
           }
         },
         "es": {
@@ -178115,7 +178115,7 @@
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Deine Ladung (Erholung) auf dem Zifferblatt, mit Anstrengung und Ruhe in der rechteckigen Karte."
+            "value": "Deine Energie (Erholung) auf dem Zifferblatt, mit Belastung und Erholung in der rechteckigen Karte."
           }
         },
         "es": {
@@ -178173,7 +178173,7 @@
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Dein Ladungswert lernt mit der Zeit eine persönliche Basislinie aus deiner Herzfrequenzvariabilität, Ruheherzfrequenz und mehr. Wenn eine schlechte erste Woche sie verzerrt hat, kannst du sie ab heute Nacht neu lernen lassen. Dein Verlauf bleibt."
+            "value": "Dein Energiewert lernt mit der Zeit eine persönliche Basislinie aus deiner Herzfrequenzvariabilität, Ruheherzfrequenz und weiteren Signalen. Wenn eine schlechte erste Woche sie verzerrt hat, kannst du sie ab heute Nacht neu lernen lassen. Dein Verlauf bleibt."
           }
         },
         "es": {
@@ -179409,7 +179409,7 @@
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Deine Live-Herzfrequenz funktioniert bereits vom Strap, und Ladung, Anstrengung und Ruhe bauen sich daraus über die nächsten Nächte am Handgelenk auf und werden genauer, während er deine Basislinie lernt. Willst du deinen vollen Verlauf sofort? Importiere deinen WHOOP-Export unter „Datenquellen“, und er füllt sich in etwa einer Minute rückwirkend."
+            "value": "Deine Live-Herzfrequenz funktioniert bereits vom Strap, und Energie, Belastung und Erholung bauen sich daraus über die nächsten Nächte am Handgelenk auf und werden genauer, während er deine Basislinie lernt. Willst du deinen vollen Verlauf sofort? Importiere deinen WHOOP-Export unter „Datenquellen“, und er füllt sich in etwa einer Minute rückwirkend."
           }
         },
         "es": {
@@ -184267,7 +184267,7 @@
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Anstrengung %@"
+            "value": "Belastung %@"
           }
         },
         "es": {
@@ -207396,7 +207396,7 @@
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Benötigt %1$lld+ aufeinanderfolgende Tage mit Anstrengung, um zu starten. Bisher %2$lld."
+            "value": "Benötigt %1$lld+ aufeinanderfolgende Tage mit Belastung, um zu starten. Bisher %2$lld."
           }
         },
         "es": {

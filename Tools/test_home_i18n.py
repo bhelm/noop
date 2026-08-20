@@ -265,6 +265,12 @@ class HomeLocalizationTest(unittest.TestCase):
         self.assertIn("R.plurals.today_source_workouts", source)
         self.assertNotIn("R.string.today_source_counts", source)
 
+    def test_android_analytics_stays_free_of_ui_resources(self) -> None:
+        source = (ROOT / "android/app/src/main/java/com/noop/analytics/ReadinessEngine.kt").read_text(encoding="utf-8")
+        self.assertNotIn("com.noop.R", source)
+        self.assertNotIn("androidx.annotation.StringRes", source)
+        self.assertIn("enum class Copy", source)
+
     def test_android_english_home_contract_preserves_head_semantics(self) -> None:
         root = ET.parse(ROOT / "android/app/src/main/res/values/strings.xml").getroot()
         strings = {node.attrib["name"]: (node.text or "").replace("\\'", "'") for node in root.findall("string")}
@@ -512,6 +518,24 @@ class HomeLocalizationTest(unittest.TestCase):
         self.assertIn('suppressedBy.append("a hard or late workout")', illness)
         self.assertIn("public enum SuppressionReason", illness)
         self.assertIn("public let suppressionReasons: [SuppressionReason]", illness)
+
+    def test_apple_de_score_glossary_preserves_physiology_terms(self) -> None:
+        strings = audit.load_catalog(ROOT / "Strand/Resources/Localizable.xcstrings")["strings"]
+        values = [
+            entry.get("localizations", {}).get("de", {}).get("stringUnit", {}).get("value", "")
+            for entry in strings.values()
+        ]
+        joined = "\n".join(values)
+        self.assertNotIn("Erholungherz", joined)
+        self.assertNotIn("Erholungqualität", joined)
+        self.assertNotIn("Erholung- und Live-Herzfrequenz", joined)
+        for key, expected in {
+            "Charge": "Energie",
+            "Effort": "Belastung",
+            "Rest": "Erholung",
+            "How Rest is calculated": "So wird Erholung berechnet",
+        }.items():
+            self.assertEqual(expected, strings[key]["localizations"]["de"]["stringUnit"]["value"])
 
     def test_apple_home_count_catalogs_have_real_focus_plural_variations(self) -> None:
         today = (ROOT / "Strand/Screens/TodayView.swift").read_text(encoding="utf-8")
