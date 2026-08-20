@@ -400,6 +400,12 @@ class HomeLocalizationTest(unittest.TestCase):
         scoped = [row for row in findings if row[0] in APPLE_HOME_FILES]
         self.assertEqual([], scoped, "Unlocalized Apple Home UI:\n" + _format_findings(scoped))
 
+    def test_apple_day_nav_dynamic_date_avoids_multiline_interpolation(self) -> None:
+        source = (ROOT / "Packages/StrandDesign/Sources/StrandDesign/DayNavBar.swift").read_text(encoding="utf-8")
+        self.assertIn("let formattedDay = selectedDay.formatted(", source)
+        self.assertIn("return LocalizedStringKey(formattedDay)", source)
+        self.assertNotIn('return "\\(selectedDay.formatted(', source)
+
     def test_apple_home_catalog_entries_cover_focus_locales(self) -> None:
         missing: list[str] = []
         catalogs: dict[Path, dict] = {}

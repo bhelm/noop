@@ -42,9 +42,10 @@ public struct DayNavBar: View {
         case 0:  return "Today"
         case 1:  return "Yesterday"
         default:
-            return "\(selectedDay.formatted(
+            let formattedDay = selectedDay.formatted(
                 .dateTime.weekday(.abbreviated).day().month(.abbreviated).locale(locale)
-            ))"
+            )
+            return LocalizedStringKey(formattedDay)
         }
     }
 
