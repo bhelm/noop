@@ -2404,4 +2404,19 @@
     <string name="today_driver_warmer_limiting">cieplej niż baza, ogranicza regenerację</string>
     <string name="today_driver_cooler_limiting">chłodniej niż baza, ogranicza regenerację</string>
     <string name="today_driver_a11y">%1$s, %2$s, %3$s, %4$s pkt, %5$s</string>
+    <string name="scoring_guide_daily_scores">Twoje dzienne wyniki</string>
+    <string name="scoring_guide_three_scores">Trzy wyniki</string>
+    <string name="scoring_guide_intro_body">NOOP podaje trzy dzienne wyniki: Energię, Wysiłek i Odpoczynek, od 0 do 100. Są obliczane na urządzeniu z sygnałów opaski i opublikowanej nauki o sporcie. To niezależne oszacowania, a nie prywatne wyniki WHOOP, dlatego mogą zmieniać się podobnie, lecz nie będą identyczne.</string>
+    <string name="scoring_guide_charge_headline">Energia: jak dobrze się zregenerowałeś?</string>
+    <string name="scoring_guide_charge_body">Energia opiera się głównie na HRV względem osobistej wartości bazowej oraz tętnie spoczynkowym, Odpoczynku z ostatniej nocy, oddechu i temperaturze skóry. Wyższe HRV oznacza więcej Energii. NOOP potrzebuje kilku nocy na poznanie wartości bazowej; do tego czasu wyświetla „Kalibracja”.</string>
+    <string name="scoring_guide_charge_vs_whoop">Idea jest podobna do Recovery % WHOOP, ale nasze wagi i obliczenia wartości bazowej są niezależne i udokumentowane.</string>
+    <string name="scoring_guide_effort_headline">Wysiłek: jak ciężko pracowało Twoje serce?</string>
+    <string name="scoring_guide_effort_body">Wysiłek mierzy obciążenie układu krążenia. Tętno jest przeliczane na impuls treningowy za pomocą stref rezerwy; intensywne strefy ważą więcej. Wynik trafia na logarytmiczną skalę 0–100. Kroki i aktywna energia uwzględniają długie aktywności o małym obciążeniu.</string>
+    <string name="scoring_guide_effort_vs_whoop">Idea jest podobna do Day Strain WHOOP (0–21), przeskalowanego do 0–100. Wynik 100 pozostaje tak rzadki jak 21,0.</string>
+    <string name="scoring_guide_rest_headline">Odpoczynek: jak regenerujący był Twój sen?</string>
+    <string name="scoring_guide_rest_body">Odpoczynek łączy długość snu względem potrzeb, wydajność snu, regeneracyjny sen głęboki i REM oraz regularność pór snu i budzenia.</string>
+    <string name="scoring_guide_rest_vs_whoop">Idea jest podobna do Sleep Performance % WHOOP, ale nasze obliczenie jest niezależne.</string>
+    <string name="scoring_guide_solid">Pewny</string>
+    <string name="scoring_guide_building">W trakcie</string>
+    <string name="scoring_guide_confidence_body">Każdy wynik pokazuje wiarygodność. „Kalibracja” oznacza naukę wartości bazowej lub brak danych. „W trakcie” oznacza, że danych wystarcza, ale nadal jest ich niewiele. „Pewny” oznacza komplet danych. Gdy obliczenie nie jest wiarygodne, NOOP nie pokazuje wyniku zamiast zgadywać.</string>
 </resources>

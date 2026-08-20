@@ -2413,4 +2413,19 @@
     <string name="today_driver_warmer_limiting">wärmer als der Basiswert, begrenzt die Erholung</string>
     <string name="today_driver_cooler_limiting">kühler als der Basiswert, begrenzt die Erholung</string>
     <string name="today_driver_a11y">%1$s, %2$s, %3$s, %4$s Punkte, %5$s</string>
+    <string name="scoring_guide_daily_scores">Deine Tageswerte</string>
+    <string name="scoring_guide_three_scores">Die drei Werte</string>
+    <string name="scoring_guide_intro_body">NOOP gibt dir drei Tageswerte: Energie, Belastung und Erholung, jeweils von 0 bis 100. Sie werden auf deinem Gerät aus den Signalen des Straps und veröffentlichter Sportwissenschaft berechnet. Es sind eigenständige Näherungswerte, nicht WHOOPs private Werte. Daher kann die Entwicklung ähnlich sein, während die Zahlen abweichen.</string>
+    <string name="scoring_guide_charge_headline">Energie: Wie gut bist du erholt?</string>
+    <string name="scoring_guide_charge_body">Maßgeblich ist deine HRV im Vergleich zur persönlichen Basislinie. Hinzu kommen Ruheherzfrequenz, die Erholung der letzten Nacht, Atemfrequenz und Hauttemperatur. Eine höhere HRV bedeutet mehr Energie. NOOP benötigt einige Nächte, um deine Basislinie zu lernen; bis dahin wird „Kalibrierung“ angezeigt.</string>
+    <string name="scoring_guide_charge_vs_whoop">Die Idee ähnelt WHOOPs Recovery-Wert. Unsere Gewichtung und Berechnung der Basislinie sind jedoch eigenständig und offen dokumentiert.</string>
+    <string name="scoring_guide_effort_headline">Belastung: Wie stark hat dein Herz gearbeitet?</string>
+    <string name="scoring_guide_effort_body">Belastung misst die Beanspruchung des Herz-Kreislauf-Systems. Die Herzfrequenz wird mithilfe von Herzfrequenzreserve-Zonen in einen Trainingsimpuls umgerechnet; intensive Zonen zählen stärker. Das Ergebnis liegt auf einer logarithmischen Skala von 0 bis 100. Schritte und aktive Energie bilden eine Untergrenze für lange Aktivitäten mit geringer Herz-Kreislauf-Belastung.</string>
+    <string name="scoring_guide_effort_vs_whoop">Die Idee ähnelt WHOOPs Day Strain (0–21), wurde aber auf 0–100 skaliert. Eine 100 bleibt so selten wie eine 21,0.</string>
+    <string name="scoring_guide_rest_headline">Erholung: Wie erholsam war dein Schlaf?</string>
+    <string name="scoring_guide_rest_body">Erholung kombiniert Schlafdauer im Verhältnis zu deinem Bedarf, Schlafeffizienz, erholsamen Tief- und REM-Schlaf sowie die Regelmäßigkeit deiner Schlaf- und Aufwachzeiten.</string>
+    <string name="scoring_guide_rest_vs_whoop">Die Idee ähnelt WHOOPs Sleep Performance; unsere Berechnung ist jedoch eigenständig.</string>
+    <string name="scoring_guide_solid">Stabil</string>
+    <string name="scoring_guide_building">Im Aufbau</string>
+    <string name="scoring_guide_confidence_body">Jeder Wert zeigt seine Verlässlichkeit. „Kalibrierung“ bedeutet, dass NOOP deine Basislinie noch lernt oder mehr Daten benötigt. „Im Aufbau“ bedeutet, dass genügend, aber noch wenige Daten vorliegen. „Stabil“ bedeutet, dass alle Eingaben vorhanden sind. Ist keine verlässliche Berechnung möglich, zeigt NOOP lieber keinen Wert als eine Schätzung.</string>
 </resources>

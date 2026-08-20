@@ -2399,4 +2399,19 @@
     <string name="today_driver_warmer_limiting">más alta que la referencia, limita la recuperación</string>
     <string name="today_driver_cooler_limiting">más baja que la referencia, limita la recuperación</string>
     <string name="today_driver_a11y">%1$s, %2$s, %3$s, %4$s puntos, %5$s</string>
+    <string name="scoring_guide_daily_scores">Tus puntuaciones diarias</string>
+    <string name="scoring_guide_three_scores">Las tres puntuaciones</string>
+    <string name="scoring_guide_intro_body">NOOP ofrece tres puntuaciones diarias: Carga, Esfuerzo y Descanso, de 0 a 100. Se calculan en tu dispositivo a partir de las señales de la pulsera y ciencia deportiva publicada. Son estimaciones independientes, no las puntuaciones privadas de WHOOP; por eso pueden evolucionar de forma similar sin coincidir.</string>
+    <string name="scoring_guide_charge_headline">Carga: ¿qué tan recuperado estás?</string>
+    <string name="scoring_guide_charge_body">La Carga se basa principalmente en tu VFC frente a la línea base personal, además de la frecuencia cardíaca en reposo, el Descanso de anoche, la respiración y la temperatura de la piel. Una VFC más alta implica más Carga. NOOP necesita varias noches para aprender tu línea base; mientras tanto muestra «Calibrando».</string>
+    <string name="scoring_guide_charge_vs_whoop">La idea es similar al Recovery % de WHOOP, pero nuestra ponderación y línea base son independientes y están documentadas.</string>
+    <string name="scoring_guide_effort_headline">Esfuerzo: ¿cuánto trabajó tu corazón?</string>
+    <string name="scoring_guide_effort_body">El Esfuerzo mide la carga cardiovascular. Convierte la frecuencia cardíaca en impulso de entrenamiento mediante zonas de reserva, dando más peso a las zonas intensas, y la sitúa en una escala logarítmica de 0 a 100. Los pasos y la energía activa cuentan en actividades largas con poco cardio.</string>
+    <string name="scoring_guide_effort_vs_whoop">La idea es similar al Day Strain de WHOOP (0–21), reescalado a 0–100. Un 100 sigue siendo tan excepcional como un 21,0.</string>
+    <string name="scoring_guide_rest_headline">Descanso: ¿qué tan reparador fue tu sueño?</string>
+    <string name="scoring_guide_rest_body">El Descanso combina duración frente a tu necesidad, eficiencia, sueño profundo y REM reparador, y regularidad de las horas de dormir y despertar.</string>
+    <string name="scoring_guide_rest_vs_whoop">La idea es similar al Sleep Performance % de WHOOP, pero nuestro cálculo es independiente.</string>
+    <string name="scoring_guide_solid">Sólido</string>
+    <string name="scoring_guide_building">En desarrollo</string>
+    <string name="scoring_guide_confidence_body">Cada puntuación indica su fiabilidad. «Calibrando» significa que NOOP aprende tu línea base o necesita más datos. «En desarrollo» indica que hay datos suficientes, pero aún limitados. «Sólido» indica que están presentes todos los datos. Si el cálculo no es fiable, NOOP no muestra una puntuación en vez de adivinar.</string>
 </resources>

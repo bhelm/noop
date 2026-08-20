@@ -2398,4 +2398,19 @@
     <string name="today_driver_warmer_limiting">plus chaude que la référence, limite la récupération</string>
     <string name="today_driver_cooler_limiting">plus froide que la référence, limite la récupération</string>
     <string name="today_driver_a11y">%1$s, %2$s, %3$s, %4$s points, %5$s</string>
+    <string name="scoring_guide_daily_scores">Vos scores quotidiens</string>
+    <string name="scoring_guide_three_scores">Les trois scores</string>
+    <string name="scoring_guide_intro_body">NOOP propose trois scores quotidiens : Charge, Effort et Repos, de 0 à 100. Ils sont calculés sur votre appareil à partir des signaux du bracelet et de travaux publiés en sciences du sport. Ce sont des estimations indépendantes, pas les scores privés de WHOOP ; ils peuvent donc évoluer de façon similaire sans coïncider.</string>
+    <string name="scoring_guide_charge_headline">Charge : quel est votre niveau de récupération ?</string>
+    <string name="scoring_guide_charge_body">La Charge dépend surtout de votre VFC comparée à votre référence personnelle, ainsi que de la fréquence cardiaque au repos, du Repos de la nuit dernière, de la respiration et de la température cutanée. Une VFC plus élevée donne davantage de Charge. NOOP a besoin de quelques nuits pour apprendre votre référence ; entre-temps, il affiche « Calibration en cours ».</string>
+    <string name="scoring_guide_charge_vs_whoop">L’idée est proche du Recovery % de WHOOP, mais notre pondération et notre référence sont indépendantes et documentées.</string>
+    <string name="scoring_guide_effort_headline">Effort : à quel point votre cœur a-t-il travaillé ?</string>
+    <string name="scoring_guide_effort_body">L’Effort mesure la charge cardiovasculaire. La fréquence cardiaque devient une impulsion d’entraînement selon les zones de réserve ; les zones intenses pèsent davantage. Le résultat suit une échelle logarithmique de 0 à 100. Les pas et l’énergie active comptent pour les activités longues avec peu de cardio.</string>
+    <string name="scoring_guide_effort_vs_whoop">L’idée est proche du Day Strain de WHOOP (0–21), remis à l’échelle de 0 à 100. Un 100 reste aussi rare qu’un 21,0.</string>
+    <string name="scoring_guide_rest_headline">Repos : votre sommeil a-t-il été réparateur ?</string>
+    <string name="scoring_guide_rest_body">Le Repos combine la durée par rapport à vos besoins, l’efficacité, le sommeil profond et paradoxal réparateur, et la régularité des heures de coucher et de réveil.</string>
+    <string name="scoring_guide_rest_vs_whoop">L’idée est proche du Sleep Performance % de WHOOP, mais notre calcul est indépendant.</string>
+    <string name="scoring_guide_solid">Fiable</string>
+    <string name="scoring_guide_building">En cours</string>
+    <string name="scoring_guide_confidence_body">Chaque score indique sa fiabilité. « Calibration en cours » signifie que NOOP apprend votre référence ou manque de données. « En cours » signifie que les données suffisent mais restent limitées. « Fiable » signifie que toutes les entrées sont présentes. Si le calcul n’est pas fiable, NOOP n’affiche rien plutôt que d’inventer.</string>
 </resources>

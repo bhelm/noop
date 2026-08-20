@@ -2425,4 +2425,19 @@
     <string name="today_driver_warmer_limiting">warmer than baseline, limiting recovery</string>
     <string name="today_driver_cooler_limiting">cooler than baseline, limiting recovery</string>
     <string name="today_driver_a11y">%1$s, %2$s, %3$s, %4$s points, %5$s</string>
+    <string name="scoring_guide_daily_scores">Your daily scores</string>
+    <string name="scoring_guide_three_scores">The three scores</string>
+    <string name="scoring_guide_intro_body">NOOP gives you three daily scores: Charge, Effort and Rest, each from 0 to 100. They are calculated on your device from strap signals and published sport science. They are independent approximations, not WHOOP’s private scores, so the direction may be similar while the numbers differ.</string>
+    <string name="scoring_guide_charge_headline">Charge: how recovered are you?</string>
+    <string name="scoring_guide_charge_body">Charge is led by HRV compared with your personal baseline, plus resting heart rate, last night’s Rest, breathing rate and skin temperature. Higher HRV means more Charge. NOOP needs a few nights to learn your baseline; until then it shows “Calibrating”.</string>
+    <string name="scoring_guide_charge_vs_whoop">The idea is similar to WHOOP’s Recovery %, but our weighting and baseline calculations are independent and openly documented.</string>
+    <string name="scoring_guide_effort_headline">Effort: how hard did your heart work?</string>
+    <string name="scoring_guide_effort_body">Effort measures cardiovascular load. Heart rate is converted into a training impulse using heart-rate-reserve zones, with harder zones weighted more heavily, then mapped to a logarithmic 0–100 scale. Steps and active energy provide a floor for long, low-cardio activity.</string>
+    <string name="scoring_guide_effort_vs_whoop">The idea is similar to WHOOP’s Day Strain (0–21), rescaled to 0–100. A 100 remains as rare as a 21.0.</string>
+    <string name="scoring_guide_rest_headline">Rest: how restorative was your sleep?</string>
+    <string name="scoring_guide_rest_body">Rest combines sleep duration versus your need, sleep efficiency, restorative deep and REM sleep, and the consistency of sleep and wake times.</string>
+    <string name="scoring_guide_rest_vs_whoop">The idea is similar to WHOOP’s Sleep Performance %, but our calculation is independent.</string>
+    <string name="scoring_guide_solid">Solid</string>
+    <string name="scoring_guide_building">Building</string>
+    <string name="scoring_guide_confidence_body">Each score shows its reliability. Calibrating means NOOP is learning your baseline or needs more data. Building means enough data exists for a score, but it is still limited. Solid means all inputs are present. If NOOP cannot calculate a score reliably, it shows no score instead of guessing.</string>
 </resources>

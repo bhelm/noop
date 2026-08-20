@@ -231,6 +231,24 @@ class HomeLocalizationTest(unittest.TestCase):
         source = audit._mask_comments((ROOT / relative).read_text(encoding="utf-8"))
         self.assertNotRegex(source, r"val\s+label\s*:\s*String", "ScoreSection must expose a resource contract")
 
+    def test_android_home_score_labels_and_explain_copy_are_resource_backed(self) -> None:
+        today_relative = "android/app/src/main/java/com/noop/ui/TodayScreen.kt"
+        today = audit._mask_comments((ROOT / today_relative).read_text(encoding="utf-8"))
+        self.assertNotIn("domain.label", today, "Home score names must be resolved from Android resources")
+
+        guide_relative = "android/app/src/main/java/com/noop/ui/ScoringGuideScreen.kt"
+        findings = [
+            (guide_relative, line, literal)
+            for line, literal in _all_kotlin_literals(ROOT / guide_relative)
+            if _is_helper_copy(literal)
+            and literal not in {
+                "${(sampleFraction * 100).roundToInt()}",
+                "noop_scoring_guide_prefs",
+                "scoringGuideCardSeen",
+            }
+        ]
+        self.assertEqual([], findings, "Raw Android score-explainer copy:\n" + _format_findings(findings))
+
     def test_android_today_source_counts_use_two_plural_resources(self) -> None:
         relative = "android/app/src/main/java/com/noop/ui/TodayScreen.kt"
         source = audit._mask_comments((ROOT / relative).read_text(encoding="utf-8"))
