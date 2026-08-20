@@ -493,6 +493,42 @@
       "text": "BatteryPackInfo.decodeExtended/2 has 2 test callsite(s) and no production callsite"
     },
     {
+      "identity": "unmapped-file|Packages/WhoopProtocol/Sources/WhoopProtocol/ChunkClockDiag.swift",
+      "rule": "unmapped-file",
+      "path": "Packages/WhoopProtocol/Sources/WhoopProtocol/ChunkClockDiag.swift",
+      "line": 1,
+      "text": "new Swift file has no twin-map entry",
+      "issue": 98,
+      "provenance": "upstream diagnostic #1008 / 8124da33; bhelm/noop#98"
+    },
+    {
+      "identity": "unmapped-function|Packages/WhoopProtocol/Sources/WhoopProtocol/ChunkClockDiag.swift::line/4#1",
+      "rule": "unmapped-function",
+      "path": "Packages/WhoopProtocol/Sources/WhoopProtocol/ChunkClockDiag.swift",
+      "line": 34,
+      "text": "line/4 has no twin-map entry",
+      "issue": 98,
+      "provenance": "upstream diagnostic #1008 / 8124da33; bhelm/noop#98"
+    },
+    {
+      "identity": "unmapped-function|Packages/WhoopProtocol/Sources/WhoopProtocol/ChunkClockDiag.swift::signed/1#1",
+      "rule": "unmapped-function",
+      "path": "Packages/WhoopProtocol/Sources/WhoopProtocol/ChunkClockDiag.swift",
+      "line": 72,
+      "text": "signed/1 has no twin-map entry",
+      "issue": 98,
+      "provenance": "upstream diagnostic #1008 / 8124da33; bhelm/noop#98"
+    },
+    {
+      "identity": "unmapped-function|Packages/WhoopProtocol/Sources/WhoopProtocol/ChunkClockDiag.swift::fixed2/2#1",
+      "rule": "unmapped-function",
+      "path": "Packages/WhoopProtocol/Sources/WhoopProtocol/ChunkClockDiag.swift",
+      "line": 85,
+      "text": "fixed2/2 has no twin-map entry",
+      "issue": 98,
+      "provenance": "upstream diagnostic #1008 / 8124da33; bhelm/noop#98"
+    },
+    {
       "identity": "test-only-callsite|Packages/WhoopProtocol/Sources/WhoopProtocol/FeatureFlagProbe.swift::hex/1#1",
       "rule": "test-only-callsite",
       "path": "Packages/WhoopProtocol/Sources/WhoopProtocol/FeatureFlagProbe.swift",
@@ -545,14 +581,14 @@
       "identity": "test-only-callsite|Packages/WhoopProtocol/Sources/WhoopProtocol/Streams.swift::mg/1#1",
       "rule": "test-only-callsite",
       "path": "Packages/WhoopProtocol/Sources/WhoopProtocol/Streams.swift",
-      "line": 633,
+      "line": 643,
       "text": "DynAccelDiag.mg/1 has 5 test callsite(s) and no production callsite"
     },
     {
       "identity": "test-only-callsite|Packages/WhoopProtocol/Sources/WhoopProtocol/Streams.swift::pct/1#1",
       "rule": "test-only-callsite",
       "path": "Packages/WhoopProtocol/Sources/WhoopProtocol/Streams.swift",
-      "line": 636,
+      "line": 646,
       "text": "DynAccelDiag.pct/1 has 2 test callsite(s) and no production callsite"
     },
     {
@@ -1177,21 +1213,21 @@
       "identity": "test-only-callsite|android/app/src/main/java/com/noop/analytics/IntelligenceEngine.kt::midnightUtc/1#1",
       "rule": "test-only-callsite",
       "path": "android/app/src/main/java/com/noop/analytics/IntelligenceEngine.kt",
-      "line": 2250,
+      "line": 2251,
       "text": "IntelligenceEngine.midnightUtc/1 has 1 test callsite(s) and no production callsite"
     },
     {
       "identity": "test-only-callsite|android/app/src/main/java/com/noop/analytics/IntelligenceEngine.kt::daySourceToken/3#1",
       "rule": "test-only-callsite",
       "path": "android/app/src/main/java/com/noop/analytics/IntelligenceEngine.kt",
-      "line": 2284,
+      "line": 2285,
       "text": "IntelligenceEngine.daySourceToken/3 has 6 test callsite(s) and no production callsite"
     },
     {
       "identity": "test-only-callsite|android/app/src/main/java/com/noop/analytics/IntelligenceEngine.kt::sleepStagesLogToken/3#1",
       "rule": "test-only-callsite",
       "path": "android/app/src/main/java/com/noop/analytics/IntelligenceEngine.kt",
-      "line": 2302,
+      "line": 2303,
       "text": "IntelligenceEngine.sleepStagesLogToken/3 has 7 test callsite(s) and no production callsite"
     },
     {
@@ -1800,6 +1836,42 @@
       "path": "android/app/src/main/java/com/noop/protocol/BatteryPackInfo.kt",
       "line": 67,
       "text": "BatteryPackInfo.decodeExtended/2 has 2 test callsite(s) and no production callsite"
+    },
+    {
+      "identity": "unmapped-file|android/app/src/main/java/com/noop/protocol/ChunkClockDiag.kt",
+      "rule": "unmapped-file",
+      "path": "android/app/src/main/java/com/noop/protocol/ChunkClockDiag.kt",
+      "line": 1,
+      "text": "new Kotlin file has no twin-map entry",
+      "issue": 98,
+      "provenance": "upstream diagnostic #1008 / 8124da33; bhelm/noop#98"
+    },
+    {
+      "identity": "unmapped-function|android/app/src/main/java/com/noop/protocol/ChunkClockDiag.kt::line/4#1",
+      "rule": "unmapped-function",
+      "path": "android/app/src/main/java/com/noop/protocol/ChunkClockDiag.kt",
+      "line": 40,
+      "text": "line/4 has no twin-map entry",
+      "issue": 98,
+      "provenance": "upstream diagnostic #1008 / 8124da33; bhelm/noop#98"
+    },
+    {
+      "identity": "unmapped-function|android/app/src/main/java/com/noop/protocol/ChunkClockDiag.kt::signed/1#1",
+      "rule": "unmapped-function",
+      "path": "android/app/src/main/java/com/noop/protocol/ChunkClockDiag.kt",
+      "line": 76,
+      "text": "signed/1 has no twin-map entry",
+      "issue": 98,
+      "provenance": "upstream diagnostic #1008 / 8124da33; bhelm/noop#98"
+    },
+    {
+      "identity": "unmapped-function|android/app/src/main/java/com/noop/protocol/ChunkClockDiag.kt::fixed2/2#1",
+      "rule": "unmapped-function",
+      "path": "android/app/src/main/java/com/noop/protocol/ChunkClockDiag.kt",
+      "line": 91,
+      "text": "fixed2/2 has no twin-map entry",
+      "issue": 98,
+      "provenance": "upstream diagnostic #1008 / 8124da33; bhelm/noop#98"
     },
     {
       "identity": "test-only-callsite|android/app/src/main/java/com/noop/protocol/Framing.kt::le32/1#1",

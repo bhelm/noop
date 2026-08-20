@@ -4987,7 +4987,7 @@
       "Packages/StrandAnalytics/Sources/StrandAnalytics/HRVAnalyzer.swift::analyze/2#1",
       "Packages/StrandAnalytics/Sources/StrandAnalytics/HRVAnalyzer.swift::sdnnIndex/2#1",
       "Packages/StrandAnalytics/Sources/StrandAnalytics/HRVAnalyzer.swift::rollingRmssd/4#1",
-      "Packages/StrandAnalytics/Sources/StrandAnalytics/HRVAnalyzer.swift::densestSecondWindowSample/5#1",
+      "Packages/StrandAnalytics/Sources/StrandAnalytics/HRVAnalyzer.swift::densestSecondWindowSample/6#1",
       "Packages/StrandAnalytics/Sources/StrandAnalytics/HRVAnalyzer.swift::median/1#1",
       "Packages/StrandAnalytics/Sources/StrandAnalytics/HRVFreqDomain.swift::freqDomain/1#1",
       "Packages/StrandAnalytics/Sources/StrandAnalytics/HRVFreqDomain.swift::freqDomain/1#2",
@@ -6418,7 +6418,7 @@
       "android/app/src/main/java/com/noop/analytics/HrvAnalyzer.kt::analyze/3#1",
       "android/app/src/main/java/com/noop/analytics/HrvAnalyzer.kt::analyzeRaw/2#1",
       "android/app/src/main/java/com/noop/analytics/HrvAnalyzer.kt::collapseOverCount/4#1",
-      "android/app/src/main/java/com/noop/analytics/HrvAnalyzer.kt::densestSecondWindowSample/5#1",
+      "android/app/src/main/java/com/noop/analytics/HrvAnalyzer.kt::densestSecondWindowSample/6#1",
       "android/app/src/main/java/com/noop/analytics/HrvAnalyzer.kt::rollingRmssd/4#1",
       "android/app/src/main/java/com/noop/analytics/HrvAnalyzer.kt::median/1#1",
       "android/app/src/main/java/com/noop/analytics/HrvAnalyzerTrace.kt::r2/1#1",
@@ -9493,8 +9493,8 @@
         "kotlin": "android/app/src/main/java/com/noop/analytics/WakeMotionRefinement.kt::denseMinuteFraction/5#1"
       },
       {
-        "swift": "Packages/StrandAnalytics/Sources/StrandAnalytics/HRVAnalyzer.swift::densestSecondWindowSample/5#1",
-        "kotlin": "android/app/src/main/java/com/noop/analytics/HrvAnalyzer.kt::densestSecondWindowSample/5#1"
+        "swift": "Packages/StrandAnalytics/Sources/StrandAnalytics/HRVAnalyzer.swift::densestSecondWindowSample/6#1",
+        "kotlin": "android/app/src/main/java/com/noop/analytics/HrvAnalyzer.kt::densestSecondWindowSample/6#1"
       },
       {
         "swift": "Packages/StrandAnalytics/Sources/StrandAnalytics/WorkoutDetector.swift::deriveRestingHR/1#1",
