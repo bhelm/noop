@@ -78,7 +78,7 @@ class PushCursorTest {
 
     @Test
     fun moreThanOnePageOfEqualTimestampRrRowsLosesNothing() = runBlocking {
-        val rows = (0..500).map { seq ->
+        val rows = (0..5_000).map { seq ->
             PushAppendRecord(
                 rowId = seq + 1L,
                 key = linkedMapOf("ts" to 100L, "rrMs" to 900, "seq" to seq),
@@ -95,10 +95,10 @@ class PushCursorTest {
         val first = coordinator.pushAppend(PushAppendTable.RR_INTERVAL, "a")
         val second = coordinator.pushAppend(PushAppendTable.RR_INTERVAL, "a")
 
-        assertTrue(first is PushResult.Accepted && first.recordCount == 500 && first.hasMore)
+        assertTrue(first is PushResult.Accepted && first.recordCount == 5_000 && first.hasMore)
         assertTrue(second is PushResult.Accepted && second.recordCount == 1 && !second.hasMore)
-        assertEquals(listOf(500, 1), transport.batches.map { it.recordCount })
-        assertEquals(501L, progress.cursors[key(PushAppendTable.RR_INTERVAL, "a")]?.rowId)
+        assertEquals(listOf(5_000, 1), transport.batches.map { it.recordCount })
+        assertEquals(5_001L, progress.cursors[key(PushAppendTable.RR_INTERVAL, "a")]?.rowId)
     }
 
     @Test

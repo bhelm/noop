@@ -5,6 +5,28 @@ import androidx.room.withTransaction
 import androidx.sqlite.db.SimpleSQLiteQuery
 import com.noop.data.WhoopDatabase
 
+/** SQL-side upper bound evaluated before Android materializes any unrestricted TEXT value. */
+internal object PushSnapshotPreflight {
+    // 4 KiB per row conservatively covers maps, entries, boxed scalars and fixed JSON syntax. The
+    // remaining budget covers text at 6x its UTF-8 byte length, the maximum JSON string expansion.
+    const val FIXED_ROW_OVERHEAD_BYTES = 4 * 1024L
+    const val MAX_ESTIMATED_SNAPSHOT_BYTES = 48 * 1024 * 1024L
+
+    fun rowEstimateExpression(columns: List<String>): String = buildString {
+        append(FIXED_ROW_OVERHEAD_BYTES)
+        columns.forEach { column ->
+            append(" + (CASE WHEN $column IS NULL THEN 4 ")
+            append("WHEN typeof($column) = 'text' THEN length(CAST($column AS BLOB)) * 6 + 2 ")
+            append("WHEN typeof($column) = 'blob' THEN ${MAX_ESTIMATED_SNAPSHOT_BYTES + 1} ")
+            append("ELSE 32 END)")
+        }
+    }
+
+    fun query(table: String, columns: List<String>, predicate: String, orderBy: String): String =
+        "SELECT COALESCE(SUM(${rowEstimateExpression(columns)}), 0) FROM " +
+            "(SELECT ${columns.joinToString()} FROM $table WHERE $predicate ORDER BY $orderBy LIMIT ?)"
+}
+
 /**
  * Narrow, read-only Room snapshot adapter. SQL identifiers come exclusively from the closed enums below;
  * user/config input is always a bind argument. Every cursor is consumed and closed inside [withTransaction].
@@ -33,6 +55,11 @@ class PushDao internal constructor(private val db: WhoopDatabase) : PushSnapshot
     ): PushAppendRecord? {
         val spec = appendSpec(table)
         return db.withTransaction {
+            val args = arrayOf<Any?>(deviceId, rowId, 1)
+            ensureSnapshotBounded(
+                PushSnapshotPreflight.query(spec.sqlName, spec.columns, "deviceId = ? AND rowid = ?", "rowid ASC"),
+                args,
+            )
             val sql = "SELECT rowid AS _pushRowId, ${spec.columns.joinToString()} FROM ${spec.sqlName} " +
                 "WHERE deviceId = ? AND rowid = ? LIMIT 1"
             db.query(SimpleSQLiteQuery(sql, arrayOf(deviceId, rowId))).use { cursor ->
@@ -50,6 +77,11 @@ class PushDao internal constructor(private val db: WhoopDatabase) : PushSnapshot
         require(limit in 1..PushProtocol.MAX_RECORDS + 1)
         val spec = appendSpec(table)
         return db.withTransaction {
+            val args = arrayOf<Any?>(deviceId, afterRowId, limit)
+            ensureSnapshotBounded(
+                PushSnapshotPreflight.query(spec.sqlName, spec.columns, "deviceId = ? AND rowid > ?", "rowid ASC"),
+                args,
+            )
             val sql = "SELECT rowid AS _pushRowId, ${spec.columns.joinToString()} FROM ${spec.sqlName} " +
                 "WHERE deviceId = ? AND rowid > ? ORDER BY rowid ASC LIMIT ?"
             db.query(SimpleSQLiteQuery(sql, arrayOf(deviceId, afterRowId, limit))).use { cursor ->
@@ -82,11 +114,29 @@ class PushDao internal constructor(private val db: WhoopDatabase) : PushSnapshot
             args[0] = deviceId
             bounds.copyInto(args, destinationOffset = 1)
             args[args.lastIndex] = limit
+            ensureSnapshotBounded(
+                PushSnapshotPreflight.query(
+                    spec.sqlName,
+                    spec.columns,
+                    "deviceId = ? AND $predicate",
+                    "${spec.keyColumns.joinToString()} ASC",
+                ),
+                args,
+            )
             db.query(SimpleSQLiteQuery(sql, args)).use { cursor ->
                 buildList {
                     while (cursor.moveToNext()) add(cursor.mutableRecord(spec))
                 }
             }
+        }
+    }
+
+    private fun ensureSnapshotBounded(sql: String, args: Array<Any?>) {
+        val estimate = db.query(SimpleSQLiteQuery(sql, args)).use { cursor ->
+            if (cursor.moveToFirst()) cursor.getLong(0) else 0L
+        }
+        if (estimate > PushSnapshotPreflight.MAX_ESTIMATED_SNAPSHOT_BYTES) {
+            throw PushProtocolException("snapshot exceeds local memory limit")
         }
     }
 

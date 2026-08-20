@@ -142,6 +142,7 @@ data class PushRunResult(
     val acceptedBatches: Int,
     val rejectedBatches: Int,
     val hasMoreAppendRows: Boolean,
+    val acceptedRecords: Int = 0,
     val hasRetryableFailure: Boolean = false,
     val nextDeviceIndex: Int = 0,
     val hasMoreDevices: Boolean = false,

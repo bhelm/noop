@@ -28,6 +28,8 @@ class PushCoordinator(
                 source.appendRecordAt(table, deviceId, stored.rowId)
             } catch (cancelled: CancellationException) {
                 throw cancelled
+            } catch (invalid: PushProtocolException) {
+                return PushResult.Rejected(invalid.message ?: "cursor snapshot exceeds local memory limit", retryable = false)
             } catch (_: Throwable) {
                 return PushResult.Rejected("cursor verification failed", retryable = true)
             }
@@ -38,6 +40,8 @@ class PushCoordinator(
             source.appendRows(table, deviceId, effective?.rowId ?: 0L, PushProtocol.MAX_RECORDS + 1)
         } catch (cancelled: CancellationException) {
             throw cancelled
+        } catch (invalid: PushProtocolException) {
+            return PushResult.Rejected(invalid.message ?: "append snapshot exceeds local memory limit", retryable = false)
         } catch (_: Throwable) {
             return PushResult.Rejected("append snapshot failed", retryable = true)
         }
@@ -55,6 +59,8 @@ class PushCoordinator(
             accepted.copy(hasMore = rows.size > batch.recordCount)
         } catch (cancelled: CancellationException) {
             throw cancelled
+        } catch (invalid: PushProtocolException) {
+            return PushResult.Rejected(invalid.message ?: "mutable snapshot exceeds local memory limit", retryable = false)
         } catch (_: Throwable) {
             // The endpoint may have applied the bytes. Keeping the old cursor safely repeats the same upserts.
             PushResult.Rejected("cursor save failed", retryable = true)
@@ -69,6 +75,8 @@ class PushCoordinator(
             )
         } catch (cancelled: CancellationException) {
             throw cancelled
+        } catch (invalid: PushProtocolException) {
+            return PushResult.Rejected(invalid.message ?: "mutable snapshot failed", retryable = false)
         } catch (_: Throwable) {
             return PushResult.Rejected("mutable snapshot failed", retryable = true)
         }
@@ -126,14 +134,15 @@ class PushCoordinator(
         } catch (cancelled: CancellationException) {
             throw cancelled
         } catch (_: Throwable) {
-            return PushRunResult(0, 1, false, hasRetryableFailure = true)
+            return PushRunResult(acceptedBatches = 0, acceptedRecords = 0, rejectedBatches = 1, hasMoreAppendRows = false, hasRetryableFailure = true)
         }
-        if (devices.isEmpty()) return PushRunResult(0, 0, false)
+        if (devices.isEmpty()) return PushRunResult(acceptedBatches = 0, acceptedRecords = 0, rejectedBatches = 0, hasMoreAppendRows = false)
         val start = startDeviceIndex % devices.size
         val selectedCount = minOf(maxDevices, devices.size)
         val selectedDevices = (0 until selectedCount).map { devices[(start + it) % devices.size] }
         val nextDeviceIndex = (start + selectedCount) % devices.size
         var accepted = 0
+        var acceptedRecords = 0
         var rejected = 0
         var more = false
         var retryableFailure = false
@@ -142,6 +151,7 @@ class PushCoordinator(
                 when (val result = pushAppend(table, deviceId)) {
                     is PushResult.Accepted -> {
                         accepted += result.batchCount
+                        acceptedRecords += result.recordCount
                         more = more || result.hasMore
                     }
                     is PushResult.Rejected -> {
@@ -153,7 +163,10 @@ class PushCoordinator(
             }
             for (table in PushMutableTable.entries) {
                 when (val result = pushMutable(table, deviceId)) {
-                    is PushResult.Accepted -> accepted += result.batchCount
+                    is PushResult.Accepted -> {
+                        accepted += result.batchCount
+                        acceptedRecords += result.recordCount
+                    }
                     is PushResult.Rejected -> {
                         rejected += 1
                         retryableFailure = retryableFailure || result.retryable
@@ -164,6 +177,7 @@ class PushCoordinator(
         }
         return PushRunResult(
             acceptedBatches = accepted,
+            acceptedRecords = acceptedRecords,
             rejectedBatches = rejected,
             hasMoreAppendRows = more,
             hasRetryableFailure = retryableFailure,

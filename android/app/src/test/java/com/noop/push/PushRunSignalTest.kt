@@ -13,16 +13,14 @@ class PushRunSignalTest {
         assertFalse(PushRunSignal.reserve(prefs, "b"))
         assertTrue(PushRunSignal.finish(prefs, "a", willRetry = false))
 
-        // Pending forced the same owner to survive into retry/backoff; another trigger still coalesces.
-        assertFalse(PushRunSignal.reserve(prefs, "b"))
-        PushRunSignal.begin(prefs, "a")
-        assertTrue(PushRunSignal.finish(prefs, "a", willRetry = true))
-        PushRunSignal.begin(prefs, "a")
-        assertFalse(PushRunSignal.finish(prefs, "a", willRetry = false))
-
+        // A successful owner is released; its caller can enqueue a fresh, non-backoff continuation.
         assertTrue(PushRunSignal.reserve(prefs, "b"))
         assertFalse(PushRunSignal.finish(prefs, "a", willRetry = false))
         assertFalse(PushRunSignal.reserve(prefs, "c"))
+
+        PushRunSignal.begin(prefs, "b")
+        assertTrue(PushRunSignal.finish(prefs, "b", willRetry = true))
+        assertFalse(PushRunSignal.reserve(prefs, "must-coalesce"))
     }
 
     @Test fun abandonedPreEnqueueReservationExpiresButBackoffOwnerDoesNot() {
@@ -34,5 +32,47 @@ class PushRunSignalTest {
         PushRunSignal.begin(prefs, "replacement")
         PushRunSignal.finish(prefs, "replacement", willRetry = true)
         assertFalse(PushRunSignal.reserve(prefs, "must-coalesce", now = Long.MAX_VALUE))
+    }
+
+    @Test fun settlementSeesPendingBeforeStatusAndReleasesOwnerAfterStatus() {
+        val prefs = SelfHostedPushSettingsTest.FakePushPrefs()
+        assertTrue(PushRunSignal.reserve(prefs, "worker"))
+        PushRunSignal.begin(prefs, "worker")
+        assertFalse(PushRunSignal.reserve(prefs, "offload"))
+        var statusSawPending: Boolean? = null
+
+        val settlement = PushRunSignal.settle(prefs, "worker", willRetry = false) { pending ->
+            statusSawPending = pending
+        }
+
+        assertTrue(settlement.owned)
+        assertTrue(settlement.pending)
+        assertTrue(statusSawPending == true)
+        assertTrue(PushRunSignal.reserve(prefs, "successor"))
+    }
+
+    @Test fun failedReservationReleaseReportsCoalescedPendingExactlyOnce() {
+        val prefs = SelfHostedPushSettingsTest.FakePushPrefs()
+        assertTrue(PushRunSignal.reserve(prefs, "enqueue"))
+        assertFalse(PushRunSignal.reserve(prefs, "trigger"))
+
+        assertTrue(PushRunSignal.releaseReservation(prefs, "enqueue"))
+        assertFalse(PushRunSignal.releaseReservation(prefs, "enqueue"))
+        assertTrue(PushRunSignal.reserve(prefs, "retry"))
+    }
+
+    @Test fun asyncEnqueueFailureArbitratesStatusBeforeReleaseAndPreservesPendingForRequeue() {
+        val prefs = SelfHostedPushSettingsTest.FakePushPrefs()
+        assertTrue(PushRunSignal.reserve(prefs, "failed-enqueue"))
+        assertFalse(PushRunSignal.reserve(prefs, "coalesced-trigger"))
+        var failureWritten = false
+
+        val pending = PushRunSignal.releaseReservation(prefs, "failed-enqueue") {
+            if (!it) failureWritten = true
+        }
+
+        assertTrue(pending)
+        assertFalse(failureWritten)
+        assertTrue(PushRunSignal.reserve(prefs, "requeued-owner"))
     }
 }

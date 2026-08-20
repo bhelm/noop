@@ -8,8 +8,10 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CloudUpload
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -18,6 +20,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import com.noop.R
 import com.noop.ui.NoopButton
@@ -29,6 +32,9 @@ import com.noop.ui.SettingsCard
 import com.noop.ui.SettingsToggleRow
 import java.text.DateFormat
 import java.util.Date
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 
 /** Experimental, explicit consent surface for raw one-way health-data egress. */
 @Composable
@@ -39,6 +45,15 @@ fun SelfHostedPushScreen() {
     var token by remember { mutableStateOf("") }
     var snapshot by remember { mutableStateOf(settings.snapshot()) }
     var validationMessage by remember { mutableStateOf<String?>(null) }
+
+    // WorkManager runs outside this composition. Refresh while visible so progress and completion do
+    // not require navigating away and back (and avoid retaining a UI listener in process globals).
+    LaunchedEffect(settings) {
+        while (currentCoroutineContext().isActive) {
+            snapshot = settings.snapshot()
+            delay(750)
+        }
+    }
 
     val endpointValid = PushEndpointPolicy.validate(endpoint) is PushEndpointPolicy.Result.Valid
     val tokenAvailable = token.isNotBlank() || snapshot.hasToken
@@ -58,15 +73,17 @@ fun SelfHostedPushScreen() {
                     style = NoopType.footnote,
                     color = Palette.statusWarning,
                 )
-                PushSecretField(
+                PushTextField(
                     value = endpoint,
                     onValueChange = { endpoint = it; validationMessage = null },
                     label = stringResource(R.string.push_endpoint),
+                    secret = false,
                 )
-                PushSecretField(
+                PushTextField(
                     value = token,
                     onValueChange = { token = it },
                     label = if (snapshot.hasToken) stringResource(R.string.push_token_saved) else stringResource(R.string.push_token),
+                    secret = true,
                 )
                 validationMessage?.let {
                     Text(it, style = NoopType.footnote, color = Palette.statusWarning)
@@ -127,6 +144,30 @@ fun SelfHostedPushScreen() {
             title = stringResource(R.string.push_status_title),
             blurb = stringResource(R.string.push_status_detail),
         ) {
+            val active = snapshot.runState in setOf(
+                SelfHostedPushSettings.RunState.QUEUED,
+                SelfHostedPushSettings.RunState.RUNNING,
+                SelfHostedPushSettings.RunState.CONTINUING,
+                SelfHostedPushSettings.RunState.RETRYING,
+            )
+            if (active) {
+                LinearProgressIndicator(modifier = Modifier.fillMaxWidth(), color = Palette.accent)
+            }
+            val state = when (snapshot.runState) {
+                SelfHostedPushSettings.RunState.IDLE -> stringResource(R.string.push_state_idle)
+                SelfHostedPushSettings.RunState.QUEUED -> stringResource(R.string.push_state_queued)
+                SelfHostedPushSettings.RunState.RUNNING -> stringResource(R.string.push_state_running)
+                SelfHostedPushSettings.RunState.CONTINUING -> stringResource(R.string.push_state_continuing)
+                SelfHostedPushSettings.RunState.RETRYING -> stringResource(R.string.push_state_retrying)
+                SelfHostedPushSettings.RunState.COMPLETE -> stringResource(R.string.push_state_complete)
+                SelfHostedPushSettings.RunState.FAILED -> stringResource(R.string.push_state_failed)
+            }
+            Text(stringResource(R.string.push_current_state, state), style = NoopType.body, color = Palette.textPrimary)
+            Text(
+                stringResource(R.string.push_progress, snapshot.acceptedBatches, snapshot.acceptedRecords),
+                style = NoopType.footnote,
+                color = Palette.textSecondary,
+            )
             val success = snapshot.lastSuccessAt?.let {
                 DateFormat.getDateTimeInstance(DateFormat.MEDIUM, DateFormat.SHORT).format(Date(it))
             } ?: stringResource(R.string.push_never)
@@ -139,13 +180,13 @@ fun SelfHostedPushScreen() {
 }
 
 @Composable
-private fun PushSecretField(value: String, onValueChange: (String) -> Unit, label: String) {
+private fun PushTextField(value: String, onValueChange: (String) -> Unit, label: String, secret: Boolean) {
     OutlinedTextField(
         value = value,
         onValueChange = onValueChange,
         label = { Text(label) },
         singleLine = true,
-        visualTransformation = PasswordVisualTransformation(),
+        visualTransformation = if (secret) PasswordVisualTransformation() else VisualTransformation.None,
         textStyle = NoopType.mono(13f),
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(14.dp),

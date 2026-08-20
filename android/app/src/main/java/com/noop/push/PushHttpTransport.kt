@@ -7,8 +7,12 @@ import okhttp3.Callback
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
-import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
+import okhttp3.RequestBody
+import okio.Buffer
+import okio.BufferedSink
+import okio.GzipSink
+import okio.buffer
 import java.io.IOException
 import java.util.concurrent.TimeUnit
 import kotlin.coroutines.resume
@@ -21,11 +25,21 @@ class PushHttpTransport(
     private val client: OkHttpClient = defaultClient(),
 ) : PushTransport {
     override suspend fun post(batch: PushBatch): PushTransportResponse {
+        val compressedBody = gzip(batch.body)
+        val compressed = execute(compressedBody, contentEncoding = "gzip")
+        if (compressed.statusCode != 415) return compressed
+        // Protocol 1.0 allowed identity requests. A definitive media-type rejection is the only
+        // signal that permits one compatibility attempt with the exact same decoded entity.
+        return execute(batch.body, contentEncoding = null)
+    }
+
+    private suspend fun execute(body: ByteArray, contentEncoding: String?): PushTransportResponse {
         val request = Request.Builder()
             .url(endpoint.url)
             .header("Authorization", "Bearer $bearerToken")
             .header("Accept", "application/json")
-            .post(batch.body.toRequestBody(NDJSON))
+            .apply { if (contentEncoding != null) header("Content-Encoding", contentEncoding) }
+            .post(FixedRequestBody(body))
             .build()
         return client.newCall(request).await().use { response ->
             val bytes = response.body?.byteStream()?.use { input ->
@@ -71,5 +85,22 @@ class PushHttpTransport(
             .writeTimeout(15, TimeUnit.SECONDS)
             .callTimeout(15, TimeUnit.SECONDS)
             .build()
+
+        /** Compresses only the already bounded decoded entity and rejects unexpected wire expansion. */
+        internal fun gzip(decoded: ByteArray): ByteArray {
+            require(decoded.size <= PushProtocol.MAX_BODY_BYTES) { "decoded push body exceeds limit" }
+            val buffer = Buffer()
+            GzipSink(buffer).buffer().use { it.write(decoded) }
+            check(buffer.size <= PushProtocol.MAX_WIRE_BODY_BYTES) { "gzip push body exceeds wire limit" }
+            return buffer.readByteArray()
+        }
+
+        private class FixedRequestBody(private val bytes: ByteArray) : RequestBody() {
+            override fun contentType() = NDJSON
+            override fun contentLength(): Long = bytes.size.toLong()
+            override fun writeTo(sink: BufferedSink) {
+                sink.write(bytes)
+            }
+        }
     }
 }

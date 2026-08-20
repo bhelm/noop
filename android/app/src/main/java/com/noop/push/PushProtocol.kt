@@ -9,10 +9,13 @@ class PushProtocolException(message: String) : IllegalArgumentException(message)
 /** Deterministic, bounded NDJSON encoder and acknowledgement codec for protocol 1.0. */
 object PushProtocol {
     const val VERSION = "1.0"
-    const val MAX_RECORDS = 500
-    const val MAX_BODY_BYTES = 1024 * 1024
+    const val MAX_RECORDS = 5_000
+    /** Hard limit for the decoded UTF-8 NDJSON entity, before optional content coding. */
+    const val MAX_BODY_BYTES = 4 * 1024 * 1024
+    /** Deflate framing can be slightly larger than incompressible input; keep that copy bounded too. */
+    const val MAX_WIRE_BODY_BYTES = MAX_BODY_BYTES + 64 * 1024
     const val MAX_ACK_BYTES = 16 * 1024
-    internal const val SNAPSHOT_PAGE_SIZE = 500
+    internal const val SNAPSHOT_PAGE_SIZE = 5_000
     // A rolling window may be multipart, but client memory use is fail-closed and independent of DB size.
     internal const val MAX_MUTABLE_SNAPSHOT_RECORDS = 1_000
     internal const val MAX_MUTABLE_SNAPSHOT_ENCODED_BYTES = 2 * 1024 * 1024
@@ -31,23 +34,25 @@ object PushProtocol {
         }
         records.forEach { validateRecord(table, it.key, it.data) }
         val candidates = records.take(MAX_RECORDS)
-        val encodedRows = candidates.map(::encodeRecordLine)
         val selectedRows = ArrayList<PushAppendRecord>(candidates.size)
         val selectedLines = ArrayList<ByteArray>(candidates.size)
         var rowBytes = 0
         for (i in candidates.indices) {
             val candidate = candidates[i]
+            // Encode one row at a time so rows beyond the decoded entity bound never create a
+            // second page-sized collection of byte arrays in memory.
+            val encodedRow = encodeRecordLine(candidate)
             val end = cursorFor(table, deviceId, candidate)
             val candidateCount = selectedRows.size + 1
             val headerSize = appendHeader(
                 sourceId, table, deviceId, startCursor, end, candidateCount, UUID_PLACEHOLDER,
             ).size
-            if (headerSize + rowBytes + encodedRows[i].size > MAX_BODY_BYTES) break
+            if (headerSize + rowBytes + encodedRow.size > MAX_BODY_BYTES) break
             selectedRows += candidate
-            selectedLines += encodedRows[i]
-            rowBytes += encodedRows[i].size
+            selectedLines += encodedRow
+            rowBytes += encodedRow.size
         }
-        if (selectedRows.isEmpty()) throw PushProtocolException("first append record exceeds the 1 MiB batch limit")
+        if (selectedRows.isEmpty()) throw PushProtocolException("first append record exceeds the 4 MiB decoded batch limit")
 
         val endCursor = cursorFor(table, deviceId, selectedRows.last())
         val identity = appendIdentity(sourceId, table, deviceId, startCursor, endCursor, selectedRows.size)
@@ -110,7 +115,7 @@ object PushProtocol {
                 batchId = UUID_PLACEHOLDER,
             )
             if (nextCount > MAX_RECORDS || conservativeHeader.size + currentBytes + line.size > MAX_BODY_BYTES) {
-                if (current.isEmpty()) throw PushProtocolException("first replace_window record exceeds the 1 MiB batch limit")
+                if (current.isEmpty()) throw PushProtocolException("first replace_window record exceeds the 4 MiB decoded batch limit")
                 chunks += current
                 current = mutableListOf()
                 currentBytes = 0
@@ -120,7 +125,7 @@ object PushProtocol {
                 Int.MAX_VALUE, Int.MAX_VALUE, 1, UUID_PLACEHOLDER,
             )
             if (oneHeader.size + line.size > MAX_BODY_BYTES) {
-                throw PushProtocolException("replace_window record exceeds the 1 MiB batch limit")
+                throw PushProtocolException("replace_window record exceeds the 4 MiB decoded batch limit")
             }
             current += line
             currentBytes += line.size
