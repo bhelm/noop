@@ -581,14 +581,35 @@ public final class BLEManager: NSObject, ObservableObject {
         lowRefresh ? lowRefreshBackfillIntervalSeconds : backfillIntervalSeconds
     }
 
+    /// #battery: is a keep-alive tick due to poll the strap's battery?
+    ///
+    /// Normally every SECOND 30 s tick (~60 s), which is plenty while the charge only creeps downward. A
+    /// CHARGING strap is the exception: the value climbs visibly, the user is usually watching it on the
+    /// puck, and the window is short and bounded — so poll every tick (~30 s) instead. It costs one extra
+    /// read per minute, only while charging, and nothing at all the rest of the time.
+    ///
+    /// The charge state itself rides bit 0 of the BATTERY_LEVEL event, so it is only learned FROM a poll:
+    /// docking is still noticed on the ordinary ~60 s cadence, and the faster rate applies from the next
+    /// tick onward. Twin of the Kotlin `batteryPollDue`.
+    static func batteryPollDue(tick: Int, charging: Bool) -> Bool {
+        charging || tick % 2 == 0
+    }
+
     /// #battery: pure 5/MG battery-read throttle decision, unit-testable without a CoreBluetooth seam.
     /// Returns true when no prior read exists (the first read of a connection, or post-disconnect re-seed)
-    /// OR when at least `whoop5BatteryReadMinIntervalSeconds` has elapsed since the last read. Stops the
-    /// 30 s keep-alive tick from re-reading 0x2A19 every cycle. Twin of the Android `keepAliveTick % 2 == 0`
+    /// OR when at least `whoop5BatteryReadMinIntervalSeconds` has elapsed since the last read — HALVED
+    /// while the strap is charging, for the reason given on `batteryPollDue` above. Stops the 30 s
+    /// keep-alive tick from re-reading 0x2A19 every cycle. Twin of the Android `keepAliveTick % 2 == 0`
     /// ~60 s cadence (WhoopBleClient keepAliveFire).
-    static func shouldPollWhoop5Battery(lastReadAt: Date?, now: Date = Date()) -> Bool {
+    static func shouldPollWhoop5Battery(lastReadAt: Date?, now: Date = Date(),
+                                        charging: Bool = false) -> Bool {
         guard let last = lastReadAt else { return true }
-        return now.timeIntervalSince(last) >= whoop5BatteryReadMinIntervalSeconds
+        // #battery: same reasoning as `batteryPollDue` — a charging strap earns the finer cadence, so the
+        // 5/MG time throttle halves while charging rather than leaving it a minute behind the 4.0.
+        let minInterval = charging
+            ? whoop5BatteryReadMinIntervalSeconds / 2
+            : whoop5BatteryReadMinIntervalSeconds
+        return now.timeIntervalSince(last) >= minInterval
     }
 
     /// #battery: pure periodic-offload interval for a 5/MG whose history is known-empty, unit-testable
@@ -2138,7 +2159,12 @@ public final class BLEManager: NSObject, ObservableObject {
             let rows = bf.sessionRowsPersisted
             let result: String
             if reason == "timeout" {
-                result = "stalled (idle timeout, rows=\(rows) so far)"
+                // #1466: an idle timeout that banked rows is a productive end, not a stall — the strap
+                // simply went quiet after handing everything over. Only rows=0 is a genuine stall. Calling
+                // both "stalled" made a healthy 17k-row night read as a failure in the log.
+                result = rows > 0
+                    ? "idle-timeout after rows=\(rows)"
+                    : "stalled (idle timeout, rows=0)"
             } else if reason == "HISTORY_COMPLETE" {
                 result = rows > 0
                     ? "complete rows=\(rows) nights=\(bf.sessionNights)"
@@ -2265,9 +2291,10 @@ public final class BLEManager: NSObject, ObservableObject {
             // 5/MG case isn't a failure — live HR is streaming fine over 0x2A37, the history offload is
             // just experimental/empty on that firmware. "Banked" = this offload made ANY offload progress
             // (chunks acked, rows persisted, or deep packets seen); an empty 5/MG offload has none.
-            let bankedThisOffload = state.syncChunksThisSession > 0
-                || (backfiller?.sessionRowsPersisted ?? 0) > 0
-                || state.deepPacketsThisSession > 0
+            let bankedThisOffload = BLEManager.offloadBankedAnything(
+                chunks: state.syncChunksThisSession,
+                rows: backfiller?.sessionRowsPersisted ?? 0,
+                deepPackets: state.deepPacketsThisSession)
             if selectedModel.deviceFamily == .whoop5 {
                 let crossed = whoop5EmptyOffload.recordOffload(bankedRecords: bankedThisOffload)
                 if whoop5EmptyOffload.historyEmpty {
@@ -2288,8 +2315,16 @@ public final class BLEManager: NSObject, ObservableObject {
                 // #324/#928: a future-dated strap TIMES OUT on its deep future-dated backlog — that's not
                 // "the strap went quiet", it's the clock being set ahead. Prefer the honest future-clock
                 // banner so the reporter's timeout case (the common one) names the real cause + remedy.
-                state.lastSyncError = futureClockBanner
-                    ?? "Sync interrupted - the strap went quiet. It will retry on the next sync."
+                //
+                // #1466: past that, only claim the strap went quiet when this offload actually handed over
+                // NOTHING. A WHOOP 4.0 routinely ends a full, successful night on the idle timeout rather
+                // than HISTORY_COMPLETE — one field log shows a session banking 17,205 rows across a night
+                // and still exiting reason=timeout. Announcing "sync interrupted" there tells the user a
+                // sync that worked had failed, which is worse than saying nothing: it trains them to
+                // distrust the one banner that matters when a sync really does stall. `bankedThisOffload`
+                // was already computed above for the 5/MG path and simply never consulted here.
+                state.lastSyncError = BLEManager.timeoutSyncError(futureClockBanner: futureClockBanner,
+                                                                  bankedThisOffload: bankedThisOffload)
             }
         }
         checkStrapLiveness()         // safety-net: strap ahead of us AND our frontier frozen ⇒ stuck?
@@ -2434,6 +2469,36 @@ public final class BLEManager: NSObject, ObservableObject {
     /// (that flag guards the once-per-connect INITIAL kick); the periodic re-trigger is separate.
     static func shouldRunPeriodicBackfill(connected: Bool, bonded: Bool, backfilling: Bool) -> Bool {
         connected && bonded && !backfilling
+    }
+
+    /// #1466: did this offload hand over anything at all? Acked chunks, persisted rows, or deep packets.
+    ///
+    /// Deliberately NOT a frame count. A stalled session still receives frames — three in one field log ran
+    /// 66–109s and took 42, 51 and 59 frames while banking ZERO rows. Gating the "strap went quiet" banner
+    /// on frames would therefore silence it on exactly the sessions it exists for. Twin of the Kotlin
+    /// `offloadBankedAnything`; both platforms must answer this the same way or one of them goes quiet on a
+    /// real stall.
+    nonisolated static func offloadBankedAnything(chunks: Int, rows: Int, deepPackets: Int) -> Bool {
+        chunks > 0 || rows > 0 || deepPackets > 0
+    }
+
+    /// #1466: the banner (if any) for an offload that ended on the idle TIMEOUT rather than
+    /// HISTORY_COMPLETE, for a non-5/MG strap. Pure so the decision is unit-testable — the surrounding
+    /// method is a long side-effecting BLE callback.
+    ///
+    /// A WHOOP 4.0 routinely ends a full, successful night this way: a field log shows a session banking
+    /// 17,205 rows across a night and still exiting `reason=timeout`. So "the strap went quiet" is only
+    /// honest when the offload handed over NOTHING; saying it after a productive sync reports a success as
+    /// a failure, and teaches the user to ignore the banner that matters when a sync really does stall.
+    ///
+    /// A future-dated clock still wins: it names a cause and a remedy, and #324/#928 showed that strap
+    /// times out precisely BECAUSE of the bad clock. Twin of the Kotlin `timeoutSyncError`.
+    nonisolated static func timeoutSyncError(futureClockBanner: String?,
+                                             bankedThisOffload: Bool) -> String? {
+        if let futureClockBanner { return futureClockBanner }
+        return bankedThisOffload
+            ? nil
+            : "Sync interrupted - the strap went quiet. It will retry on the next sync."
     }
 
     /// Pure classification of a COMPLETED (HISTORY_COMPLETE) offload, extracted from exitBackfilling so
@@ -3874,7 +3939,10 @@ public final class BLEManager: NSObject, ObservableObject {
             send(.toggleRealtimeHR, payload: [0x01])
         }   // re-arm so it can't lapse
         keepAliveTick += 1
-        if keepAliveTick % 2 == 0 { send(.getBatteryLevel, payload: []) }  // ~every 60s
+        // #battery: ~60 s normally, ~30 s while charging (see `batteryPollDue`).
+        if BLEManager.batteryPollDue(tick: keepAliveTick, charging: state.charging == true) {
+            send(.getBatteryLevel, payload: [])
+        }
     }
 
     private func startBackfillTimer() {
@@ -4095,7 +4163,8 @@ public final class BLEManager: NSObject, ObservableObject {
         // revert the true reading, #77). The 600 s same-% throttle in LiveState guards the estimator.
         if let b = batteryCharacteristic, b.properties.contains(.read),
            selectedModel.deviceFamily != .whoop4,
-           BLEManager.shouldPollWhoop5Battery(lastReadAt: lastBatteryReadAt) {
+           BLEManager.shouldPollWhoop5Battery(lastReadAt: lastBatteryReadAt,
+                                              charging: state.charging == true) {
             p.readValue(for: b)
             lastBatteryReadAt = Date()
         }

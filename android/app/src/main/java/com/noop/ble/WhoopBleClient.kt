@@ -602,6 +602,18 @@ class WhoopBleClient(
             else -> "status$status"
         }
 
+        /** #battery: is a keep-alive tick due to poll the strap's battery?
+         *
+         *  Normally every SECOND 30 s tick (~60 s), which is plenty while the charge only creeps downward.
+         *  A CHARGING strap is the exception: the value climbs visibly, the user is usually watching it on
+         *  the puck, and the window is short and bounded — so poll every tick (~30 s) instead. It costs one
+         *  extra read per minute, only while charging, and nothing at all the rest of the time.
+         *
+         *  The charge state itself rides bit 0 of the BATTERY_LEVEL event, so it is only learned FROM a
+         *  poll: docking is still noticed on the ordinary ~60 s cadence, and the faster rate applies from
+         *  the next tick onward. Twin of the Swift `BLEManager.batteryPollDue`. */
+        fun batteryPollDue(tick: Int, charging: Boolean): Boolean = charging || tick % 2 == 0
+
         /** Pure battery-adaptive gate (#477), unit-testable without a BLE stack. Keyed on the STRAP's
          *  battery (WHOOP/Oura/Fitbit): the lever is ARMED by [thresholdPct] > 0 and engages while the
          *  strap is DISCHARGING at/below [thresholdPct]. The
@@ -1141,6 +1153,34 @@ class WhoopBleClient(
                 statusNote = null,
             )
 
+        /** #1466: did this offload hand over anything at all? Acked chunks, persisted rows, or deep packets.
+         *
+         *  Deliberately NOT a frame count, and deliberately NOT the neighbouring [bankedThisOffload] used by
+         *  the 5/MG empty-offload tracker — that one counts offload FRAMES, and a stalled session still
+         *  receives frames: three in one field log ran 66–109s and took 42, 51 and 59 frames while banking
+         *  ZERO rows. Reusing it here would silence the "strap went quiet" banner on exactly the sessions it
+         *  exists for. Twin of the Swift `offloadBankedAnything`; both platforms must answer this the same
+         *  way or one of them goes quiet on a real stall. */
+        fun offloadBankedAnything(chunks: Int, rows: Int, deepPackets: Int): Boolean =
+            chunks > 0 || rows > 0 || deepPackets > 0
+
+        /** #1466: the banner (if any) for an offload that ended on the idle TIMEOUT rather than
+         *  HISTORY_COMPLETE, for a non-5/MG strap. Pure so the decision is unit-testable — the surrounding
+         *  method is a long side-effecting BLE callback.
+         *
+         *  A WHOOP 4.0 routinely ends a full, successful night this way: a field log shows a session
+         *  banking 17,205 rows across a night and still exiting `reason=timeout`. So "the strap went quiet"
+         *  is only honest when the offload handed over NOTHING; saying it after a productive sync reports a
+         *  success as a failure, and teaches the user to ignore the banner that matters when a sync really
+         *  does stall.
+         *
+         *  A future-dated clock still wins: it names a cause and a remedy, and #324/#928 showed that strap
+         *  times out precisely BECAUSE of the bad clock. Twin of the Swift `timeoutSyncError`. */
+        fun timeoutSyncError(futureClockBanner: String?, bankedThisOffload: Boolean): String? =
+            futureClockBanner
+                ?: if (bankedThisOffload) null
+                else "Sync interrupted - the strap went quiet. It will retry on the next sync."
+
         /**
          * Pure classification of a COMPLETED (HISTORY_COMPLETE) offload, extracted from exitBackfilling
          * so it's unit-testable without a live GATT stack. Mirrors Swift
@@ -1607,6 +1647,11 @@ class WhoopBleClient(
         LiveState(lastSyncAt = NoopPrefs.lastSyncAt(context).takeIf { it > 0L }),
     )
     val state: StateFlow<LiveState> = _state.asStateFlow()
+
+    /** Monotonic event for the in-memory/exportable strap log. Test Centre panels collect it only while
+     * active and coalesce bursts, so a new tagged line refreshes its readout without mutating LiveState. */
+    private val _logRevision = MutableStateFlow(0L)
+    val logRevision: StateFlow<Long> = _logRevision.asStateFlow()
 
     // MARK: Multi-WHOOP (additive — inert on the single-WHOOP path; MW-2/MW-3 parity with iOS BLEManager).
 
@@ -2100,6 +2145,23 @@ class WhoopBleClient(
      *  the surviving tail, and exactly once, or a second roll would push this process's own partial tail in
      *  as a "previous" session. Guarded by [genLock]. */
     private var didRollGenerations = false
+
+    /** #1468 follow-up: the PREVIOUS-sessions half of [exportLogText], memoised for the process.
+     *
+     *  It is invariant once [rollLogGenerationsIfNeeded] has run: [persistLogGenerations] is called from
+     *  exactly one place, inside that latched roll, so nothing rewrites the generations again while the app
+     *  lives. Recomputing it was pure waste — and not free, since it re-reads SharedPreferences and
+     *  re-formats every past session.
+     *
+     *  That waste only became visible with the Test Centre live readouts (#1468), which call [exportLogText]
+     *  on every 250 ms coalesce tick while a panel is open, so a screen the user leaves open during an
+     *  offload re-read prefs and re-rendered historical sessions four times a second. Guarded by [genLock],
+     *  the same lock the roll uses, so the memo cannot be filled from a pre-roll read. */
+    private var cachedPreviousSessionsText: String? = null
+
+    /** Line-form twin of [cachedPreviousSessionsText], memoised for the same reason and under
+     *  the same [genLock]. Built from the generations directly — see [buildPreviousSessionsLines]. */
+    private var cachedPreviousSessionsLines: List<String>? = null
     /** Durable-tail mirror counter, mutated only under [logBuffer]'s monitor (like [logBuffer] itself). */
     private var logsSincePersist = 0
 
@@ -6097,8 +6159,11 @@ class WhoopBleClient(
                 }
                 if (connectedFamily == DeviceFamily.WHOOP4) {
                     if (wantsRealtime) { realtimeArmed = true; send(CommandNumber.TOGGLE_REALTIME_HR, byteArrayOf(1)) }
-                    if (keepAliveTick % 2 == 0) send(CommandNumber.GET_BATTERY_LEVEL)
-                } else if (connectedFamily == DeviceFamily.WHOOP5 && keepAliveTick % 2 == 0) {
+                    // #battery: ~60 s normally, ~30 s while charging (see [batteryPollDue]).
+                    if (batteryPollDue(keepAliveTick, s.charging == true)) send(CommandNumber.GET_BATTERY_LEVEL)
+                } else if (connectedFamily == DeviceFamily.WHOOP5 &&
+                    batteryPollDue(keepAliveTick, s.charging == true)
+                ) {
                     // 5/MG battery comes only from a 0x2A19 read and the strap sends no unsolicited battery
                     // notification, so poll it here (about every 60s) rather than only while the Live screen
                     // is open. The ring then stays current on any screen without a manual sync, and the read
@@ -7432,8 +7497,25 @@ class WhoopBleClient(
                 // error (it's just the empty offload), and surface the experimental flag instead.
                 // #324/#928: a future-dated WHOOP-4 TIMES OUT on its deep future-dated backlog — prefer the
                 // honest future-clock banner over "strap went quiet" (the reporter's #324 case timed out).
+                // #1466: only claim the strap went quiet when this offload handed over NOTHING. A WHOOP 4.0
+                // routinely ends a full, successful night on the idle timeout rather than HISTORY_COMPLETE —
+                // one field log shows a session banking 17,205 rows and still exiting reason=timeout.
+                // Announcing "sync interrupted" there tells the user a sync that worked had failed, which
+                // trains them to distrust the banner that matters when a sync really does stall. NOT
+                // `bankedThisOffload` — that counts frames (see [offloadBankedAnything]) and a stall still
+                // receives them; chunks/rows/deep-packets is the twin of what Swift asks. Deep packets come
+                // from `it`, the snapshot being copied, NOT a fresh `_state.value` read: `update` re-runs
+                // this lambda on a CAS retry, so a fresh read could answer from a different state than the
+                // one this copy is built from.
                 lastSyncError = if (isWhoop5) null
-                    else futureClockBanner ?: "Sync interrupted - the strap went quiet. It will retry on the next sync.",
+                    else timeoutSyncError(
+                        futureClockBanner,
+                        offloadBankedAnything(
+                            chunks = ackedChunksThisSession,
+                            rows = rowsThisSession,
+                            deepPackets = it.deepPacketsThisSession,
+                        ),
+                    ),
                 historySyncExperimental = whoop5HistoryExperimental,
             )
             else -> it.copy(
@@ -7489,7 +7571,10 @@ class WhoopBleClient(
         if (testCentre.active(com.noop.testcentre.TestDomain.CONNECTION)) {
             val rows = backfiller.sessionRowsPersisted
             val result = when {
-                reason == "timeout" -> "stalled (idle timeout, rows=$rows so far)"
+                // #1466: an idle timeout that banked rows is a productive end, not a stall. Only rows=0 is
+                // a genuine stall; calling both "stalled" made a healthy night read as a failure.
+                reason == "timeout" && rows > 0 -> "idle-timeout after rows=$rows"
+                reason == "timeout" -> "stalled (idle timeout, rows=0)"
                 reason == "HISTORY_COMPLETE" && rows > 0 -> "complete rows=$rows nights=${backfiller.sessionNights}"
                 reason == "HISTORY_COMPLETE" -> "empty (console only, no sensor records)"
                 else -> "$reason rows=$rows"
@@ -8302,6 +8387,7 @@ class WhoopBleClient(
                 }
                 line
             }
+            _logRevision.update { it + 1 }
             // #1263: durable-tail mirror (batched), OUTSIDE the logBuffer monitor.
             tailToPersist?.let { persistLogTail(it) }
             // #1121: when detailed capture is on, ALSO append the (already PII-scrubbed) line to the
@@ -8316,6 +8402,7 @@ class WhoopBleClient(
                     logBuffer.addLast("[log error: ${t.javaClass.simpleName}]")
                     while (logBuffer.size > LOG_BUFFER_MAX) logBuffer.removeFirst()
                 }
+                _logRevision.update { it + 1 }
             }
         }
     }
@@ -8453,6 +8540,37 @@ class WhoopBleClient(
         log("bondState $detail", com.noop.testcentre.TestDomain.CONNECTION)
     }
 
+    /** #1468 follow-up: the export as LINES, without ever building the joined string.
+     *
+     *  Every in-app consumer of the log immediately splits it again — `TestCentreLiveReadouts.rows` filters
+     *  to a single domain tag, `CaptureAccumulator.capturedDayKeys` does `split("\n")` — so joining 5,000
+     *  buffered lines plus every past session into one string, only for the caller to tear it back apart, is
+     *  pure overhead. It became a per-tick cost with the live readouts (#1468), which refresh every 250 ms
+     *  while a panel is open.
+     *
+     *  Same lines, same order as [exportLogText] splits into. The one difference is a trailing empty
+     *  segment: with an empty in-memory buffer, `exportLogText` ends in the newline after the session marker
+     *  and splitting it yields a final `""`, which this omits. No consumer can see that — an empty line
+     *  matches no domain tag and no day marker — but it is stated rather than glossed, because "identical"
+     *  would be a stronger claim than the code makes.
+     *
+     *  Only the share/export paths, which genuinely need one string, pay for the join. */
+    fun exportLogLines(): List<String> {
+        rollLogGenerationsIfNeeded()
+        val previous = synchronized(genLock) {
+            cachedPreviousSessionsLines
+                ?: buildPreviousSessionsLines().also { cachedPreviousSessionsLines = it }
+        }
+        val snapshot = synchronized(logBuffer) { logBuffer.toList() }
+        return if (previous.isEmpty()) snapshot else previous + snapshot
+    }
+
+    /** The previous-session lines exactly as [com.noop.ui.StrapLogGenerations.previousSessionsText] would
+     *  render them, taken from the generations themselves so no string is built and re-split. Empty when
+     *  there are no previous sessions, matching that function's empty-string case. */
+    private fun buildPreviousSessionsLines(): List<String> =
+        com.noop.ui.StrapLogGenerations.previousSessionsLines(persistedLogGenerations())
+
     /**
      * Snapshot of the recent strap log, newest last, for the "Share strap log" diagnostics export.
      *
@@ -8465,9 +8583,18 @@ class WhoopBleClient(
      */
     fun exportLogText(): String {
         rollLogGenerationsIfNeeded()
-        val previous = com.noop.ui.StrapLogGenerations.previousSessionsText(persistedLogGenerations())
-        val current = synchronized(logBuffer) { logBuffer.joinToString("\n") }
-        return previous + current
+        val previous = synchronized(genLock) {
+            cachedPreviousSessionsText
+                ?: com.noop.ui.StrapLogGenerations.previousSessionsText(persistedLogGenerations())
+                    .also { cachedPreviousSessionsText = it }
+        }
+        // #1468 follow-up: COPY the buffer under the lock and join outside it. The join allocates one string
+        // per line plus the result — thousands of lines during an offload — and `log()` is called from the
+        // GATT binder thread, which blocks on this same lock for every line it writes. Holding it only for a
+        // reference copy keeps a readout refresh from throttling the writer it is reading. Output is
+        // byte-identical either way.
+        val snapshot = synchronized(logBuffer) { logBuffer.toList() }
+        return previous + snapshot.joinToString("\n")
     }
 }
 
