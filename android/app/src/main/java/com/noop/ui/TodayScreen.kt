@@ -2944,13 +2944,15 @@ private fun RingEmptyOverlay(
 @Composable
 private fun RingNoData(diameter: Dp) {
     Box(modifier = Modifier.size(diameter), contentAlignment = Alignment.Center) {
-        AutoSizeValue(
+        Text(
             text = uiString(R.string.today_no_data),
             style = NoopType.headline,
             color = Palette.textTertiary,
             modifier = Modifier.width(diameter * 0.78f),
-            minScale = 0.65f,
             textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+            maxLines = 2,
+            softWrap = true,
+            overflow = TextOverflow.Clip,
         )
     }
 }

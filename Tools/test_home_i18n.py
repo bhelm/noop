@@ -253,6 +253,8 @@ class HomeLocalizationTest(unittest.TestCase):
         source = (ROOT / "android/app/src/main/java/com/noop/ui/TodayScreen.kt").read_text(encoding="utf-8")
         self.assertIn("text = domainLabel.uppercase()", source)
         self.assertIn("private fun RingNoData(diameter: Dp)", source)
+        self.assertIn("maxLines = 2", source)
+        self.assertIn("overflow = TextOverflow.Clip", source)
         self.assertNotIn("Text(domainLabel.uppercase()", source)
         self.assertNotIn("private fun RingNoData()", source)
 
