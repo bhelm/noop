@@ -123,15 +123,22 @@ extension StepsEstimateEngine {
         var rawTotal = 0
         var keptDeltas = 0
         var droppedDeltas = 0
+        var nonLocomotionDeltas = 0
         var minDelta = Int.max
         var maxDelta = Int.min
+        let hasActivityClasses = StepsCounter.hasActivityClasses(sorted)
         for i in 1..<sorted.count {
             let delta = (sorted[i].counter - sorted[i - 1].counter) & 0xFFFF  // wrap-aware u16 increment
-            if delta >= 1 && delta < maxStepDelta {
+            if delta >= 1 && delta < maxStepDelta
+                && StepsCounter.shouldCountDelta(
+                    activityClass: sorted[i].activityClass,
+                    hasActivityClasses: hasActivityClasses) {
                 rawTotal += delta
                 keptDeltas += 1
                 minDelta = Swift.min(minDelta, delta)
                 maxDelta = Swift.max(maxDelta, delta)
+            } else if delta >= 1 && delta < maxStepDelta {
+                nonLocomotionDeltas += 1
             } else if delta >= maxStepDelta {
                 droppedDeltas += 1   // a sync-gap / reboot boundary, not real steps (>= 512)
             }
@@ -143,6 +150,8 @@ extension StepsEstimateEngine {
             + "firstCounter=\(firstCounter) lastCounter=\(lastCounter) (cumulative u16 @57)")
         lines.append("stepsRaw deltas kept=\(keptDeltas) dropped=\(droppedDeltas) "
             + "(dropped = delta>=\(maxStepDelta), a sync-gap/reboot boundary)")
+        lines.append("stepsRaw activityFilter=\(hasActivityClasses ? "walk-run" : "legacy-unclassed") "
+            + "nonLocomotion=\(nonLocomotionDeltas)")
         if keptDeltas > 0 {
             lines.append("stepsRaw keptRange min=\(minDelta) max=\(maxDelta) "
                 + "(each = (cur-prev)&0xFFFF, wrap-aware)")
