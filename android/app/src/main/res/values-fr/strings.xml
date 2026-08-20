@@ -2137,7 +2137,7 @@
     <string name="push_destination_title">Votre point de terminaison</string>
     <string name="push_disclosure">Une fois activé, NOOP envoie les données de santé brutes de ce téléphone au point de terminaison que vous contrôlez. Ces données quittent explicitement l’appareil.</string>
     <string name="push_one_way_warning">Export à sens unique uniquement. NOOP ne peut pas restaurer les données depuis ce point et ne fournit pas de récepteur.</string>
-    <string name="push_endpoint">URL du point de terminaison (masquée)</string>
+    <string name="push_endpoint">URL du point de terminaison</string>
     <string name="push_token">Jeton Bearer (masqué)</string>
     <string name="push_token_saved">Jeton Bearer (enregistré ; saisir pour remplacer)</string>
     <string name="push_clear_token">Effacer le jeton enregistré</string>
@@ -2152,5 +2152,14 @@
     <string name="push_never">Jamais</string>
     <string name="push_last_success">Dernière réussite : %1$s</string>
     <string name="push_last_error">Dernière erreur : %1$s</string>
+    <string name="push_current_state">État actuel : %1$s</string>
+    <string name="push_progress">Accepté pendant ce rattrapage : %1$d lots · %2$d enregistrements</string>
+    <string name="push_state_idle">Inactif</string>
+    <string name="push_state_queued">En attente</string>
+    <string name="push_state_running">Envoi en cours</string>
+    <string name="push_state_continuing">Autres données locales trouvées ; poursuite en cours</string>
+    <string name="push_state_retrying">Nouvelle tentative après une erreur</string>
+    <string name="push_state_complete">À jour</string>
+    <string name="push_state_failed">En pause après une erreur</string>
     <string name="push_settings_row_detail">Export expérimental à sens unique vers un point que vous contrôlez. Désactivé par défaut.</string>
 </resources>

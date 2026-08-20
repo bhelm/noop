@@ -2138,7 +2138,7 @@
     <string name="push_destination_title">Tu endpoint</string>
     <string name="push_disclosure">Al activarlo, NOOP envía datos de salud sin procesar desde este teléfono al endpoint que controlas. Los datos salen expresamente del dispositivo.</string>
     <string name="push_one_way_warning">Solo exportación unidireccional. NOOP no puede restaurar datos desde este endpoint ni proporciona un receptor.</string>
-    <string name="push_endpoint">URL del endpoint (oculta)</string>
+    <string name="push_endpoint">URL del endpoint</string>
     <string name="push_token">Token Bearer (oculto)</string>
     <string name="push_token_saved">Token Bearer (guardado; escribe para sustituirlo)</string>
     <string name="push_clear_token">Borrar token guardado</string>
@@ -2153,5 +2153,14 @@
     <string name="push_never">Nunca</string>
     <string name="push_last_success">Último éxito: %1$s</string>
     <string name="push_last_error">Último error: %1$s</string>
+    <string name="push_current_state">Estado actual: %1$s</string>
+    <string name="push_progress">Aceptado en esta puesta al día: %1$d lotes · %2$d registros</string>
+    <string name="push_state_idle">Inactivo</string>
+    <string name="push_state_queued">En cola</string>
+    <string name="push_state_running">Enviando</string>
+    <string name="push_state_continuing">Hay más datos locales; continuando</string>
+    <string name="push_state_retrying">Reintentando tras un error</string>
+    <string name="push_state_complete">Actualizado</string>
+    <string name="push_state_failed">En pausa tras un error</string>
     <string name="push_settings_row_detail">Exportación unidireccional experimental a un endpoint que controlas. Desactivada de forma predeterminada.</string>
 </resources>

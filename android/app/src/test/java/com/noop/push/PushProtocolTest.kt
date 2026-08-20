@@ -67,14 +67,31 @@ class PushProtocolTest {
     }
 
     @Test
-    fun appendBatchCapsRowsAtFiveHundred() {
-        val rows = (1L..501L).map { hrRecord(it, it, 60) }
+    fun appendBatchCapsRowsAtFiveThousand() {
+        val rows = (1L..5_001L).map { hrRecord(it, it, 60) }
 
         val batch = PushProtocol.appendBatch(PushAppendTable.HR_SAMPLE, SOURCE_A, "strap-a", null, rows)
 
         assertEquals(PushProtocol.MAX_RECORDS, batch.recordCount)
-        assertEquals(500L, batch.endCursor?.rowId)
+        assertEquals(5_000L, batch.endCursor?.rowId)
         assertTrue(batch.body.size <= PushProtocol.MAX_BODY_BYTES)
+    }
+
+    @Test
+    fun appendBatchStopsBeforeFourMiBDecodedNdjsonLimit() {
+        val rows = (1L..5_000L).map { rowId ->
+            PushAppendRecord(
+                rowId = rowId,
+                key = linkedMapOf("ts" to rowId, "kind" to "large"),
+                data = linkedMapOf("payloadJSON" to "x".repeat(1_000)),
+            )
+        }
+
+        val batch = PushProtocol.appendBatch(PushAppendTable.EVENT, SOURCE_A, "strap-a", null, rows)
+
+        assertTrue(batch.recordCount < PushProtocol.MAX_RECORDS)
+        assertTrue(batch.body.size <= 4 * 1024 * 1024)
+        assertTrue(batch.body.size > 4 * 1024 * 1024 - 2_000)
     }
 
     @Test(expected = PushProtocolException::class)
@@ -108,7 +125,7 @@ class PushProtocolTest {
 
     @Test
     fun mutableSnapshotIsDeterministicallySplitIntoBoundedParts() {
-        val records = (1..501).map { index ->
+        val records = (1..5_001).map { index ->
             PushMutableRecord(
                 linkedMapOf("day" to "2026-08-${(index % 14 + 5).toString().padStart(2, '0')}", "question" to "q$index"),
                 linkedMapOf("answeredYes" to true, "notes" to null, "numericValue" to null),
@@ -119,7 +136,7 @@ class PushProtocolTest {
         val retry = PushProtocol.mutableBatches(PushMutableTable.JOURNAL, SOURCE_A, "device-a", testWindow(), records)
 
         assertEquals(2, first.size)
-        assertTrue(first.all { it.recordCount <= 500 && it.body.size <= PushProtocol.MAX_BODY_BYTES })
+        assertTrue(first.all { it.recordCount <= PushProtocol.MAX_RECORDS && it.body.size <= PushProtocol.MAX_BODY_BYTES })
         assertEquals(first.map { it.batchId }, retry.map { it.batchId })
         assertEquals(1, first[0].part)
         assertEquals(2, first[1].part)

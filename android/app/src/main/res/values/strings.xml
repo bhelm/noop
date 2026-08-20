@@ -49,7 +49,7 @@
     <string name="push_destination_title">Your endpoint</string>
     <string name="push_disclosure">When enabled, NOOP sends raw health records from this phone to the endpoint you control. This is explicit data egress from the device.</string>
     <string name="push_one_way_warning">One-way export only. NOOP cannot restore data from this endpoint and does not provide a receiver.</string>
-    <string name="push_endpoint">Endpoint URL (hidden)</string>
+    <string name="push_endpoint">Endpoint URL</string>
     <string name="push_token">Bearer token (hidden)</string>
     <string name="push_token_saved">Bearer token (saved; enter to replace)</string>
     <string name="push_clear_token">Clear saved token</string>
@@ -64,6 +64,15 @@
     <string name="push_never">Never</string>
     <string name="push_last_success">Last success: %1$s</string>
     <string name="push_last_error">Last error: %1$s</string>
+    <string name="push_current_state">Current state: %1$s</string>
+    <string name="push_progress">Accepted this catch-up: %1$d batches · %2$d records</string>
+    <string name="push_state_idle">Idle</string>
+    <string name="push_state_queued">Queued</string>
+    <string name="push_state_running">Sending</string>
+    <string name="push_state_continuing">More local data found; continuing</string>
+    <string name="push_state_retrying">Retrying after an error</string>
+    <string name="push_state_complete">Up to date</string>
+    <string name="push_state_failed">Paused after an error</string>
     <string name="push_settings_row_detail">Experimental one-way export to an endpoint you control. Off by default.</string>
 
     <!-- More-page section headers (DISPLAY only; the stored expand/collapse key stays the English

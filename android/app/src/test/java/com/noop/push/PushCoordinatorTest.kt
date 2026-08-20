@@ -200,6 +200,34 @@ class PushCoordinatorTest {
     }
 
     @Test
+    fun daoPreflightRejectionIsPermanentAndNeverStartsHttp() = runBlocking {
+        val source = FakePushSource().apply {
+            appendRowsFailure = PushProtocolException("snapshot exceeds local memory limit")
+        }
+        val transport = AckingTransport()
+
+        val result = PushCoordinator(source, transport, MemoryProgress(), SOURCE_A)
+            .pushAppend(PushAppendTable.EVENT, "a")
+
+        assertTrue(result is PushResult.Rejected && !result.retryable)
+        assertTrue(transport.batches.isEmpty())
+    }
+
+    @Test
+    fun mutableDaoProtocolRejectionIsPermanentAndNeverStartsHttp() = runBlocking {
+        val source = FakePushSource().apply {
+            mutableRowsFailure = PushProtocolException("snapshot exceeds local memory limit")
+        }
+        val transport = AckingTransport()
+
+        val result = PushCoordinator(source, transport, MemoryProgress(), SOURCE_A)
+            .pushMutable(PushMutableTable.JOURNAL, "a")
+
+        assertTrue(result is PushResult.Rejected && !result.retryable)
+        assertTrue(transport.batches.isEmpty())
+    }
+
+    @Test
     fun boundedDeviceRotationGuaranteesLaterDeviceProgress() = runBlocking {
         val source = FakePushSource(
             append = mutableMapOf(
@@ -213,6 +241,7 @@ class PushCoordinatorTest {
             .pushKnownDevices(startDeviceIndex = 0, maxDevices = 1)
 
         assertTrue(first.hasMoreDevices)
+        assertEquals(1, first.acceptedRecords)
         assertEquals(1, first.nextDeviceIndex)
         assertTrue(firstTransport.batches.isNotEmpty())
         assertTrue(firstTransport.batches.all { it.deviceId == "a" })
@@ -269,6 +298,8 @@ internal class FakePushSource(
 ) : PushSnapshotSource {
     val afterCursors = mutableListOf<Long>()
     var reading = false
+    var appendRowsFailure: Throwable? = null
+    var mutableRowsFailure: Throwable? = null
 
     override suspend fun knownDeviceIds(): List<String> =
         (append.keys + mutable.keys).map { it.substringAfter('|') }.distinct().sorted()
@@ -285,6 +316,7 @@ internal class FakePushSource(
         afterRowId: Long,
         limit: Int,
     ): List<PushAppendRecord> {
+        appendRowsFailure?.let { throw it }
         reading = true
         return try {
             afterCursors += afterRowId
@@ -299,7 +331,10 @@ internal class FakePushSource(
         deviceId: String,
         window: PushWindow,
         limit: Int,
-    ): List<PushMutableRecord> = mutable[key(table, deviceId)].orEmpty().take(limit)
+    ): List<PushMutableRecord> {
+        mutableRowsFailure?.let { throw it }
+        return mutable[key(table, deviceId)].orEmpty().take(limit)
+    }
 }
 
 internal class MemoryProgress : PushProgressStore {

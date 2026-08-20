@@ -17,6 +17,7 @@ POST /the/user-configured-path HTTP/1.1
 Content-Type: application/x-ndjson; charset=utf-8
 Accept: application/json
 Authorization: Bearer <user-supplied-token>
+Content-Encoding: gzip
 ```
 
 - HTTPS endpoints may be public. Plain HTTP is accepted only when the URL uses a numeric loopback,
@@ -25,11 +26,25 @@ Authorization: Bearer <user-supplied-token>
   bearer token sent over allowed local HTTP is still visible locally, so HTTPS remains preferable.
 - The token and endpoint are supplied by the user. Neither identifies a NOOP account; no such account
   exists.
-- One request contains exactly one device and one stream. A v1 request contains at most **500 record
-  lines** and at most **1 MiB (1,048,576 bytes)** of UTF-8 NDJSON, including newlines.
+- One request contains exactly one device and one stream. A v1 request contains at most **5,000 record
+  lines** and at most **4 MiB (4,194,304 bytes)** of decoded UTF-8 NDJSON, including newlines.
+- Android sends request entities with `Content-Encoding: gzip` and an explicit `Content-Length`.
+  The decoded NDJSON bound is authoritative; the sender also caps the encoded wire entity at
+  **4 MiB + 64 KiB** so compression cannot introduce unbounded buffering. Receivers must decode
+  before enforcing the NDJSON limit. Other conforming senders may use identity encoding while
+  applying the same 4-MiB decoded bound.
+- For compatibility with protocol-1.0 identity-only receivers, Android retries once without
+  `Content-Encoding` only after a definitive HTTP `415 Unsupported Media Type`. The fallback uses
+  the same endpoint, authorization, `batchId`, and byte-identical decoded NDJSON entity. Redirects,
+  transient failures, and every other status never trigger this fallback.
 - A sender run also caps one mutable-window snapshot at **1,000 records / 2 MiB encoded record
   data**. Larger local windows fail visibly before the first HTTP request instead of growing memory
   without bound or sending an incomplete authoritative replacement.
+- Before reading an append page (at most 5,001 queried rows) or mutable snapshot (at most 1,001
+  queried rows), Android performs a length preflight over that exact ordered, limited selection in
+  the same database transaction. The conservative estimate charges every text value at six times
+  its UTF-8 byte length for worst-case JSON escaping plus fixed per-row/object overhead. Oversized
+  snapshots fail without truncation or cursor movement before unrestricted text enters app memory.
 - Network or receiver failure must not block strap offload, local writes, analytics, or UI. Delivery
   is retried by the independent background worker.
 - Android coalesces triggers that arrive during a running worker, processes at most one remembered
@@ -75,18 +90,19 @@ Header members are:
 |---|---|
 | `type` | Always `"batch"`. |
 | `protocolVersion` | `"1.0"` for this contract. |
-| `batchId` | UUID identifying these exact request bytes. Stable across retries. |
+| `batchId` | UUID identifying these exact decoded NDJSON entity bytes. Stable across retries and content codings. |
 | `sourceId` | Locally generated installation UUID. |
 | `deviceId` | Local device identifier; scopes every record in the batch. |
 | `stream` | A name in the versioned stream registry below. |
 | `delivery` | `"append"` or `"replace_window"`, as fixed by the registry. |
-| `recordCount` | Number of record lines, `0...500`. |
+| `recordCount` | Number of record lines, `0...5000`. |
 | `startCursor` | Exclusive append insertion highwater, or `null` for the first append batch and replace-window parts. |
 | `endCursor` | Inclusive insertion highwater of the final append record, or `null` for replace-window parts. |
 | `window` | Required only for `replace_window` delivery; absent for append delivery. |
 
 All UUIDs are lowercase canonical UUID strings. JSON object member order is not semantically
-significant, but the sender must retain the exact encoded bytes until that batch is acknowledged.
+significant, but the sender must retain the exact decoded NDJSON entity bytes until that batch is
+acknowledged.
 
 ### Records
 
@@ -133,12 +149,13 @@ startCursor.rowId < first rowid < ... <= final rowid == endCursor.rowId
 ```
 
 For an initial batch, `startCursor` is `null` and all insertion positions are eligible. Batches stop before either
-the 500-record or 1-MiB bound is exceeded. A receiver applies records as idempotent upserts using the
+the 5,000-record or 4-MiB decoded bound is exceeded. A receiver applies records as idempotent upserts using the
 scoped primary key. Append streams do not communicate deletions.
 
 The sender advances a stream's local highwater to `endCursor` only after a valid acceptance response
 for the whole batch. A timeout, non-2xx response, invalid body, partial acceptance, or mismatched
-acknowledgement leaves the highwater unchanged and retries the identical `batchId` and bytes. Other
+acknowledgement leaves the highwater unchanged and retries the identical `batchId` and decoded
+NDJSON entity bytes. Other
 streams have independent highwaters and may continue.
 
 ## Authoritative rolling-window delivery
@@ -239,10 +256,13 @@ partial success. The response contains acknowledgement metadata only; it must no
 records, remote changes, commands, cursors chosen by the server, or configuration for NOOP to apply.
 
 A receiver must remember the hash and acceptance result of each batch under
-`(sourceId, deviceId, batchId)`. Repeating the same `batchId` with byte-identical content returns the
-same acknowledgement without duplicating effects. Reusing it with different bytes is a conflict and
-must not modify data. Recommended failures are `400` for malformed NDJSON, `401`/`403` for auth,
-`409` for conflicting identifiers or replace-window parts, `413` for a body over 1 MiB, `422` for an
+`(sourceId, deviceId, batchId)`. Repeating the same `batchId` with byte-identical **decoded NDJSON
+entity bytes** returns the same acknowledgement without duplicating effects. Content coding is not
+part of batch identity: gzip and identity representations of the same decoded entity are the same
+batch. Reusing a `batchId` with different decoded entity bytes is a conflict and must not modify
+data. Recommended failures are `400` for malformed NDJSON, `401`/`403` for auth,
+`409` for conflicting identifiers or replace-window parts, `413` for a decoded body over 4 MiB (or
+an encoded body over the receiver's documented wire limit), `422` for an
 unsupported protocol/stream or invalid record, and `5xx` for a transient receiver failure. NOOP
 automatically retries transport errors, `408`, `429`, and `5xx`. Other `4xx` responses and malformed
 or mismatched acknowledgements retain progress and surface a visible configuration/protocol error;

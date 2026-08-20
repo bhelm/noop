@@ -3,6 +3,7 @@ package com.noop.push
 import android.content.SharedPreferences
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotEquals
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -40,6 +41,52 @@ class SelfHostedPushSettingsTest {
 
         assertNotEquals(firstNamespace, settings.progressNamespace(SOURCE_A, second))
         assertTrue(firstNamespace == settings.progressNamespace(SOURCE_A, first))
+    }
+
+    @Test fun progressIsPersistedAndSuccessOnlyAppearsAfterCatchUpCompletes() {
+        val settings = SelfHostedPushSettings.forTest(FakePushPrefs(), FakePushPrefs())
+        settings.saveEndpoint("https://example.com/push")
+        settings.saveToken("secret")
+        assertTrue(settings.setEnabled(true))
+
+        settings.recordPushStarted()
+        settings.recordAcceptedBatches(4, records = 12_000)
+        settings.recordContinuation()
+
+        val continuing = settings.snapshot()
+        assertEquals(SelfHostedPushSettings.RunState.CONTINUING, continuing.runState)
+        assertEquals(4, continuing.acceptedBatches)
+        assertEquals(12_000L, continuing.acceptedRecords)
+        assertNull(continuing.lastSuccessAt)
+        assertNull(continuing.lastError)
+
+        settings.recordAcceptedBatches(3, records = 8_000)
+        settings.recordSuccess(atMillis = 1234L)
+        val complete = settings.snapshot()
+        assertEquals(SelfHostedPushSettings.RunState.COMPLETE, complete.runState)
+        assertEquals(7, complete.acceptedBatches)
+        assertEquals(20_000L, complete.acceptedRecords)
+        assertEquals(1234L, complete.lastSuccessAt)
+    }
+
+    @Test fun disableIsImmediatelyIdleAndRejectsLateWorkerStatusWrites() {
+        val settings = SelfHostedPushSettings.forTest(FakePushPrefs(), FakePushPrefs())
+        settings.saveEndpoint("https://example.com/push")
+        settings.saveToken("secret")
+        assertTrue(settings.setEnabled(true))
+        settings.recordPushStarted()
+        settings.recordRunning()
+
+        assertTrue(settings.setEnabled(false))
+        assertEquals(SelfHostedPushSettings.RunState.IDLE, settings.snapshot().runState)
+
+        settings.recordContinuation()
+        settings.recordRetrying("late retry")
+        settings.recordSuccess(999L)
+        val stopped = settings.snapshot()
+        assertEquals(SelfHostedPushSettings.RunState.IDLE, stopped.runState)
+        assertNull(stopped.lastError)
+        assertNull(stopped.lastSuccessAt)
     }
 
     internal class FakePushPrefs : SharedPreferences {

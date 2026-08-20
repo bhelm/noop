@@ -2152,7 +2152,7 @@
     <string name="push_destination_title">Dein Endpunkt</string>
     <string name="push_disclosure">Wenn aktiviert, sendet NOOP rohe Gesundheitsdaten von diesem Telefon an den von dir kontrollierten Endpunkt. Dabei verlassen Daten ausdrücklich das Gerät.</string>
     <string name="push_one_way_warning">Nur Einweg-Export. NOOP kann Daten von diesem Endpunkt nicht wiederherstellen und stellt keinen Empfänger bereit.</string>
-    <string name="push_endpoint">Endpunkt-URL (ausgeblendet)</string>
+    <string name="push_endpoint">Endpunkt-URL</string>
     <string name="push_token">Bearer-Token (ausgeblendet)</string>
     <string name="push_token_saved">Bearer-Token (gespeichert; zur Ersetzung eingeben)</string>
     <string name="push_clear_token">Gespeichertes Token löschen</string>
@@ -2167,5 +2167,14 @@
     <string name="push_never">Nie</string>
     <string name="push_last_success">Letzter Erfolg: %1$s</string>
     <string name="push_last_error">Letzter Fehler: %1$s</string>
+    <string name="push_current_state">Aktueller Status: %1$s</string>
+    <string name="push_progress">In diesem Durchlauf akzeptiert: %1$d Batches · %2$d Datensätze</string>
+    <string name="push_state_idle">Inaktiv</string>
+    <string name="push_state_queued">Eingeplant</string>
+    <string name="push_state_running">Wird gesendet</string>
+    <string name="push_state_continuing">Weitere lokale Daten gefunden; wird fortgesetzt</string>
+    <string name="push_state_retrying">Wiederholung nach einem Fehler</string>
+    <string name="push_state_complete">Aktuell</string>
+    <string name="push_state_failed">Nach einem Fehler pausiert</string>
     <string name="push_settings_row_detail">Experimenteller Einweg-Export an einen von dir kontrollierten Endpunkt. Standardmäßig aus.</string>
 </resources>

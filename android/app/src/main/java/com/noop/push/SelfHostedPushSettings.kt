@@ -11,24 +11,35 @@ class SelfHostedPushSettings private constructor(
     private val prefs: SharedPreferences,
     private val secrets: Lazy<SharedPreferences>,
 ) {
+    enum class RunState { IDLE, QUEUED, RUNNING, CONTINUING, RETRYING, COMPLETE, FAILED }
+
     data class Snapshot(
         val enabled: Boolean,
         val endpoint: PushEndpointPolicy.ValidEndpoint?,
         val hasToken: Boolean,
         val lastSuccessAt: Long?,
         val lastError: String?,
+        val runState: RunState,
+        val acceptedBatches: Int,
+        val acceptedRecords: Long,
     ) {
         val ready: Boolean get() = enabled && endpoint != null && hasToken
     }
 
     fun snapshot(): Snapshot {
+        val enabled = prefs.getBoolean(KEY_ENABLED, false)
         val endpoint = (PushEndpointPolicy.validate(prefs.getString(KEY_ENDPOINT, "").orEmpty()) as? PushEndpointPolicy.Result.Valid)?.endpoint
         return Snapshot(
-            enabled = prefs.getBoolean(KEY_ENABLED, false),
+            enabled = enabled,
             endpoint = endpoint,
             hasToken = !secrets.value.getString(KEY_TOKEN, null).isNullOrBlank(),
             lastSuccessAt = prefs.getLong(KEY_LAST_SUCCESS, 0L).takeIf { it > 0 },
             lastError = prefs.getString(KEY_LAST_ERROR, null),
+            runState = if (!enabled) RunState.IDLE else runCatching {
+                RunState.valueOf(prefs.getString(KEY_RUN_STATE, RunState.IDLE.name).orEmpty())
+            }.getOrDefault(RunState.IDLE),
+            acceptedBatches = prefs.getInt(KEY_ACCEPTED_BATCHES, 0).coerceAtLeast(0),
+            acceptedRecords = prefs.getLong(KEY_ACCEPTED_RECORDS, 0L).coerceAtLeast(0L),
         )
     }
 
@@ -68,23 +79,68 @@ class SelfHostedPushSettings private constructor(
         }.apply()
     }
 
-    fun setEnabled(enabled: Boolean): Boolean {
-        if (enabled && !snapshot().copy(enabled = true).ready) return false
-        prefs.edit().putBoolean(KEY_ENABLED, enabled).apply()
-        return true
+    fun setEnabled(enabled: Boolean): Boolean = synchronized(statusLock) {
+        if (enabled && !snapshot().copy(enabled = true).ready) return@synchronized false
+        val edit = prefs.edit().putBoolean(KEY_ENABLED, enabled)
+        if (!enabled) edit.putString(KEY_RUN_STATE, RunState.IDLE.name).remove(KEY_LAST_ERROR)
+        check(edit.commit()) { "Could not persist push enabled state" }
+        true
     }
 
     fun progressNamespace(sourceId: String, endpoint: PushEndpointPolicy.ValidEndpoint): String =
         MessageDigest.getInstance("SHA-256").digest("$sourceId\u0000${endpoint.url}".toByteArray())
             .take(12).joinToString("") { "%02x".format(it) }
 
-    fun recordSuccess(atMillis: Long = System.currentTimeMillis()) {
-        prefs.edit().putLong(KEY_LAST_SUCCESS, atMillis).remove(KEY_LAST_ERROR).apply()
+    fun recordSuccess(atMillis: Long = System.currentTimeMillis()) = updateWhileEnabled {
+        it.putLong(KEY_LAST_SUCCESS, atMillis).remove(KEY_LAST_ERROR)
+            .putString(KEY_RUN_STATE, RunState.COMPLETE.name)
     }
 
-    fun recordError(message: String) {
-        prefs.edit().putString(KEY_LAST_ERROR, message.take(MAX_STATUS_CHARS)).apply()
+    fun recordError(message: String) = updateWhileEnabled {
+        it.putString(KEY_LAST_ERROR, message.take(MAX_STATUS_CHARS))
+            .putString(KEY_RUN_STATE, RunState.FAILED.name)
     }
+
+    /** Starts a new logical catch-up. Continuation workers deliberately do not reset these counters. */
+    fun recordPushStarted() = updateWhileEnabled {
+        it.remove(KEY_LAST_ERROR)
+            .putInt(KEY_ACCEPTED_BATCHES, 0).putLong(KEY_ACCEPTED_RECORDS, 0L)
+            .putString(KEY_RUN_STATE, RunState.QUEUED.name)
+    }
+
+    fun recordRunning() = updateWhileEnabled { it.putString(KEY_RUN_STATE, RunState.RUNNING.name) }
+
+    @Synchronized
+    fun recordAcceptedBatches(batches: Int, records: Long = 0L) = synchronized(statusLock) {
+        if (batches <= 0 && records <= 0) return
+        if (!prefs.getBoolean(KEY_ENABLED, false)) return
+        check(prefs.edit()
+            .putInt(
+                KEY_ACCEPTED_BATCHES,
+                prefs.getInt(KEY_ACCEPTED_BATCHES, 0).coerceAtLeast(0) + batches.coerceAtLeast(0),
+            )
+            .putLong(
+                KEY_ACCEPTED_RECORDS,
+                prefs.getLong(KEY_ACCEPTED_RECORDS, 0L).coerceAtLeast(0L) + records.coerceAtLeast(0L),
+            )
+            .commit()) { "Could not persist push progress" }
+    }
+
+    /** Pagination and device rotation are healthy progress, never an error. */
+    fun recordContinuation() = updateWhileEnabled {
+        it.remove(KEY_LAST_ERROR).putString(KEY_RUN_STATE, RunState.CONTINUING.name)
+    }
+
+    fun recordRetrying(message: String) = updateWhileEnabled {
+        it.putString(KEY_LAST_ERROR, message.take(MAX_STATUS_CHARS))
+            .putString(KEY_RUN_STATE, RunState.RETRYING.name)
+    }
+
+    private inline fun updateWhileEnabled(change: (SharedPreferences.Editor) -> SharedPreferences.Editor) =
+        synchronized(statusLock) {
+            if (!prefs.getBoolean(KEY_ENABLED, false)) return@synchronized
+            check(change(prefs.edit()).commit()) { "Could not persist push status" }
+        }
 
     fun nextDeviceIndex(namespace: String): Int = prefs.getInt("$KEY_NEXT_DEVICE.$namespace", 0).coerceAtLeast(0)
 
@@ -115,10 +171,14 @@ class SelfHostedPushSettings private constructor(
         private const val KEY_SOURCE_ID = "source_id"
         private const val KEY_LAST_SUCCESS = "last_success_at"
         private const val KEY_LAST_ERROR = "last_error"
+        private const val KEY_RUN_STATE = "run_state"
+        private const val KEY_ACCEPTED_BATCHES = "accepted_batches"
+        private const val KEY_ACCEPTED_RECORDS = "accepted_records"
         private const val KEY_NEXT_DEVICE = "next_device"
         private const val KEY_CYCLE_MORE = "cycle_more"
         private const val KEY_CYCLE_REJECTED = "cycle_rejected"
         private const val MAX_STATUS_CHARS = 300
+        private val statusLock = Any()
 
         fun from(context: Context) = SelfHostedPushSettings(
             context.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE),

@@ -2131,7 +2131,7 @@
     <string name="push_destination_title">Twój endpoint</string>
     <string name="push_disclosure">Po włączeniu NOOP wysyła surowe dane zdrowotne z tego telefonu do kontrolowanego przez Ciebie endpointu. Dane jawnie opuszczają urządzenie.</string>
     <string name="push_one_way_warning">Tylko eksport jednokierunkowy. NOOP nie może odtworzyć danych z tego endpointu i nie udostępnia odbiornika.</string>
-    <string name="push_endpoint">URL endpointu (ukryty)</string>
+    <string name="push_endpoint">URL endpointu</string>
     <string name="push_token">Token Bearer (ukryty)</string>
     <string name="push_token_saved">Token Bearer (zapisany; wpisz, aby zastąpić)</string>
     <string name="push_clear_token">Usuń zapisany token</string>
@@ -2146,5 +2146,14 @@
     <string name="push_never">Nigdy</string>
     <string name="push_last_success">Ostatnie powodzenie: %1$s</string>
     <string name="push_last_error">Ostatni błąd: %1$s</string>
+    <string name="push_current_state">Bieżący stan: %1$s</string>
+    <string name="push_progress">Zaakceptowano w tej synchronizacji: %1$d partii · %2$d rekordów</string>
+    <string name="push_state_idle">Bezczynny</string>
+    <string name="push_state_queued">W kolejce</string>
+    <string name="push_state_running">Wysyłanie</string>
+    <string name="push_state_continuing">Znaleziono więcej danych lokalnych; kontynuowanie</string>
+    <string name="push_state_retrying">Ponawianie po błędzie</string>
+    <string name="push_state_complete">Aktualne</string>
+    <string name="push_state_failed">Wstrzymano po błędzie</string>
     <string name="push_settings_row_detail">Eksperymentalny eksport jednokierunkowy do kontrolowanego endpointu. Domyślnie wyłączony.</string>
 </resources>
