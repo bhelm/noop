@@ -2718,7 +2718,9 @@ private fun HeroRingColumn(
                 color = Palette.textSecondary,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = Metrics.space18),
+                    // Keep almost the complete width available on the leading side. The larger trailing
+                    // inset reserves space for the chevron without shifting or clipping longer labels.
+                    .padding(start = Metrics.space2, end = Metrics.space18),
                 minScale = 0.7f,
                 textAlign = androidx.compose.ui.text.style.TextAlign.Center,
             )
