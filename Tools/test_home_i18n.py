@@ -260,6 +260,13 @@ class HomeLocalizationTest(unittest.TestCase):
         self.assertNotIn("Text(domainLabel.uppercase()", source)
         self.assertNotIn("private fun RingNoData()", source)
 
+    def test_android_section_header_trailing_copy_does_not_squeeze_title(self) -> None:
+        source = (ROOT / "android/app/src/main/java/com/noop/ui/Components.kt").read_text(encoding="utf-8")
+        section_header = source.split("fun SectionHeader(", 1)[1].split("// MARK: - StrandTone", 1)[0]
+        self.assertIn("if (overline != null || trailing != null)", section_header)
+        self.assertIn("Text(title, style = NoopType.title2", section_header)
+        self.assertLess(section_header.index("if (trailing != null)"), section_header.index("Text(title"))
+
     def test_android_today_source_counts_use_two_plural_resources(self) -> None:
         relative = "android/app/src/main/java/com/noop/ui/TodayScreen.kt"
         source = audit._mask_comments((ROOT / relative).read_text(encoding="utf-8"))
