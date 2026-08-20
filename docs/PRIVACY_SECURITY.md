@@ -153,15 +153,26 @@ not a NOOP cloud, account, restore path, or two-way sync:
 
 - **Off until configured.** No endpoint means the worker does not send. The user supplies both the
   HTTP(S) URL and bearer token; NOOP operates no intermediary or receiver.
-- **After offload, outside sync.** A background job runs only after strap offload has completed.
+- **After offload, at launch, or explicitly now — always outside BLE sync.** Automatic work is queued
+  after a complete strap offload and at app launch to catch up; the user may also press **Export now**.
   An unavailable or slow endpoint cannot delay BLE collection, local persistence, analytics, or UI.
 - **What is sent.** The finite, versioned stream registry in
   [`PUSH_PROTOCOL.md`](PUSH_PROTOCOL.md) includes biometric rows and rolling snapshots of selected
   recomputed/editable tables, scoped by a locally generated installation ID and local device ID.
-- **What comes back.** Only an acknowledgement of the submitted batch. NOOP never fetches health
-  rows, remote changes, commands, settings, or conflict decisions from the receiver. The local
-  database remains authoritative.
-- **Credential transport.** The bearer token authenticates every POST. Public cleartext endpoints
+- **What comes back.** The receiver may advertise only a subset of NOOP's fixed v1 stream names, and
+  acknowledges submitted batches. NOOP never fetches health rows, remote changes, commands, URLs,
+  schemas, settings, or conflict decisions. The local database remains authoritative.
+- **Connection test.** The explicit **Test connection** action performs only the authenticated
+  capability `GET`; it does not open the health database or submit a batch, and uses the same
+  Wi-Fi-only network gate as export work.
+- **Useful diagnostics without leaking secrets.** The screen distinguishes DNS lookup, TLS
+  certificate/handshake, timeout, connection-refused, unreachable/reset connection, HTTP status,
+  capability/acknowledgement, local encoding, and local database failures. It stores and displays
+  only that stable category and (where applicable) the numeric HTTP status. Bearer tokens, response
+  bodies, health rows, endpoint-derived exception text, and stack traces are never placed in push
+  status. Retryable failures also say that backoff is scheduled; permanent failures identify the
+  configuration or receiver area to check.
+- **Credential transport.** The bearer token authenticates every capability `GET` and batch `POST`. Public cleartext endpoints
   are rejected; HTTP is limited to numeric loopback/private/link-local/ULA addresses. Cleartext
   hostnames are rejected, so DNS cannot move an allowed local URL to a public address. Even on an
   allowed IP, HTTP exposes the token and batch contents locally, so HTTPS remains preferable.

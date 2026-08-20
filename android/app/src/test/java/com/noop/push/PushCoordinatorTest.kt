@@ -282,6 +282,65 @@ class PushCoordinatorTest {
         assertEquals(0, journal.recordCount)
         assertEquals("replace_window", journal.mode)
     }
+
+    @Test
+    fun capabilitiesPreventEveryUnsupportedStreamSnapshotAndPost() = runBlocking {
+        val source = FakePushSource(
+            append = mutableMapOf(key(PushAppendTable.HR_SAMPLE, "a") to mutableListOf(hr(1, 10))),
+            mutable = mutableMapOf(
+                key(PushMutableTable.JOURNAL, "a") to mutableListOf(
+                    PushMutableRecord(
+                        linkedMapOf("day" to "2026-08-18", "question" to "coffee"),
+                        linkedMapOf("answeredYes" to true, "notes" to null, "numericValue" to null),
+                    ),
+                ),
+            ),
+        )
+        val transport = AckingTransport()
+        val capabilities = PushCapabilities(
+            appendTables = emptySet(),
+            mutableTables = setOf(PushMutableTable.JOURNAL),
+        )
+
+        PushCoordinator(source, transport, MemoryProgress(), SOURCE_A)
+            .pushKnownDevices(capabilities = capabilities)
+
+        assertEquals(emptyList<PushAppendTable>(), source.appendTablesRead)
+        assertEquals(listOf(PushMutableTable.JOURNAL), source.mutableTablesRead)
+        assertEquals(capabilities, source.deviceDiscoveryCapabilities)
+        assertEquals(listOf("journal"), transport.batches.map { it.table.wireName })
+    }
+
+    @Test
+    fun emptyCapabilitiesAvoidEvenDeviceDiscovery() = runBlocking {
+        val source = FakePushSource().apply { knownDeviceIdsFailure = AssertionError("Room must stay unopened") }
+
+        val result = PushCoordinator(source, AckingTransport(), MemoryProgress(), SOURCE_A)
+            .pushKnownDevices(capabilities = PushCapabilities(emptySet(), emptySet()))
+
+        assertEquals(0, result.acceptedBatches)
+        assertEquals(0, result.rejectedBatches)
+    }
+
+    @Test
+    fun structuredTransportFailureSurvivesCoordinatorAggregation() = runBlocking {
+        val source = FakePushSource(
+            append = mutableMapOf(key(PushAppendTable.HR_SAMPLE, "a") to mutableListOf(hr(1, 10))),
+        )
+        val transport = object : PushTransport {
+            override suspend fun post(batch: PushBatch): PushTransportResponse {
+                throw PushTransportException(PushFailure(PushFailureCode.CONNECTION_REFUSED))
+            }
+        }
+
+        val result = PushCoordinator(source, transport, MemoryProgress(), SOURCE_A)
+            .pushKnownDevices(
+                capabilities = PushCapabilities(setOf(PushAppendTable.HR_SAMPLE), emptySet()),
+            )
+
+        assertTrue(result.hasRetryableFailure)
+        assertEquals(PushFailureCode.CONNECTION_REFUSED, result.failure?.code)
+    }
 }
 
 internal fun key(table: PushTable, deviceId: String) = "${table.wireName}|$deviceId"
@@ -297,12 +356,25 @@ internal class FakePushSource(
     val mutable: MutableMap<String, MutableList<PushMutableRecord>> = mutableMapOf(),
 ) : PushSnapshotSource {
     val afterCursors = mutableListOf<Long>()
+    val appendTablesRead = mutableListOf<PushAppendTable>()
+    val mutableTablesRead = mutableListOf<PushMutableTable>()
     var reading = false
     var appendRowsFailure: Throwable? = null
     var mutableRowsFailure: Throwable? = null
+    var knownDeviceIdsFailure: Throwable? = null
+    var deviceDiscoveryCapabilities: PushCapabilities? = null
 
-    override suspend fun knownDeviceIds(): List<String> =
-        (append.keys + mutable.keys).map { it.substringAfter('|') }.distinct().sorted()
+    override suspend fun knownDeviceIds(capabilities: PushCapabilities): List<String> {
+        deviceDiscoveryCapabilities = capabilities
+        knownDeviceIdsFailure?.let { throw it }
+        val supportedNames = capabilities.appendTables.map { it.wireName }.toSet() +
+            capabilities.mutableTables.map { it.wireName }
+        return (append.keys + mutable.keys)
+            .filter { it.substringBefore('|') in supportedNames }
+            .map { it.substringAfter('|') }
+            .distinct()
+            .sorted()
+    }
 
     override suspend fun appendRecordAt(
         table: PushAppendTable,
@@ -316,6 +388,7 @@ internal class FakePushSource(
         afterRowId: Long,
         limit: Int,
     ): List<PushAppendRecord> {
+        appendTablesRead += table
         appendRowsFailure?.let { throw it }
         reading = true
         return try {
@@ -332,6 +405,7 @@ internal class FakePushSource(
         window: PushWindow,
         limit: Int,
     ): List<PushMutableRecord> {
+        mutableTablesRead += table
         mutableRowsFailure?.let { throw it }
         return mutable[key(table, deviceId)].orEmpty().take(limit)
     }

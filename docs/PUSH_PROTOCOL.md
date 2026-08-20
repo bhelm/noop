@@ -2,15 +2,49 @@
 
 This document specifies the wire contract for NOOP's **Experimental**, default-off export to a
 user-owned HTTP(S) endpoint. Protocol version **1.0** covers the Android-first client. It is a
-one-way export protocol: the on-device database is authoritative, the receiver only acknowledges
-writes, and NOOP never reads health data or configuration back from the receiver.
+one-way export protocol: the on-device database is authoritative, the receiver acknowledges writes
+and may advertise only which fixed v1 streams it accepts. NOOP never reads health data, commands,
+URLs, field names, or other configuration back from the receiver.
 
 NOOP does not ship, operate, or endorse a receiver. A receiver is not part of this repository, and
 this contract must not be interpreted as an account, hosted-sync, restore, or two-way-sync API.
 
 ## Transport and authentication
 
-The configured endpoint accepts one `POST` per batch.
+The configured endpoint serves authenticated capabilities on `GET` and accepts one `POST` per batch.
+The settings screen may issue this `GET` alone when the user selects **Test connection**; that action
+does not open the health database or send a batch.
+
+```http
+GET /the/user-configured-path HTTP/1.1
+Accept: application/json
+Authorization: Bearer <user-supplied-token>
+```
+
+A successful capability response has exactly this shape:
+
+```json
+{"type":"capabilities","protocolVersion":"1.0","streams":["hrSample","rrInterval","dailyMetric"]}
+```
+
+`streams` is a duplicate-free subset of the twelve names in the v1 registry; array order has no
+semantic meaning. An empty
+array is valid. Unknown names, duplicate names, additional members, an unsupported version, malformed
+JSON, or a response over 16 KiB fail closed before Room is opened or health data is encoded. The
+receiver cannot add tables or fields: the effective registry is always the intersection of its list
+and the client's compiled v1 registry. Android performs no snapshot read and no batch `POST` for an
+unadvertised stream.
+
+Capability changes affect future attempts only. A client retains progress for an unadvertised
+stream, so advertising it again resumes from the existing cursor. Removing a stream from the list
+is not a deletion command and cannot remove records already stored by the receiver.
+
+For compatibility with pre-capability experimental v1 receivers, HTTP `404` or `405` from this exact
+authenticated `GET` means the complete v1 registry. Transport failures, `408`, `429`, and `5xx` are
+retryable and send no batch in that attempt; other failures are visible protocol/configuration errors.
+Redirects are never followed and the bearer token is never forwarded.
+
+Batch delivery then uses:
 
 ```http
 POST /the/user-configured-path HTTP/1.1
@@ -252,8 +286,9 @@ Acceptance is valid only if all of these exactly match the request:
 - `status == "accepted"`
 
 Any missing or mismatched member is a failed delivery even when the HTTP status is 2xx. There is no
-partial success. The response contains acknowledgement metadata only; it must not contain source
-records, remote changes, commands, cursors chosen by the server, or configuration for NOOP to apply.
+partial success. The acknowledgement contains metadata only; it must not contain source records,
+remote changes, commands, cursors chosen by the server, or configuration for NOOP to apply.
+Capability metadata is confined to the separate authenticated `GET` defined above.
 
 A receiver must remember the hash and acceptance result of each batch under
 `(sourceId, deviceId, batchId)`. Repeating the same `batchId` with byte-identical **decoded NDJSON
@@ -268,6 +303,13 @@ automatically retries transport errors, `408`, `429`, and `5xx`. Other `4xx` res
 or mismatched acknowledgements retain progress and surface a visible configuration/protocol error;
 they are retried only after a later trigger or configuration change. Responses are never consumed as
 health data.
+
+The Android client reports a safe, structured cause for self-hosting diagnostics: DNS resolution,
+TLS certificate or handshake, connection timeout/refused/unreachable/reset, numeric HTTP status,
+invalid capabilities or acknowledgement, local encoding limits, or local database state. These
+categories survive bounded continuation work so the final status keeps the original cause. Raw
+exception messages and response bodies are deliberately neither displayed nor persisted because
+network stacks and receiver errors can contain endpoint details, credentials, or health data.
 
 ## Versioning and forward compatibility
 
@@ -284,5 +326,6 @@ health data.
 - Receivers must reject malformed known members rather than guessing. They should preserve unknown
   `data` members if their storage model permits, but must not assign semantics to them.
 
-The sender never negotiates by reading capabilities from the endpoint. Configuration chooses one
-protocol version, and normal POST acknowledgements are the only server-to-client messages.
+Capability discovery only narrows the sender's compiled registry for the selected protocol version.
+It is not general negotiation: the receiver cannot add schemas, change delivery modes, select an
+endpoint, request diagnostics, set cadence, or otherwise control NOOP.

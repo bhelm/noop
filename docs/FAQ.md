@@ -50,8 +50,10 @@ into something diagnosable.
 No, unless you export it yourself or explicitly enable an optional network path. NOOP operates no
 servers, accounts, telemetry, or cloud sync. The AI Coach sends a compact summary only when you ask
 it a question. Android's Experimental self-hosted push can send fresh database rows after offload,
+at app-launch catch-up, or when the user explicitly selects **Export now**,
 but is off until you configure your own endpoint and bearer token; it is one-way and never reads
-records back. A source-built Oura history importer is inbound-only.
+records back. A receiver may only advertise which fixed protocol streams it accepts. A source-built
+Oura history importer is inbound-only.
 
 These exports can carry your data off-device **when you choose to use them**:
 

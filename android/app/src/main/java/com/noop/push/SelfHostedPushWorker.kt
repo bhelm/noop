@@ -6,6 +6,7 @@ import android.net.NetworkCapabilities
 import androidx.work.CoroutineWorker
 import androidx.work.ListenableWorker
 import androidx.work.WorkerParameters
+import com.noop.R
 import com.noop.data.WhoopDatabase
 import kotlinx.coroutines.CancellationException
 
@@ -21,6 +22,12 @@ internal fun successorOwnsEnqueueFailure(currentRequestCouldReserve: Boolean): B
     !currentRequestCouldReserve
 internal fun shouldScheduleLatePendingSuccessor(willRetry: Boolean, settlementPending: Boolean): Boolean =
     !willRetry && settlementPending
+internal fun isPushWifiAvailable(context: Context): Boolean {
+    val connectivity = context.getSystemService(ConnectivityManager::class.java) ?: return false
+    val network = connectivity.activeNetwork ?: return false
+    val capabilities = connectivity.getNetworkCapabilities(network) ?: return false
+    return capabilities.hasTransport(NetworkCapabilities.TRANSPORT_WIFI)
+}
 
 /** One bounded coordinator run. Unique WorkManager work and the trigger lease keep it serial. */
 class SelfHostedPushWorker(
@@ -35,7 +42,18 @@ class SelfHostedPushWorker(
         val message: String? = null,
     )
 
-    private enum class Execution { COMPLETE, CONTINUE, RETRY_FAILURE, TERMINAL_FAILURE }
+    private data class ExecutionOutcome(
+        val state: Execution,
+        val failure: PushFailure? = null,
+    )
+
+    private enum class Execution {
+        COMPLETE,
+        CONTINUE,
+        RETRY_FAILURE,
+        CAPABILITY_TERMINAL_FAILURE,
+        TERMINAL_FAILURE,
+    }
     private enum class Status { NONE, SUCCESS, CONTINUING, RETRYING, FAILED }
 
     override suspend fun doWork(): Result {
@@ -50,31 +68,37 @@ class SelfHostedPushWorker(
         try {
             PushRunSignal.begin(applicationContext, requestId)
             settings.recordRunning()
-            var execution = Execution.COMPLETE
+            var execution = ExecutionOutcome(Execution.COMPLETE)
             var decision = try {
                 when (val outcome = PushWorkerGate.run(
                     enabledEndpoint = settings::enabledEndpoint,
-                    wifiAvailable = ::isOnWifi,
+                    wifiAvailable = { isPushWifiAvailable(applicationContext) },
                     token = settings::token,
                     execute = { endpoint, token ->
                         execution = executeOnce(settings, endpoint, token)
-                        execution == Execution.RETRY_FAILURE
+                        execution.state == Execution.RETRY_FAILURE
                     },
                 )) {
                     PushWorkerGate.Outcome.DisabledOrInvalid -> Decision(Result.success(), false)
                     PushWorkerGate.Outcome.MissingToken -> Decision(
                         Result.failure(), false, status = Status.FAILED,
-                        message = "The saved bearer token is unavailable; save it again.",
+                        message = applicationContext.getString(R.string.push_error_missing_token),
                     )
-                    PushWorkerGate.Outcome.NotOnWifi -> retryOrStop("Waiting for Wi-Fi; push will retry.")
+                    PushWorkerGate.Outcome.NotOnWifi -> retryOrStop(
+                        applicationContext.getString(R.string.push_error_wifi),
+                    )
                     is PushWorkerGate.Outcome.Executed -> when {
-                        outcome.retry -> retryOrStop("The endpoint or network failed; push will retry.")
-                        execution == Execution.CONTINUE -> Decision(
+                        outcome.retry -> retryOrStop(failureMessage(execution.failure))
+                        execution.state == Execution.CONTINUE -> Decision(
                             Result.success(), false, continueNormally = true, status = Status.CONTINUING,
                         )
-                        execution == Execution.TERMINAL_FAILURE -> Decision(
+                        execution.state == Execution.CAPABILITY_TERMINAL_FAILURE -> Decision(
                             Result.failure(), false, status = Status.FAILED,
-                            message = "The endpoint rejected one or more batches.",
+                            message = failureMessage(execution.failure),
+                        )
+                        execution.state == Execution.TERMINAL_FAILURE -> Decision(
+                            Result.failure(), false, status = Status.FAILED,
+                            message = failureMessage(execution.failure),
                         )
                         else -> Decision(Result.success(), false, status = Status.SUCCESS)
                     }
@@ -83,7 +107,7 @@ class SelfHostedPushWorker(
                 throw cancelled
             } catch (_: Throwable) {
                 // Deliberately generic: exception strings from TLS/HTTP stacks may include destination data.
-                retryOrStop("Push could not start and will retry.")
+                retryOrStop(applicationContext.getString(R.string.push_error_start))
             }
             val settlement = PushRunSignal.settle(
                 applicationContext, requestId, willRetry = decision.willRetry,
@@ -95,7 +119,7 @@ class SelfHostedPushWorker(
             if (needsContinuation && !SelfHostedPushScheduler.enqueueContinuation(applicationContext)) {
                 // The append Operation itself failed asynchronously. Re-arm THIS WorkRequest so
                 // WorkManager's bounded runAttemptCount/backoff handles the infrastructure failure.
-                val enqueueRetry = retryOrStop("Could not queue the next push slice; will retry.")
+                val enqueueRetry = retryOrStop(applicationContext.getString(R.string.push_error_queue))
                 val currentCouldReserve = PushRunSignal.reserve(applicationContext, requestId)
                 if (successorOwnsEnqueueFailure(currentCouldReserve)) {
                     // The preserved pending trigger already owns QUEUED work. Do not let this old
@@ -135,11 +159,40 @@ class SelfHostedPushWorker(
         settings: SelfHostedPushSettings,
         endpoint: PushEndpointPolicy.ValidEndpoint,
         token: String,
-    ): Execution {
+    ): ExecutionOutcome {
         val sourceId = settings.sourceId()
         // Derive progress from the exact endpoint captured by the stale-work gate. Re-reading prefs
         // here could otherwise pair an E1 HTTP request with E2 cursor state during a concurrent edit.
         val namespace = settings.progressNamespace(sourceId, endpoint)
+        val transport = PushHttpTransport(endpoint, token) { batch ->
+            settings.recordCurrentStream(batch.table.wireName)
+        }
+        val capabilities = when (val result = transport.capabilities()) {
+            is PushCapabilitiesResult.Available -> result.capabilities
+            is PushCapabilitiesResult.Rejected -> {
+                return if (result.retryable) {
+                    ExecutionOutcome(
+                        Execution.RETRY_FAILURE,
+                        result.failure ?: PushFailure(PushFailureCode.NETWORK_IO),
+                    )
+                } else {
+                    ExecutionOutcome(
+                        Execution.CAPABILITY_TERMINAL_FAILURE,
+                        result.failure ?: PushFailure(PushFailureCode.CAPABILITIES_INVALID),
+                    )
+                }
+            }
+        }
+        runCatching { settings.recordCapabilities(endpoint, capabilities) }
+        // Capability discovery deliberately precedes Room: unsupported streams cause no table scan,
+        // snapshot allocation, encoding, or POST. An empty allowlist is a valid caught-up receiver.
+        if (capabilities.isEmpty) {
+            settings.saveNextDeviceIndex(namespace, 0)
+            settings.saveCycleNeedsAnotherPass(namespace, false)
+            settings.saveCycleHadRejection(namespace, false)
+            settings.saveCycleFailure(namespace, null)
+            return ExecutionOutcome(Execution.COMPLETE)
+        }
         // Room is first opened here, after the stale-work, endpoint, Wi-Fi, token and identity gates.
         val dao = WhoopDatabase.get(applicationContext).pushDao()
         val progress = EndpointScopedProgressStore(
@@ -149,10 +202,10 @@ class SelfHostedPushWorker(
         val startDeviceIndex = settings.nextDeviceIndex(namespace)
         val run = PushCoordinator(
             source = dao,
-            transport = PushHttpTransport(endpoint, token),
+            transport = transport,
             progress = progress,
             sourceId = sourceId,
-        ).pushKnownDevices(startDeviceIndex, MAX_DEVICES_PER_RUN)
+        ).pushKnownDevices(startDeviceIndex, MAX_DEVICES_PER_RUN, capabilities)
         settings.recordAcceptedBatches(
             run.acceptedBatches,
             records = run.acceptedRecords.toLong(),
@@ -160,15 +213,19 @@ class SelfHostedPushWorker(
         if (run.hasRetryableFailure) {
             // Do not rotate away from a failing device: this WorkRequest retries the exact same
             // device with its bounded runAttemptCount. Already-acked tables remain idempotent.
-            return Execution.RETRY_FAILURE
+            return ExecutionOutcome(
+                Execution.RETRY_FAILURE,
+                run.failure ?: PushFailure(PushFailureCode.NETWORK_IO),
+            )
         }
         settings.saveNextDeviceIndex(
             namespace,
             persistedDeviceIndex(startDeviceIndex, run.nextDeviceIndex, retryableFailure = false),
         )
         val cycleNeedsAnotherPass = settings.cycleNeedsAnotherPass(namespace) || run.hasMoreAppendRows
-        val cycleHadRejection = settings.cycleHadRejection(namespace) ||
-            (run.rejectedBatches > 0 && !run.hasRetryableFailure)
+        val runHadTerminalRejection = run.rejectedBatches > 0 && !run.hasRetryableFailure
+        val cycleHadRejection = settings.cycleHadRejection(namespace) || runHadTerminalRejection
+        val cycleFailure = settings.cycleFailure(namespace) ?: run.failure.takeIf { runHadTerminalRejection }
         val cycleCompleted = run.nextDeviceIndex == 0
         settings.saveCycleNeedsAnotherPass(namespace, if (cycleCompleted) false else cycleNeedsAnotherPass)
         // If append pagination starts another cycle, carry any terminal rejection through that cycle;
@@ -177,37 +234,44 @@ class SelfHostedPushWorker(
             namespace,
             if (cycleCompleted && !cycleNeedsAnotherPass) false else cycleHadRejection,
         )
+        settings.saveCycleFailure(
+            namespace,
+            if (cycleCompleted && !cycleNeedsAnotherPass) null else cycleFailure,
+        )
 
         return when {
             !cycleCompleted || cycleNeedsAnotherPass -> {
-                Execution.CONTINUE
+                ExecutionOutcome(Execution.CONTINUE)
             }
             cycleHadRejection -> {
-                Execution.TERMINAL_FAILURE
+                ExecutionOutcome(
+                    Execution.TERMINAL_FAILURE,
+                    cycleFailure ?: PushFailure(PushFailureCode.HTTP_PROTOCOL_REJECTED),
+                )
             }
             else -> {
-                Execution.COMPLETE
+                ExecutionOutcome(Execution.COMPLETE)
             }
         }
-    }
-
-    private fun isOnWifi(): Boolean {
-        val connectivity = applicationContext.getSystemService(ConnectivityManager::class.java)
-            ?: return false
-        val network = connectivity.activeNetwork ?: return false
-        val capabilities = connectivity.getNetworkCapabilities(network) ?: return false
-        return capabilities.hasTransport(NetworkCapabilities.TRANSPORT_WIFI)
     }
 
     private fun retryOrStop(message: String): Decision =
         if (!shouldRetryPush(runAttemptCount)) {
             Decision(
                 Result.failure(), false, status = Status.FAILED,
-                message = "Push paused after repeated failures; the next sync can try again.",
+                message = applicationContext.getString(R.string.push_error_paused, message),
             )
         } else {
-            Decision(Result.retry(), true, status = Status.RETRYING, message = message)
+            Decision(
+                Result.retry(), true, status = Status.RETRYING,
+                message = applicationContext.getString(R.string.push_error_retrying, message),
+            )
         }
+
+    private fun failureMessage(failure: PushFailure?): String = pushFailureMessage(
+        applicationContext,
+        failure ?: PushFailure(PushFailureCode.NETWORK_IO),
+    )
 
     private fun recordSettledStatus(
         settings: SelfHostedPushSettings,

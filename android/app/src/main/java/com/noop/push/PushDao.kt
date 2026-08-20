@@ -27,20 +27,25 @@ internal object PushSnapshotPreflight {
             "(SELECT ${columns.joinToString()} FROM $table WHERE $predicate ORDER BY $orderBy LIMIT ?)"
 }
 
+internal object PushDeviceDiscovery {
+    fun query(supportedSqlTables: List<String>): String = buildString {
+        append("SELECT id AS deviceId FROM device WHERE id <> ''")
+        supportedSqlTables.distinct().forEach { table ->
+            append(" UNION SELECT deviceId FROM $table WHERE deviceId <> ''")
+        }
+        append(" ORDER BY deviceId")
+    }
+}
+
 /**
  * Narrow, read-only Room snapshot adapter. SQL identifiers come exclusively from the closed enums below;
  * user/config input is always a bind argument. Every cursor is consumed and closed inside [withTransaction].
  */
 class PushDao internal constructor(private val db: WhoopDatabase) : PushSnapshotSource {
-    override suspend fun knownDeviceIds(): List<String> = db.withTransaction {
-        val sql = buildString {
-            append("SELECT id AS deviceId FROM device WHERE id <> ''")
-            ALL_WIRE_TABLES.forEach { table ->
-                append(" UNION ")
-                append("SELECT deviceId FROM ${table.sqlName} WHERE deviceId <> ''")
-            }
-            append(" ORDER BY deviceId")
-        }
+    override suspend fun knownDeviceIds(capabilities: PushCapabilities): List<String> = db.withTransaction {
+        val supportedTables = capabilities.appendTables.map(::appendSpec) +
+            capabilities.mutableTables.map(::mutableSpec)
+        val sql = PushDeviceDiscovery.query(supportedTables.map(TableSpec::sqlName))
         db.query(SimpleSQLiteQuery(sql)).use { cursor ->
             buildList {
                 while (cursor.moveToNext()) cursor.getString(0)?.takeIf { it.isNotBlank() }?.let(::add)
@@ -253,6 +258,5 @@ class PushDao internal constructor(private val db: WhoopDatabase) : PushSnapshot
             "journal", listOf("day", "question"), listOf("answeredYes", "notes", "numericValue"),
             booleanColumns = setOf("answeredYes"),
         )
-        val ALL_WIRE_TABLES = listOf(HR, RR, EVENT, BATTERY, SPO2, SKIN_TEMP, RESP, GRAVITY, DAILY, SLEEP, WORKOUT, JOURNAL)
     }
 }

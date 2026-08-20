@@ -89,6 +89,58 @@ class SelfHostedPushSettingsTest {
         assertNull(stopped.lastSuccessAt)
     }
 
+    @Test fun capabilitiesArePersistedOnlyForTheirNormalizedEndpoint() {
+        val settings = SelfHostedPushSettings.forTest(FakePushPrefs(), FakePushPrefs())
+        val first = (PushEndpointPolicy.validate("https://one.example/push") as PushEndpointPolicy.Result.Valid).endpoint
+        val second = (PushEndpointPolicy.validate("https://two.example/push") as PushEndpointPolicy.Result.Valid).endpoint
+        settings.saveEndpoint(first.url)
+
+        settings.recordCapabilities(
+            first,
+            PushCapabilities(
+                appendTables = setOf(PushAppendTable.HR_SAMPLE),
+                mutableTables = setOf(PushMutableTable.JOURNAL),
+            ),
+            atMillis = 1234L,
+        )
+
+        assertEquals(listOf("hrSample", "journal"), settings.snapshot().supportedStreams)
+        assertEquals(1234L, settings.snapshot().capabilitiesCheckedAt)
+        settings.saveToken("rotated-token")
+        assertNull(settings.snapshot().supportedStreams)
+        settings.recordCapabilities(first, PushCapabilities.ALL, atMillis = 2345L)
+        settings.saveEndpoint(second.url)
+        assertNull(settings.snapshot().supportedStreams)
+        assertNull(settings.snapshot().capabilitiesCheckedAt)
+    }
+
+    @Test fun liveStreamIsVisibleDuringWorkAndClearedAfterCompleteCatchUp() {
+        val settings = SelfHostedPushSettings.forTest(FakePushPrefs(), FakePushPrefs())
+        settings.saveEndpoint("https://example.com/push")
+        settings.saveToken("secret")
+        assertTrue(settings.setEnabled(true))
+        settings.recordRunning()
+
+        settings.recordCurrentStream("rrInterval")
+        assertEquals("rrInterval", settings.snapshot().currentStream)
+
+        settings.recordSuccess(atMillis = 999L)
+        assertNull(settings.snapshot().currentStream)
+    }
+
+    @Test fun cycleFailurePersistsOnlyStructuredCategoryAndStatus() {
+        val plain = FakePushPrefs()
+        val settings = SelfHostedPushSettings.forTest(plain, FakePushPrefs())
+        val failure = PushFailure(PushFailureCode.HTTP_AUTH, 401)
+
+        settings.saveCycleFailure("receiver-a", failure)
+
+        assertEquals(failure, settings.cycleFailure("receiver-a"))
+        assertFalse(plain.all.values.any { it.toString().contains("secret.example") })
+        settings.saveCycleFailure("receiver-a", null)
+        assertNull(settings.cycleFailure("receiver-a"))
+    }
+
     internal class FakePushPrefs : SharedPreferences {
         private val map = HashMap<String, Any?>()
         override fun getBoolean(key: String, defValue: Boolean) = map[key] as? Boolean ?: defValue
