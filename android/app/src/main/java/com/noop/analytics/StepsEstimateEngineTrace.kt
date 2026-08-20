@@ -137,15 +137,20 @@ object StepsEstimateEngineTrace {
         var rawTotal = 0
         var keptDeltas = 0
         var droppedDeltas = 0
+        var nonLocomotionDeltas = 0
         var minDelta = Int.MAX_VALUE
         var maxDelta = Int.MIN_VALUE
+        val hasActivityClasses = StepsCounter.hasActivityClasses(sorted)
         for (i in 1 until sorted.size) {
             val delta = (sorted[i].counter - sorted[i - 1].counter) and 0xFFFF // wrap-aware u16 increment
-            if (delta in 1 until maxStepDelta) {
+            if (delta in 1 until maxStepDelta &&
+                StepsCounter.shouldCountDelta(sorted[i].activityClass, hasActivityClasses)) {
                 rawTotal += delta
                 keptDeltas += 1
                 minDelta = minOf(minDelta, delta)
                 maxDelta = maxOf(maxDelta, delta)
+            } else if (delta in 1 until maxStepDelta) {
+                nonLocomotionDeltas += 1
             } else if (delta >= maxStepDelta) {
                 droppedDeltas += 1 // a sync-gap / reboot boundary, not real steps (>= 512)
             }
@@ -160,6 +165,10 @@ object StepsEstimateEngineTrace {
         lines.add(
             "stepsRaw deltas kept=$keptDeltas dropped=$droppedDeltas " +
                 "(dropped = delta>=$maxStepDelta, a sync-gap/reboot boundary)",
+        )
+        lines.add(
+            "stepsRaw activityFilter=${if (hasActivityClasses) "walk-run" else "legacy-unclassed"} " +
+                "nonLocomotion=$nonLocomotionDeltas",
         )
         if (keptDeltas > 0) {
             lines.add(

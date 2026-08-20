@@ -8,7 +8,9 @@ import WhoopProtocol
 /// the caller's `stepTicksPerStep` calibration). Mirrors the Android StepsCounterTest vectors value-for-value.
 final class StepsCounterTests: XCTestCase {
 
-    private func step(_ ts: Int, _ counter: Int) -> StepSample { StepSample(ts: ts, counter: counter) }
+    private func step(_ ts: Int, _ counter: Int, _ activityClass: Int? = nil) -> StepSample {
+        StepSample(ts: ts, counter: counter, activityClass: activityClass)
+    }
 
     func testSumsPositiveConsecutiveDeltas() {
         // counters 100 -> 150 -> 220 => deltas 50 + 70 = 120
@@ -46,5 +48,24 @@ final class StepsCounterTests: XCTestCase {
         // Exactly maxStepDelta (512) is dropped; 511 counts.
         XCTAssertEqual(StepsCounter.stepsInWindow([step(0, 0), step(60, 512)]), nil)   // 512 dropped => no movement
         XCTAssertEqual(StepsCounter.stepsInWindow([step(0, 0), step(60, 511)]), 511)   // 511 kept
+    }
+
+    func testClassedStreamCountsOnlyWalkAndRunDeltas() {
+        // Attribute each counter delta to the later sample, matching the strap's per-record class.
+        // still: +10 ignored; walk: +20; run: +15; unknown: +25 ignored => 35 locomotion ticks.
+        XCTAssertEqual(StepsCounter.stepsInWindow([
+            step(0, 100, 0),
+            step(1, 110, 0),
+            step(2, 130, 1),
+            step(3, 145, 2),
+            step(4, 170, nil),
+        ]), 35)
+    }
+
+    func testLegacyUnclassedStreamKeepsCounterFallback() {
+        // Rows written before activityClass existed must retain their historical estimate.
+        XCTAssertEqual(StepsCounter.stepsInWindow([
+            step(0, 100), step(1, 140), step(2, 170),
+        ]), 70)
     }
 }

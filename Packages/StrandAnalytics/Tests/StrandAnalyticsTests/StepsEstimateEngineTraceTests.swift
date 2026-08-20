@@ -15,8 +15,8 @@ final class StepsEstimateEngineTraceTests: XCTestCase {
     private let dayUtc = "2026-01-02"
     private let noonUtc = 1_767_355_200
 
-    private func step(_ tsOffsetSec: Int, _ counter: Int) -> StepSample {
-        StepSample(ts: noonUtc + tsOffsetSec, counter: counter)
+    private func step(_ tsOffsetSec: Int, _ counter: Int, _ activityClass: Int? = nil) -> StepSample {
+        StepSample(ts: noonUtc + tsOffsetSec, counter: counter, activityClass: activityClass)
     }
 
     // MARK: - 5/MG raw-counter trace
@@ -57,6 +57,18 @@ final class StepsEstimateEngineTraceTests: XCTestCase {
             daySteps: samples, dayKey: dayUtc, tzOffsetSeconds: 0, ticksPerStep: profile.stepTicksPerStep)
         XCTAssertTrue(lines.contains { $0.contains("stepsRaw deltas kept=2 dropped=1") })
         XCTAssertTrue(lines.first { $0.hasPrefix("stepsRaw total ") }!.contains("scaledSteps=\(production!)"))
+    }
+
+    func testActivityFilterTraceMatchesProduction() {
+        let samples = [
+            step(0, 100, 0), step(1, 110, 0), step(2, 130, 1), step(3, 145, 2), step(4, 170, nil),
+        ]
+        let production = AnalyticsEngine.analyzeDay(day: dayUtc, steps: samples, profile: profile).daily.steps
+        XCTAssertEqual(production, 35)
+        let lines = StepsEstimateEngine.rawCounterTrace(
+            daySteps: samples, dayKey: dayUtc, tzOffsetSeconds: 0, ticksPerStep: profile.stepTicksPerStep)
+        XCTAssertTrue(lines.contains { $0.contains("activityFilter=walk-run nonLocomotion=2") })
+        XCTAssertTrue(lines.first { $0.hasPrefix("stepsRaw total ") }!.contains("rawTicks=35"))
     }
 
     func testTicksPerStepScalingMatchesAnalyzeDay() {

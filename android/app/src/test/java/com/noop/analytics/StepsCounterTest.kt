@@ -13,7 +13,8 @@ import org.junit.Test
  */
 class StepsCounterTest {
 
-    private fun step(ts: Long, counter: Int) = StepSample(deviceId = "my-whoop", ts = ts, counter = counter)
+    private fun step(ts: Long, counter: Int, activityClass: Int? = null) =
+        StepSample(deviceId = "my-whoop", ts = ts, counter = counter, activityClass = activityClass)
 
     @Test fun sumsPositiveConsecutiveDeltas() {
         // counters 100 -> 150 -> 220 => deltas 50 + 70 = 120
@@ -50,5 +51,24 @@ class StepsCounterTest {
         // Exactly MAX_STEP_DELTA (512) is dropped; 511 counts.
         assertNull(StepsCounter.stepsInWindow(listOf(step(0, 0), step(60, 512))))
         assertEquals(511, StepsCounter.stepsInWindow(listOf(step(0, 0), step(60, 511))))
+    }
+
+    @Test fun classedStreamCountsOnlyWalkAndRunDeltas() {
+        // Attribute each counter delta to the later sample, matching the strap's per-record class.
+        // still: +10 ignored; walk: +20; run: +15; unknown: +25 ignored => 35 locomotion ticks.
+        assertEquals(35, StepsCounter.stepsInWindow(listOf(
+            step(0, 100, 0),
+            step(1, 110, 0),
+            step(2, 130, 1),
+            step(3, 145, 2),
+            step(4, 170, null),
+        )))
+    }
+
+    @Test fun legacyUnclassedStreamKeepsCounterFallback() {
+        // Rows written before activityClass existed must retain their historical estimate.
+        assertEquals(70, StepsCounter.stepsInWindow(listOf(
+            step(0, 100), step(1, 140), step(2, 170),
+        )))
     }
 }
