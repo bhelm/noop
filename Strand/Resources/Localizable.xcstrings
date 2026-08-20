@@ -1,6 +1,279 @@
 {
   "sourceLanguage": "en",
   "strings": {
+    "RHR +%lld": { "localizations": {
+      "de": { "stringUnit": { "state": "translated", "value": "Ruhepuls +%lld" } }, "en": { "stringUnit": { "state": "translated", "value": "RHR +%lld" } }, "es": { "stringUnit": { "state": "translated", "value": "FC en reposo +%lld" } }, "fr": { "stringUnit": { "state": "translated", "value": "FC au repos +%lld" } }, "it": { "stringUnit": { "state": "translated", "value": "FC a riposo +%lld" } }, "pl": { "stringUnit": { "state": "translated", "value": "Tętno spocz. +%lld" } }, "pt-PT": { "stringUnit": { "state": "translated", "value": "FC em repouso +%lld" } }, "ru": { "stringUnit": { "state": "translated", "value": "Пульс в покое +%lld" } }, "zh-Hans": { "stringUnit": { "state": "translated", "value": "静息心率 +%lld" } }, "zh-Hant": { "stringUnit": { "state": "translated", "value": "靜息心率 +%lld" } }
+    } },
+    "HRV −%lld%%": { "localizations": {
+      "de": { "stringUnit": { "state": "translated", "value": "HRV −%lld%%" } }, "en": { "stringUnit": { "state": "translated", "value": "HRV −%lld%%" } }, "es": { "stringUnit": { "state": "translated", "value": "VFC −%lld%%" } }, "fr": { "stringUnit": { "state": "translated", "value": "VFC −%lld%%" } }, "it": { "stringUnit": { "state": "translated", "value": "HRV −%lld%%" } }, "pl": { "stringUnit": { "state": "translated", "value": "HRV −%lld%%" } }, "pt-PT": { "stringUnit": { "state": "translated", "value": "VFC −%lld%%" } }, "ru": { "stringUnit": { "state": "translated", "value": "ВСР −%lld%%" } }, "zh-Hans": { "stringUnit": { "state": "translated", "value": "HRV −%lld%%" } }, "zh-Hant": { "stringUnit": { "state": "translated", "value": "HRV −%lld%%" } }
+    } },
+    "Skin temperature +%@ °C": { "localizations": {
+      "de": { "stringUnit": { "state": "translated", "value": "Hauttemperatur +%@ °C" } }, "en": { "stringUnit": { "state": "translated", "value": "Skin temperature +%@ °C" } }, "es": { "stringUnit": { "state": "translated", "value": "Temperatura de la piel +%@ °C" } }, "fr": { "stringUnit": { "state": "translated", "value": "Température cutanée +%@ °C" } }, "it": { "stringUnit": { "state": "translated", "value": "Temperatura cutanea +%@ °C" } }, "pl": { "stringUnit": { "state": "translated", "value": "Temperatura skóry +%@ °C" } }, "pt-PT": { "stringUnit": { "state": "translated", "value": "Temperatura da pele +%@ °C" } }, "ru": { "stringUnit": { "state": "translated", "value": "Температура кожи +%@ °C" } }, "zh-Hans": { "stringUnit": { "state": "translated", "value": "皮肤温度 +%@ °C" } }, "zh-Hant": { "stringUnit": { "state": "translated", "value": "皮膚溫度 +%@ °C" } }
+    } },
+    "Respiration up": { "localizations": {
+      "de": { "stringUnit": { "state": "translated", "value": "Atemfrequenz erhöht" } }, "en": { "stringUnit": { "state": "translated", "value": "Respiration up" } }, "es": { "stringUnit": { "state": "translated", "value": "Respiración elevada" } }, "fr": { "stringUnit": { "state": "translated", "value": "Respiration élevée" } }, "it": { "stringUnit": { "state": "translated", "value": "Respirazione elevata" } }, "pl": { "stringUnit": { "state": "translated", "value": "Oddech podwyższony" } }, "pt-PT": { "stringUnit": { "state": "translated", "value": "Respiração elevada" } }, "ru": { "stringUnit": { "state": "translated", "value": "Частота дыхания повышена" } }, "zh-Hans": { "stringUnit": { "state": "translated", "value": "呼吸频率升高" } }, "zh-Hant": { "stringUnit": { "state": "translated", "value": "呼吸頻率升高" } }
+    } },
+    "%@ vs %@ %@": { "localizations": {
+      "de": { "stringUnit": { "state": "translated", "value": "%1$@ vs. %2$@ %3$@" } }, "en": { "stringUnit": { "state": "translated", "value": "%@ vs %@ %@" } }, "es": { "stringUnit": { "state": "translated", "value": "%1$@ frente a %2$@ %3$@" } }, "fr": { "stringUnit": { "state": "translated", "value": "%1$@ contre %2$@ %3$@" } }, "it": { "stringUnit": { "state": "translated", "value": "%1$@ rispetto a %2$@ %3$@" } }, "pl": { "stringUnit": { "state": "translated", "value": "%1$@ vs %2$@ %3$@" } }, "pt-PT": { "stringUnit": { "state": "translated", "value": "%1$@ vs. %2$@ %3$@" } }, "ru": { "stringUnit": { "state": "translated", "value": "%1$@ против %2$@ %3$@" } }, "zh-Hans": { "stringUnit": { "state": "translated", "value": "%1$@ 对比 %2$@ %3$@" } }, "zh-Hant": { "stringUnit": { "state": "translated", "value": "%1$@ 對比 %2$@ %3$@" } }
+    } },
+    "7d %@ / 28d %@": { "localizations": {
+      "de": { "stringUnit": { "state": "translated", "value": "7 T %@ / 28 T %@" } }, "en": { "stringUnit": { "state": "translated", "value": "7d %@ / 28d %@" } }, "es": { "stringUnit": { "state": "translated", "value": "7 d %@ / 28 d %@" } }, "fr": { "stringUnit": { "state": "translated", "value": "7 j %@ / 28 j %@" } }, "it": { "stringUnit": { "state": "translated", "value": "7 g %@ / 28 g %@" } }, "pl": { "stringUnit": { "state": "translated", "value": "7 d %@ / 28 d %@" } }, "pt-PT": { "stringUnit": { "state": "translated", "value": "7 d %@ / 28 d %@" } }, "ru": { "stringUnit": { "state": "translated", "value": "7 д %@ / 28 д %@" } }, "zh-Hans": { "stringUnit": { "state": "translated", "value": "7 天 %@ / 28 天 %@" } }, "zh-Hant": { "stringUnit": { "state": "translated", "value": "7 天 %@ / 28 天 %@" } }
+    } },
+    "monotony %@": { "localizations": {
+      "de": { "stringUnit": { "state": "translated", "value": "Monotonie %@" } }, "en": { "stringUnit": { "state": "translated", "value": "monotony %@" } }, "es": { "stringUnit": { "state": "translated", "value": "monotonía %@" } }, "fr": { "stringUnit": { "state": "translated", "value": "monotonie %@" } }, "it": { "stringUnit": { "state": "translated", "value": "monotonia %@" } }, "pl": { "stringUnit": { "state": "translated", "value": "monotonia %@" } }, "pt-PT": { "stringUnit": { "state": "translated", "value": "monotonia %@" } }, "ru": { "stringUnit": { "state": "translated", "value": "монотонность %@" } }, "zh-Hans": { "stringUnit": { "state": "translated", "value": "单调度 %@" } }, "zh-Hant": { "stringUnit": { "state": "translated", "value": "單調度 %@" } }
+    } },
+    "Your body looks strained. Signals up: %@. No alcohol or travel was logged, so consider taking it easy. On-device estimate, not a diagnosis.": { "localizations": {
+      "de": { "stringUnit": { "state": "translated", "value": "Dein Körper wirkt belastet. Auffällige Signale: %@. Da weder Alkohol noch Reisen protokolliert wurden, solltest du es ruhiger angehen. Schätzung auf dem Gerät, keine Diagnose." } }, "en": { "stringUnit": { "state": "translated", "value": "Your body looks strained. Signals up: %@. No alcohol or travel was logged, so consider taking it easy. On-device estimate, not a diagnosis." } }, "es": { "stringUnit": { "state": "translated", "value": "Tu cuerpo parece estar bajo presión. Señales elevadas: %@. Como no has registrado alcohol ni viajes, plantéate tomártelo con calma. Estimación en el dispositivo, no es un diagnóstico." } }, "fr": { "stringUnit": { "state": "translated", "value": "Votre corps semble éprouvé. Signaux élevés : %@. Comme aucun alcool ni voyage n’a été enregistré, envisagez de lever le pied. Estimation sur l’appareil, pas un diagnostic." } }, "pt-PT": { "stringUnit": { "state": "translated", "value": "O teu corpo parece sob esforço. Sinais elevados: %@. Como não registaste álcool nem viagens, considera abrandar. Estimativa no dispositivo, não é um diagnóstico." } },
+      "it": { "stringUnit": { "state": "translated", "value": "Il tuo corpo sembra sotto sforzo. Segnali elevati: %@. Non risultano alcol o viaggi registrati, quindi considera di prendertela con calma. Stima sul dispositivo, non è una diagnosi." } },
+      "pl": { "stringUnit": { "state": "translated", "value": "Twój organizm wygląda na przeciążony. Podwyższone sygnały: %@. Nie zarejestrowano alkoholu ani podróży, więc rozważ spokojniejszy dzień. Ocena na urządzeniu, nie diagnoza." } },
+      "ru": { "stringUnit": { "state": "translated", "value": "Похоже, организм испытывает нагрузку. Повышенные показатели: %@. Алкоголь и поездки не отмечены, поэтому постарайтесь снизить нагрузку. Оценка на устройстве, не диагноз." } },
+      "zh-Hans": { "stringUnit": { "state": "translated", "value": "你的身体似乎承受着较大压力。升高的信号：%@。未记录饮酒或旅行，因此请考虑放松一些。设备端估算，不是诊断。" } },
+      "zh-Hant": { "stringUnit": { "state": "translated", "value": "你的身體似乎承受著較大壓力。升高的訊號：%@。未記錄飲酒或旅行，因此請考慮放鬆一些。裝置端估算，不是診斷。" } }
+    } },
+    "You logged feeling unwell, and your signals agree. Take it easy today. On-device estimate, not a diagnosis.": { "localizations": {
+      "de": { "stringUnit": { "state": "translated", "value": "Du hast angegeben, dass du dich unwohl fühlst, und deine Signale passen dazu. Geh es heute ruhig an. Schätzung auf dem Gerät, keine Diagnose." } }, "en": { "stringUnit": { "state": "translated", "value": "You logged feeling unwell, and your signals agree. Take it easy today. On-device estimate, not a diagnosis." } }, "es": { "stringUnit": { "state": "translated", "value": "Has registrado que no te encuentras bien y tus señales coinciden. Tómatelo con calma hoy. Estimación en el dispositivo, no es un diagnóstico." } }, "fr": { "stringUnit": { "state": "translated", "value": "Vous avez indiqué ne pas vous sentir bien et vos signaux concordent. Levez le pied aujourd’hui. Estimation sur l’appareil, pas un diagnostic." } }, "pt-PT": { "stringUnit": { "state": "translated", "value": "Registaste que não te sentes bem e os teus sinais estão de acordo. Tem calma hoje. Estimativa no dispositivo, não é um diagnóstico." } },
+      "it": { "stringUnit": { "state": "translated", "value": "Hai registrato di non sentirti bene e i tuoi segnali lo confermano. Riposati oggi. Stima sul dispositivo, non è una diagnosi." } },
+      "pl": { "stringUnit": { "state": "translated", "value": "Zarejestrowano złe samopoczucie, a sygnały organizmu to potwierdzają. Dziś zwolnij tempo. Ocena na urządzeniu, nie diagnoza." } },
+      "ru": { "stringUnit": { "state": "translated", "value": "Вы отметили плохое самочувствие, и показатели это подтверждают. Сегодня снизьте нагрузку. Оценка на устройстве, не диагноз." } },
+      "zh-Hans": { "stringUnit": { "state": "translated", "value": "你记录了身体不适，相关信号也与之吻合。今天请放松休息。设备端估算，不是诊断。" } },
+      "zh-Hant": { "stringUnit": { "state": "translated", "value": "你記錄了身體不適，相關訊號也與之吻合。今天請放鬆休息。裝置端估算，不是診斷。" } }
+    } },
+    "You logged feeling unwell. Take it easy today. On-device estimate, not a diagnosis.": { "localizations": {
+      "de": { "stringUnit": { "state": "translated", "value": "Du hast angegeben, dass du dich unwohl fühlst. Geh es heute ruhig an. Schätzung auf dem Gerät, keine Diagnose." } }, "en": { "stringUnit": { "state": "translated", "value": "You logged feeling unwell. Take it easy today. On-device estimate, not a diagnosis." } }, "es": { "stringUnit": { "state": "translated", "value": "Has registrado que no te encuentras bien. Tómatelo con calma hoy. Estimación en el dispositivo, no es un diagnóstico." } }, "fr": { "stringUnit": { "state": "translated", "value": "Vous avez indiqué ne pas vous sentir bien. Levez le pied aujourd’hui. Estimation sur l’appareil, pas un diagnostic." } }, "pt-PT": { "stringUnit": { "state": "translated", "value": "Registaste que não te sentes bem. Tem calma hoje. Estimativa no dispositivo, não é um diagnóstico." } },
+      "it": { "stringUnit": { "state": "translated", "value": "Hai registrato di non sentirti bene. Riposati oggi. Stima sul dispositivo, non è una diagnosi." } },
+      "pl": { "stringUnit": { "state": "translated", "value": "Zarejestrowano złe samopoczucie. Dziś zwolnij tempo. Ocena na urządzeniu, nie diagnoza." } },
+      "ru": { "stringUnit": { "state": "translated", "value": "Вы отметили плохое самочувствие. Сегодня снизьте нагрузку. Оценка на устройстве, не диагноз." } },
+      "zh-Hans": { "stringUnit": { "state": "translated", "value": "你记录了身体不适。今天请放松休息。设备端估算，不是诊断。" } },
+      "zh-Hant": { "stringUnit": { "state": "translated", "value": "你記錄了身體不適。今天請放鬆休息。裝置端估算，不是診斷。" } }
+    } },
+    "Some signals are up, but you logged %@. That is the more likely explanation. On-device estimate, not a diagnosis.": { "localizations": {
+      "de": { "stringUnit": { "state": "translated", "value": "Einige Signale sind erhöht, aber du hast %@ protokolliert. Das ist die wahrscheinlichere Erklärung. Schätzung auf dem Gerät, keine Diagnose." } }, "en": { "stringUnit": { "state": "translated", "value": "Some signals are up, but you logged %@. That is the more likely explanation. On-device estimate, not a diagnosis." } }, "es": { "stringUnit": { "state": "translated", "value": "Algunas señales están elevadas, pero has registrado %@. Esa es la explicación más probable. Estimación en el dispositivo, no es un diagnóstico." } }, "fr": { "stringUnit": { "state": "translated", "value": "Certains signaux sont élevés, mais vous avez enregistré %@. C’est l’explication la plus probable. Estimation sur l’appareil, pas un diagnostic." } }, "pt-PT": { "stringUnit": { "state": "translated", "value": "Alguns sinais estão elevados, mas registaste %@. Essa é a explicação mais provável. Estimativa no dispositivo, não é um diagnóstico." } },
+      "it": { "stringUnit": { "state": "translated", "value": "Alcuni segnali sono elevati, ma hai registrato %@. Questa è la spiegazione più probabile. Stima sul dispositivo, non è una diagnosi." } },
+      "pl": { "stringUnit": { "state": "translated", "value": "Niektóre sygnały są podwyższone, ale zarejestrowano %@. To najbardziej prawdopodobne wyjaśnienie. Ocena na urządzeniu, nie diagnoza." } },
+      "ru": { "stringUnit": { "state": "translated", "value": "Некоторые показатели повышены, но отмечено: %@. Скорее всего, причина именно в этом. Оценка на устройстве, не диагноз." } },
+      "zh-Hans": { "stringUnit": { "state": "translated", "value": "部分信号升高，但你记录了%@。这更可能是原因。设备端估算，不是诊断。" } },
+      "zh-Hant": { "stringUnit": { "state": "translated", "value": "部分訊號升高，但你記錄了%@。這更可能是原因。裝置端估算，不是診斷。" } }
+    } },
+    "A few signals are mildly up: %@. Nothing alarming, but a calmer day may help. On-device estimate, not a diagnosis.": { "localizations": {
+      "de": { "stringUnit": { "state": "translated", "value": "Einige Signale sind leicht erhöht: %@. Kein Grund zur Sorge, aber ein ruhigerer Tag könnte helfen. Schätzung auf dem Gerät, keine Diagnose." } }, "en": { "stringUnit": { "state": "translated", "value": "A few signals are mildly up: %@. Nothing alarming, but a calmer day may help. On-device estimate, not a diagnosis." } }, "es": { "stringUnit": { "state": "translated", "value": "Algunas señales están ligeramente elevadas: %@. No es alarmante, pero un día más tranquilo podría ayudar. Estimación en el dispositivo, no es un diagnóstico." } }, "fr": { "stringUnit": { "state": "translated", "value": "Quelques signaux sont légèrement élevés : %@. Rien d’alarmant, mais une journée plus calme peut aider. Estimation sur l’appareil, pas un diagnostic." } }, "pt-PT": { "stringUnit": { "state": "translated", "value": "Alguns sinais estão ligeiramente elevados: %@. Não é alarmante, mas um dia mais calmo pode ajudar. Estimativa no dispositivo, não é um diagnóstico." } },
+      "it": { "stringUnit": { "state": "translated", "value": "Alcuni segnali sono leggermente elevati: %@. Nulla di allarmante, ma una giornata più tranquilla può aiutare. Stima sul dispositivo, non è una diagnosi." } },
+      "pl": { "stringUnit": { "state": "translated", "value": "Kilka sygnałów jest lekko podwyższonych: %@. Nie ma powodów do niepokoju, ale spokojniejszy dzień może pomóc. Ocena na urządzeniu, nie diagnoza." } },
+      "ru": { "stringUnit": { "state": "translated", "value": "Несколько показателей немного повышены: %@. Ничего тревожного, но более спокойный день может помочь. Оценка на устройстве, не диагноз." } },
+      "zh-Hans": { "stringUnit": { "state": "translated", "value": "有几个信号略有升高：%@。无需担心，但轻松度过一天可能会有帮助。设备端估算，不是诊断。" } },
+      "zh-Hant": { "stringUnit": { "state": "translated", "value": "有幾個訊號略有升高：%@。無需擔心，但輕鬆度過一天可能會有幫助。裝置端估算，不是診斷。" } }
+    } },
+    "Still learning your baseline and keeping an eye on your signals.": { "localizations": {
+      "de": { "stringUnit": { "state": "translated", "value": "Dein Ausgangswert wird noch gelernt und deine Signale werden weiter beobachtet." } }, "en": { "stringUnit": { "state": "translated", "value": "Still learning your baseline and keeping an eye on your signals." } }, "es": { "stringUnit": { "state": "translated", "value": "Todavía estamos aprendiendo tu valor de referencia y observando tus señales." } }, "fr": { "stringUnit": { "state": "translated", "value": "Votre valeur de référence est encore en cours d’apprentissage et vos signaux restent sous surveillance." } }, "pt-PT": { "stringUnit": { "state": "translated", "value": "Ainda estamos a aprender o teu valor de referência e a acompanhar os teus sinais." } },
+      "it": { "stringUnit": { "state": "translated", "value": "Stiamo ancora imparando i tuoi valori di riferimento e tenendo d’occhio i tuoi segnali." } },
+      "pl": { "stringUnit": { "state": "translated", "value": "Nadal uczymy się Twoich wartości bazowych i obserwujemy sygnały organizmu." } },
+      "ru": { "stringUnit": { "state": "translated", "value": "Мы всё ещё изучаем ваши базовые значения и следим за показателями." } },
+      "zh-Hans": { "stringUnit": { "state": "translated", "value": "仍在了解你的基线并持续关注相关信号。" } },
+      "zh-Hant": { "stringUnit": { "state": "translated", "value": "仍在瞭解你的基線並持續關注相關訊號。" } }
+    } },
+    "Nothing notable. Your signals look like their normal range.": { "localizations": {
+      "de": { "stringUnit": { "state": "translated", "value": "Nichts Auffälliges. Deine Signale liegen im normalen Bereich." } }, "en": { "stringUnit": { "state": "translated", "value": "Nothing notable. Your signals look like their normal range." } }, "es": { "stringUnit": { "state": "translated", "value": "Nada destacable. Tus señales parecen estar dentro de su rango normal." } }, "fr": { "stringUnit": { "state": "translated", "value": "Rien de notable. Vos signaux semblent dans leur plage habituelle." } }, "pt-PT": { "stringUnit": { "state": "translated", "value": "Nada de relevante. Os teus sinais parecem estar dentro do intervalo normal." } },
+      "it": { "stringUnit": { "state": "translated", "value": "Nulla di rilevante. I tuoi segnali sembrano rientrare nell’intervallo normale." } },
+      "pl": { "stringUnit": { "state": "translated", "value": "Nic szczególnego. Sygnały organizmu mieszczą się w typowym zakresie." } },
+      "ru": { "stringUnit": { "state": "translated", "value": "Ничего необычного. Показатели находятся в обычном диапазоне." } },
+      "zh-Hans": { "stringUnit": { "state": "translated", "value": "没有明显异常。你的信号处于正常范围内。" } },
+      "zh-Hant": { "stringUnit": { "state": "translated", "value": "沒有明顯異常。你的訊號處於正常範圍內。" } }
+    } },
+    "Sauna": { "localizations": {
+      "de": { "stringUnit": { "state": "translated", "value": "Sauna" } }, "en": { "stringUnit": { "state": "translated", "value": "Sauna" } }, "es": { "stringUnit": { "state": "translated", "value": "sauna" } }, "fr": { "stringUnit": { "state": "translated", "value": "sauna" } }, "pt-PT": { "stringUnit": { "state": "translated", "value": "sauna" } },
+      "it": { "stringUnit": { "state": "translated", "value": "sauna" } },
+      "pl": { "stringUnit": { "state": "translated", "value": "sauna" } },
+      "ru": { "stringUnit": { "state": "translated", "value": "sauna" } },
+      "zh-Hans": { "stringUnit": { "state": "translated", "value": "sauna" } },
+      "zh-Hant": { "stringUnit": { "state": "translated", "value": "sauna" } }
+    } },
+    "Travel": { "localizations": {
+      "de": { "stringUnit": { "state": "translated", "value": "Reise" } }, "en": { "stringUnit": { "state": "translated", "value": "travel" } }, "es": { "stringUnit": { "state": "translated", "value": "viaje" } }, "fr": { "stringUnit": { "state": "translated", "value": "voyage" } }, "pt-PT": { "stringUnit": { "state": "translated", "value": "viagem" } },
+      "it": { "stringUnit": { "state": "translated", "value": "viagem" } },
+      "pl": { "stringUnit": { "state": "translated", "value": "viagem" } },
+      "ru": { "stringUnit": { "state": "translated", "value": "viagem" } },
+      "zh-Hans": { "stringUnit": { "state": "translated", "value": "viagem" } },
+      "zh-Hant": { "stringUnit": { "state": "translated", "value": "viagem" } }
+    } },
+    "Hard or late workout": { "localizations": {
+      "de": { "stringUnit": { "state": "translated", "value": "hartes oder spätes Training" } }, "en": { "stringUnit": { "state": "translated", "value": "hard or late workout" } }, "es": { "stringUnit": { "state": "translated", "value": "entrenamiento intenso o tardío" } }, "fr": { "stringUnit": { "state": "translated", "value": "entraînement intense ou tardif" } }, "pt-PT": { "stringUnit": { "state": "translated", "value": "treino intenso ou tardio" } },
+      "it": { "stringUnit": { "state": "translated", "value": "treino intenso ou tardio" } },
+      "pl": { "stringUnit": { "state": "translated", "value": "treino intenso ou tardio" } },
+      "ru": { "stringUnit": { "state": "translated", "value": "treino intenso ou tardio" } },
+      "zh-Hans": { "stringUnit": { "state": "translated", "value": "treino intenso ou tardio" } },
+      "zh-Hant": { "stringUnit": { "state": "translated", "value": "treino intenso ou tardio" } }
+    } },
+    "For awareness only. Not a medical device, not contraception, not a substitute for professional care.": { "localizations": {
+      "de": { "stringUnit": { "state": "translated", "value": "Nur zur Orientierung. Kein Medizinprodukt, keine Verhütungsmethode und kein Ersatz für professionelle medizinische Beratung." } },
+      "en": { "stringUnit": { "state": "translated", "value": "For awareness only. Not a medical device, not contraception, not a substitute for professional care." } },
+      "es": { "stringUnit": { "state": "translated", "value": "Solo con fines informativos. No es un dispositivo médico ni un método anticonceptivo, ni sustituye la atención profesional." } },
+      "fr": { "stringUnit": { "state": "translated", "value": "À titre informatif uniquement. Ce n’est ni un dispositif médical, ni un moyen de contraception, ni un substitut à un avis professionnel." } },
+      "pt-PT": { "stringUnit": { "state": "translated", "value": "Apenas para fins informativos. Não é um dispositivo médico nem um método contracetivo, nem substitui cuidados profissionais." } },
+      "it": { "stringUnit": { "state": "translated", "value": "Apenas para fins informativos. Não é um dispositivo médico nem um método contracetivo, nem substitui cuidados profissionais." } },
+      "pl": { "stringUnit": { "state": "translated", "value": "Apenas para fins informativos. Não é um dispositivo médico nem um método contracetivo, nem substitui cuidados profissionais." } },
+      "ru": { "stringUnit": { "state": "translated", "value": "Apenas para fins informativos. Não é um dispositivo médico nem um método contracetivo, nem substitui cuidados profissionais." } },
+      "zh-Hans": { "stringUnit": { "state": "translated", "value": "Apenas para fins informativos. Não é um dispositivo médico nem um método contracetivo, nem substitui cuidados profissionais." } },
+      "zh-Hant": { "stringUnit": { "state": "translated", "value": "Apenas para fins informativos. Não é um dispositivo médico nem um método contracetivo, nem substitui cuidados profissionais." } }
+    } },
+    "Follicular range – temperature is near your baseline.": { "localizations": {
+      "de": { "stringUnit": { "state": "translated", "value": "Follikuläre Phase – die Temperatur liegt nahe deinem Ausgangswert." } }, "en": { "stringUnit": { "state": "translated", "value": "Follicular range – temperature is near your baseline." } }, "es": { "stringUnit": { "state": "translated", "value": "Fase folicular: la temperatura está cerca de tu valor de referencia." } }, "fr": { "stringUnit": { "state": "translated", "value": "Phase folliculaire : la température est proche de votre valeur de référence." } }, "pt-PT": { "stringUnit": { "state": "translated", "value": "Fase folicular: a temperatura está próxima do teu valor de referência." } },
+      "it": { "stringUnit": { "state": "translated", "value": "Fase folicular: a temperatura está próxima do teu valor de referência." } },
+      "pl": { "stringUnit": { "state": "translated", "value": "Fase folicular: a temperatura está próxima do teu valor de referência." } },
+      "ru": { "stringUnit": { "state": "translated", "value": "Fase folicular: a temperatura está próxima do teu valor de referência." } },
+      "zh-Hans": { "stringUnit": { "state": "translated", "value": "Fase folicular: a temperatura está próxima do teu valor de referência." } },
+      "zh-Hant": { "stringUnit": { "state": "translated", "value": "Fase folicular: a temperatura está próxima do teu valor de referência." } }
+    } },
+    "Around your mid-cycle shift – temperature is changing.": { "localizations": {
+      "de": { "stringUnit": { "state": "translated", "value": "Um die Zyklusmitte – deine Temperatur verändert sich." } }, "en": { "stringUnit": { "state": "translated", "value": "Around your mid-cycle shift – temperature is changing." } }, "es": { "stringUnit": { "state": "translated", "value": "En torno al cambio de mitad del ciclo: tu temperatura está variando." } }, "fr": { "stringUnit": { "state": "translated", "value": "Autour du changement de milieu de cycle : votre température évolue." } }, "pt-PT": { "stringUnit": { "state": "translated", "value": "Perto da mudança a meio do ciclo: a tua temperatura está a mudar." } },
+      "it": { "stringUnit": { "state": "translated", "value": "Perto da mudança a meio do ciclo: a tua temperatura está a mudar." } },
+      "pl": { "stringUnit": { "state": "translated", "value": "Perto da mudança a meio do ciclo: a tua temperatura está a mudar." } },
+      "ru": { "stringUnit": { "state": "translated", "value": "Perto da mudança a meio do ciclo: a tua temperatura está a mudar." } },
+      "zh-Hans": { "stringUnit": { "state": "translated", "value": "Perto da mudança a meio do ciclo: a tua temperatura está a mudar." } },
+      "zh-Hant": { "stringUnit": { "state": "translated", "value": "Perto da mudança a meio do ciclo: a tua temperatura está a mudar." } }
+    } },
+    "Luteal range – temperature is above your baseline.": { "localizations": {
+      "de": { "stringUnit": { "state": "translated", "value": "Luteale Phase – die Temperatur liegt über deinem Ausgangswert." } }, "en": { "stringUnit": { "state": "translated", "value": "Luteal range – temperature is above your baseline." } }, "es": { "stringUnit": { "state": "translated", "value": "Fase lútea: la temperatura está por encima de tu valor de referencia." } }, "fr": { "stringUnit": { "state": "translated", "value": "Phase lutéale : la température est supérieure à votre valeur de référence." } }, "pt-PT": { "stringUnit": { "state": "translated", "value": "Fase lútea: a temperatura está acima do teu valor de referência." } },
+      "it": { "stringUnit": { "state": "translated", "value": "Fase lútea: a temperatura está acima do teu valor de referência." } },
+      "pl": { "stringUnit": { "state": "translated", "value": "Fase lútea: a temperatura está acima do teu valor de referência." } },
+      "ru": { "stringUnit": { "state": "translated", "value": "Fase lútea: a temperatura está acima do teu valor de referência." } },
+      "zh-Hans": { "stringUnit": { "state": "translated", "value": "Fase lútea: a temperatura está acima do teu valor de referência." } },
+      "zh-Hant": { "stringUnit": { "state": "translated", "value": "Fase lútea: a temperatura está acima do teu valor de referência." } }
+    } },
+    "No clear temperature pattern yet. This can happen with irregular cycles, hormonal contraception or shift work.": { "localizations": {
+      "de": { "stringUnit": { "state": "translated", "value": "Noch kein klares Temperaturmuster. Das kann bei unregelmäßigen Zyklen, hormoneller Verhütung oder Schichtarbeit vorkommen." } }, "en": { "stringUnit": { "state": "translated", "value": "No clear temperature pattern yet. This can happen with irregular cycles, hormonal contraception or shift work." } }, "es": { "stringUnit": { "state": "translated", "value": "Aún no hay un patrón de temperatura claro. Puede ocurrir con ciclos irregulares, anticoncepción hormonal o trabajo por turnos." } }, "fr": { "stringUnit": { "state": "translated", "value": "Aucun profil de température clair pour le moment. Cela peut arriver avec des cycles irréguliers, une contraception hormonale ou le travail posté." } }, "pt-PT": { "stringUnit": { "state": "translated", "value": "Ainda não existe um padrão de temperatura claro. Isto pode acontecer com ciclos irregulares, contraceção hormonal ou trabalho por turnos." } },
+      "it": { "stringUnit": { "state": "translated", "value": "Ainda não existe um padrão de temperatura claro. Isto pode acontecer com ciclos irregulares, contraceção hormonal ou trabalho por turnos." } },
+      "pl": { "stringUnit": { "state": "translated", "value": "Ainda não existe um padrão de temperatura claro. Isto pode acontecer com ciclos irregulares, contraceção hormonal ou trabalho por turnos." } },
+      "ru": { "stringUnit": { "state": "translated", "value": "Ainda não existe um padrão de temperatura claro. Isto pode acontecer com ciclos irregulares, contraceção hormonal ou trabalho por turnos." } },
+      "zh-Hans": { "stringUnit": { "state": "translated", "value": "Ainda não existe um padrão de temperatura claro. Isto pode acontecer com ciclos irregulares, contraceção hormonal ou trabalho por turnos." } },
+      "zh-Hant": { "stringUnit": { "state": "translated", "value": "Ainda não existe um padrão de temperatura claro. Isto pode acontecer com ciclos irregulares, contraceção hormonal ou trabalho por turnos." } }
+    } },
+    "Learning your pattern from your nightly temperature. Keep wearing your device overnight.": { "localizations": {
+      "de": { "stringUnit": { "state": "translated", "value": "Dein Muster wird anhand deiner nächtlichen Temperatur gelernt. Trage dein Gerät weiter über Nacht." } }, "en": { "stringUnit": { "state": "translated", "value": "Learning your pattern from your nightly temperature. Keep wearing your device overnight." } }, "es": { "stringUnit": { "state": "translated", "value": "Estamos aprendiendo tu patrón a partir de la temperatura nocturna. Sigue llevando el dispositivo por la noche." } }, "fr": { "stringUnit": { "state": "translated", "value": "Votre profil est appris à partir de votre température nocturne. Continuez à porter votre appareil la nuit." } }, "pt-PT": { "stringUnit": { "state": "translated", "value": "Estamos a aprender o teu padrão a partir da temperatura noturna. Continua a usar o dispositivo durante a noite." } },
+      "it": { "stringUnit": { "state": "translated", "value": "Estamos a aprender o teu padrão a partir da temperatura noturna. Continua a usar o dispositivo durante a noite." } },
+      "pl": { "stringUnit": { "state": "translated", "value": "Estamos a aprender o teu padrão a partir da temperatura noturna. Continua a usar o dispositivo durante a noite." } },
+      "ru": { "stringUnit": { "state": "translated", "value": "Estamos a aprender o teu padrão a partir da temperatura noturna. Continua a usar o dispositivo durante a noite." } },
+      "zh-Hans": { "stringUnit": { "state": "translated", "value": "Estamos a aprender o teu padrão a partir da temperatura noturna. Continua a usar o dispositivo durante a noite." } },
+      "zh-Hant": { "stringUnit": { "state": "translated", "value": "Estamos a aprender o teu padrão a partir da temperatura noturna. Continua a usar o dispositivo durante a noite." } }
+    } },
+    "Your temperature shift came at a different time than your logged date – the logged start may be off.": { "localizations": {
+      "de": { "stringUnit": { "state": "translated", "value": "Deine Temperaturveränderung trat zu einem anderen Zeitpunkt als das protokollierte Datum auf – der eingetragene Beginn könnte abweichen." } }, "en": { "stringUnit": { "state": "translated", "value": "Your temperature shift came at a different time than your logged date – the logged start may be off." } }, "es": { "stringUnit": { "state": "translated", "value": "El cambio de temperatura se produjo en otro momento distinto a la fecha registrada; puede que el inicio anotado no sea correcto." } }, "fr": { "stringUnit": { "state": "translated", "value": "Le changement de température est survenu à un autre moment que la date enregistrée ; le début indiqué est peut-être décalé." } }, "pt-PT": { "stringUnit": { "state": "translated", "value": "A mudança de temperatura ocorreu num momento diferente da data registada; o início indicado pode estar desfasado." } },
+      "it": { "stringUnit": { "state": "translated", "value": "A mudança de temperatura ocorreu num momento diferente da data registada; o início indicado pode estar desfasado." } },
+      "pl": { "stringUnit": { "state": "translated", "value": "A mudança de temperatura ocorreu num momento diferente da data registada; o início indicado pode estar desfasado." } },
+      "ru": { "stringUnit": { "state": "translated", "value": "A mudança de temperatura ocorreu num momento diferente da data registada; o início indicado pode estar desfasado." } },
+      "zh-Hans": { "stringUnit": { "state": "translated", "value": "A mudança de temperatura ocorreu num momento diferente da data registada; o início indicado pode estar desfasado." } },
+      "zh-Hant": { "stringUnit": { "state": "translated", "value": "A mudança de temperatura ocorreu num momento diferente da data registada; o início indicado pode estar desfasado." } }
+    } },
+    "Your rhythm is hard to read right now. Keep wearing your device for a clearer picture.": { "localizations": {
+      "de": { "stringUnit": { "state": "translated", "value": "Dein Rhythmus ist gerade schwer zu erkennen. Trage dein Gerät weiter, damit das Bild klarer wird." } }, "en": { "stringUnit": { "state": "translated", "value": "Your rhythm is hard to read right now. Keep wearing your device for a clearer picture." } }, "es": { "stringUnit": { "state": "translated", "value": "Ahora mismo es difícil interpretar tu ritmo. Sigue llevando el dispositivo para obtener una imagen más clara." } }, "fr": { "stringUnit": { "state": "translated", "value": "Votre rythme est difficile à interpréter pour le moment. Continuez à porter votre appareil pour obtenir une image plus claire." } }, "pt-PT": { "stringUnit": { "state": "translated", "value": "Neste momento, é difícil interpretar o teu ritmo. Continua a usar o dispositivo para obter uma imagem mais clara." } },
+      "it": { "stringUnit": { "state": "translated", "value": "Neste momento, é difícil interpretar o teu ritmo. Continua a usar o dispositivo para obter uma imagem mais clara." } },
+      "pl": { "stringUnit": { "state": "translated", "value": "Neste momento, é difícil interpretar o teu ritmo. Continua a usar o dispositivo para obter uma imagem mais clara." } },
+      "ru": { "stringUnit": { "state": "translated", "value": "Neste momento, é difícil interpretar o teu ritmo. Continua a usar o dispositivo para obter uma imagem mais clara." } },
+      "zh-Hans": { "stringUnit": { "state": "translated", "value": "Neste momento, é difícil interpretar o teu ritmo. Continua a usar o dispositivo para obter uma imagem mais clara." } },
+      "zh-Hant": { "stringUnit": { "state": "translated", "value": "Neste momento, é difícil interpretar o teu ritmo. Continua a usar o dispositivo para obter uma imagem mais clara." } }
+    } },
+    "Your body clock looks later, with a night-owl tendency.": { "localizations": {
+      "de": { "stringUnit": { "state": "translated", "value": "Deine innere Uhr scheint später zu laufen – mit einer Tendenz zum Nachtmenschen." } }, "en": { "stringUnit": { "state": "translated", "value": "Your body clock looks later, with a night-owl tendency." } }, "es": { "stringUnit": { "state": "translated", "value": "Tu reloj biológico parece más tardío, con tendencia nocturna." } }, "fr": { "stringUnit": { "state": "translated", "value": "Votre horloge biologique semble plus tardive, avec une tendance couche-tard." } }, "pt-PT": { "stringUnit": { "state": "translated", "value": "O teu relógio biológico parece mais tardio, com tendência noturna." } },
+      "it": { "stringUnit": { "state": "translated", "value": "O teu relógio biológico parece mais tardio, com tendência noturna." } },
+      "pl": { "stringUnit": { "state": "translated", "value": "O teu relógio biológico parece mais tardio, com tendência noturna." } },
+      "ru": { "stringUnit": { "state": "translated", "value": "O teu relógio biológico parece mais tardio, com tendência noturna." } },
+      "zh-Hans": { "stringUnit": { "state": "translated", "value": "O teu relógio biológico parece mais tardio, com tendência noturna." } },
+      "zh-Hant": { "stringUnit": { "state": "translated", "value": "O teu relógio biológico parece mais tardio, com tendência noturna." } }
+    } },
+    "Your body clock looks earlier, with a morning tendency.": { "localizations": {
+      "de": { "stringUnit": { "state": "translated", "value": "Deine innere Uhr scheint früher zu laufen – mit einer Tendenz zum Morgenmenschen." } }, "en": { "stringUnit": { "state": "translated", "value": "Your body clock looks earlier, with a morning tendency." } }, "es": { "stringUnit": { "state": "translated", "value": "Tu reloj biológico parece más temprano, con tendencia matutina." } }, "fr": { "stringUnit": { "state": "translated", "value": "Votre horloge biologique semble plus précoce, avec une tendance matinale." } }, "pt-PT": { "stringUnit": { "state": "translated", "value": "O teu relógio biológico parece mais adiantado, com tendência matinal." } },
+      "it": { "stringUnit": { "state": "translated", "value": "O teu relógio biológico parece mais adiantado, com tendência matinal." } },
+      "pl": { "stringUnit": { "state": "translated", "value": "O teu relógio biológico parece mais adiantado, com tendência matinal." } },
+      "ru": { "stringUnit": { "state": "translated", "value": "O teu relógio biológico parece mais adiantado, com tendência matinal." } },
+      "zh-Hans": { "stringUnit": { "state": "translated", "value": "O teu relógio biológico parece mais adiantado, com tendência matinal." } },
+      "zh-Hant": { "stringUnit": { "state": "translated", "value": "O teu relógio biológico parece mais adiantado, com tendência matinal." } }
+    } },
+    "Your body clock looks aligned with your schedule.": { "localizations": {
+      "de": { "stringUnit": { "state": "translated", "value": "Deine innere Uhr scheint zu deinem Zeitplan zu passen." } }, "en": { "stringUnit": { "state": "translated", "value": "Your body clock looks aligned with your schedule." } }, "es": { "stringUnit": { "state": "translated", "value": "Tu reloj biológico parece estar alineado con tu horario." } }, "fr": { "stringUnit": { "state": "translated", "value": "Votre horloge biologique semble alignée sur votre emploi du temps." } }, "pt-PT": { "stringUnit": { "state": "translated", "value": "O teu relógio biológico parece alinhado com o teu horário." } },
+      "it": { "stringUnit": { "state": "translated", "value": "O teu relógio biológico parece alinhado com o teu horário." } },
+      "pl": { "stringUnit": { "state": "translated", "value": "O teu relógio biológico parece alinhado com o teu horário." } },
+      "ru": { "stringUnit": { "state": "translated", "value": "O teu relógio biológico parece alinhado com o teu horário." } },
+      "zh-Hans": { "stringUnit": { "state": "translated", "value": "O teu relógio biológico parece alinhado com o teu horário." } },
+      "zh-Hant": { "stringUnit": { "state": "translated", "value": "O teu relógio biológico parece alinhado com o teu horário." } }
+    } },
+    "Shifting your clock %@ h earlier, about an hour a day. Light and sleep timing only.": { "localizations": {
+      "de": { "stringUnit": { "state": "translated", "value": "Deine innere Uhr wird um %@ Std. nach vorn verschoben, etwa eine Stunde pro Tag. Nur Licht- und Schlafzeiten." } }, "en": { "stringUnit": { "state": "translated", "value": "Shifting your clock %@ h earlier, about an hour a day. Light and sleep timing only." } }, "es": { "stringUnit": { "state": "translated", "value": "Adelanta tu reloj %@ h, aproximadamente una hora al día. Solo se ajustan la luz y los horarios de sueño." } }, "fr": { "stringUnit": { "state": "translated", "value": "Avance de votre horloge de %@ h, environ une heure par jour. Uniquement la lumière et les horaires de sommeil." } }, "pt-PT": { "stringUnit": { "state": "translated", "value": "Adianta o teu relógio %@ h, cerca de uma hora por dia. Apenas luz e horários de sono." } },
+      "it": { "stringUnit": { "state": "translated", "value": "Adianta o teu relógio %@ h, cerca de uma hora por dia. Apenas luz e horários de sono." } },
+      "pl": { "stringUnit": { "state": "translated", "value": "Adianta o teu relógio %@ h, cerca de uma hora por dia. Apenas luz e horários de sono." } },
+      "ru": { "stringUnit": { "state": "translated", "value": "Adianta o teu relógio %@ h, cerca de uma hora por dia. Apenas luz e horários de sono." } },
+      "zh-Hans": { "stringUnit": { "state": "translated", "value": "Adianta o teu relógio %@ h, cerca de uma hora por dia. Apenas luz e horários de sono." } },
+      "zh-Hant": { "stringUnit": { "state": "translated", "value": "Adianta o teu relógio %@ h, cerca de uma hora por dia. Apenas luz e horários de sono." } }
+    } },
+    "Shifting your clock %@ h later, about an hour a day. Light and sleep timing only.": { "localizations": {
+      "de": { "stringUnit": { "state": "translated", "value": "Deine innere Uhr wird um %@ Std. nach hinten verschoben, etwa eine Stunde pro Tag. Nur Licht- und Schlafzeiten." } }, "en": { "stringUnit": { "state": "translated", "value": "Shifting your clock %@ h later, about an hour a day. Light and sleep timing only." } }, "es": { "stringUnit": { "state": "translated", "value": "Retrasa tu reloj %@ h, aproximadamente una hora al día. Solo se ajustan la luz y los horarios de sueño." } }, "fr": { "stringUnit": { "state": "translated", "value": "Retarde votre horloge de %@ h, environ une heure par jour. Uniquement la lumière et les horaires de sommeil." } }, "pt-PT": { "stringUnit": { "state": "translated", "value": "Atrasa o teu relógio %@ h, cerca de uma hora por dia. Apenas luz e horários de sono." } },
+      "it": { "stringUnit": { "state": "translated", "value": "Atrasa o teu relógio %@ h, cerca de uma hora por dia. Apenas luz e horários de sono." } },
+      "pl": { "stringUnit": { "state": "translated", "value": "Atrasa o teu relógio %@ h, cerca de uma hora por dia. Apenas luz e horários de sono." } },
+      "ru": { "stringUnit": { "state": "translated", "value": "Atrasa o teu relógio %@ h, cerca de uma hora por dia. Apenas luz e horários de sono." } },
+      "zh-Hans": { "stringUnit": { "state": "translated", "value": "Atrasa o teu relógio %@ h, cerca de uma hora por dia. Apenas luz e horários de sono." } },
+      "zh-Hant": { "stringUnit": { "state": "translated", "value": "Atrasa o teu relógio %@ h, cerca de uma hora por dia. Apenas luz e horários de sono." } }
+    } },
+    "No meaningful body-clock shift is needed. You are about aligned.": { "localizations": {
+      "de": { "stringUnit": { "state": "translated", "value": "Keine nennenswerte Verschiebung deiner inneren Uhr nötig. Du bist weitgehend im Rhythmus." } }, "en": { "stringUnit": { "state": "translated", "value": "No meaningful body-clock shift is needed. You are about aligned." } }, "es": { "stringUnit": { "state": "translated", "value": "No necesitas ajustar de forma significativa tu reloj biológico. Está prácticamente alineado." } }, "fr": { "stringUnit": { "state": "translated", "value": "Aucun décalage notable de votre horloge biologique n’est nécessaire. Vous êtes globalement aligné." } }, "pt-PT": { "stringUnit": { "state": "translated", "value": "Não é necessário um ajuste significativo do teu relógio biológico. Está praticamente alinhado." } },
+      "it": { "stringUnit": { "state": "translated", "value": "Não é necessário um ajuste significativo do teu relógio biológico. Está praticamente alinhado." } },
+      "pl": { "stringUnit": { "state": "translated", "value": "Não é necessário um ajuste significativo do teu relógio biológico. Está praticamente alinhado." } },
+      "ru": { "stringUnit": { "state": "translated", "value": "Não é necessário um ajuste significativo do teu relógio biológico. Está praticamente alinhado." } },
+      "zh-Hans": { "stringUnit": { "state": "translated", "value": "Não é necessário um ajuste significativo do teu relógio biológico. Está praticamente alinhado." } },
+      "zh-Hant": { "stringUnit": { "state": "translated", "value": "Não é necessário um ajuste significativo do teu relógio biológico. Está praticamente alinhado." } }
+    } },
+    "Cached": {
+      "localizations": {
+        "de": { "stringUnit": { "state": "translated", "value": "Zwischengespeichert" } },
+        "en": { "stringUnit": { "state": "translated", "value": "Cached" } },
+        "es": { "stringUnit": { "state": "translated", "value": "En caché" } },
+        "fr": { "stringUnit": { "state": "translated", "value": "En cache" } },
+        "pt-PT": { "stringUnit": { "state": "translated", "value": "Em cache" } },
+      "it": { "stringUnit": { "state": "translated", "value": "Em cache" } },
+      "pl": { "stringUnit": { "state": "translated", "value": "Em cache" } },
+      "ru": { "stringUnit": { "state": "translated", "value": "Em cache" } },
+      "zh-Hans": { "stringUnit": { "state": "translated", "value": "Em cache" } },
+      "zh-Hant": { "stringUnit": { "state": "translated", "value": "Em cache" } }
+      }
+    },
+    "Swipe": {
+      "localizations": {
+        "de": { "stringUnit": { "state": "translated", "value": "Wischen" } },
+        "en": { "stringUnit": { "state": "translated", "value": "Swipe" } },
+        "es": { "stringUnit": { "state": "translated", "value": "Desliza" } },
+        "fr": { "stringUnit": { "state": "translated", "value": "Balayer" } },
+        "pt-PT": { "stringUnit": { "state": "translated", "value": "Deslizar" } },
+      "it": { "stringUnit": { "state": "translated", "value": "Deslizar" } },
+      "pl": { "stringUnit": { "state": "translated", "value": "Deslizar" } },
+      "ru": { "stringUnit": { "state": "translated", "value": "Deslizar" } },
+      "zh-Hans": { "stringUnit": { "state": "translated", "value": "Deslizar" } },
+      "zh-Hant": { "stringUnit": { "state": "translated", "value": "Deslizar" } }
+      }
+    },
+    "Tap": {
+      "localizations": {
+        "de": { "stringUnit": { "state": "translated", "value": "Tippen" } },
+        "en": { "stringUnit": { "state": "translated", "value": "Tap" } },
+        "es": { "stringUnit": { "state": "translated", "value": "Toca" } },
+        "fr": { "stringUnit": { "state": "translated", "value": "Toucher" } },
+        "pt-PT": { "stringUnit": { "state": "translated", "value": "Tocar" } },
+      "it": { "stringUnit": { "state": "translated", "value": "Tocar" } },
+      "pl": { "stringUnit": { "state": "translated", "value": "Tocar" } },
+      "ru": { "stringUnit": { "state": "translated", "value": "Tocar" } },
+      "zh-Hans": { "stringUnit": { "state": "translated", "value": "Tocar" } },
+      "zh-Hant": { "stringUnit": { "state": "translated", "value": "Tocar" } }
+      }
+    },
+    "Workout files": {
+      "localizations": {
+        "de": { "stringUnit": { "state": "translated", "value": "Trainingsdateien" } },
+        "en": { "stringUnit": { "state": "translated", "value": "Workout files" } },
+        "es": { "stringUnit": { "state": "translated", "value": "Archivos de entrenamiento" } },
+        "fr": { "stringUnit": { "state": "translated", "value": "Fichiers d’entraînement" } },
+        "pt-PT": { "stringUnit": { "state": "translated", "value": "Ficheiros de treino" } },
+      "it": { "stringUnit": { "state": "translated", "value": "Ficheiros de treino" } },
+      "pl": { "stringUnit": { "state": "translated", "value": "Ficheiros de treino" } },
+      "ru": { "stringUnit": { "state": "translated", "value": "Ficheiros de treino" } },
+      "zh-Hans": { "stringUnit": { "state": "translated", "value": "Ficheiros de treino" } },
+      "zh-Hant": { "stringUnit": { "state": "translated", "value": "Ficheiros de treino" } }
+      }
+    },
     "Auto-backup hasn't run in a few days. Check the backup folder is still available — a moved or disconnected cloud folder stops backups silently.": {
       "localizations": {
         "de": {
@@ -8146,34 +8419,40 @@
     "%lld days": {
       "localizations": {
         "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%lld Tage"
-          }
+          "variations": { "plural": {
+            "one": { "stringUnit": { "state": "translated", "value": "%lld Tag" } },
+            "other": { "stringUnit": { "state": "translated", "value": "%lld Tage" } }
+          } }
+        },
+        "en": {
+          "variations": { "plural": {
+            "one": { "stringUnit": { "state": "translated", "value": "%lld day" } },
+            "other": { "stringUnit": { "state": "translated", "value": "%lld days" } }
+          } }
         },
         "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%lld días"
-          }
+          "variations": { "plural": {
+            "one": { "stringUnit": { "state": "translated", "value": "%lld día" } },
+            "other": { "stringUnit": { "state": "translated", "value": "%lld días" } }
+          } }
         },
         "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%lld jours"
-          }
+          "variations": { "plural": {
+            "one": { "stringUnit": { "state": "translated", "value": "%lld jour" } },
+            "other": { "stringUnit": { "state": "translated", "value": "%lld jours" } }
+          } }
         },
         "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%lld giorni"
-          }
+          "variations": { "plural": {
+            "one": { "stringUnit": { "state": "translated", "value": "%lld giorno" } },
+            "other": { "stringUnit": { "state": "translated", "value": "%lld giorni" } }
+          } }
         },
         "pt-PT": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%lld dias"
-          }
+          "variations": { "plural": {
+            "one": { "stringUnit": { "state": "translated", "value": "%lld dia" } },
+            "other": { "stringUnit": { "state": "translated", "value": "%lld dias" } }
+          } }
         },
         "ru": {
           "variations": {
@@ -8562,7 +8841,7 @@
         "pt-PT": {
           "stringUnit": {
             "state": "translated",
-            "value": "%1$lld dias · %2$lld dorme"
+            "value": "%1$lld dias · %2$lld noites de sono"
           }
         },
         "ru": {
@@ -12514,38 +12793,100 @@
         }
       }
     },
+    "%lld sleeps": {
+      "localizations": {
+        "de": { "variations": { "plural": {
+          "one": { "stringUnit": { "state": "translated", "value": "%lld Nacht" } },
+          "other": { "stringUnit": { "state": "translated", "value": "%lld Nächte" } }
+        } } },
+        "en": { "variations": { "plural": {
+          "one": { "stringUnit": { "state": "translated", "value": "%lld sleep" } },
+          "other": { "stringUnit": { "state": "translated", "value": "%lld sleeps" } }
+        } } },
+        "es": { "variations": { "plural": {
+          "one": { "stringUnit": { "state": "translated", "value": "%lld noche" } },
+          "other": { "stringUnit": { "state": "translated", "value": "%lld noches" } }
+        } } },
+        "fr": { "variations": { "plural": {
+          "one": { "stringUnit": { "state": "translated", "value": "%lld nuit" } },
+          "other": { "stringUnit": { "state": "translated", "value": "%lld nuits" } }
+        } } },
+        "it": { "variations": { "plural": {
+          "one": { "stringUnit": { "state": "translated", "value": "%lld notte" } },
+          "other": { "stringUnit": { "state": "translated", "value": "%lld notti" } }
+        } } },
+        "pl": { "variations": { "plural": {
+          "one": { "stringUnit": { "state": "translated", "value": "%lld noc" } },
+          "few": { "stringUnit": { "state": "translated", "value": "%lld noce" } },
+          "many": { "stringUnit": { "state": "translated", "value": "%lld nocy" } },
+          "other": { "stringUnit": { "state": "translated", "value": "%lld nocy" } }
+        } } },
+        "pt-PT": { "variations": { "plural": {
+          "one": { "stringUnit": { "state": "translated", "value": "%lld noite de sono" } },
+          "other": { "stringUnit": { "state": "translated", "value": "%lld noites de sono" } }
+        } } },
+        "ru": { "variations": { "plural": {
+          "one": { "stringUnit": { "state": "translated", "value": "%lld ночь" } },
+          "few": { "stringUnit": { "state": "translated", "value": "%lld ночи" } },
+          "many": { "stringUnit": { "state": "translated", "value": "%lld ночей" } },
+          "other": { "stringUnit": { "state": "translated", "value": "%lld ночи" } }
+        } } },
+        "zh-Hans": { "variations": { "plural": {
+          "one": { "stringUnit": { "state": "translated", "value": "%lld 次睡眠" } },
+          "other": { "stringUnit": { "state": "translated", "value": "%lld 次睡眠" } }
+        } } },
+        "zh-Hant": { "variations": { "plural": {
+          "one": { "stringUnit": { "state": "translated", "value": "%lld 次睡眠" } },
+          "other": { "stringUnit": { "state": "translated", "value": "%lld 次睡眠" } }
+        } } }
+      }
+    },
     "%lld workouts": {
       "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%lld Workouts"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%lld entrenamientos"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%lld entraînements"
-          }
-        },
-        "pt-PT": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%lld treinos"
-          }
-        },
-        "pl": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Treningi %lld"
-          }
-        }
+        "de": { "variations": { "plural": {
+          "one": { "stringUnit": { "state": "translated", "value": "%lld Workout" } },
+          "other": { "stringUnit": { "state": "translated", "value": "%lld Workouts" } }
+        } } },
+        "en": { "variations": { "plural": {
+          "one": { "stringUnit": { "state": "translated", "value": "%lld workout" } },
+          "other": { "stringUnit": { "state": "translated", "value": "%lld workouts" } }
+        } } },
+        "es": { "variations": { "plural": {
+          "one": { "stringUnit": { "state": "translated", "value": "%lld entrenamiento" } },
+          "other": { "stringUnit": { "state": "translated", "value": "%lld entrenamientos" } }
+        } } },
+        "fr": { "variations": { "plural": {
+          "one": { "stringUnit": { "state": "translated", "value": "%lld entraînement" } },
+          "other": { "stringUnit": { "state": "translated", "value": "%lld entraînements" } }
+        } } },
+        "it": { "variations": { "plural": {
+          "one": { "stringUnit": { "state": "translated", "value": "%lld allenamento" } },
+          "other": { "stringUnit": { "state": "translated", "value": "%lld allenamenti" } }
+        } } },
+        "pl": { "variations": { "plural": {
+          "one": { "stringUnit": { "state": "translated", "value": "%lld trening" } },
+          "few": { "stringUnit": { "state": "translated", "value": "%lld treningi" } },
+          "many": { "stringUnit": { "state": "translated", "value": "%lld treningów" } },
+          "other": { "stringUnit": { "state": "translated", "value": "%lld treningu" } }
+        } } },
+        "pt-PT": { "variations": { "plural": {
+          "one": { "stringUnit": { "state": "translated", "value": "%lld treino" } },
+          "other": { "stringUnit": { "state": "translated", "value": "%lld treinos" } }
+        } } },
+        "ru": { "variations": { "plural": {
+          "one": { "stringUnit": { "state": "translated", "value": "%lld тренировка" } },
+          "few": { "stringUnit": { "state": "translated", "value": "%lld тренировки" } },
+          "many": { "stringUnit": { "state": "translated", "value": "%lld тренировок" } },
+          "other": { "stringUnit": { "state": "translated", "value": "%lld тренировки" } }
+        } } },
+        "zh-Hans": { "variations": { "plural": {
+          "one": { "stringUnit": { "state": "translated", "value": "%lld 次训练" } },
+          "other": { "stringUnit": { "state": "translated", "value": "%lld 次训练" } }
+        } } },
+        "zh-Hant": { "variations": { "plural": {
+          "one": { "stringUnit": { "state": "translated", "value": "%lld 次訓練" } },
+          "other": { "stringUnit": { "state": "translated", "value": "%lld 次訓練" } }
+        } } }
       }
     },
     "%lld year%@ %@ than your age": {
@@ -103097,7 +103438,7 @@
         "pt-PT": {
           "stringUnit": {
             "state": "translated",
-            "value": "Precisa da pega"
+            "value": "Requer a pulseira"
           }
         },
         "ru": {
@@ -121923,7 +122264,7 @@
         "pt-PT": {
           "stringUnit": {
             "state": "translated",
-            "value": "Pressionar"
+            "value": "Avançar"
           }
         },
         "ru": {
@@ -131792,7 +132133,7 @@
         "pt-PT": {
           "stringUnit": {
             "state": "translated",
-            "value": "Descanse RH"
+            "value": "FC repouso"
           }
         },
         "ru": {
@@ -132416,7 +132757,7 @@
         "pt-PT": {
           "stringUnit": {
             "state": "translated",
-            "value": "Descansando RH"
+            "value": "FC em repouso"
           }
         },
         "ru": {
@@ -134846,7 +135187,7 @@
         "pt-PT": {
           "stringUnit": {
             "state": "translated",
-            "value": "Atropelar"
+            "value": "Esgotado"
           }
         },
         "ru": {
@@ -136360,7 +136701,7 @@
         "pt-PT": {
           "stringUnit": {
             "state": "translated",
-            "value": "SYNTHESIS"
+            "value": "SÍNTESE"
           }
         },
         "ru": {
@@ -148966,7 +149307,7 @@
         "pt-PT": {
           "stringUnit": {
             "state": "translated",
-            "value": "Continuar"
+            "value": "Parado"
           }
         },
         "ru": {
@@ -150184,7 +150525,7 @@
         "pt-PT": {
           "stringUnit": {
             "state": "translated",
-            "value": "Bateria de pega"
+            "value": "Bateria da pulseira"
           }
         },
         "ru": {
@@ -174327,7 +174668,7 @@
         "pt-PT": {
           "stringUnit": {
             "state": "translated",
-            "value": "Grito"
+            "value": "WHOOP"
           }
         },
         "ru": {
@@ -178552,7 +178893,7 @@
         "pt-PT": {
           "stringUnit": {
             "state": "translated",
-            "value": "As tuas cartas"
+            "value": "Os teus cartões"
           }
         },
         "ru": {
@@ -193260,7 +193601,7 @@
         "pt-PT": {
           "stringUnit": {
             "state": "translated",
-            "value": "~%lldh esquerda"
+            "value": "Faltam ~%lld h"
           }
         },
         "ru": {
