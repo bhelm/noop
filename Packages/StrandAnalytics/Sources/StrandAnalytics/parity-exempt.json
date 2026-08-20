@@ -188,8 +188,8 @@
       "issue": 17
     },
     {
-      "key": "Packages/StrandAnalytics/Sources/StrandAnalytics/AnalyticsEngine.swift::analyzeDay/31[defaults=2,3,4,5,6,7,8,9,10,11,12,13,14,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31]#1",
-      "reason": "Bootstrap debt signature updated for upstream #1450 in f40897ac71a0..140c8b3c44bf; the analyzeDay pipeline still has no differential or declared platform coverage proof.",
+      "key": "Packages/StrandAnalytics/Sources/StrandAnalytics/AnalyticsEngine.swift::analyzeDay/32[defaults=2,3,4,5,6,7,8,9,10,11,12,13,14,15,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32]#1",
+      "reason": "Bootstrap debt signature updated for upstream #1463 / c5ea975a; the analyzeDay pipeline still has no differential or declared platform coverage proof.",
       "issue": 17
     },
     {
@@ -303,8 +303,8 @@
       "issue": 17
     },
     {
-      "key": "Packages/StrandAnalytics/Sources/StrandAnalytics/AnalyticsEngine.swift::wornNightlySkinTempC/6[defaults=4,5,6]#1",
-      "reason": "Bootstrap debt: no differential or declared platform coverage proof yet.",
+      "key": "Packages/StrandAnalytics/Sources/StrandAnalytics/AnalyticsEngine.swift::wornNightlySkinTempC/7[defaults=4,5,6,7]#1",
+      "reason": "Bootstrap debt signature updated for upstream #1467 / cec9c80d; no differential or declared platform coverage proof yet.",
       "issue": 17
     },
     {
@@ -353,8 +353,8 @@
       "issue": 17
     },
     {
-      "key": "Packages/StrandAnalytics/Sources/StrandAnalytics/AnalyticsEngine.swift::skinTempFunnel/6[defaults=4,5,6]#1",
-      "reason": "Bootstrap debt: no differential or declared platform coverage proof yet.",
+      "key": "Packages/StrandAnalytics/Sources/StrandAnalytics/AnalyticsEngine.swift::skinTempFunnel/7[defaults=4,5,6,7]#1",
+      "reason": "Bootstrap debt signature updated for upstream #1467 / cec9c80d; no differential or declared platform coverage proof yet.",
       "issue": 17
     },
     {
@@ -6203,12 +6203,22 @@
       "issue": 17
     },
     {
+      "key": "Packages/StrandAnalytics/Sources/StrandAnalytics/AnalyticsEngine.swift::defaultOuraWornToleranceSec@property-initializer#1",
+      "reason": "Bootstrap debt: upstream #1467 / cec9c80d; Swift emits no executable coverage record for this constant property initializer.",
+      "issue": 17
+    },
+    {
       "key": "Packages/StrandAnalytics/Sources/StrandAnalytics/TrainingLoadEngine.swift::standard@property-initializer#1",
       "reason": "Bootstrap debt: upstream #1423 / b8c7b15f, imported range f40897ac71a0..140c8b3c44bf; Swift emits no executable coverage record for this constant property initializer.",
       "issue": 17
     }
   ],
   "platform-test": [
+    {
+        "key": "Packages/StrandAnalytics/Sources/StrandAnalytics/StepsEstimateEngine.swift::isUsableCalibrationPoint/1[defaults=-]#1",
+        "test": "StrandAnalyticsTests.StepsEstimateEngineTests.testManualOverrideCountsOnlyUsableCalibrationDays; upstream #1469 / 3e3bff81",
+        "issue": 17
+    },
     {
         "key": "Packages/StrandAnalytics/Sources/StrandAnalytics/AnalyticsEngine.swift::vendorRespRateBpm/2[defaults=-]#1",
         "test": "StrandAnalyticsTests.VendorRespRateTests; upstream #1450 / b6b2f73f; imported range f40897ac71a0..140c8b3c44bf",

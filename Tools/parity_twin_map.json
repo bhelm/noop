@@ -211,6 +211,16 @@
   ],
   "function_pairs": [
     {
+      "swift": "Packages/StrandAnalytics/Sources/StrandAnalytics/AnalyticsEngine.swift::isWorn/1#1",
+      "kotlin": "android/app/src/main/java/com/noop/analytics/AnalyticsEngine.kt::isWorn/1#1",
+      "evidence": "audited same-body local helper introduced by upstream #1467 / cec9c80d"
+    },
+    {
+      "swift": "Packages/StrandAnalytics/Sources/StrandAnalytics/StepsEstimateEngine.swift::isUsableCalibrationPoint/1#1",
+      "kotlin": "android/app/src/main/java/com/noop/analytics/StepsEstimateEngine.kt::isUsableCalibrationPoint/1#1",
+      "evidence": "audited cross-platform helper introduced by upstream #1469 / 3e3bff81"
+    },
+    {
       "swift": "Packages/OuraProtocol/Sources/OuraProtocol/Decoders.swift::decodeRealStepsFields/1#1",
       "kotlin": "android/app/src/main/java/com/noop/oura/Decoders.kt::decodeRealStepsFields/1#1",
       "evidence": "declared twin reference"
@@ -1334,6 +1344,11 @@
     }
   ],
   "constant_pairs": [
+    {
+      "swift": "Packages/StrandAnalytics/Sources/StrandAnalytics/AnalyticsEngine.swift::defaultOuraWornToleranceSec",
+      "kotlin": "android/app/src/main/java/com/noop/analytics/AnalyticsEngine.kt::DEFAULT_OURA_WORN_TOLERANCE_SEC",
+      "evidence": "audited cross-platform constant introduced by upstream #1467 / cec9c80d"
+    },
     {
       "swift": "Packages/OuraProtocol/Sources/OuraProtocol/Auth.swift::keyLength",
       "kotlin": "android/app/src/main/java/com/noop/oura/Auth.kt::keyLength",
@@ -4794,8 +4809,8 @@
       "Packages/StrandAnalytics/Sources/StrandAnalytics/AnalyticsEngine.swift::clamp01/1#1",
       "Packages/StrandAnalytics/Sources/StrandAnalytics/AnalyticsEngine.swift::composite/3#1",
       "Packages/StrandAnalytics/Sources/StrandAnalytics/AnalyticsEngine.swift::round2/1#1",
-      "Packages/StrandAnalytics/Sources/StrandAnalytics/AnalyticsEngine.swift::wornNightlySkinTempC/6#1",
-      "Packages/StrandAnalytics/Sources/StrandAnalytics/AnalyticsEngine.swift::skinTempFunnel/6#1",
+      "Packages/StrandAnalytics/Sources/StrandAnalytics/AnalyticsEngine.swift::wornNightlySkinTempC/7#1",
+      "Packages/StrandAnalytics/Sources/StrandAnalytics/AnalyticsEngine.swift::skinTempFunnel/7#1",
       "Packages/StrandAnalytics/Sources/StrandAnalytics/AnalyticsMemo.swift::value/2#1",
       "Packages/StrandAnalytics/Sources/StrandAnalytics/AnalyticsMemo.swift::of/3#1",
       "Packages/StrandAnalytics/Sources/StrandAnalytics/AnalyzeRecentDayCache.swift::cacheKey/4#1",
@@ -5804,7 +5819,7 @@
       "Packages/WhoopProtocol/Sources/WhoopProtocol/HistoricalStreams.swift::isPlausibleHistoricalUnix/4#1",
       "Packages/WhoopProtocol/Sources/WhoopProtocol/HistoricalStreams.swift::rejectedHistoricalRecords/2#1",
       "Packages/WhoopProtocol/Sources/WhoopProtocol/HistoricalStreams.swift::isEmptyRecordFrame/1#1",
-      "Packages/WhoopProtocol/Sources/WhoopProtocol/HistoricalStreams.swift::extractHistoricalStreams/6#1",
+      "Packages/WhoopProtocol/Sources/WhoopProtocol/HistoricalStreams.swift::extractHistoricalStreams/7#1",
       "Packages/WhoopProtocol/Sources/WhoopProtocol/HistoricalStreams.swift::wall/1#1",
       "Packages/WhoopProtocol/Sources/WhoopProtocol/HistoricalStreams.swift::correctedWall/1#1",
       "Packages/WhoopProtocol/Sources/WhoopProtocol/HistoricalStreams.swift::slot/1#1",
@@ -6156,7 +6171,7 @@
       "Packages/WhoopStore/Sources/WhoopStore/WhoopStore.swift::columnNamesForTest/1#1",
       "Packages/WhoopStore/Sources/WhoopStore/WhoopStore.swift::columnIsNullableWithoutDefaultForTest/2#1",
       "Packages/WhoopStore/Sources/WhoopStore/WhoopStore.swift::indexNamesForTest/1#1",
-      "Packages/StrandAnalytics/Sources/StrandAnalytics/AnalyticsEngine.swift::analyzeDay/31#1",
+      "Packages/StrandAnalytics/Sources/StrandAnalytics/AnalyticsEngine.swift::analyzeDay/32#1",
       "Packages/StrandAnalytics/Sources/StrandAnalytics/AnalyticsEngine.swift::vendorRespRateBpm/2#1",
       "Packages/StrandAnalytics/Sources/StrandAnalytics/AnalyticsMemo.swift::gravityQuant/3#1",
       "Packages/StrandAnalytics/Sources/StrandAnalytics/ReadinessTrainingLoad.swift::evaluateWithTrainingLoad/3#1",
@@ -6224,8 +6239,16 @@
       "android/app/src/main/java/com/noop/analytics/AnalyticsEngine.kt::tsInDay/1#1",
       "android/app/src/main/java/com/noop/analytics/AnalyticsEngine.kt::meanMs/1#1",
       "android/app/src/main/java/com/noop/analytics/AnalyticsEngine.kt::round2/1#1",
-      "android/app/src/main/java/com/noop/analytics/AnalyticsEngine.kt::wornNightlySkinTempC/6#1",
-      "android/app/src/main/java/com/noop/analytics/AnalyticsEngine.kt::skinTempFunnel/6#1",
+      "android/app/src/main/java/com/noop/analytics/AnalyticsEngine.kt::wornNightlySkinTempC/7#1",
+      "android/app/src/main/java/com/noop/analytics/AnalyticsEngine.kt::skinTempFunnel/7#1",
+      "android/app/src/main/java/com/noop/analytics/IntelligenceEngine.kt::skinTempWornToleranceSec/1#1",
+      "android/app/src/main/java/com/noop/analytics/RegistryDayOwnerSource.kt::skinTempWornToleranceSec/1#1",
+      "android/app/src/main/java/com/noop/data/BackupProvenance.kt::jsonString/1#1",
+      "android/app/src/main/java/com/noop/data/WhoopRepository.kt::advanceReadoutDataRevisions/2#1",
+      "android/app/src/main/java/com/noop/data/WhoopRepository.kt::publishReadoutRevisions/1#1",
+      "android/app/src/main/java/com/noop/ingest/RouteExport.kt::roundNearestTiesAwayFromZero/1#1",
+      "android/app/src/main/java/com/noop/oura/Decoders.kt::strictUtf8/1#1",
+      "android/app/src/main/java/com/noop/protocol/Streams.kt::longOrNull/1#1",
       "android/app/src/main/java/com/noop/analytics/AnalyticsEngine.kt::populationNeedFloorHours/1#1",
       "android/app/src/main/java/com/noop/analytics/AnalyticsEngine.kt::personalizedNeedHours/2#1",
       "android/app/src/main/java/com/noop/analytics/AnalyticsEngine.kt::rest/6#1",
@@ -8124,7 +8147,7 @@
       "android/app/src/main/java/com/noop/protocol/Whoop5RawOptical.kt::u32/1#1",
       "android/app/src/main/java/com/noop/protocol/Whoop5RawOptical.kt::i32/1#1",
       "android/app/src/main/java/com/noop/protocol/Whoop5Variant.kt::from/2#1",
-      "android/app/src/main/java/com/noop/analytics/AnalyticsEngine.kt::analyzeDay/31#1",
+      "android/app/src/main/java/com/noop/analytics/AnalyticsEngine.kt::analyzeDay/32#1",
       "android/app/src/main/java/com/noop/analytics/AnalyticsEngine.kt::vendorRespRateBpm/2#1",
       "android/app/src/main/java/com/noop/analytics/BreathProtocol.kt::invoke/3#1",
       "android/app/src/main/java/com/noop/analytics/IntelligenceEngine.kt::sweepPoint/1#1",
@@ -11373,8 +11396,8 @@
         "kotlin": "android/app/src/main/java/com/noop/protocol/Streams.kt::skinTempCelsius/3#1"
       },
       {
-        "swift": "Packages/StrandAnalytics/Sources/StrandAnalytics/AnalyticsEngine.swift::skinTempFunnel/6#1",
-        "kotlin": "android/app/src/main/java/com/noop/analytics/AnalyticsEngine.kt::skinTempFunnel/6#1"
+        "swift": "Packages/StrandAnalytics/Sources/StrandAnalytics/AnalyticsEngine.swift::skinTempFunnel/7#1",
+        "kotlin": "android/app/src/main/java/com/noop/analytics/AnalyticsEngine.kt::skinTempFunnel/7#1"
       },
       {
         "swift": "Packages/StrandAnalytics/Sources/StrandAnalytics/VitalBands.swift::skinTempHistory/2#1",
@@ -11837,8 +11860,8 @@
         "kotlin": "android/app/src/main/java/com/noop/ingest/ActivityFileImporter.kt::workoutSport/1#1"
       },
       {
-        "swift": "Packages/StrandAnalytics/Sources/StrandAnalytics/AnalyticsEngine.swift::wornNightlySkinTempC/6#1",
-        "kotlin": "android/app/src/main/java/com/noop/analytics/AnalyticsEngine.kt::wornNightlySkinTempC/6#1"
+        "swift": "Packages/StrandAnalytics/Sources/StrandAnalytics/AnalyticsEngine.swift::wornNightlySkinTempC/7#1",
+        "kotlin": "android/app/src/main/java/com/noop/analytics/AnalyticsEngine.kt::wornNightlySkinTempC/7#1"
       },
       {
         "swift": "Packages/StrandAnalytics/Sources/StrandAnalytics/FusionResolver.swift::worse/2#1",

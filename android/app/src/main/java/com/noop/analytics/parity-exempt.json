@@ -233,8 +233,8 @@
       "issue": 17
     },
     {
-      "key": "android/app/src/main/java/com/noop/analytics/AnalyticsEngine.kt::analyzeDay/31[defaults=2,3,4,5,6,7,8,9,10,11,12,13,14,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31]#1",
-      "reason": "Bootstrap debt signature updated for upstream #1450 in f40897ac71a0..140c8b3c44bf; the analyzeDay pipeline still has no differential or declared platform coverage proof.",
+      "key": "android/app/src/main/java/com/noop/analytics/AnalyticsEngine.kt::analyzeDay/32[defaults=2,3,4,5,6,7,8,9,10,11,12,13,14,15,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32]#1",
+      "reason": "Bootstrap debt signature updated for upstream #1463 / c5ea975a; the analyzeDay pipeline still has no differential or declared platform coverage proof.",
       "issue": 17
     },
     {
@@ -263,8 +263,8 @@
       "issue": 17
     },
     {
-      "key": "android/app/src/main/java/com/noop/analytics/AnalyticsEngine.kt::wornNightlySkinTempC/6[defaults=4,5,6]#1",
-      "reason": "Bootstrap debt: no differential or declared platform coverage proof yet.",
+      "key": "android/app/src/main/java/com/noop/analytics/AnalyticsEngine.kt::wornNightlySkinTempC/7[defaults=4,5,6,7]#1",
+      "reason": "Bootstrap debt signature updated for upstream #1467 / cec9c80d; no differential or declared platform coverage proof yet.",
       "issue": 17
     },
     {
@@ -348,8 +348,8 @@
       "issue": 17
     },
     {
-      "key": "android/app/src/main/java/com/noop/analytics/AnalyticsEngine.kt::skinTempFunnel/6[defaults=4,5,6]#1",
-      "reason": "Bootstrap debt: no differential or declared platform coverage proof yet.",
+      "key": "android/app/src/main/java/com/noop/analytics/AnalyticsEngine.kt::skinTempFunnel/7[defaults=4,5,6,7]#1",
+      "reason": "Bootstrap debt signature updated for upstream #1467 / cec9c80d; no differential or declared platform coverage proof yet.",
       "issue": 17
     },
     {
@@ -6718,12 +6718,32 @@
       "issue": 17
     },
     {
+      "key": "android/app/src/main/java/com/noop/analytics/AnalyticsEngine.kt::DEFAULT_OURA_WORN_TOLERANCE_SEC@property-initializer#1",
+      "reason": "Bootstrap debt: upstream #1467 / cec9c80d; Kotlin/JVM emits no executable coverage record for this constant property initializer.",
+      "issue": 17
+    },
+    {
+      "key": "android/app/src/main/java/com/noop/analytics/IntelligenceEngine.kt::skinTempWornToleranceSec/1[defaults=-]#1",
+      "reason": "Bootstrap debt: upstream #1467 / cec9c80d; interface default has no standalone differential or declared platform coverage proof.",
+      "issue": 17
+    },
+    {
+      "key": "android/app/src/main/java/com/noop/analytics/RegistryDayOwnerSource.kt::skinTempWornToleranceSec/1[defaults=-]#1",
+      "reason": "Bootstrap debt: upstream #1467 / cec9c80d; platform integration helper has no standalone differential or declared platform coverage proof.",
+      "issue": 17
+    },
+    {
       "key": "android/app/src/main/java/com/noop/analytics/SleepSessionDedup.kt::ONSET_KEY_GRID_SECONDS@property-initializer#1",
       "reason": "Bootstrap debt: upstream #1284 residual / 23a08f9a, imported range f40897ac71a0..140c8b3c44bf; Kotlin/JVM emits no executable coverage record for this constant property initializer.",
       "issue": 17
     }
   ],
   "platform-test": [
+    {
+        "key": "android/app/src/main/java/com/noop/analytics/StepsEstimateEngine.kt::isUsableCalibrationPoint/1[defaults=-]#1",
+        "test": "com.noop.analytics.StepsEstimateEngineTest.manualOverrideCountsOnlyUsableCalibrationDays; upstream #1469 / 3e3bff81",
+        "issue": 17
+    },
     {
         "key": "android/app/src/main/java/com/noop/analytics/AnalyticsEngine.kt::vendorRespRateBpm/2[defaults=-]#1",
         "test": "com.noop.analytics.VendorRespRateTest; upstream #1450 / b6b2f73f; imported range f40897ac71a0..140c8b3c44bf",

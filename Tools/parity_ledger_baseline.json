@@ -986,13 +986,6 @@
       "text": "Swift target AutoWorkoutDetector.detectedBoutLine does not resolve"
     },
     {
-      "identity": "test-only-callsite|android/app/src/main/java/com/noop/analytics/AutoWorkoutDetectorTrace.kt::lastSessionSummary/1#1",
-      "rule": "test-only-callsite",
-      "path": "android/app/src/main/java/com/noop/analytics/AutoWorkoutDetectorTrace.kt",
-      "line": 212,
-      "text": "WorkoutsReadout.lastSessionSummary/1 has 2 test callsite(s) and no production callsite"
-    },
-    {
       "identity": "test-only-callsite|android/app/src/main/java/com/noop/analytics/BreathPacer.kt::sessionDurationMs/2#1",
       "rule": "test-only-callsite",
       "path": "android/app/src/main/java/com/noop/analytics/BreathPacer.kt",
@@ -1035,27 +1028,6 @@
       "text": "ConnectionTrace.sessionHeldSuffix/1 has 4 test callsite(s) and no production callsite"
     },
     {
-      "identity": "test-only-callsite|android/app/src/main/java/com/noop/analytics/ConnectionReadout.kt::uptimeLabel/2#1",
-      "rule": "test-only-callsite",
-      "path": "android/app/src/main/java/com/noop/analytics/ConnectionReadout.kt",
-      "line": 126,
-      "text": "ConnectionReadout.uptimeLabel/2 has 4 test callsite(s) and no production callsite"
-    },
-    {
-      "identity": "test-only-callsite|android/app/src/main/java/com/noop/analytics/ConnectionReadout.kt::reconnectCount/1#1",
-      "rule": "test-only-callsite",
-      "path": "android/app/src/main/java/com/noop/analytics/ConnectionReadout.kt",
-      "line": 140,
-      "text": "ConnectionReadout.reconnectCount/1 has 2 test callsite(s) and no production callsite"
-    },
-    {
-      "identity": "test-only-callsite|android/app/src/main/java/com/noop/analytics/ConnectionReadout.kt::lastOffloadResult/1#1",
-      "rule": "test-only-callsite",
-      "path": "android/app/src/main/java/com/noop/analytics/ConnectionReadout.kt",
-      "line": 152,
-      "text": "ConnectionReadout.lastOffloadResult/1 has 3 test callsite(s) and no production callsite"
-    },
-    {
       "identity": "test-only-callsite|android/app/src/main/java/com/noop/analytics/ConnectionReadout.kt::sessionRows/1#1",
       "rule": "test-only-callsite",
       "path": "android/app/src/main/java/com/noop/analytics/ConnectionReadout.kt",
@@ -1096,13 +1068,6 @@
       "path": "android/app/src/main/java/com/noop/analytics/ConnectionReadout.kt",
       "line": 228,
       "text": "ConnectionReadout.lastFrameLabel/2 has 2 test callsite(s) and no production callsite"
-    },
-    {
-      "identity": "test-only-callsite|android/app/src/main/java/com/noop/analytics/DisplayTrace.kt::deviceMetricsNow/1#1",
-      "rule": "test-only-callsite",
-      "path": "android/app/src/main/java/com/noop/analytics/DisplayTrace.kt",
-      "line": 108,
-      "text": "DisplayReadout.deviceMetricsNow/1 has 2 test callsite(s) and no production callsite"
     },
     {
       "identity": "test-only-callsite|android/app/src/main/java/com/noop/analytics/DisplayTrace.kt::frameSummaryNow/1#1",
@@ -1194,13 +1159,6 @@
       "path": "android/app/src/main/java/com/noop/analytics/ImportTrace.kt",
       "line": 152,
       "text": "ImportTrace.safeExt/1 has 2 test callsite(s) and no production callsite"
-    },
-    {
-      "identity": "test-only-callsite|android/app/src/main/java/com/noop/analytics/ImportTrace.kt::lastImportSummary/1#1",
-      "rule": "test-only-callsite",
-      "path": "android/app/src/main/java/com/noop/analytics/ImportTrace.kt",
-      "line": 208,
-      "text": "ImportReadout.lastImportSummary/1 has 2 test callsite(s) and no production callsite"
     },
     {
       "identity": "test-only-callsite|android/app/src/main/java/com/noop/analytics/ImuFeatureExtractor.kt::extract/1#1",
@@ -1327,41 +1285,6 @@
       "text": "SleepMark.fromRow/1 has 3 test callsite(s) and no production callsite"
     },
     {
-      "identity": "test-only-callsite|android/app/src/main/java/com/noop/analytics/SleepReadout.kt::hrDensityPerMinute/1#1",
-      "rule": "test-only-callsite",
-      "path": "android/app/src/main/java/com/noop/analytics/SleepReadout.kt",
-      "line": 11,
-      "text": "SleepReadout.hrDensityPerMinute/1 has 3 test callsite(s) and no production callsite"
-    },
-    {
-      "identity": "test-only-callsite|android/app/src/main/java/com/noop/analytics/SleepReadout.kt::gravityCoverageFraction/2#1",
-      "rule": "test-only-callsite",
-      "path": "android/app/src/main/java/com/noop/analytics/SleepReadout.kt",
-      "line": 21,
-      "text": "SleepReadout.gravityCoverageFraction/2 has 2 test callsite(s) and no production callsite"
-    },
-    {
-      "identity": "test-only-callsite|android/app/src/main/java/com/noop/analytics/SleepReadout.kt::lastGateFired/1#1",
-      "rule": "test-only-callsite",
-      "path": "android/app/src/main/java/com/noop/analytics/SleepReadout.kt",
-      "line": 32,
-      "text": "SleepReadout.lastGateFired/1 has 3 test callsite(s) and no production callsite"
-    },
-    {
-      "identity": "test-only-callsite|android/app/src/main/java/com/noop/analytics/SleepReadout.kt::lastChargeBreakdown/1#1",
-      "rule": "test-only-callsite",
-      "path": "android/app/src/main/java/com/noop/analytics/SleepReadout.kt",
-      "line": 63,
-      "text": "TestReadout.lastChargeBreakdown/1 has 7 test callsite(s) and no production callsite"
-    },
-    {
-      "identity": "test-only-callsite|android/app/src/main/java/com/noop/analytics/SleepReadout.kt::lastHrvComputation/1#1",
-      "rule": "test-only-callsite",
-      "path": "android/app/src/main/java/com/noop/analytics/SleepReadout.kt",
-      "line": 96,
-      "text": "TestReadout.lastHrvComputation/1 has 2 test callsite(s) and no production callsite"
-    },
-    {
       "identity": "test-only-callsite|android/app/src/main/java/com/noop/analytics/SleepStageTotals.kt::bridgeAdjacent/1#1",
       "rule": "test-only-callsite",
       "path": "android/app/src/main/java/com/noop/analytics/SleepStageTotals.kt",
@@ -1395,20 +1318,6 @@
       "path": "android/app/src/main/java/com/noop/analytics/SpotHrvReading.kt",
       "line": 73,
       "text": "SpotHrvReading.compute/2 has 8 test callsite(s) and no production callsite"
-    },
-    {
-      "identity": "test-only-callsite|android/app/src/main/java/com/noop/analytics/StepsEstimateEngineTrace.kt::stepsToday/1#1",
-      "rule": "test-only-callsite",
-      "path": "android/app/src/main/java/com/noop/analytics/StepsEstimateEngineTrace.kt",
-      "line": 191,
-      "text": "StepsReadout.stepsToday/1 has 2 test callsite(s) and no production callsite"
-    },
-    {
-      "identity": "test-only-callsite|android/app/src/main/java/com/noop/analytics/StepsEstimateEngineTrace.kt::calibrationState/1#1",
-      "rule": "test-only-callsite",
-      "path": "android/app/src/main/java/com/noop/analytics/StepsEstimateEngineTrace.kt",
-      "line": 205,
-      "text": "StepsReadout.calibrationState/1 has 2 test callsite(s) and no production callsite"
     },
     {
       "identity": "test-only-callsite|android/app/src/main/java/com/noop/analytics/StrainScorer.kt::sampleDurationMinutes/1#1",
