@@ -61,6 +61,29 @@ class TestCentre internal constructor(private val prefs: SharedPreferences) {
         return CaptureSession(id, startedAt, prefs.getString(DEVICE_PREFIX + d.id, null))
     }
 
+    /**
+     * Repair an active test created by an older app version before capture-session identities existed.
+     * This is intentionally called at app startup: waiting until the export button is tapped would create
+     * a zero-duration ZIP and silently exclude the test the user just performed.
+     *
+     * Returns only a newly-created session, so the caller emits exactly one matching activation marker.
+     */
+    fun startMissingCaptureSession(
+        d: TestDomain,
+        deviceId: String? = null,
+        nowMs: Long = System.currentTimeMillis(),
+    ): CaptureSession? {
+        if (!active(d) || captureSession(d) != null) return null
+        val session = CaptureSession("${d.id}-$nowMs", nowMs / 1000L, deviceId)
+        val edit = prefs.edit()
+            .putLong(STARTED_PREFIX + d.id, session.startedAt)
+            .putString(SESSION_PREFIX + d.id, session.id)
+        if (deviceId == null) edit.remove(DEVICE_PREFIX + d.id)
+        else edit.putString(DEVICE_PREFIX + d.id, deviceId)
+        edit.apply()
+        return session
+    }
+
     fun answers(d: TestDomain): Map<String, String> {
         val raw = prefs.getString(ANSWERS_PREFIX + d.id, null) ?: return emptyMap()
         return runCatching {

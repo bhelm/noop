@@ -188,18 +188,23 @@ fun TestCentreScreen(vm: AppViewModel) {
                             scope.launch { pendingReport = buildPending(context, mode, vm.ble.exportLogText(), vm) }
                         },
                         onMatchedExport = if (StepsMatchedExport.visibleFor(mode.domain)) {
-                            {
-                                // Old installs (or MASTER-implied Steps) can be active without the new
-                                // session key. Start an honest session now; it will export as incomplete
-                                // until enough post-marker sensor rows have synced.
+                            export@{
+                                // Startup normally repairs an active legacy/Master-implied test. If that
+                                // invariant is ever broken, NEVER share a plausible-looking zero-second ZIP:
+                                // start capture explicitly, tell the user, and require a later export.
                                 val session = testCentre.captureSession(TestDomain.STEPS) ?: run {
-                                    testCentre.activate(TestDomain.STEPS, activeStrapId)
-                                    testCentre.captureSession(TestDomain.STEPS)!!.also {
+                                    testCentre.startMissingCaptureSession(TestDomain.STEPS, activeStrapId)?.let {
                                         vm.ble.externalLog(
                                             StepsMatchedExport.activationMarker(it),
                                             TestDomain.STEPS,
                                         )
                                     }
+                                    android.widget.Toast.makeText(
+                                        context,
+                                        "Steps capture had not started. It is running now; repeat the test before exporting.",
+                                        android.widget.Toast.LENGTH_LONG,
+                                    ).show()
+                                    return@export
                                 }
                                 LogExport.shareStepsControlSession(
                                     context = context,

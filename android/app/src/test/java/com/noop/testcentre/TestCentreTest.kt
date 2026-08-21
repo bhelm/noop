@@ -107,6 +107,26 @@ class TestCentreTest {
         assertNull(tc.captureSession(TestDomain.STEPS)?.deviceId)
     }
 
+    @Test fun activeLegacyStepsTestGetsSessionAtAppStartNotExportTime() {
+        val prefs = FakeSharedPreferences()
+        val tc = TestCentre(prefs)
+        tc.activate(TestDomain.STEPS)
+        prefs.map.remove("testcentre.session.steps")
+
+        val repaired = tc.startMissingCaptureSession(
+            TestDomain.STEPS,
+            deviceId = "strap-a",
+            nowMs = 1_787_330_400_000L,
+        )
+
+        assertEquals("steps-1787330400000", repaired?.id)
+        assertEquals(1_787_330_400L, repaired?.startedAt)
+        assertEquals("strap-a", repaired?.deviceId)
+        assertEquals(repaired, tc.captureSession(TestDomain.STEPS))
+        assertNull(tc.startMissingCaptureSession(TestDomain.STEPS, "strap-b", nowMs = 1_787_330_500_000L))
+        assertEquals("strap-a", tc.captureSession(TestDomain.STEPS)?.deviceId)
+    }
+
     @Test fun answersRoundTrip() {
         val tc = newCentre()
         assertEquals(emptyMap<String, String>(), tc.answers(TestDomain.BATTERY))

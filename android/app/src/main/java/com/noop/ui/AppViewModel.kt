@@ -785,6 +785,20 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         // existing WHOOP flow below runs unchanged; it only acts when a non-WHOOP strap is the active
         // device. The Devices screen (next task) calls onActiveDeviceChanged after a setActive.
         noopApp.sourceCoordinator.start()
+        // A Steps test may already be ON after upgrading from a build that pre-dates matched-session
+        // identities (or because MASTER implies Steps). Repair it at APP START, not when Export is tapped:
+        // export-time activation creates a zero-second ZIP and loses the control walk that just happened.
+        com.noop.testcentre.TestCentre.from(appContext)
+            .startMissingCaptureSession(
+                com.noop.testcentre.TestDomain.STEPS,
+                activeStrapId,
+            )
+            ?.let { session ->
+                ble.externalLog(
+                    com.noop.testcentre.StepsMatchedExport.activationMarker(session),
+                    com.noop.testcentre.TestDomain.STEPS,
+                )
+            }
         // #1410: on the first launch after an update, append an APP_VERSION_CHANGED event so a single
         // export can answer "what ran when". Idempotent — the stored last-seen version only advances
         // once the transition is recorded, so a background-only launch is caught on the next UI open.
