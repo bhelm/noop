@@ -1545,23 +1545,9 @@ fun TodayScreen(
                                     caloriesSpark = caloriesSpark,                    // #616: imported-first trend
                                     stepActivityClassForDay = stepActivityClassForDay,
                                     stepsEstimateCaption = stepsEstimateCaption(profileStore),
-                                    // Remembered on the calibration state it reads, matching the same
-                                    // preference lookup in SettingsScreen: this is a SharedPreferences
-                                    // read and the Today body recomposes with live HR.
-                                    //
-                                    // The strap model is a key too, because the prompt returns null for
-                                    // anything but a 4.0 -- and that key is rewritten under a composed
-                                    // Today, by Settings and by live detection in WhoopBleClient. Keyed
-                                    // only on the calibration values, a strap switch left the previous
-                                    // answer on screen until one of those happened to move. Re-reading
-                                    // the key per pass is a loaded-map lookup; what stays memoised is
-                                    // the rest of the prompt.
-                                    stepsCalibrationPrompt = remember(
-                                        profileStore.stepsCalibrationSampleDays,
-                                        profileStore.stepsCalibrationCoefficient,
-                                        profileStore.stepsCalibrationManual,
-                                        NoopPrefs.of(context).getString("noop.selectedWhoopModel", null),
-                                    ) { stepsCalibrationPrompt(context, profileStore) },
+                                    // Resolve the semantic engine headline at the composable UI boundary.
+                                    // This preference read is cheap and only feeds the otherwise-empty tile.
+                                    stepsCalibrationPrompt = stepsCalibrationPrompt(context, profileStore),
                                     restScore = restScoreForDay,
                                     restSpark = restCompositeSpark,
                                     enabledMetrics = enabledKeyMetrics,
@@ -3690,6 +3676,7 @@ private fun DashboardCardRow(
  *  The wording is the engine's own [StepsEstimateEngine.CalibrationStatus.headline], which already says
  *  "connect your phone's step count" when NO day has both motion and a phone total, rather than a
  *  countdown that would never advance. */
+@Composable
 private fun stepsCalibrationPrompt(context: Context, profileStore: ProfileStore): String? {
     val model = context.getSharedPreferences(NoopPrefs.NAME, Context.MODE_PRIVATE)
         .getString("noop.selectedWhoopModel", null) ?: return null
@@ -3709,10 +3696,19 @@ private fun stepsCalibrationPrompt(context: Context, profileStore: ProfileStore)
     ) {
         return null
     }
-    return StepsEstimateEngine.CalibrationStatus.NeedsMoreDays(
+    val headline = StepsEstimateEngine.CalibrationStatus.NeedsMoreDays(
         have = profileStore.stepsCalibrationSampleDays,
         need = StepsEstimateEngine.MIN_CALIBRATION_DAYS,
     ).headline
+    return when (headline) {
+        StepsEstimateEngine.CalibrationStatus.Headline.Manual -> uiString(R.string.today_steps_headline_manual)
+        is StepsEstimateEngine.CalibrationStatus.Headline.Calibrated ->
+            uiString(R.string.today_steps_headline_calibrated, headline.sampleDays)
+        StepsEstimateEngine.CalibrationStatus.Headline.ConnectPhoneSteps ->
+            uiString(R.string.today_steps_headline_connect_phone)
+        is StepsEstimateEngine.CalibrationStatus.Headline.NeedMoreDays ->
+            uiString(R.string.today_steps_headline_more_days, headline.remaining)
+    }
 }
 
 /** #760/#792: the caption under an ESTIMATED Steps tile: "est. · <status detail>", where the detail is the
