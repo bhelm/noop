@@ -182958,6 +182958,64 @@
         }
       }
     },
+    "below baseline, limiting recovery, though low resting HR suggests this may be parasympathetic saturation rather than fatigue": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "unter der Basislinie, bremst die Erholung; die niedrige Ruheherzfrequenz deutet jedoch darauf hin, dass es sich eher um parasympathische Sättigung als um Ermüdung handeln könnte"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "por debajo de tu línea base, limita la recuperación, aunque la baja frecuencia cardíaca en reposo sugiere que podría tratarse de saturación parasimpática en lugar de fatiga"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "en dessous de la référence, limite la récupération, bien qu’une faible fréquence cardiaque au repos suggère qu’il pourrait s’agir d’une saturation parasympathique plutôt que de fatigue"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "sotto la linea di base, limita il recupero, anche se la bassa frequenza cardiaca a riposo suggerisce che potrebbe trattarsi di saturazione parasimpatica anziché affaticamento"
+          }
+        },
+        "pt-PT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "abaixo do valor de referência, limita a recuperação, embora a frequência cardíaca baixa em repouso sugira que possa tratar-se de saturação parassimpática em vez de fadiga"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ниже нормы, ограничивает восстановление, однако низкий пульс в покое указывает, что причиной может быть парасимпатическое насыщение, а не усталость"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "低于基线，限制恢复，但较低的静息心率表明这可能是副交感饱和，而非疲劳"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "低於基線，限制恢復，但較低的靜息心率顯示這可能是副交感飽和，而非疲勞"
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "poniżej wartości wyjściowej, ogranicza regenerację, choć niskie tętno spoczynkowe sugeruje, że może to być nasycenie przywspółczulne, a nie zmęczenie"
+          }
+        }
+      }
+    },
     "below baseline, supporting recovery": {
       "localizations": {
         "de": {

@@ -406,6 +406,30 @@ class HomeLocalizationTest(unittest.TestCase):
         self.assertIn("return LocalizedStringKey(formattedDay)", source)
         self.assertNotIn('return "\\(selectedDay.formatted(', source)
 
+    def test_apple_charge_driver_verdicts_are_complete_catalog_keys(self) -> None:
+        source = (ROOT / "Packages/StrandAnalytics/Sources/StrandAnalytics/ChargeDrivers.swift").read_text(
+            encoding="utf-8"
+        )
+        verdict_block = source.split("// MARK: - Plain-English verdicts", 1)[1].split(
+            "static func skinTempDevText", 1
+        )[0]
+        verdicts = set(re.findall(r'(?:return|\?|:)\s*"([^"]+)"', verdict_block))
+        # Thirteen return paths currently collapse to twelve unique keys because several helpers share
+        # "at baseline". Pin the unique-key set size so syntax changes cannot silently evade extraction.
+        self.assertEqual(12, len(verdicts), "Verdict extraction changed; review the catalog contract")
+
+        catalog = audit.load_catalog(ROOT / "Strand/Resources/Localizable.xcstrings")
+        missing = []
+        for verdict in sorted(verdicts):
+            entry = audit.swift_catalog_lookup(catalog, verdict)
+            if entry is None:
+                missing.append(f"all: {verdict!r} absent from catalog")
+                continue
+            for lang in audit.LANGS:
+                if not audit._is_translated(entry, lang):
+                    missing.append(f"{lang}: {verdict!r}")
+        self.assertEqual([], missing, "Missing Charge-driver verdict translations:\n" + "\n".join(missing))
+
     def test_apple_home_catalog_entries_cover_focus_locales(self) -> None:
         missing: list[str] = []
         catalogs: dict[Path, dict] = {}
