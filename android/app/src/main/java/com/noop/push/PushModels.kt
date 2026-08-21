@@ -63,13 +63,28 @@ data class PushWindow(
                 endTsExclusive = today.plusDays(1).atStartOfDay(zoneId).toEpochSecond(),
             )
         }
+
+        fun days(from: LocalDate, to: LocalDate, zoneId: ZoneId): PushWindow {
+            require(!to.isBefore(from))
+            return PushWindow(
+                fromDay = from.toString(),
+                toDay = to.toString(),
+                startTsInclusive = from.atStartOfDay(zoneId).toEpochSecond(),
+                endTsExclusive = to.plusDays(1).atStartOfDay(zoneId).toEpochSecond(),
+            )
+        }
     }
 }
 
 /** Persisted and transmitted cursor. The fingerprint is SHA-256, never raw key material. */
 data class PushCursor(val rowId: Long, val naturalKeyFingerprint: String)
 
-data class PushWindowProgress(val window: PushWindow, val batchId: String)
+data class PushWindowProgress(
+    val window: PushWindow,
+    val batchId: String,
+    /** Canonical SHA-256 per local calendar day; absent on pre-checksum installations. */
+    val dayHashes: Map<String, String> = emptyMap(),
+)
 
 /** Fully materialized bounded request; no Room transaction survives into transport. */
 data class PushBatch(

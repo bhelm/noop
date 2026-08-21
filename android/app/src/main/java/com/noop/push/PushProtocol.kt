@@ -183,6 +183,21 @@ object PushProtocol {
         return encodeRecordLine(record).size
     }
 
+    /** Stable local content identity. It is progress metadata and is never sent to the receiver. */
+    internal fun mutableSnapshotHash(
+        table: PushMutableTable,
+        records: List<PushMutableRecord>,
+    ): String {
+        val lines = records.map { record ->
+            validateRecord(table, record.key, record.data)
+            encodeRecordLine(record)
+        }.sortedWith { left, right -> compareBytes(left, right) }
+        val digest = MessageDigest.getInstance("SHA-256")
+        digest.update("noop-push-day-hash\n$VERSION\n${table.wireName}\n".toByteArray(Charsets.UTF_8))
+        lines.forEach(digest::update)
+        return digest.digest().joinToString("") { "%02x".format(it.toInt() and 0xff) }
+    }
+
     internal fun canonicalJson(value: Any?): String = buildString { appendCanonical(value, sortMaps = true) }
 
     private fun orderedObjectJson(value: Map<String, Any?>): String = buildString {
@@ -365,6 +380,15 @@ object PushProtocol {
             offset += line.size
         }
         return out
+    }
+
+    private fun compareBytes(left: ByteArray, right: ByteArray): Int {
+        val common = minOf(left.size, right.size)
+        for (index in 0 until common) {
+            val difference = (left[index].toInt() and 0xff) - (right[index].toInt() and 0xff)
+            if (difference != 0) return difference
+        }
+        return left.size - right.size
     }
 
     private fun validateRecord(table: PushTable, key: Map<String, Any?>, data: Map<String, Any?>) {

@@ -158,6 +158,149 @@ class PushCoordinatorTest {
             transport.batches.single().replacementId,
             progress.windows[key(PushMutableTable.JOURNAL, "noop-journal")]?.batchId,
         )
+        assertEquals(14, progress.windows[key(PushMutableTable.JOURNAL, "noop-journal")]?.dayHashes?.size)
+    }
+
+    @Test
+    fun unchangedMutableDaysSkipEveryHttpBatch() = runBlocking {
+        val source = FakePushSource(
+            mutable = mutableMapOf(
+                key(PushMutableTable.JOURNAL, "a") to mutableListOf(journal("2026-08-18", "coffee")),
+            ),
+        )
+        val progress = MemoryProgress()
+        val today = { LocalDate.of(2026, 8, 18) }
+        val first = AckingTransport()
+        val coordinator = PushCoordinator(source, first, progress, SOURCE_A, today, ZoneId.of("UTC"))
+
+        assertTrue(coordinator.pushMutable(PushMutableTable.JOURNAL, "a") is PushResult.Accepted)
+        assertEquals(1, first.batches.size)
+
+        val unchanged = AckingTransport()
+        val result = PushCoordinator(source, unchanged, progress, SOURCE_A, today, ZoneId.of("UTC"))
+            .pushMutable(PushMutableTable.JOURNAL, "a")
+
+        assertEquals(PushResult.NoData, result)
+        assertTrue(unchanged.batches.isEmpty())
+    }
+
+    @Test
+    fun oneChangedDaySendsOnlyThatAuthoritativeDay() = runBlocking {
+        val source = FakePushSource(
+            mutable = mutableMapOf(
+                key(PushMutableTable.JOURNAL, "a") to mutableListOf(
+                    journal("2026-08-17", "coffee", notes = "old"),
+                    journal("2026-08-18", "exercise", notes = "same"),
+                ),
+            ),
+        )
+        val progress = MemoryProgress()
+        val today = { LocalDate.of(2026, 8, 18) }
+        PushCoordinator(source, AckingTransport(), progress, SOURCE_A, today, ZoneId.of("UTC"))
+            .pushMutable(PushMutableTable.JOURNAL, "a")
+        source.mutable.getValue(key(PushMutableTable.JOURNAL, "a"))[0] =
+            journal("2026-08-17", "coffee", notes = "changed")
+
+        val changed = AckingTransport()
+        val result = PushCoordinator(source, changed, progress, SOURCE_A, today, ZoneId.of("UTC"))
+            .pushMutable(PushMutableTable.JOURNAL, "a")
+
+        assertTrue(result is PushResult.Accepted)
+        val batch = changed.batches.single()
+        assertEquals("2026-08-17", batch.window?.fromDay)
+        assertEquals("2026-08-17", batch.window?.toDay)
+        assertEquals(1, batch.recordCount)
+        assertTrue(batch.body.toString(Charsets.UTF_8).contains("changed"))
+        assertFalse(batch.body.toString(Charsets.UTF_8).contains("exercise"))
+    }
+
+    @Test
+    fun legacyWindowProgressWithoutDailyHashesForcesOneFullBaseline() = runBlocking {
+        val source = FakePushSource(
+            mutable = mutableMapOf(
+                key(PushMutableTable.JOURNAL, "a") to mutableListOf(journal("2026-08-18", "coffee")),
+            ),
+        )
+        val progress = MemoryProgress().apply {
+            windows[key(PushMutableTable.JOURNAL, "a")] = PushWindowProgress(
+                PushWindow.days(LocalDate.of(2026, 8, 5), LocalDate.of(2026, 8, 18), ZoneId.of("UTC")),
+                "legacy-batch",
+            )
+        }
+        val transport = AckingTransport()
+
+        PushCoordinator(
+            source, transport, progress, SOURCE_A,
+            today = { LocalDate.of(2026, 8, 18) }, zoneId = ZoneId.of("UTC"),
+        ).pushMutable(PushMutableTable.JOURNAL, "a")
+
+        assertEquals("2026-08-05", transport.batches.single().window?.fromDay)
+        assertEquals("2026-08-18", transport.batches.single().window?.toDay)
+        assertEquals(14, progress.windows.getValue(key(PushMutableTable.JOURNAL, "a")).dayHashes.size)
+    }
+
+    @Test
+    fun timestampSelectedStreamUsesLocalMidnightForChangedDay() = runBlocking {
+        val zone = ZoneId.of("Europe/Berlin")
+        val day = LocalDate.of(2026, 8, 17)
+        val startTs = day.atTime(23, 30).atZone(zone).toEpochSecond()
+        val source = FakePushSource(
+            mutable = mutableMapOf(
+                key(PushMutableTable.SLEEP_SESSION, "a") to mutableListOf(sleep(startTs, efficiency = 0.80)),
+            ),
+        )
+        val progress = MemoryProgress()
+        val today = { LocalDate.of(2026, 8, 18) }
+        PushCoordinator(source, AckingTransport(), progress, SOURCE_A, today, zone)
+            .pushMutable(PushMutableTable.SLEEP_SESSION, "a")
+        source.mutable.getValue(key(PushMutableTable.SLEEP_SESSION, "a"))[0] =
+            sleep(startTs, efficiency = 0.90)
+
+        val changed = AckingTransport()
+        PushCoordinator(source, changed, progress, SOURCE_A, today, zone)
+            .pushMutable(PushMutableTable.SLEEP_SESSION, "a")
+
+        val window = changed.batches.single().window ?: error("missing window")
+        assertEquals(day.toString(), window.fromDay)
+        assertEquals(day.toString(), window.toDay)
+        assertEquals(day.atStartOfDay(zone).toEpochSecond(), window.startTsInclusive)
+        assertEquals(day.plusDays(1).atStartOfDay(zone).toEpochSecond(), window.endTsExclusive)
+    }
+
+    @Test
+    fun deletingLastRowSendsOneEmptyDayAndFailedAckKeepsOldHash() = runBlocking {
+        val source = FakePushSource(
+            mutable = mutableMapOf(
+                key(PushMutableTable.JOURNAL, "a") to mutableListOf(journal("2026-08-17", "coffee")),
+            ),
+        )
+        val progress = MemoryProgress()
+        val today = { LocalDate.of(2026, 8, 18) }
+        PushCoordinator(source, AckingTransport(), progress, SOURCE_A, today, ZoneId.of("UTC"))
+            .pushMutable(PushMutableTable.JOURNAL, "a")
+        val acceptedHashes = progress.windows.getValue(key(PushMutableTable.JOURNAL, "a")).dayHashes
+        source.mutable.getValue(key(PushMutableTable.JOURNAL, "a")).clear()
+        val rejecting = object : PushTransport {
+            val batches = mutableListOf<PushBatch>()
+            override suspend fun post(batch: PushBatch): PushTransportResponse {
+                batches += batch
+                return PushTransportResponse(500, ByteArray(0))
+            }
+        }
+
+        val rejected = PushCoordinator(source, rejecting, progress, SOURCE_A, today, ZoneId.of("UTC"))
+            .pushMutable(PushMutableTable.JOURNAL, "a")
+
+        assertTrue(rejected is PushResult.Rejected)
+        assertEquals("2026-08-17", rejecting.batches.single().window?.fromDay)
+        assertEquals(0, rejecting.batches.single().recordCount)
+        assertEquals(acceptedHashes, progress.windows.getValue(key(PushMutableTable.JOURNAL, "a")).dayHashes)
+
+        val retry = AckingTransport()
+        PushCoordinator(source, retry, progress, SOURCE_A, today, ZoneId.of("UTC"))
+            .pushMutable(PushMutableTable.JOURNAL, "a")
+        assertEquals("2026-08-17", retry.batches.single().window?.fromDay)
+        assertEquals(0, retry.batches.single().recordCount)
     }
 
     @Test
@@ -349,6 +492,27 @@ internal fun hr(rowId: Long, ts: Long) = PushAppendRecord(
     rowId,
     linkedMapOf("ts" to ts),
     linkedMapOf("bpm" to 60),
+)
+
+internal fun journal(day: String, question: String, notes: String? = null) = PushMutableRecord(
+    linkedMapOf("day" to day, "question" to question),
+    linkedMapOf("answeredYes" to true, "notes" to notes, "numericValue" to null),
+)
+
+internal fun sleep(startTs: Long, efficiency: Double) = PushMutableRecord(
+    linkedMapOf("startTs" to startTs),
+    linkedMapOf(
+        "endTs" to startTs + 8 * 60 * 60,
+        "efficiency" to efficiency,
+        "restingHr" to null,
+        "avgHrv" to null,
+        "stagesJSON" to null,
+        "userEdited" to false,
+        "startTsAdjusted" to null,
+        "motionJSON" to null,
+        "sleepStateJSON" to null,
+        "stagingSparse" to null,
+    ),
 )
 
 internal class FakePushSource(

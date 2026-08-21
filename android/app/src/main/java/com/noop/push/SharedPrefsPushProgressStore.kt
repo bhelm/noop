@@ -44,6 +44,7 @@ class SharedPrefsPushProgressStore private constructor(
                 endTsExclusive = prefs.getLong("$prefix.end", 0L),
             ),
             batch,
+            parseDayHashes(prefs.getString("$prefix.dayHashes", null)),
         )
     }
 
@@ -55,15 +56,39 @@ class SharedPrefsPushProgressStore private constructor(
             .putString("$prefix.to", progress.window.toDay)
             .putLong("$prefix.start", progress.window.startTsInclusive)
             .putLong("$prefix.end", progress.window.endTsExclusive)
+            .putString("$prefix.dayHashes", encodeDayHashes(progress.dayHashes))
             .commit()) { "Could not persist push window" }
     }
 
     private fun key(kind: String, table: String, deviceId: String): String =
         "$kind.$table.${sha256(deviceId)}"
 
+    private fun encodeDayHashes(hashes: Map<String, String>): String {
+        check(hashes.all { (day, hash) ->
+            runCatching { java.time.LocalDate.parse(day) }.isSuccess && hash.matches(HASH_PATTERN)
+        }) { "Invalid mutable day hash progress" }
+        return hashes.toSortedMap().entries.joinToString(",") { (day, hash) -> "$day:$hash" }
+    }
+
+    private fun parseDayHashes(encoded: String?): Map<String, String> {
+        if (encoded.isNullOrEmpty()) return emptyMap()
+        return runCatching {
+            encoded.split(',').associate { item ->
+                val separator = item.indexOf(':')
+                require(separator > 0)
+                val day = item.substring(0, separator)
+                val hash = item.substring(separator + 1)
+                java.time.LocalDate.parse(day)
+                require(hash.matches(HASH_PATTERN))
+                day to hash
+            }
+        }.getOrDefault(emptyMap())
+    }
+
     companion object {
         private const val PREFS = "self_hosted_push_progress"
         private const val KEY_DEVICES = "known_devices"
+        private val HASH_PATTERN = Regex("[0-9a-f]{64}")
 
         fun from(context: Context) = SharedPrefsPushProgressStore(
             SecurePrefs.of(context.applicationContext, PREFS),
