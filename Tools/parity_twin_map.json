@@ -1,0 +1,37 @@
+{
+  "schema_version": 3,
+  "derivation": "parity_ledger.build_twin_map/v3",
+  "scope": {
+    "swift_roots": [
+      "Packages/StrandAnalytics/Sources",
+      "Packages/StrandImport/Sources",
+      "Packages/WhoopStore/Sources",
+      "Packages/WhoopProtocol/Sources",
+      "Packages/OuraProtocol/Sources"
+    ],
+    "kotlin_roots": [
+      "android/app/src/main/java/com/noop/analytics",
+      "android/app/src/main/java/com/noop/ingest",
+      "android/app/src/main/java/com/noop/data",
+      "android/app/src/main/java/com/noop/protocol",
+      "android/app/src/main/java/com/noop/oura"
+    ]
+  },
+  "authority": {
+    "files": {"count": 405, "sha256": "76aa5175efaf188b55f588493b8bd29fc2d9ce0d80c3563f6b2b9c813adc76f1"},
+    "functions": {"count": 3653, "sha256": "7e6c143e314baf60860fdf1458abb3a5729f76f4a23e471034947494ab295b0c"},
+    "properties": {"count": 404, "sha256": "9ea20c9f4cc36d6e19fed40b46a544331da99ac7fa5ad8d3c9f59601b69f6a43"},
+    "constants": {"count": 1676, "sha256": "f920a5e0af395591f41b0bb41c1bd7f43d5713cdcdfa30e60033a498562a8cc2"},
+    "file_pairs": {"count": 32, "sha256": "f1b67fe10159e42debc9a4bd9aa3c7964c874cf7d77e676020d7724eb1142210"},
+    "function_pairs": {"count": 71, "sha256": "9b8f92f327806d66a8e3d4aa7caefe477c287b8d01aec7176c530d6641498f82"},
+    "property_pairs": {"count": 134, "sha256": "b757904f974c6a101c4d6c910c8e358b6d37ee95f8d28871a814dc103a8b95de"},
+    "constant_pairs": {"count": 590, "sha256": "266e47afaf0a9adf8a29c57117926ace5cb331fc51a3c199eaa186f536313eb9"},
+    "unpaired_files": {"count": 349, "sha256": "d5e4832ac0d563bda5f9a30326a28eaf077b2b07aa6b8ed44485bc44ff1b79f5"},
+    "unpaired_functions": {"count": 3514, "sha256": "b17969743ab2d67a18b717c1f0f2414e172bcc7154333e2f1216ce3bcfbfcc2c"},
+    "unpaired_properties": {"count": 136, "sha256": "18bb71d1856310804c9154439080fb5c7530a98773421108020376a71aad5577"},
+    "unpaired_constants": {"count": 496, "sha256": "0a887980a5ded1091bc7d123e2fc0f75bfe861b5be407b105514b0baa47d17db"}
+  },
+  "exemptions": [
+    {"kind": "bootstrap-unpaired-function", "identity": "swift\u0000Packages/StrandAnalytics/Sources/StrandAnalytics/HRVAnalyzer.swift::sdnnIndex/2#1", "identity_sha256": "68f0c52d6b2011b800189c9d8337a4df5f4432be70df8e42ae1bfbc97156fca7", "issue": "bhelm/noop#18", "reason": "Issue 18 records the exact existing Swift-only sdnnIndex declaration and missing Kotlin twin."}
+  ]
+}
