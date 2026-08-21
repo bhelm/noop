@@ -23,7 +23,7 @@ class ReportCompletenessParityTest {
         assertEquals("session event=", ReportCompleteness.killerTokens[TestDomain.WORKOUTS])
         assertEquals("dataVolume dbRows=", ReportCompleteness.killerTokens[TestDomain.DISPLAY])
         assertEquals("import parser=", ReportCompleteness.killerTokens[TestDomain.IMPORT])
-        assertEquals("stepsEst ", ReportCompleteness.killerTokens[TestDomain.STEPS])
+        assertEquals("stepsCycle wakeDay=", ReportCompleteness.killerTokens[TestDomain.STEPS])
         assertEquals("battery series=", ReportCompleteness.killerTokens[TestDomain.BATTERY])
         assertEquals("charge score=", ReportCompleteness.killerTokens[TestDomain.RECOVERY])
         assertEquals("hrv rmssd=", ReportCompleteness.killerTokens[TestDomain.HRV])
@@ -32,6 +32,29 @@ class ReportCompletenessParityTest {
         assertFalse(ReportCompleteness.killerTokens.containsKey(TestDomain.NOTIFICATIONS))
         assertFalse(ReportCompleteness.killerTokens.containsKey(TestDomain.SOURCES))
         assertFalse(ReportCompleteness.killerTokens.containsKey(TestDomain.MASTER))
+    }
+
+    @Test fun stepsRequiresThePhysiologicalCycleAndItsDecisionBreakdown() {
+        val complete = "[steps] stepsCycle wakeDay=2026-08-21 status=active onsetTs=100 endTs=200 " +
+            "owner=my-whoop pages=2 samples=12001 totalTicks=37 outside=20 awakeGap=9 " +
+            "sleepBout=8 rejectedIsolatedSleep=4 scaledSteps=37"
+        assertEquals(
+            ReportCompleteness.Status.PRESENT,
+            ReportCompleteness.statuses(complete, setOf(TestDomain.STEPS))[TestDomain.STEPS],
+        )
+
+        val oldCalendarTrace = "[steps] stepsEst day=2026-08-21 steps=410"
+        assertEquals(
+            ReportCompleteness.Status.MISSING,
+            ReportCompleteness.statuses(oldCalendarTrace, setOf(TestDomain.STEPS))[TestDomain.STEPS],
+        )
+
+        val missingBreakdown = "[steps] stepsCycle wakeDay=2026-08-21 status=active scaledSteps=37"
+        assertEquals(
+            "a count without accept/reject evidence is not a useful control capture",
+            ReportCompleteness.Status.MISSING,
+            ReportCompleteness.statuses(missingBreakdown, setOf(TestDomain.STEPS))[TestDomain.STEPS],
+        )
     }
 
     @Test fun universalIsAlwaysCheckedEvenWithNoActiveMode() {

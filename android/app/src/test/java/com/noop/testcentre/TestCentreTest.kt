@@ -90,6 +90,23 @@ class TestCentreTest {
         assertTrue((tc.startedAt(TestDomain.SLEEP) ?: 0L) > 0L)
     }
 
+    @Test fun stepsActivationCreatesOneStableExportSessionIdentity() {
+        val tc = newCentre()
+        tc.activate(TestDomain.STEPS, deviceId = "strap-a")
+        val first = tc.captureSession(TestDomain.STEPS)
+        assertTrue(first != null)
+        assertTrue(first!!.id.startsWith("steps-"))
+        assertEquals(tc.startedAt(TestDomain.STEPS), first.startedAt)
+        assertEquals("strap-a", first.deviceId)
+        assertEquals(first, tc.captureSession(TestDomain.STEPS))
+    }
+
+    @Test fun legacySessionWithoutDeviceNeverInventsTheCurrentStrap() {
+        val tc = newCentre()
+        tc.activate(TestDomain.STEPS)
+        assertNull(tc.captureSession(TestDomain.STEPS)?.deviceId)
+    }
+
     @Test fun answersRoundTrip() {
         val tc = newCentre()
         assertEquals(emptyMap<String, String>(), tc.answers(TestDomain.BATTERY))

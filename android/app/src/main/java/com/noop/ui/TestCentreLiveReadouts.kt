@@ -106,7 +106,7 @@ internal object TestCentreLiveReadouts {
                     id, "Last import", ImportReadout.lastImportSummary(tail) ?: "no import yet",
                 )
                 "stepsToday" -> LiveReadoutRow(
-                    id, "Current algorithm", StepsReadout.stepsToday(tail)?.toString() ?: "no estimate yet",
+                    id, "Active physiological cycle", StepsReadout.stepsToday(tail)?.toString() ?: "no cycle yet",
                 )
                 "shadowSteps" -> LiveReadoutRow(
                     id, "Shadow candidate", StepsReadout.shadowSteps(tail)?.toString() ?: "no candidate yet",

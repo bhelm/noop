@@ -60,6 +60,8 @@ import com.noop.protocol.whoopGattScanDecision
 import com.noop.analytics.Baselines
 import com.noop.analytics.BatterySocLine
 import com.noop.analytics.IntelligenceEngine
+import com.noop.analytics.RegistryDayOwnerSource
+import com.noop.NoopApplication
 import com.noop.analytics.NapDetector
 import com.noop.analytics.NapPrefs
 import com.noop.analytics.NapVerdict
@@ -430,6 +432,11 @@ class WhoopBleClient(
      */
     private val gattOpsFactory: (BluetoothGatt) -> GattOps = ::RealGattOps,
 ) {
+
+    /** Same registry-backed owner resolver the UI rescore uses; null only in isolated test contexts. */
+    private val analyticsOwnerSource: IntelligenceEngine.DayOwnerSource? by lazy {
+        (context.applicationContext as? NoopApplication)?.let { RegistryDayOwnerSource(it.deviceRegistry) }
+    }
 
     companion object {
         private const val TAG = "WhoopBleClient"
@@ -2380,6 +2387,7 @@ class WhoopBleClient(
                         repo = repository,
                         profile = profile,
                         importedDeviceId = deviceId,
+                        ownerSource = analyticsOwnerSource,
                         maxHROverride = profileStore.hrMaxOverride.takeIf { it > 0 }?.toDouble(),
                         // Steps-estimate calibration: honor the user's manual override and persist the fit
                         // after a backfill too, so the Settings/Steps screen reflects the latest data.

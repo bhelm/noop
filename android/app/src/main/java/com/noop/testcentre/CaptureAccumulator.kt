@@ -14,7 +14,8 @@ import com.noop.analytics.AnalyticsEngine
  * This is the honest replacement: for a given domain, count the DISTINCT local calendar days that domain's
  * own tagged trace lines carry, so each active mode INDEPENDENTLY accumulates its own count off the
  * shareable strap log. Sleep counts nights (its `sleep day=` / `gate run=` lines), Battery counts days
- * (its `bank soc=... t=<unix>s` samples, folded to a local day), Steps counts days (`stepsRaw day=`), and
+ * (its `bank soc=... t=<unix>s` samples, folded to a local day), Steps counts physiological wake-days
+ * (`stepsCycle wakeDay=`), and
  * the universal `dayOwner day=` line accumulates once per scored day for the universal row.
  *
  * Pure + side-effect-free: it takes the domain, the already-redacted report text and a timezone offset and
@@ -42,13 +43,13 @@ object CaptureAccumulator {
      */
     val markers: Map<TestDomain, DayMarker> = linkedMapOf(
         TestDomain.SLEEP to DayMarker.DayKey(listOf("sleep day=", "gate run=")),
-        TestDomain.STEPS to DayMarker.DayKey(listOf("stepsRaw", "stepsEst day=")),
+        TestDomain.STEPS to DayMarker.DayKey(listOf("stepsCycle wakeDay=")),
         TestDomain.RECOVERY to DayMarker.DayKey(listOf("charge ")),
         TestDomain.BATTERY to DayMarker.Epoch(listOf("bank soc=")),
         TestDomain.UNIVERSAL to DayMarker.DayKey(listOf("dayOwner ")),
     )
 
-    private val dayKeyRegex = Regex("day=([0-9]{4}-[0-9]{2}-[0-9]{2})")
+    private val dayKeyRegex = Regex("(?:day|wakeDay)=([0-9]{4}-[0-9]{2}-[0-9]{2})")
     private val epochRegex = Regex("""\bt=([0-9]{6,})s""")
 
     /**

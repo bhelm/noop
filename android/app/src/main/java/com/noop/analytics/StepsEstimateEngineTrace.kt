@@ -273,6 +273,13 @@ object StepsReadout {
     /** Today's steps for the `stepsToday` id: the most recent scaled-steps figure in the tagged tail (the
      *  5/MG `scaledSteps=` or the WHOOP-4 `stepsEst ... steps=`). null when no step line is present yet. */
     fun stepsToday(taggedTail: List<String>): Int? {
+        // The dashboard value is a sleep-onset cycle now. Prefer it explicitly over a later replayed
+        // calendar/raw diagnostic line; the latter remains useful evidence but is no longer "Today".
+        for (line in taggedTail.asReversed()) {
+            if (!line.contains("stepsCycle ")) continue
+            val n = intField(line, "scaledSteps=")
+            if (n != null) return n
+        }
         for (line in taggedTail.asReversed()) {
             val n = intField(line, "scaledSteps=")
             if (n != null) return n

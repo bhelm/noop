@@ -14,7 +14,6 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
-import kotlin.math.roundToLong
 
 /*
  * IntelligenceEngine.kt , on-device "intelligence": computes recovery / day-strain /
@@ -41,6 +40,138 @@ import kotlin.math.roundToLong
  * caller (AppViewModel) lets the flow refresh the UI. All `ts` are unix SECONDS (Long).
  */
 object IntelligenceEngine {
+    /** Marker persisted beside a cycle total so Today can resolve steps independently of LogicalDay 04:00. */
+    const val STEPS_CYCLE_ONSET_KEY = "steps_cycle_onset_ts"
+
+    /**
+     * Calendar totals are a cold-start fallback only. Once any physiological boundary is established,
+     * a wake-day without a boundary is part of the preceding still-open cycle and must not receive the
+     * same ticks a second time under its calendar key.
+     */
+    internal fun integratedStepValue(
+        calendarSteps: Int?,
+        hasEstablishedCycle: Boolean,
+        cycleSteps: Int?,
+    ): Int? = if (hasEstablishedCycle) cycleSteps else calendarSteps
+
+    /** Marker cleanup must cover every computed namespace that persisted recovery can inspect. */
+    internal fun stepMarkerRewriteSourceIds(
+        currentComputedSources: List<String>,
+        candidateComputedSources: List<String>,
+    ): List<String> = (currentComputedSources + candidateComputedSources).distinct()
+
+    /** A persisted boundary is usable only together with the exact main-sleep row that produced it. */
+    internal data class PersistedPhysiologicalBoundary(
+        val boundary: PhysiologicalSteps.CycleBoundary,
+        val wakeDay: String,
+        val owner: String,
+        val sleepContext: DetectedSleep,
+    )
+
+    /**
+     * Recover historical cycle state after a strap was removed/re-added. Marker-only recovery would
+     * resurrect stale onsets after a sleep deletion/edit, so an onset is accepted only when it exactly
+     * matches an effective persisted session onset and that wake-day group still classifies it MAIN_SLEEP.
+     * Current detector/edit results reserve their wake days before historical candidates are considered.
+     */
+    internal fun persistedPhysiologicalBoundaries(
+        candidates: List<Pair<String, Int>>,
+        sessionsByOwner: Map<String, List<SleepSession>>,
+        markerOnsetByOwnerAndDay: Map<String, Map<String, Long>>,
+        currentBoundaryWakeDays: Set<String>,
+        tzOffsetSeconds: Long,
+        habitualMidsleepSec: Long?,
+    ): List<PersistedPhysiologicalBoundary> {
+        val claimedDays = currentBoundaryWakeDays.toMutableSet()
+        val recovered = ArrayList<PersistedPhysiologicalBoundary>()
+        for ((owner, _) in candidates.sortedWith(compareBy<Pair<String, Int>> { it.second }.thenBy { it.first })) {
+            val sessionsByWakeDay = sessionsByOwner[owner].orEmpty()
+                .filter { it.endTs > it.effectiveStartTs }
+                .groupBy { AnalyticsEngine.dayString(it.endTs, tzOffsetSeconds) }
+            for ((wakeDay, sessions) in sessionsByWakeDay.toSortedMap()) {
+                if (wakeDay in claimedDays) continue
+                val markerOnset = markerOnsetByOwnerAndDay[owner]?.get(wakeDay) ?: continue
+                val blocks = sessions.map { session ->
+                    PhysiologicalSteps.SleepBlock(
+                        onset = session.startTs,
+                        end = session.endTs,
+                        id = session.startTs.toString(),
+                        editedOnset = session.startTsAdjusted,
+                    )
+                }
+                val classified = PhysiologicalSteps.classifyForCycle(
+                    blocks, tzOffsetSeconds, habitualMidsleepSec,
+                )
+                val winner = classified.firstOrNull {
+                    it.kind == PhysiologicalSteps.SleepKind.MAIN_SLEEP &&
+                        it.effectiveOnset == markerOnset
+                } ?: continue
+                val persisted = sessions.firstOrNull {
+                    it.startTs.toString() == winner.id && it.effectiveStartTs == markerOnset
+                } ?: continue
+                val sleepId = "persisted:$owner:${persisted.startTs}"
+                recovered += PersistedPhysiologicalBoundary(
+                    boundary = PhysiologicalSteps.CycleBoundary(sleepId, markerOnset),
+                    wakeDay = wakeDay,
+                    owner = owner,
+                    sleepContext = DetectedSleep(
+                        start = persisted.effectiveStartTs,
+                        end = persisted.endTs,
+                        efficiency = persisted.efficiency ?: 0.0,
+                        stages = AnalyticsEngine.decodeStages(persisted.stagesJSON),
+                        restingHR = persisted.restingHr,
+                        avgHRV = persisted.avgHrv,
+                    ),
+                )
+                claimedDays += wakeDay
+            }
+        }
+        return recovered
+    }
+
+    /**
+     * Re-materialise every validated historical marker in its owner namespace during candidate-wide
+     * cleanup. Invalid/stale markers never enter [recovered], so this cannot perpetuate marker-only state.
+     */
+    internal fun recoveredStepMarkerRows(
+        recovered: List<PersistedPhysiologicalBoundary>,
+        computedDeviceId: (String) -> String,
+    ): List<MetricSeriesRow> = recovered.map { item ->
+        MetricSeriesRow(
+            deviceId = computedDeviceId(item.owner),
+            day = item.wakeDay,
+            key = STEPS_CYCLE_ONSET_KEY,
+            value = item.boundary.onset.toDouble(),
+        )
+    }
+
+    /** Stable, small cache identity; raw StepSample lists are deliberately never retained. */
+    internal fun physiologicalStepCacheKey(
+        owner: String,
+        sleepId: String,
+        onset: Long,
+        end: Long,
+        stepRevision: String,
+        sleepContextSignature: String,
+        contributingDayKeys: List<Pair<String, String>>,
+    ): String = buildString {
+        append(owner).append('|').append(sleepId).append('|').append(onset).append('|').append(end)
+            .append("|stepRevision=").append(stepRevision)
+            .append("|sleepContext=").append(sleepContextSignature)
+        for ((day, witness) in contributingDayKeys.sortedBy { it.first }) {
+            append('|').append(day).append('=').append(witness)
+        }
+    }
+
+    internal fun shouldRecountPhysiologicalSteps(cachedKey: String?, currentKey: String): Boolean =
+        cachedKey != currentKey
+
+    private fun stepDayWitness(owner: String, result: DayResult): String = buildString {
+        append(owner).append(':').append(result.daily.steps ?: "nil")
+        for (s in result.sleepSessions.sortedBy { it.start }) {
+            append('|').append(s.start).append('-').append(s.end).append(':').append(s.stages.hashCode())
+        }
+    }
 
     /**
      * Serialises [analyzeRecent] against itself. The pass is launched from four independent coroutines: the
@@ -146,6 +277,7 @@ object IntelligenceEngine {
 
     /** Read cap per stream read , matches the Swift 200_000 bound. */
     const val STREAM_LIMIT: Int = 200_000
+    internal const val PHYSIOLOGICAL_STEP_PAGE_SIZE: Int = 10_000
 
     private const val SECONDS_PER_DAY: Long = 86_400L
 
@@ -450,6 +582,9 @@ object IntelligenceEngine {
         // on. Keyed by the local day.
         val readOwnerByDay = LinkedHashMap<String, OwnerRead>()
         val resolvedScoreOwnerByDay = LinkedHashMap<String, String>()
+        // Boundary/cache witness assembled from the already-computed day result. The independent O(1)
+        // repository revision below handles step-only inserts even when the HR-keyed day cache is reused.
+        val stepWitnessByDay = LinkedHashMap<String, String>()
         // HRV baseline honours the manual "Recalibrate baseline" epoch (noop.hrvBaselineEpoch): pass the
         // per-value "yyyy-MM-dd" day keys (parallel to the values) so foldHistory drops every night before
         // the epoch. baselineEpoch is threaded down from the Context-aware caller (0.0 = no recalibration).
@@ -647,6 +782,7 @@ object IntelligenceEngine {
                     cached.primaryRhrCoverage?.let { primarySessionRHRCoverageByDay[day] = it }
                     scoredNights.add(cached.res)
                     resolvedScoreOwnerByDay[day] = cached.owner
+                    stepWitnessByDay[day] = stepDayWitness(cached.owner, cached.res)
                     for (line in cached.diagLines) diag(line)
                     dayCacheReused++
                     continue
@@ -1050,6 +1186,7 @@ object IntelligenceEngine {
             primaryRhrCoverage?.let { primarySessionRHRCoverageByDay[res.daily.day] = it }
             scoredNights.add(res)
             resolvedScoreOwnerByDay[res.daily.day] = owner
+            stepWitnessByDay[res.daily.day] = stepDayWitness(owner, res)
             // #1005: cache this freshly-scored night under its per-day key (only when it was cache-eligible
             // this pass — a WHOOP 4.0 owner with no trace active — hence dayCacheKey != null). Reused days
             // continue'd above and never reach here, so the cache only ever holds fresh scans. Carries the
@@ -1221,40 +1358,25 @@ object IntelligenceEngine {
             .appleDaily(WhoopRepository.APPLE_HEALTH_SOURCE, "0000-01-01", "9999-12-31")
             .map { it.day }.toHashSet()
 
-        // WHOOP's activity day is a physiological sleep-onset -> sleep-onset cycle, not a calendar
-        // midnight bucket. Resolve one onset per scored wake-day using the SAME main-night selector as
-        // the sleep headline. User-adjusted onsets participate immediately; a hand-entered main sleep is
-        // also eligible when the detector found no matching block. Naps remain separate candidates and
-        // lose to the canonical main-night selector. The resulting boundaries are consumed below one day
-        // at a time, so raw counter materialisation remains bounded to one cycle rather than the history.
         val editedRowsByDay = editedRows.groupBy {
             AnalyticsEngine.dayString(it.endTs, tzOffsetSeconds)
         }
-        val physiologicalStepOnsetByDay = LinkedHashMap<String, Long>()
-        for (res in scoredNights) {
-            val dayEdits = editedRowsByDay[res.daily.day].orEmpty()
-            val editsByDetectedStart = dayEdits.associateBy { it.startTs }
-            val detectedStarts = res.sleepSessions.mapTo(HashSet()) { it.start }
-            val blocks = buildList {
-                for (session in res.sleepSessions) {
-                    val edit = editsByDetectedStart[session.start]
-                    add(
-                        PhysiologicalSteps.SleepBlock(
-                            onset = edit?.effectiveStartTs ?: session.start,
-                            end = edit?.endTs ?: session.end,
-                        ),
-                    )
-                }
-                for (edit in dayEdits) {
-                    if (edit.startTs !in detectedStarts) {
-                        add(PhysiologicalSteps.SleepBlock(edit.effectiveStartTs, edit.endTs))
-                    }
-                }
-            }
-            PhysiologicalSteps.mainSleepOnset(blocks, tzOffsetSeconds, habitualMidsleepSec)?.let {
-                physiologicalStepOnsetByDay[res.daily.day] = it
-            }
-        }
+        val physiologicalSteps = PhysiologicalStepCycleEngine.compute(
+            scoredNights = scoredNights,
+            editedRows = editedRows,
+            resolvedScoreOwnerByDay = resolvedScoreOwnerByDay,
+            candidatePriorities = candidatePriorities,
+            stepWitnessByDay = stepWitnessByDay,
+            repo = repo,
+            tzOffsetSeconds = tzOffsetSeconds,
+            habitualMidsleepSec = habitualMidsleepSec,
+            windowStart = windowStart,
+            nowSeconds = nowSeconds,
+            stepTicksPerStep = profile.stepTicksPerStep,
+            stepsTraceSink = stepsTraceSink,
+        )
+        val cycleStepsByWakeDay = physiologicalSteps.cycleStepsByWakeDay
+        val firstCycleWakeDay = physiologicalSteps.firstCycleWakeDay
 
         for (res in scoredNights) {
             // #299: scope the edits to THIS day before folding. A userEdited row / hand-logged nap belongs
@@ -1273,36 +1395,23 @@ object IntelligenceEngine {
                 res.daily, res.sleepSessions, editsByStart, editOnsetByStart,
                 tzOffsetSeconds, habitualMidsleepSec,
             )
-            // Replace the calendar-midnight counter total with the physiological cycle total. Do NOT
-            // discard the sleep interval: a sustained, strap-classified walk while caring for a child or
-            // going to the bathroom remains countable. Bed motion is still rejected by the shared
-            // walk/run class and physical tick-rate gates. One predecessor minute is read so the first
-            // post-onset delta can be attributed to its later sample without counting pre-onset motion.
-            val cycleOnset = physiologicalStepOnsetByDay[daily.day]
-            val stepOwner = resolvedScoreOwnerByDay[daily.day]
-            if (cycleOnset != null && stepOwner != null) {
-                val cycleEnd = PhysiologicalSteps.cycleEnd(
-                    daily.day, physiologicalStepOnsetByDay, nowSeconds,
+            val hasEstablishedCycle = firstCycleWakeDay != null && daily.day >= firstCycleWakeDay
+            daily = daily.copy(
+                steps = integratedStepValue(
+                    calendarSteps = daily.steps,
+                    hasEstablishedCycle = hasEstablishedCycle,
+                    cycleSteps = cycleStepsByWakeDay[daily.day],
+                ),
+            )
+            physiologicalSteps.boundaryOnsetByWakeDay[daily.day]?.let { onset ->
+                restRows.add(
+                    MetricSeriesRow(
+                        deviceId = computedId,
+                        day = daily.day,
+                        key = STEPS_CYCLE_ONSET_KEY,
+                        value = onset.toDouble(),
+                    ),
                 )
-                val queryEnd = (cycleEnd - 1L).coerceAtLeast(cycleOnset)
-                val cycleSamples = repo.stepSamples(
-                    stepOwner,
-                    (cycleOnset - 60L).coerceAtLeast(0L),
-                    queryEnd,
-                    STREAM_LIMIT,
-                )
-                val cycleTicks = PhysiologicalSteps.stepsInCycle(cycleSamples, cycleOnset, cycleEnd)
-                if (cycleTicks != null) {
-                    val safeTicksPerStep = maxOf(profile.stepTicksPerStep, 0.5)
-                    val cycleSteps = (cycleTicks.toDouble() / safeTicksPerStep).roundToLong()
-                        .coerceAtMost(Int.MAX_VALUE.toLong()).toInt()
-                    daily = daily.copy(steps = cycleSteps)
-                    stepsTraceSink?.invoke(
-                        "stepsCycle day=${daily.day} onsetTs=$cycleOnset endTs=$cycleEnd " +
-                            "counterSamples=${cycleSamples.size} rawTicks=$cycleTicks " +
-                            "ticksPerStep=$safeTicksPerStep scaledSteps=$cycleSteps",
-                    )
-                }
             }
             val recovery = recomputeRecovery(daily, baselines2)
             // Charge term-breakdown trace (Test Centre Group G): only when the Recovery test mode is on
@@ -1590,8 +1699,16 @@ object IntelligenceEngine {
             from = oldestDay,
             to = newestDay,
             dailyMetrics = dailies,
-            metricPoints = restRows,
+            metricPoints = (restRows + physiologicalSteps.recoveredOwnerMarkerRows)
+                .distinctBy { Triple(it.deviceId, it.day, it.key) },
             provenance = provenanceByCell.values.toList(),
+            replaceMetricKeys = listOf(STEPS_CYCLE_ONSET_KEY),
+            replaceMetricSourceIds = stepMarkerRewriteSourceIds(
+                currentComputedSources = repo.computedSourceIds(importedDeviceId),
+                candidateComputedSources = candidatePriorities.map { (owner, _) ->
+                    repo.computedDeviceId(owner)
+                },
+            ),
         )
 
         // ── Fitness Age (Phase 2) , weekly, keyed to the week's Saturday ──

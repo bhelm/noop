@@ -7,6 +7,10 @@ import android.widget.Toast
 import androidx.core.content.FileProvider
 import com.noop.BuildConfig
 import com.noop.ble.PuffinExperiment
+import com.noop.data.WhoopRepository
+import com.noop.ingest.RawSensorExport
+import com.noop.testcentre.ReportCompleteness
+import com.noop.testcentre.TestDomain
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -19,6 +23,47 @@ import java.io.File
  * in-memory ring buffer (`exportLogText()`); this writes it to a cache file and fires a share sheet.
  */
 object LogExport {
+
+    /** Return only log lines belonging to [sessionId], or null when the rolling log lost its marker. */
+    fun stepsSessionLog(logText: String, sessionId: String): String? {
+        val marker = "stepsControl session=$sessionId "
+        val lines = logText.lineSequence().toList()
+        val start = lines.indexOfLast { marker in it }
+        return if (start < 0) null else lines.drop(start).joinToString("\n")
+    }
+
+    /** Self-describing coverage record placed beside a Steps control-test's CSV and report. */
+    fun stepsSessionMetadata(
+        sessionId: String,
+        startedAt: Long,
+        endedAt: Long,
+        deviceId: String?,
+        counts: Map<String, Int>,
+        possiblyTruncated: Set<String>,
+        logMatched: Boolean,
+        stepsCycleTraceComplete: Boolean,
+        deviceChanged: Boolean,
+        deviceUnknown: Boolean,
+        windowCapped: Boolean = false,
+    ): String {
+        val reasons = buildList {
+            if ((counts["steps"] ?: 0) < 2) add("no_step_rows")
+            if (!logMatched) add("log_marker_missing")
+            if (possiblyTruncated.isNotEmpty()) add("possibly_truncated")
+            if (windowCapped) add("window_capped_to_24h")
+            if (!stepsCycleTraceComplete) add("steps_cycle_trace_missing_or_incomplete")
+            if (deviceChanged) add("device_changed_during_session")
+            if (deviceUnknown) add("device_unknown")
+        }
+        fun q(value: String) = "\"" + value
+            .replace("\\", "\\\\")
+            .replace("\"", "\\\"") + "\""
+        val countJson = counts.toSortedMap().entries.joinToString(",") { (k, v) -> "${q(k)}:$v" }
+        val truncatedJson = possiblyTruncated.sorted().joinToString(",") { q(it) }
+        val reasonJson = reasons.joinToString(",") { q(it) }
+        val deviceJson = deviceId?.let(::q) ?: "null"
+        return """{"session_id":${q(sessionId)},"started_at_unix_s":$startedAt,"ended_at_unix_s":$endedAt,"device_id":$deviceJson,"device_changed":$deviceChanged,"counts":{$countJson},"possibly_truncated":[$truncatedJson],"window_capped_to_24h":$windowCapped,"log_marker_matched":$logMatched,"complete":${reasons.isEmpty()},"incomplete_reasons":[$reasonJson]}"""
+    }
 
     /**
      * A short `yyMMdd-HHmm` wall-clock stamp for export filenames (#510 — maddognik's protocol RE), so
@@ -480,6 +525,110 @@ object LogExport {
             exportFileBundle(context, entries, name)
         }.onFailure {
             Toast.makeText(context, "Couldn't export the pair: ${it.message}", Toast.LENGTH_LONG).show()
+        }
+    }
+
+    /**
+     * Export one Steps control-test as an auditable ZIP. The sensor CSV is read from Room for the bounded
+     * [startedAt, export tap] window and only the activation strap. The report is cut at the activation marker; if the
+     * in-memory ring has already rotated that marker away, metadata says so instead of presenting an
+     * unrelated log tail as matched.
+     */
+    suspend fun shareStepsControlSession(
+        context: Context,
+        repo: WhoopRepository,
+        sessionDeviceId: String?,
+        currentDeviceId: String,
+        sessionId: String,
+        startedAt: Long,
+        logText: String,
+    ) {
+        runCatching {
+            val endedAt = System.currentTimeMillis() / 1000L
+            val deviceUnknown = sessionDeviceId == null
+            val deviceChanged = sessionDeviceId != null && sessionDeviceId != currentDeviceId
+            val staged = withContext(Dispatchers.IO) {
+                val dir = File(context.cacheDir, "logs").apply { mkdirs() }
+                val raw = if (sessionDeviceId != null) {
+                    RawSensorExport.writeSessionFile(
+                        context = context,
+                        repo = repo,
+                        deviceId = sessionDeviceId,
+                        from = startedAt,
+                        to = endedAt,
+                        sessionId = sessionId,
+                    )
+                } else {
+                    val missingWindow = RawSensorExport.sessionWindow(startedAt, endedAt)
+                    val placeholder = File(dir, "noop-steps-$sessionId-raw-sensors.csv").apply {
+                        writeText("# INCOMPLETE: legacy session has no bound strap; current strap was not substituted.\n")
+                    }
+                    RawSensorExport.SessionFile(
+                        placeholder, emptyMap(), emptySet(), windowCapped = missingWindow.capped,
+                    )
+                }
+                val matchedLog = stepsSessionLog(logText, sessionId)
+                val stepsTraceComplete = matchedLog?.let {
+                    ReportCompleteness.matchedToken(it, TestDomain.STEPS) != null
+                } == true
+                val report = File(dir, "noop-steps-$sessionId-report.txt").apply {
+                    writeText(buildString {
+                        appendLine("NOOP Steps control-test report")
+                        appendLine("session_id=$sessionId start_unix_s=$startedAt end_unix_s=$endedAt")
+                        appendLine("device_id=${sessionDeviceId ?: "UNKNOWN"} current_device_id=$currentDeviceId")
+                        if (deviceChanged) appendLine("INCOMPLETE: active strap changed; raw data remains bound to the activation strap.")
+                        if (deviceUnknown) appendLine("INCOMPLETE: this legacy session has no activation strap; no current-strap data was substituted.")
+                        appendLine("─".repeat(40))
+                        append(
+                            matchedLog ?: "INCOMPLETE: the activation marker is no longer in the rolling log; " +
+                                "no unrelated log lines were substituted.\n",
+                        )
+                    })
+                }
+                val metaText = stepsSessionMetadata(
+                    sessionId = sessionId,
+                    startedAt = startedAt,
+                    endedAt = endedAt,
+                    deviceId = sessionDeviceId,
+                    counts = raw.counts,
+                    possiblyTruncated = raw.possiblyTruncated,
+                    logMatched = matchedLog != null,
+                    stepsCycleTraceComplete = stepsTraceComplete,
+                    deviceChanged = deviceChanged,
+                    deviceUnknown = deviceUnknown,
+                    windowCapped = raw.windowCapped,
+                )
+                val meta = File(dir, "noop-steps-$sessionId-meta.json").apply { writeText(metaText) }
+                val complete = (raw.counts["steps"] ?: 0) >= 2 &&
+                    raw.possiblyTruncated.isEmpty() && !raw.windowCapped &&
+                    matchedLog != null && stepsTraceComplete && !deviceChanged && !deviceUnknown
+                Triple(
+                    listOf(
+                        "raw-sensors.csv" to raw.file,
+                        "report.txt" to report,
+                        "meta.json" to meta,
+                    ),
+                    complete,
+                    raw.counts["steps"] ?: 0,
+                )
+            }
+            val shared = exportFileBundle(
+                context = context,
+                entries = staged.first,
+                suggestedName = "noop-steps-session-${timestamp()}.zip",
+            )
+            if (shared == null) return
+            val message = when {
+                deviceUnknown ->
+                    "Legacy Steps session has no bound strap. Export marked incomplete; current strap was not substituted."
+                deviceChanged ->
+                    "Active strap changed. Exported the activation strap and marked the session incomplete."
+                staged.second -> "Steps session exported with ${staged.third} step rows."
+                else -> "Steps session exported, but marked incomplete. See meta.json for the reason."
+            }
+            Toast.makeText(context, message, Toast.LENGTH_LONG).show()
+        }.onFailure {
+            Toast.makeText(context, "Couldn't export the Steps session: ${it.message}", Toast.LENGTH_LONG).show()
         }
     }
 }

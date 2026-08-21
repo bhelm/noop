@@ -66,6 +66,7 @@ import com.noop.testcentre.TestMode
 import com.noop.testcentre.TestModeRegistry
 import com.noop.testcentre.TestReportFlow
 import com.noop.testcentre.TestReportLink
+import com.noop.testcentre.StepsMatchedExport
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.isActive
@@ -150,7 +151,19 @@ fun TestCentreScreen(vm: AppViewModel) {
                         is5MG = is5MG,
                         vm = vm,
                         onToggle = { on ->
-                            if (on) testCentre.activate(mode.domain) else testCentre.deactivate(mode.domain)
+                            if (on) {
+                                testCentre.activate(mode.domain, if (mode.domain == TestDomain.STEPS) activeStrapId else null)
+                                if (mode.domain == TestDomain.STEPS) {
+                                    testCentre.captureSession(TestDomain.STEPS)?.let { session ->
+                                        vm.ble.externalLog(
+                                            StepsMatchedExport.activationMarker(session),
+                                            TestDomain.STEPS,
+                                        )
+                                    }
+                                }
+                            } else {
+                                testCentre.deactivate(mode.domain)
+                            }
                             // Display & Performance owns a live frame monitor. It must run ONLY while the
                             // mode is on: start it on toggle-on (wiring its sink to the redacting DISPLAY
                             // log), tear it down on toggle-off so no Choreographer callback survives.
@@ -173,6 +186,33 @@ fun TestCentreScreen(vm: AppViewModel) {
                         onReport = {
                             // Launched (#1002): buildPending is now suspend (storage probe reads the store).
                             scope.launch { pendingReport = buildPending(context, mode, vm.ble.exportLogText(), vm) }
+                        },
+                        onMatchedExport = if (StepsMatchedExport.visibleFor(mode.domain)) {
+                            {
+                                // Old installs (or MASTER-implied Steps) can be active without the new
+                                // session key. Start an honest session now; it will export as incomplete
+                                // until enough post-marker sensor rows have synced.
+                                val session = testCentre.captureSession(TestDomain.STEPS) ?: run {
+                                    testCentre.activate(TestDomain.STEPS, activeStrapId)
+                                    testCentre.captureSession(TestDomain.STEPS)!!.also {
+                                        vm.ble.externalLog(
+                                            StepsMatchedExport.activationMarker(it),
+                                            TestDomain.STEPS,
+                                        )
+                                    }
+                                }
+                                LogExport.shareStepsControlSession(
+                                    context = context,
+                                    repo = vm.repo,
+                                    sessionDeviceId = session.deviceId,
+                                    currentDeviceId = activeStrapId,
+                                    sessionId = session.id,
+                                    startedAt = session.startedAt,
+                                    logText = vm.ble.exportLogText(),
+                                )
+                            }
+                        } else {
+                            null
                         },
                     )
                 }
@@ -313,8 +353,11 @@ private fun TestModeRow(
     vm: AppViewModel,
     onToggle: (Boolean) -> Unit,
     onReport: () -> Unit,
+    onMatchedExport: (suspend () -> Unit)?,
 ) {
     var on by remember { mutableStateOf(active) }
+    var matchedExportBusy by remember(mode.id) { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
     val elapsed = startedAtSeconds?.let { (System.currentTimeMillis() / 1000.0) - it }
     val refreshSources = TestCentreLiveRefreshPolicy.sources(mode, on)
     // An active row observes the log's own revision, coalesced during bursty offloads. An inactive row
@@ -362,6 +405,33 @@ private fun TestModeRow(
                 activeStrapId = activeStrapId,
                 vm = vm,
             )
+        }
+        if (on && onMatchedExport != null) {
+            Text(
+                StepsMatchedExport.EXPLANATION,
+                style = NoopType.footnote,
+                color = Palette.textTertiary,
+            )
+            NoopButton(
+                text = StepsMatchedExport.BUTTON_LABEL,
+                leadingIcon = Icons.Filled.Upload,
+                kind = NoopButtonKind.Secondary,
+                fullWidth = true,
+                enabled = !matchedExportBusy,
+                onClick = {
+                    if (!matchedExportBusy) {
+                        matchedExportBusy = true
+                        scope.launch {
+                            try {
+                                onMatchedExport()
+                            } finally {
+                                matchedExportBusy = false
+                            }
+                        }
+                    }
+                },
+            )
+            if (matchedExportBusy) NoopBusyRow()
         }
         Row {
             Spacer(Modifier.weight(1f))

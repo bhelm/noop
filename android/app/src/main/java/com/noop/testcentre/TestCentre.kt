@@ -19,6 +19,8 @@ import org.json.JSONObject
  */
 class TestCentre internal constructor(private val prefs: SharedPreferences) {
 
+    data class CaptureSession(val id: String, val startedAt: Long, val deviceId: String?)
+
     /** The zero-cost gate. `if (testCentre.active(TestDomain.SLEEP)) client.log(line, TestDomain.SLEEP)`. */
     fun active(d: TestDomain): Boolean {
         if (d == TestDomain.UNIVERSAL) return anyActive()        // universal rides whatever mode is on
@@ -31,11 +33,15 @@ class TestCentre internal constructor(private val prefs: SharedPreferences) {
         it != TestDomain.UNIVERSAL && prefs.getBoolean(ACTIVE_PREFIX + it.id, false)
     }
 
-    fun activate(d: TestDomain) {
-        prefs.edit()
+    fun activate(d: TestDomain, deviceId: String? = null) {
+        val nowMs = System.currentTimeMillis()
+        val edit = prefs.edit()
             .putBoolean(ACTIVE_PREFIX + d.id, true)
-            .putLong(STARTED_PREFIX + d.id, System.currentTimeMillis() / 1000L)
-            .apply()
+            .putLong(STARTED_PREFIX + d.id, nowMs / 1000L)
+            .putString(SESSION_PREFIX + d.id, "${d.id}-$nowMs")
+        if (deviceId == null) edit.remove(DEVICE_PREFIX + d.id)
+        else edit.putString(DEVICE_PREFIX + d.id, deviceId)
+        edit.apply()
     }
 
     fun deactivate(d: TestDomain) {
@@ -46,6 +52,13 @@ class TestCentre internal constructor(private val prefs: SharedPreferences) {
     fun startedAt(d: TestDomain): Long? {
         val t = prefs.getLong(STARTED_PREFIX + d.id, 0L)
         return if (t > 0L) t else null
+    }
+
+    /** Stable identity and lower time bound for one activation-to-export control-test session. */
+    fun captureSession(d: TestDomain): CaptureSession? {
+        val id = prefs.getString(SESSION_PREFIX + d.id, null) ?: return null
+        val startedAt = startedAt(d) ?: return null
+        return CaptureSession(id, startedAt, prefs.getString(DEVICE_PREFIX + d.id, null))
     }
 
     fun answers(d: TestDomain): Map<String, String> {
@@ -96,6 +109,8 @@ class TestCentre internal constructor(private val prefs: SharedPreferences) {
         private const val PREFS = "noop_testcentre"
         private const val ACTIVE_PREFIX = "testcentre.active."
         private const val STARTED_PREFIX = "testcentre.startedAt."
+        private const val SESSION_PREFIX = "testcentre.session."
+        private const val DEVICE_PREFIX = "testcentre.device."
         private const val ANSWERS_PREFIX = "testcentre.answers."
         private const val MIGRATED_KEY = "testcentre.migrated.v1"
         private const val CUMULATIVE_DRAINED_KEY = "testcentre.cumulativeDrainedRows"

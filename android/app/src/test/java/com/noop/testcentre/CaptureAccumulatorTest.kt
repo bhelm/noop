@@ -16,8 +16,8 @@ class CaptureAccumulatorTest {
         sleep day=2026-07-02 totalSleepMin=131 matched=3 source=computed
         sleep day=2026-07-01 totalSleepMin=331 matched=1 source=computed
         sleep day=2026-06-30 totalSleepMin=381 matched=1 source=computed
-        [steps] stepsRaw day=2026-07-02 counterSamples=29248 firstCounter=65046 lastCounter=5336
-        [steps] stepsRaw day=2026-07-01 counterSamples=1000
+        [steps] stepsCycle wakeDay=2026-07-02 status=closed onsetTs=1 endTs=2 totalTicks=3
+        [steps] stepsCycle wakeDay=2026-07-01 status=closed onsetTs=1 endTs=2 totalTicks=3
         [battery] bank soc=26.0 t=1782957600s
         [battery] bank soc=25.0 t=1782961200s
         [battery] bank soc=24.0 t=1782964800s
@@ -33,6 +33,12 @@ class CaptureAccumulatorTest {
     @Test
     fun steps_countsDistinctDays() {
         assertEquals(2, CaptureAccumulator.capturedDays(TestDomain.STEPS, report, 0L))
+    }
+
+    @Test fun stepsIgnoresRetiredCalendarDiagnostics() {
+        val retired = "[steps] stepsRaw day=2026-07-02 counterSamples=1000\n" +
+            "[steps] stepsEst day=2026-07-01 steps=410"
+        assertEquals(0, CaptureAccumulator.capturedDays(TestDomain.STEPS, retired, 0L))
     }
 
     @Test

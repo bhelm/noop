@@ -58,7 +58,7 @@ class TestCentreLiveReadoutsTest {
         }
     }
 
-    @Test fun stepsShowsProductionAndScaledShadowCandidateSideBySide() {
+    @Test fun stepsShowsActivePhysiologicalCycleAndShadowCandidateSideBySide() {
         val mode = requireNotNull(TestModeRegistry.mode(TestDomain.STEPS))
         val rows = TestCentreLiveReadouts.rows(
             mode = mode,
@@ -72,7 +72,7 @@ class TestCentreLiveReadoutsTest {
             ),
         )
 
-        assertEquals("Current algorithm", rows[0].label)
+        assertEquals("Active physiological cycle", rows[0].label)
         assertEquals("4200", rows[0].value)
         assertEquals("Shadow candidate", rows[1].label)
         assertEquals("3800", rows[1].value)

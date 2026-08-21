@@ -38,7 +38,7 @@ object ReportCompleteness {
         TestDomain.WORKOUTS to "session event=",
         TestDomain.DISPLAY to "dataVolume dbRows=",
         TestDomain.IMPORT to "import parser=",
-        TestDomain.STEPS to "stepsEst ",
+        TestDomain.STEPS to "stepsCycle wakeDay=",
         TestDomain.BATTERY to "battery series=",
         TestDomain.RECOVERY to "charge score=",
         TestDomain.HRV to "hrv rmssd=",
@@ -96,6 +96,12 @@ object ReportCompleteness {
         TestDomain.HRV to "hrv nightSummary",
     )
 
+    /** A Steps capture must explain the decision, not merely repeat the headline number. */
+    private val stepsBreakdownTokens = listOf(
+        "status=", "onsetTs=", "endTs=", "owner=", "pages=", "samples=", "totalTicks=",
+        "outside=", "awakeGap=", "sleepBout=", "rejectedIsolatedSleep=", "scaledSteps=",
+    )
+
     /**
      * The token that actually satisfied [d]'s presence check in [reportText], or null when neither did.
      * The killer trace is preferred (it is the deeper diagnostic); the evidence token (#127) only answers
@@ -105,7 +111,14 @@ object ReportCompleteness {
      */
     fun matchedToken(reportText: String, d: TestDomain): String? {
         val killer = killerTokens[d] ?: return null
-        if (reportText.contains(killer)) return killer
+        if (d == TestDomain.STEPS) {
+            val completeCycleLine = reportText.lineSequence().any { line ->
+                line.contains(killer) && stepsBreakdownTokens.all { token -> line.contains(token) }
+            }
+            if (completeCycleLine) return killer
+        } else if (reportText.contains(killer)) {
+            return killer
+        }
         return evidenceTokens[d]?.takeIf { reportText.contains(it) }
     }
 
