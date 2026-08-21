@@ -307,6 +307,8 @@ final class GpsWorkoutRecorder: NSObject, ObservableObject {
     private var filter = TrackFilter()
     private var track: [RouteMath.LatLng] = []
     private var startMs: Int64 = 0
+    private var pausedAtMs: Int64?
+    private var pausedDurationMs: Int64 = 0
 
     /// Workouts & GPS test mode (Test Centre): the tagged sink for the `.workouts` GPS-fix lines, wired by
     /// AppModel to `live.append(log:domain:)`. Default nil (inert). We ALWAYS check `TestCentre.active(.workouts)`
@@ -340,6 +342,8 @@ final class GpsWorkoutRecorder: NSObject, ObservableObject {
         track.removeAll()
         filter = TrackFilter()
         self.startMs = startMs
+        pausedAtMs = nil
+        pausedDurationMs = 0
         distanceM = 0
         paceSecPerKm = nil
         pointCount = 0
@@ -368,6 +372,25 @@ final class GpsWorkoutRecorder: NSObject, ObservableObject {
         isRecording = false
         let final = track
         return final
+    }
+
+    func pause() {
+        guard isRecording else { return }
+        pausedAtMs = Int64(Date().timeIntervalSince1970 * 1000)
+        manager.stopUpdatingLocation()
+        isRecording = false
+    }
+
+    func resume() {
+        guard startMs > 0 else { return }
+        if let pausedAtMs {
+            pausedDurationMs += Int64(Date().timeIntervalSince1970 * 1000) - pausedAtMs
+            self.pausedAtMs = nil
+        }
+        isRecording = true
+        if manager.authorizationStatus == .authorizedWhenInUse || manager.authorizationStatus == .authorizedAlways {
+            beginUpdates()
+        }
     }
 
     /// The encoded polyline + distance for the captured route, or nil when fewer than two points landed
@@ -403,7 +426,7 @@ final class GpsWorkoutRecorder: NSObject, ObservableObject {
         guard changed else { return }
         pointCount = track.count
         distanceM = RouteMath.totalMeters(track)
-        let elapsed = Double(Int64(Date().timeIntervalSince1970 * 1000) - startMs) / 1000.0
+        let elapsed = Double(Int64(Date().timeIntervalSince1970 * 1000) - startMs - pausedDurationMs) / 1000.0
         paceSecPerKm = RouteMath.paceSecPerKm(meters: distanceM, seconds: elapsed)
         // Workouts & GPS test mode: one GPS-fix-progress line tagged `.workouts` per batch that added a point,
         // showing raw fixes seen, how many the accuracy/speed filter accepted, and the running distance, so a
