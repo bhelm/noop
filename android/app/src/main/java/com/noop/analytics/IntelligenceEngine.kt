@@ -14,6 +14,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import kotlin.math.roundToLong
 
 /*
  * IntelligenceEngine.kt , on-device "intelligence": computes recovery / day-strain /
@@ -1220,6 +1221,41 @@ object IntelligenceEngine {
             .appleDaily(WhoopRepository.APPLE_HEALTH_SOURCE, "0000-01-01", "9999-12-31")
             .map { it.day }.toHashSet()
 
+        // WHOOP's activity day is a physiological sleep-onset -> sleep-onset cycle, not a calendar
+        // midnight bucket. Resolve one onset per scored wake-day using the SAME main-night selector as
+        // the sleep headline. User-adjusted onsets participate immediately; a hand-entered main sleep is
+        // also eligible when the detector found no matching block. Naps remain separate candidates and
+        // lose to the canonical main-night selector. The resulting boundaries are consumed below one day
+        // at a time, so raw counter materialisation remains bounded to one cycle rather than the history.
+        val editedRowsByDay = editedRows.groupBy {
+            AnalyticsEngine.dayString(it.endTs, tzOffsetSeconds)
+        }
+        val physiologicalStepOnsetByDay = LinkedHashMap<String, Long>()
+        for (res in scoredNights) {
+            val dayEdits = editedRowsByDay[res.daily.day].orEmpty()
+            val editsByDetectedStart = dayEdits.associateBy { it.startTs }
+            val detectedStarts = res.sleepSessions.mapTo(HashSet()) { it.start }
+            val blocks = buildList {
+                for (session in res.sleepSessions) {
+                    val edit = editsByDetectedStart[session.start]
+                    add(
+                        PhysiologicalSteps.SleepBlock(
+                            onset = edit?.effectiveStartTs ?: session.start,
+                            end = edit?.endTs ?: session.end,
+                        ),
+                    )
+                }
+                for (edit in dayEdits) {
+                    if (edit.startTs !in detectedStarts) {
+                        add(PhysiologicalSteps.SleepBlock(edit.effectiveStartTs, edit.endTs))
+                    }
+                }
+            }
+            PhysiologicalSteps.mainSleepOnset(blocks, tzOffsetSeconds, habitualMidsleepSec)?.let {
+                physiologicalStepOnsetByDay[res.daily.day] = it
+            }
+        }
+
         for (res in scoredNights) {
             // #299: scope the edits to THIS day before folding. A userEdited row / hand-logged nap belongs
             // to exactly ONE day — the day its night ENDS on, matching the daily's end-day bucket
@@ -1228,15 +1264,46 @@ object IntelligenceEngine {
             // here keeps a single-night edit overriding only its OWN night instead of every night. The
             // #547 effective-onset detail is preserved: editOnsetByStart still carries the user-CORRECTED
             // bedtime (startTsAdjusted ?: startTs) for this day's edited/manual blocks.
-            val dayEditedRows = editedRowsForDay(editedRows, res.daily.day, tzOffsetSeconds)
+            val dayEditedRows = editedRowsByDay[res.daily.day].orEmpty()
             val editsByStart: Map<Long, String?> = dayEditedRows.associate { it.startTs to it.stagesJSON }
             val editOnsetByStart: Map<Long, Long> = dayEditedRows.associate { it.startTs to it.effectiveStartTs }
             // Substitute an edited block's (reshaped) stages for its detected twin before the daily
             // sleep aggregate feeds Rest + recovery. No edit touching this night → `daily` is unchanged.
-            val daily = sleepEditedDaily(
+            var daily = sleepEditedDaily(
                 res.daily, res.sleepSessions, editsByStart, editOnsetByStart,
                 tzOffsetSeconds, habitualMidsleepSec,
             )
+            // Replace the calendar-midnight counter total with the physiological cycle total. Do NOT
+            // discard the sleep interval: a sustained, strap-classified walk while caring for a child or
+            // going to the bathroom remains countable. Bed motion is still rejected by the shared
+            // walk/run class and physical tick-rate gates. One predecessor minute is read so the first
+            // post-onset delta can be attributed to its later sample without counting pre-onset motion.
+            val cycleOnset = physiologicalStepOnsetByDay[daily.day]
+            val stepOwner = resolvedScoreOwnerByDay[daily.day]
+            if (cycleOnset != null && stepOwner != null) {
+                val cycleEnd = PhysiologicalSteps.cycleEnd(
+                    daily.day, physiologicalStepOnsetByDay, nowSeconds,
+                )
+                val queryEnd = (cycleEnd - 1L).coerceAtLeast(cycleOnset)
+                val cycleSamples = repo.stepSamples(
+                    stepOwner,
+                    (cycleOnset - 60L).coerceAtLeast(0L),
+                    queryEnd,
+                    STREAM_LIMIT,
+                )
+                val cycleTicks = PhysiologicalSteps.stepsInCycle(cycleSamples, cycleOnset, cycleEnd)
+                if (cycleTicks != null) {
+                    val safeTicksPerStep = maxOf(profile.stepTicksPerStep, 0.5)
+                    val cycleSteps = (cycleTicks.toDouble() / safeTicksPerStep).roundToLong()
+                        .coerceAtMost(Int.MAX_VALUE.toLong()).toInt()
+                    daily = daily.copy(steps = cycleSteps)
+                    stepsTraceSink?.invoke(
+                        "stepsCycle day=${daily.day} onsetTs=$cycleOnset endTs=$cycleEnd " +
+                            "counterSamples=${cycleSamples.size} rawTicks=$cycleTicks " +
+                            "ticksPerStep=$safeTicksPerStep scaledSteps=$cycleSteps",
+                    )
+                }
+            }
             val recovery = recomputeRecovery(daily, baselines2)
             // Charge term-breakdown trace (Test Centre Group G): only when the Recovery test mode is on
             // (recoveryTraceSink non-null). Emits which term moved Charge and which was nil and forced the
@@ -1311,8 +1378,9 @@ object IntelligenceEngine {
             // Scoped to computed days: an imported-total-only day legitimately has a total without our
             // sessions, so it is NOT a divergence.
             val imported = daily.day in importedWhoopDays || daily.day in appleHealthDays
-            if (!imported && daily.totalSleepMin != null && res.sleepSessions.isEmpty()) {
-                diag(sleepDivergenceLogLine(daily.day, Math.round(daily.totalSleepMin).toInt(), dayEditedRows.size))
+            val finalSleepMin = daily.totalSleepMin
+            if (!imported && finalSleepMin != null && res.sleepSessions.isEmpty()) {
+                diag(sleepDivergenceLogLine(daily.day, Math.round(finalSleepMin).toInt(), dayEditedRows.size))
             }
             // #195: one always-on line per scored night with the computed HRV value + the window it used,
             // so an "HRV reads high / deep-sleep window not changing" report is self-diagnosing straight
