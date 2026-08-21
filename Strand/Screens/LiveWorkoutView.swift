@@ -106,22 +106,20 @@ struct LiveWorkoutView: View {
         .alert("End this workout?",
                isPresented: $showEndConfirm) {
             Button("Cancel", role: .cancel) { }
-            Button("End workout", role: .destructive) {
+            Button("End", role: .destructive) {
                 model.endWorkout()
                 onClose()
             }
         } message: {
             Text("This stops recording and saves what's captured so far. It can't be resumed.")
         }
-        .confirmationDialog("Delete this workout?", isPresented: $showDeleteConfirm,
+        .confirmationDialog("Delete", isPresented: $showDeleteConfirm,
                             titleVisibility: .visible) {
-            Button("Delete workout", role: .destructive) {
+            Button("Delete", role: .destructive) {
                 model.discardWorkout()
                 onClose()
             }
             Button("Cancel", role: .cancel) { }
-        } message: {
-            Text("This stops recording and permanently discards the workout.")
         }
     }
 
@@ -131,9 +129,13 @@ struct LiveWorkoutView: View {
                 Circle()
                     .fill(StrandPalette.metricRose)
                     .frame(width: 7, height: 7)
-                Text(model.activeWorkout?.isPaused == true ? "WORKOUT PAUSED" : "RECORDING WORKOUT")
-                    .font(StrandFont.overline).tracking(StrandFont.overlineTracking)
-                    .foregroundStyle(StrandPalette.metricRose)
+                Group {
+                    if model.activeWorkout?.isPaused == true { Text("Paused") }
+                    else { Text("Recording workout") }
+                }
+                .textCase(.uppercase)
+                .font(StrandFont.overline).tracking(StrandFont.overlineTracking)
+                .foregroundStyle(StrandPalette.metricRose)
             }
             .padding(.horizontal, NoopMetrics.space2)
             .padding(.vertical, NoopMetrics.space1)
@@ -383,7 +385,7 @@ struct LiveWorkoutView: View {
                 .contentShape(Circle())
         }
         .nativeLiquidGlassWorkoutControl()
-        .accessibilityLabel(Text(paused ? "Resume workout" : "Pause workout"))
+        .accessibilityLabel(Text(paused ? "Resume" : "Pause"))
     }
 
     private var deleteWorkoutGlassButton: some View {
@@ -395,7 +397,7 @@ struct LiveWorkoutView: View {
                 .contentShape(Circle())
         }
         .nativeLiquidGlassWorkoutControl()
-        .accessibilityLabel(Text("Delete workout"))
+        .accessibilityLabel(Text("Delete"))
     }
 
     private var activeSportName: String {

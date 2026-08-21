@@ -147,7 +147,11 @@ fun LiveWorkoutScreen(vm: AppViewModel, onClose: () -> Unit) {
                         .padding(horizontal = 10.dp, vertical = 5.dp),
                 ) {
                     Box(Modifier.size(7.dp).clip(CircleShape).background(Palette.metricRose))
-                    Overline(if (w.pausedAtMs != null) "Workout paused" else "Recording workout", color = Palette.metricRose)
+                    Overline(
+                        if (w.pausedAtMs != null) uiString(R.string.workout_action_paused)
+                        else uiString(R.string.workout_action_recording),
+                        color = Palette.metricRose,
+                    )
                 }
             }
 
@@ -211,16 +215,16 @@ fun LiveWorkoutScreen(vm: AppViewModel, onClose: () -> Unit) {
                 Button(
                     onClick = { vm.toggleWorkoutPause() }, modifier = Modifier.weight(1f),
                     contentPadding = PaddingValues(vertical = 14.dp),
-                ) { Text(if (w.pausedAtMs != null) "Resume" else "Pause", style = NoopType.headline) }
+                ) { Text(if (w.pausedAtMs != null) uiString(R.string.workout_action_resume) else uiString(R.string.workout_action_pause), style = NoopType.headline) }
                 Button(
                     onClick = { showDeleteConfirm = true }, modifier = Modifier.weight(1f),
                     contentPadding = PaddingValues(vertical = 14.dp),
                     colors = ButtonDefaults.buttonColors(containerColor = Palette.statusCritical),
-                ) { Text("Delete", style = NoopType.headline) }
+                ) { Text(uiString(R.string.workout_action_delete), style = NoopType.headline) }
                 Button(
                     onClick = { showEndConfirm = true }, modifier = Modifier.weight(1f),
                     contentPadding = PaddingValues(vertical = 14.dp),
-                ) { Text(uiString(R.string.l10n_live_workout_screen_end_workout_3e8d6238), style = NoopType.headline) }
+                ) { Text(uiString(R.string.workout_action_end), style = NoopType.headline) }
             }
         }
     }
@@ -266,11 +270,11 @@ fun LiveWorkoutScreen(vm: AppViewModel, onClose: () -> Unit) {
         AlertDialog(
             onDismissRequest = { showDeleteConfirm = false },
             containerColor = Palette.surfaceOverlay,
-            title = { Text("Delete this workout?", style = NoopType.title2, color = Palette.textPrimary) },
-            text = { Text("This stops recording and permanently discards the workout.", style = NoopType.subhead, color = Palette.textSecondary) },
+            title = { Text(uiString(R.string.workout_delete_title), style = NoopType.title2, color = Palette.textPrimary) },
+            text = { Text(uiString(R.string.workout_delete_message), style = NoopType.subhead, color = Palette.textSecondary) },
             confirmButton = {
                 TextButton(onClick = { showDeleteConfirm = false; vm.discardWorkout(); onClose() }) {
-                    Text("Delete workout", style = NoopType.body, color = Palette.statusCritical)
+                    Text(uiString(R.string.workout_action_delete), style = NoopType.body, color = Palette.statusCritical)
                 }
             },
             dismissButton = {

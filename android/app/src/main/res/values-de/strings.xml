@@ -2147,4 +2147,12 @@
     <string name="nav_power_saving">Energiesparen</string>
     <string name="l10n_app_changelog_training_load_a_vo_max_without_f9205a67">Trainingsbelastung, VO₂max ohne Maßband und deutlich weniger Akku fürs Neuberechnen</string>
     <string name="l10n_sleep_screen_sleep_outside_the_new_times_was_6229881e">Schlaf außerhalb der neuen Zeiten wurde entfernt. NOOP erkennt ihn nicht erneut.</string>
+    <string name="workout_action_pause">Pause</string>
+    <string name="workout_action_resume">Fortsetzen</string>
+    <string name="workout_action_delete">Löschen</string>
+    <string name="workout_action_end">Beenden</string>
+    <string name="workout_action_recording">Workout wird aufgezeichnet</string>
+    <string name="workout_action_paused">Pausiert</string>
+    <string name="workout_delete_title">Dieses Workout löschen?</string>
+    <string name="workout_delete_message">Dadurch wird die Aufzeichnung beendet und das Workout endgültig verworfen.</string>
 </resources>

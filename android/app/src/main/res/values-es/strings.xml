@@ -2133,4 +2133,12 @@
     <string name="nav_power_saving">Ahorro de energía</string>
     <string name="l10n_app_changelog_training_load_a_vo_max_without_f9205a67">Carga de entrenamiento, VO₂max sin cinta métrica y mucha menos batería recalculando</string>
     <string name="l10n_sleep_screen_sleep_outside_the_new_times_was_6229881e">Se ha eliminado el sueño fuera del nuevo horario. NOOP no volverá a detectarlo.</string>
+    <string name="workout_action_pause">Pausar</string>
+    <string name="workout_action_resume">Reanudar</string>
+    <string name="workout_action_delete">Eliminar</string>
+    <string name="workout_action_end">Finalizar</string>
+    <string name="workout_action_recording">Grabando entrenamiento</string>
+    <string name="workout_action_paused">En pausa</string>
+    <string name="workout_delete_title">¿Eliminar este entrenamiento?</string>
+    <string name="workout_delete_message">Esto detiene la grabación y descarta permanentemente el entrenamiento.</string>
 </resources>
