@@ -1,6 +1,7 @@
 package com.noop.push
 
 import kotlinx.coroutines.CancellationException
+import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
 
@@ -68,10 +69,10 @@ class PushCoordinator(
     }
 
     suspend fun pushMutable(table: PushMutableTable, deviceId: String): PushResult {
-        val window = PushWindow.ending(today(), zoneId)
+        val fullWindow = PushWindow.ending(today(), zoneId)
         val rows = try {
             source.mutableRows(
-                table, deviceId, window, PushProtocol.MAX_MUTABLE_SNAPSHOT_RECORDS + 1,
+                table, deviceId, fullWindow, PushProtocol.MAX_MUTABLE_SNAPSHOT_RECORDS + 1,
             )
         } catch (cancelled: CancellationException) {
             throw cancelled
@@ -84,6 +85,10 @@ class PushCoordinator(
             return rejected(PushFailure(PushFailureCode.LOCAL_DATA))
         }
         var encodedBytes = 0L
+        val days = generateSequence(LocalDate.parse(fullWindow.fromDay)) { previous ->
+            previous.plusDays(1).takeUnless { it.isAfter(LocalDate.parse(fullWindow.toDay)) }
+        }.toList()
+        val recordsByDay = days.associateWith { mutableListOf<PushMutableRecord>() }
         for (record in rows) {
             val size = try {
                 PushProtocol.mutableRecordEncodedSize(table, record)
@@ -94,9 +99,37 @@ class PushCoordinator(
             if (encodedBytes > PushProtocol.MAX_MUTABLE_SNAPSHOT_ENCODED_BYTES) {
                 return rejected(PushFailure(PushFailureCode.LOCAL_DATA))
             }
+            val day = try {
+                mutableRecordDay(table, record)
+            } catch (_: PushProtocolException) {
+                return rejected(PushFailure(PushFailureCode.LOCAL_DATA))
+            }
+            val bucket = recordsByDay[day]
+                ?: return rejected(PushFailure(PushFailureCode.LOCAL_DATA))
+            bucket += record
         }
+        val currentHashes = try {
+            recordsByDay.mapKeys { (day, _) -> day.toString() }
+                .mapValues { (_, dayRows) -> PushProtocol.mutableSnapshotHash(table, dayRows) }
+        } catch (_: PushProtocolException) {
+            return rejected(PushFailure(PushFailureCode.LOCAL_DATA))
+        }
+        val previousHashes = try {
+            progress.window(table, deviceId)?.dayHashes.orEmpty()
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (_: Throwable) {
+            return rejected(PushFailure(PushFailureCode.LOCAL_DATABASE))
+        }
+        val changedDays = days.filter { day -> previousHashes[day.toString()] != currentHashes[day.toString()] }
+        if (changedDays.isEmpty()) return PushResult.NoData
+        val window = PushWindow.days(changedDays.first(), changedDays.last(), zoneId)
+        val changedRows = days.asSequence()
+            .filter { it >= changedDays.first() && it <= changedDays.last() }
+            .flatMap { recordsByDay.getValue(it).asSequence() }
+            .toList()
         val batches = try {
-            PushProtocol.mutableBatches(table, sourceId, deviceId, window, rows)
+            PushProtocol.mutableBatches(table, sourceId, deviceId, window, changedRows)
         } catch (t: PushProtocolException) {
             return rejected(PushFailure(PushFailureCode.LOCAL_DATA))
         }
@@ -106,10 +139,14 @@ class PushCoordinator(
         }
         val replacementId = batches.first().replacementId ?: batches.first().batchId
         return try {
-            progress.saveWindow(table, deviceId, PushWindowProgress(window, replacementId))
+            progress.saveWindow(
+                table,
+                deviceId,
+                PushWindowProgress(fullWindow, replacementId, currentHashes),
+            )
             PushResult.Accepted(
                 batchId = replacementId,
-                recordCount = rows.size,
+                recordCount = changedRows.size,
                 hasMore = false,
                 batchCount = batches.size,
             )
@@ -120,7 +157,25 @@ class PushCoordinator(
         }
     }
 
-    /** One append page and one complete rolling replacement per actual source device. */
+    private fun mutableRecordDay(table: PushMutableTable, record: PushMutableRecord): LocalDate = when (table) {
+        PushMutableTable.DAILY_METRIC, PushMutableTable.JOURNAL -> {
+            val value = record.key["day"] as? String
+                ?: throw PushProtocolException("mutable day key is not a string")
+            runCatching { LocalDate.parse(value) }
+                .getOrElse { throw PushProtocolException("mutable day key is invalid") }
+        }
+        PushMutableTable.SLEEP_SESSION, PushMutableTable.WORKOUT -> {
+            val value = record.key["startTs"]
+            val timestamp = when (value) {
+                is Byte, is Short, is Int, is Long -> (value as Number).toLong()
+                else -> throw PushProtocolException("mutable startTs key is not an integer")
+            }
+            runCatching { Instant.ofEpochSecond(timestamp).atZone(zoneId).toLocalDate() }
+                .getOrElse { throw PushProtocolException("mutable startTs key is invalid") }
+        }
+    }
+
+    /** One append page and one checksum-minimized mutable replacement per actual source device. */
     suspend fun pushKnownDevices(
         startDeviceIndex: Int = 0,
         maxDevices: Int = Int.MAX_VALUE,

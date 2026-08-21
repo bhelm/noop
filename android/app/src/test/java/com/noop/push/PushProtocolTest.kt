@@ -143,6 +143,26 @@ class PushProtocolTest {
         assertEquals(first[0].replacementId, first[1].replacementId)
     }
 
+    @Test
+    fun mutableDayHashIsCanonicalAndDistinguishesChangesFromEmpty() {
+        val first = journalRecord("2026-08-18", "coffee", "one")
+        val same = journalRecord("2026-08-18", "coffee", "one")
+        val changed = journalRecord("2026-08-18", "coffee", "two")
+
+        assertEquals(
+            PushProtocol.mutableSnapshotHash(PushMutableTable.JOURNAL, listOf(first)),
+            PushProtocol.mutableSnapshotHash(PushMutableTable.JOURNAL, listOf(same)),
+        )
+        assertNotEquals(
+            PushProtocol.mutableSnapshotHash(PushMutableTable.JOURNAL, listOf(first)),
+            PushProtocol.mutableSnapshotHash(PushMutableTable.JOURNAL, listOf(changed)),
+        )
+        assertNotEquals(
+            PushProtocol.mutableSnapshotHash(PushMutableTable.JOURNAL, listOf(first)),
+            PushProtocol.mutableSnapshotHash(PushMutableTable.JOURNAL, emptyList()),
+        )
+    }
+
     private fun testWindow() = PushWindow("2026-08-05", "2026-08-18", 1_754_348_400L, 1_755_558_000L)
 }
 
@@ -154,4 +174,9 @@ internal fun hrRecord(rowId: Long, ts: Long, bpm: Int = 60) = PushAppendRecord(
     rowId,
     linkedMapOf("ts" to ts),
     linkedMapOf("bpm" to bpm),
+)
+
+private fun journalRecord(day: String, question: String, notes: String?) = PushMutableRecord(
+    linkedMapOf("day" to day, "question" to question),
+    linkedMapOf("answeredYes" to true, "notes" to notes, "numericValue" to null),
 )

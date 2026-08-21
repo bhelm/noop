@@ -194,11 +194,24 @@ streams have independent highwaters and may continue.
 
 ## Authoritative rolling-window delivery
 
-Mutable and recomputed tables use authoritative `replace_window` operations rather than append cursors. After
-an offload, the sender should cover the current local calendar day plus the preceding 13 local days
-(approximately 14 times 24 hours across daylight-saving changes). Day-keyed windows use `YYYY-MM-DD`;
-timestamp-keyed windows use the corresponding local-midnight bounds converted to Unix seconds.
-Bounds are always half-open: `startInclusive <= selector < endExclusive`.
+Mutable and recomputed tables use authoritative `replace_window` operations rather than append cursors.
+After an offload, the sender evaluates the current local calendar day plus the preceding 13 local days
+(approximately 14 times 24 hours across daylight-saving changes). On a fresh destination it sends that
+complete 14-day baseline. Afterwards Android stores a canonical SHA-256 separately for every local day,
+device, stream, source, and endpoint namespace. These hashes are local progress metadata and are never
+transmitted.
+
+If every daily hash is unchanged, no replacement request is necessary. If days changed, Android sends the
+smallest contiguous window spanning those days; unchanged days between the first and last changed day may
+be included. A formerly populated day whose canonical snapshot is now empty is changed and must be sent as
+an empty authoritative window. Hash progress advances only after every part receives an exact durable
+acknowledgement. Therefore a timeout or failed acknowledgement repeats the same deletion or replacement
+instead of losing it. Receivers must accept any non-empty half-open subwindow inside the mutable horizon;
+they must not require every replacement to be exactly 14 days wide.
+
+Day-keyed windows use `YYYY-MM-DD`; timestamp-keyed windows use the corresponding local-midnight bounds
+converted to Unix seconds. Bounds are always half-open:
+`startInclusive <= selector < endExclusive`.
 
 The window header member is:
 
@@ -212,6 +225,11 @@ sorted records into `parts` bounded requests. Every part has the same `replaceme
 positive `parts` value; `part` runs from 1 through `parts`; each part has its own stable `batchId`.
 An empty window is represented by one zero-record part and is still authoritative: it deletes all
 receiver rows in that scope and window. `startCursor` and `endCursor` are `null` for all parts.
+
+Daily checksums are an upload-elision mechanism, not receiver state or a synchronization command. A
+receiver remains responsible for durable storage once it acknowledges a batch. Changing the normalized
+endpoint selects a fresh progress namespace and forces the complete baseline; rotating only the bearer
+token preserves the accepted daily hashes.
 
 The receiver durably stages accepted parts. Only when every part is present does it atomically:
 
