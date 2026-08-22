@@ -30,6 +30,7 @@ class PushHttpTransport(
             .url(endpoint.url)
             .header("Authorization", "Bearer $bearerToken")
             .header("Accept", "application/json")
+            .header(ACCEPT_VERSION_HEADER, PushProtocol.VERSION)
             .get()
             .build()
         val response = try {
@@ -46,11 +47,8 @@ class PushHttpTransport(
             val failure = PushFailure(PushFailureCode.NETWORK_IO)
             return PushCapabilitiesResult.Rejected(failure.safeCode, failure.retryable, failure)
         }
-        if (response.statusCode == 404 || response.statusCode == 405) {
-            return PushCapabilitiesResult.Available(PushCapabilities.ALL)
-        }
         if (response.statusCode !in 200..299) {
-            val failure = PushFailure.http(response.statusCode)
+            val failure = PushFailure.http(response.statusCode, PushError.parseCode(response.body))
             return PushCapabilitiesResult.Rejected(failure.safeCode, failure.retryable, failure)
         }
         return try {
@@ -126,6 +124,7 @@ class PushHttpTransport(
     }
 
     companion object {
+        const val ACCEPT_VERSION_HEADER = "NOOP-Push-Accept-Version"
         private val NDJSON = "application/x-ndjson; charset=utf-8".toMediaType()
         internal fun defaultClient(): OkHttpClient = OkHttpClient.Builder()
             .followRedirects(false)

@@ -273,7 +273,9 @@ class PushCoordinator(
             return rejected(PushFailure(PushFailureCode.ACK_INVALID))
         }
         if (response.statusCode !in 200..299) {
-            return rejected(PushFailure.http(response.statusCode))
+            return rejected(
+                PushFailure.http(response.statusCode, PushError.parseCode(response.body, batch.protocolVersion)),
+            )
         }
         val ack = try {
             PushAck.parse(response.body)

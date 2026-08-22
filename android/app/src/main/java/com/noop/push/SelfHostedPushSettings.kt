@@ -104,8 +104,15 @@ class SelfHostedPushSettings private constructor(
         true
     }
 
-    fun progressNamespace(sourceId: String, endpoint: PushEndpointPolicy.ValidEndpoint): String =
-        MessageDigest.getInstance("SHA-256").digest("$sourceId\u0000${endpoint.url}".toByteArray())
+    fun progressNamespace(
+        sourceId: String,
+        endpoint: PushEndpointPolicy.ValidEndpoint,
+        protocolVersion: String = PushProtocol.VERSION,
+        receiverStateId: String = PushCapabilities.UNSCOPED_RECEIVER_STATE_ID,
+    ): String =
+        MessageDigest.getInstance("SHA-256").digest(
+            "$sourceId\u0000${endpoint.url}\u0000$protocolVersion\u0000$receiverStateId".toByteArray(),
+        )
             .take(12).joinToString("") { "%02x".format(it) }
 
     fun recordSuccess(atMillis: Long = System.currentTimeMillis()) = updateWhileEnabled {
@@ -222,7 +229,9 @@ class SelfHostedPushSettings private constructor(
             ?: return null
         val status = prefs.getInt("$KEY_CYCLE_FAILURE_STATUS.$namespace", 0)
             .takeIf { it in 100..599 }
-        return PushFailure(code, status)
+        val receiverCode = prefs.getString("$KEY_CYCLE_FAILURE_RECEIVER_CODE.$namespace", null)
+            ?.takeIf { it.matches(Regex("[a-z][a-z0-9_]{0,63}")) }
+        return PushFailure(code, status, receiverCode)
     }
 
     fun saveCycleFailure(namespace: String, failure: PushFailure?) {
@@ -230,11 +239,15 @@ class SelfHostedPushSettings private constructor(
         if (failure == null) {
             editor.remove("$KEY_CYCLE_FAILURE_CODE.$namespace")
                 .remove("$KEY_CYCLE_FAILURE_STATUS.$namespace")
+                .remove("$KEY_CYCLE_FAILURE_RECEIVER_CODE.$namespace")
         } else {
             editor.putString("$KEY_CYCLE_FAILURE_CODE.$namespace", failure.code.name)
             failure.httpStatus?.let {
                 editor.putInt("$KEY_CYCLE_FAILURE_STATUS.$namespace", it)
             } ?: editor.remove("$KEY_CYCLE_FAILURE_STATUS.$namespace")
+            failure.receiverCode?.let {
+                editor.putString("$KEY_CYCLE_FAILURE_RECEIVER_CODE.$namespace", it)
+            } ?: editor.remove("$KEY_CYCLE_FAILURE_RECEIVER_CODE.$namespace")
         }
         check(editor.commit()) { "Could not persist push failure category" }
     }
@@ -260,6 +273,7 @@ class SelfHostedPushSettings private constructor(
         private const val KEY_CYCLE_REJECTED = "cycle_rejected"
         private const val KEY_CYCLE_FAILURE_CODE = "cycle_failure_code"
         private const val KEY_CYCLE_FAILURE_STATUS = "cycle_failure_status"
+        private const val KEY_CYCLE_FAILURE_RECEIVER_CODE = "cycle_failure_receiver_code"
         private const val MAX_STATUS_CHARS = 300
         private val statusLock = Any()
 

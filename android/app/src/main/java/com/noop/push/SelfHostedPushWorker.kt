@@ -163,7 +163,6 @@ class SelfHostedPushWorker(
         val sourceId = settings.sourceId()
         // Derive progress from the exact endpoint captured by the stale-work gate. Re-reading prefs
         // here could otherwise pair an E1 HTTP request with E2 cursor state during a concurrent edit.
-        val namespace = settings.progressNamespace(sourceId, endpoint)
         val transport = PushHttpTransport(endpoint, token) { batch ->
             settings.recordCurrentStream(batch.table.wireName)
         }
@@ -184,6 +183,12 @@ class SelfHostedPushWorker(
             }
         }
         runCatching { settings.recordCapabilities(endpoint, capabilities) }
+        val namespace = settings.progressNamespace(
+            sourceId,
+            endpoint,
+            capabilities.protocolVersion,
+            capabilities.receiverStateId,
+        )
         // Capability discovery deliberately precedes Room: unsupported streams cause no table scan,
         // snapshot allocation, encoding, or POST. An empty allowlist is a valid caught-up receiver.
         if (capabilities.isEmpty) {

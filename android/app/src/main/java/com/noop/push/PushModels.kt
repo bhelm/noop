@@ -106,6 +106,24 @@ data class PushBatch(
 
 data class PushTransportResponse(val statusCode: Int, val body: ByteArray)
 
+/** Bounded, machine-readable receiver diagnostic; arbitrary response text is never retained. */
+data class PushError(val protocolVersion: String, val code: String) {
+    companion object {
+        private val SAFE_CODE = Regex("[a-z][a-z0-9_]{0,63}")
+
+        fun parseCode(bytes: ByteArray, expectedVersion: String = PushProtocol.VERSION): String? {
+            if (bytes.isEmpty() || bytes.size > PushProtocol.MAX_ACK_BYTES) return null
+            return runCatching {
+                val obj = org.json.JSONObject(bytes.toString(Charsets.UTF_8))
+                val code = obj.opt("code") as? String
+                if (obj.opt("type") == "error" && obj.opt("protocolVersion") == expectedVersion &&
+                    code != null && code.matches(SAFE_CODE)
+                ) code else null
+            }.getOrNull()
+        }
+    }
+}
+
 interface PushTransport {
     suspend fun capabilities(): PushCapabilitiesResult =
         PushCapabilitiesResult.Available(PushCapabilities.ALL)

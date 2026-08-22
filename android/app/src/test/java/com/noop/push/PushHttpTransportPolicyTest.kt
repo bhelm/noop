@@ -68,16 +68,18 @@ class PushHttpTransportPolicyTest {
     @Test fun authenticatedCapabilitiesStrictlyNarrowTheFixedV1Registry() = runBlocking {
         var method = ""
         var authorization: String? = null
+        var acceptedVersions: String? = null
         val client = OkHttpClient.Builder().addInterceptor { chain ->
             method = chain.request().method
             authorization = chain.request().header("Authorization")
+            acceptedVersions = chain.request().header("NOOP-Push-Accept-Version")
             Response.Builder()
                 .request(chain.request())
                 .protocol(Protocol.HTTP_1_1)
                 .code(200)
                 .message("ok")
                 .body(
-                    """{"type":"capabilities","protocolVersion":"1.0","streams":["hrSample","journal"]}"""
+                    """{"type":"capabilities","protocolVersion":"1.0","receiverStateId":"00000000-0000-4000-8000-000000000099","streams":["hrSample","journal"],"futureOptional":true}"""
                         .toResponseBody(),
                 )
                 .build()
@@ -88,18 +90,20 @@ class PushHttpTransportPolicyTest {
 
         assertEquals("GET", method)
         assertEquals("Bearer secret", authorization)
+        assertEquals("1.0", acceptedVersions)
         assertEquals(
             PushCapabilitiesResult.Available(
                 PushCapabilities(
                     appendTables = setOf(PushAppendTable.HR_SAMPLE),
                     mutableTables = setOf(PushMutableTable.JOURNAL),
+                    receiverStateId = "00000000-0000-4000-8000-000000000099",
                 ),
             ),
             result,
         )
     }
 
-    @Test fun legacyReceiverWithoutCapabilitiesKeepsTheWholeV1Registry() = runBlocking {
+    @Test fun receiverWithoutCapabilitiesFailsClosedBeforeHealthDataIsSent() = runBlocking {
         val client = OkHttpClient.Builder().addInterceptor { chain ->
             Response.Builder().request(chain.request()).protocol(Protocol.HTTP_1_1)
                 .code(405).message("legacy").body(ByteArray(0).toResponseBody()).build()
@@ -108,14 +112,16 @@ class PushHttpTransportPolicyTest {
 
         val result = PushHttpTransport(endpoint, "secret", client).capabilities()
 
-        assertEquals(PushCapabilitiesResult.Available(PushCapabilities.ALL), result)
+        assertTrue(result is PushCapabilitiesResult.Rejected)
+        assertEquals(PushFailureCode.HTTP_CLIENT, (result as PushCapabilitiesResult.Rejected).failure?.code)
     }
 
     @Test fun malformedOrExpandingCapabilitiesFailClosed() = runBlocking {
         val bodies = listOf(
-            """{"type":"capabilities","protocolVersion":"1.0","streams":["unknown"]}""",
-            """{"type":"capabilities","protocolVersion":"1.0","streams":["hrSample","hrSample"]}""",
-            """{"type":"capabilities","protocolVersion":"1.0","streams":"hrSample"}""",
+            """{"type":"capabilities","protocolVersion":"1.0","streams":["hrSample"]}""",
+            """{"type":"capabilities","protocolVersion":"1.0","receiverStateId":"00000000-0000-4000-8000-000000000099","streams":["unknown"]}""",
+            """{"type":"capabilities","protocolVersion":"1.0","receiverStateId":"00000000-0000-4000-8000-000000000099","streams":["hrSample","hrSample"]}""",
+            """{"type":"capabilities","protocolVersion":"1.0","receiverStateId":"00000000-0000-4000-8000-000000000099","streams":"hrSample"}""",
         )
         val endpoint = (PushEndpointPolicy.validate("https://receiver.example/push") as PushEndpointPolicy.Result.Valid).endpoint
         for (body in bodies) {

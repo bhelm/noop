@@ -484,6 +484,26 @@ class PushCoordinatorTest {
         assertTrue(result.hasRetryableFailure)
         assertEquals(PushFailureCode.CONNECTION_REFUSED, result.failure?.code)
     }
+
+    @Test
+    fun boundedReceiverErrorCodeSurvivesHttpRejection() = runBlocking {
+        val source = FakePushSource(
+            append = mutableMapOf(key(PushAppendTable.HR_SAMPLE, "a") to mutableListOf(hr(1, 10))),
+        )
+        val transport = object : PushTransport {
+            override suspend fun post(batch: PushBatch) = PushTransportResponse(
+                422,
+                """{"type":"error","protocolVersion":"1.0","code":"registry_mismatch","ignored":true}"""
+                    .toByteArray(),
+            )
+        }
+
+        val result = PushCoordinator(source, transport, MemoryProgress(), SOURCE_A)
+            .pushKnownDevices(capabilities = PushCapabilities(setOf(PushAppendTable.HR_SAMPLE), emptySet()))
+
+        assertEquals("registry_mismatch", result.failure?.receiverCode)
+        assertFalse(result.hasRetryableFailure)
+    }
 }
 
 internal fun key(table: PushTable, deviceId: String) = "${table.wireName}|$deviceId"

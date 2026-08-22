@@ -43,6 +43,18 @@ class SelfHostedPushSettingsTest {
         assertTrue(firstNamespace == settings.progressNamespace(SOURCE_A, first))
     }
 
+    @Test fun receiverStateAndNegotiatedVersionFenceProgressAtTheSameEndpoint() {
+        val settings = SelfHostedPushSettings.forTest(FakePushPrefs(), FakePushPrefs())
+        val endpoint = (PushEndpointPolicy.validate("https://one.example/push") as PushEndpointPolicy.Result.Valid).endpoint
+
+        val first = settings.progressNamespace(SOURCE_A, endpoint, "1.0", "00000000-0000-4000-8000-000000000001")
+        val resetReceiver = settings.progressNamespace(SOURCE_A, endpoint, "1.0", "00000000-0000-4000-8000-000000000002")
+        val upgradedProtocol = settings.progressNamespace(SOURCE_A, endpoint, "1.1", "00000000-0000-4000-8000-000000000001")
+
+        assertNotEquals(first, resetReceiver)
+        assertNotEquals(first, upgradedProtocol)
+    }
+
     @Test fun progressIsPersistedAndSuccessOnlyAppearsAfterCatchUpCompletes() {
         val settings = SelfHostedPushSettings.forTest(FakePushPrefs(), FakePushPrefs())
         settings.saveEndpoint("https://example.com/push")
@@ -139,6 +151,17 @@ class SelfHostedPushSettingsTest {
         assertFalse(plain.all.values.any { it.toString().contains("secret.example") })
         settings.saveCycleFailure("receiver-a", null)
         assertNull(settings.cycleFailure("receiver-a"))
+    }
+
+    @Test fun boundedReceiverErrorCodeSurvivesContinuationWithoutArbitraryText() {
+        val plain = FakePushPrefs()
+        val settings = SelfHostedPushSettings.forTest(plain, FakePushPrefs())
+        val failure = PushFailure(PushFailureCode.HTTP_PROTOCOL_REJECTED, 422, "registry_mismatch")
+
+        settings.saveCycleFailure("receiver-a", failure)
+
+        assertEquals(failure, settings.cycleFailure("receiver-a"))
+        assertFalse(plain.all.values.any { it.toString().contains("response body") })
     }
 
     internal class FakePushPrefs : SharedPreferences {
