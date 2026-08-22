@@ -19,6 +19,7 @@ import argparse
 import hashlib
 import json
 import re
+import subprocess
 import sys
 from collections import Counter, defaultdict
 from dataclasses import dataclass
@@ -1441,6 +1442,65 @@ def authority_manifest(sets: dict[str, list[str]]) -> dict[str, dict[str, object
     }
 
 
+def _working_tree_added_lines(root: Path) -> dict[str, set[int]]:
+    """Return branch/worktree additions for actionable local diagnostics."""
+    try:
+        try:
+            base = subprocess.check_output(
+                ["git", "merge-base", "HEAD", "origin/main"],
+                cwd=root,
+                text=True,
+                stderr=subprocess.DEVNULL,
+            ).strip()
+        except subprocess.CalledProcessError:
+            base = "HEAD"
+        output = subprocess.check_output(
+            ["git", "diff", "--no-ext-diff", "--unified=0", base, "--"],
+            cwd=root,
+            text=True,
+            stderr=subprocess.DEVNULL,
+        )
+    except (OSError, subprocess.CalledProcessError):
+        return {}
+    added: dict[str, set[int]] = defaultdict(set)
+    path: str | None = None
+    for line in output.splitlines():
+        if line.startswith("+++ b/"):
+            path = line[6:]
+            continue
+        if not line.startswith("@@ ") or path is None:
+            continue
+        match = re.search(r"\+(\d+)(?:,(\d+))?", line)
+        if match is None:
+            continue
+        start = int(match.group(1))
+        count = int(match.group(2) or "1")
+        added[path].update(range(start, start + count))
+    return added
+
+
+def _new_unpaired_diagnostics(
+    root: Path,
+    semantic_sets: dict[str, list[str]],
+    declarations: Iterable[Declaration],
+) -> list[Finding]:
+    """Name locally added one-sided declarations while compact authority is stale."""
+    added = _working_tree_added_lines(root)
+    unpaired = set(semantic_sets["unpaired_functions"])
+    return [
+        _finding(
+            "add-unpaired-function",
+            declaration.path,
+            declaration.line,
+            f"new one-sided {declaration.language} function {declaration.key}",
+            f"add-unpaired-function|{declaration.language}|{declaration.key}",
+        )
+        for declaration in declarations
+        if f"{declaration.language}\0{declaration.key}" in unpaired
+        and declaration.line in added.get(declaration.path, set())
+    ]
+
+
 def build_compact_twin_map(root: Path) -> dict:
     """Freeze derived semantic sets without checking in repeated inventory rows."""
     manifest = authority_manifest(semantic_authority(root))
@@ -1736,9 +1796,8 @@ def scan(root: Path, twin_map: dict) -> ScanResult:
         inventory = _inventory(root)
         if twin_map.get("schema_version") == 3:
             expanded = build_twin_map(root, inventory)
-            current = authority_manifest(
-                semantic_authority(root, expanded=expanded, inventory=inventory)
-            )
+            semantic_sets = semantic_authority(root, expanded=expanded, inventory=inventory)
+            current = authority_manifest(semantic_sets)
             checked = twin_map.get("authority", {})
             authority_drift = [
                 key for key in SEMANTIC_AUTHORITY_SETS
@@ -1747,6 +1806,7 @@ def scan(root: Path, twin_map: dict) -> ScanResult:
             twin_map = expanded
         else:
             authority_drift = []
+            semantic_sets = {}
         (
             sw_files,
             kt_files,
@@ -1776,6 +1836,10 @@ def scan(root: Path, twin_map: dict) -> ScanResult:
         )
         for section in authority_drift
     ]
+    if "unpaired_functions" in authority_drift:
+        findings.extend(
+            _new_unpaired_diagnostics(root, semantic_sets, [*sw_funcs, *kt_funcs])
+        )
     errors: list[ScanError] = []
     findings.extend(
         _twin_map_consistency_findings(
@@ -2354,6 +2418,11 @@ def main(argv: list[str] | None = None) -> int:
     ]
     if compact_drift:
         print(f"FAIL compact baseline drift in {', '.join(compact_drift)}")
+        actionable = [item for item in result.findings if item.rule.startswith("add-unpaired-")]
+        if actionable:
+            print("\nActionable source drift:")
+            for item in actionable:
+                print(f"  {item.output()}")
         print(f"\nScanned {_summary(result)}")
         return 1
 

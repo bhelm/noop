@@ -5,6 +5,7 @@ from __future__ import annotations
 import contextlib
 import io
 import json
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -94,6 +95,43 @@ class ParityLedgerTests(unittest.TestCase):
         self.swift.write_text(self.swift.read_text() + "\npublic func addedAfterFreeze() {}\n")
         result = parity_ledger.scan(self.root, compact)
         self.assertIn("twin-map-authority-drift", {item.rule for item in result.findings})
+
+    def test_compact_authority_drift_names_new_one_sided_declaration(self) -> None:
+        self.write_clean_tree()
+        subprocess.run(["git", "init", "-q"], cwd=self.root, check=True)
+        subprocess.run(["git", "add", "."], cwd=self.root, check=True)
+        subprocess.run(
+            [
+                "git", "-c", "user.name=Parity Test", "-c", "user.email=parity@example.invalid",
+                "commit", "-qm", "fixture",
+            ],
+            cwd=self.root,
+            check=True,
+        )
+        subprocess.run(["git", "branch", "origin/main", "HEAD"], cwd=self.root, check=True)
+        compact = parity_ledger.build_compact_twin_map(self.root)
+        baseline = self.baseline_for(compact)
+        self.kotlin.write_text(
+            self.kotlin.read_text()
+            + "\nfun aFreshlyInventedOneSidedHelper(value: Int): Int = value\n"
+        )
+        subprocess.run(["git", "add", "."], cwd=self.root, check=True)
+        subprocess.run(
+            [
+                "git", "-c", "user.name=Parity Test", "-c", "user.email=parity@example.invalid",
+                "commit", "-qm", "add one-sided helper",
+            ],
+            cwd=self.root,
+            check=True,
+        )
+
+        code, output = self.run_cli(compact, baseline)
+
+        self.assertEqual(1, code)
+        self.assertIn("add-unpaired-function", output)
+        self.assertIn("kotlin", output)
+        self.assertIn("android/app/src/main/java/com/noop/analytics/Engine.kt", output)
+        self.assertIn("aFreshlyInventedOneSidedHelper/1#1", output)
 
     def test_protocol_and_oura_source_pairs_are_in_inventory_scope(self) -> None:
         self.assertIn("Packages/WhoopProtocol/Sources/**/*.swift", parity_ledger.SWIFT_GLOBS)

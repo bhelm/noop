@@ -24,7 +24,9 @@ canonical semantic set. The full file/function/property/constant inventory is
 derived deterministically from source; prose evidence and name-only suggestions
 are not authority. A normal scan expands it and deep-checks every fingerprint.
 The ratchet separately materializes and scans the exact base and current trees,
-so regenerating both JSON files cannot hide a newly unpaired declaration.
+so regenerating both JSON files cannot hide a newly unpaired declaration. The ledger is
+fail-closed when invoked; repository CI enforcement is intentionally deferred to the final
+stack PR, alongside native execution and path-filtered workflow wiring.
 
 Function pairs exactly equal resolved attached source claims. File pairs derive
 from those claims before constant resolution, so stale file metadata cannot
@@ -39,7 +41,8 @@ The compact baseline stores exact-identity-set hashes grouped by rule and narrow
 source scope. Every group has a review reason and provenance; no wildcard or
 umbrella issue matches findings.
 
-CI should omit `--offline`. Every governed `issue` field must use the exact
+When the final stack PR wires this gate into CI, that invocation must omit
+`--offline`. Every governed `issue` field must use the exact
 `owner/repository#number` form. Online validation derives the API path from
 that value and verifies both the repository and issue number; pull requests do
 not satisfy an issue reference. A new exact exemption additionally needs its
@@ -81,5 +84,7 @@ consistency is proved by independent rescanning and canonical set hashes.
 ## Layer boundary
 
 This foundation has no module runner, case corpus, coverage report, Gradle,
-SwiftPM, workflow, or native-test dependency. Those layers can consume the
-inventory later without making this scanner depend on their orchestration.
+SwiftPM, governance-gate workflow invocation, or native-test dependency. The
+existing generic Tools test workflow only discovers its Python unit tests and
+protects their count. Later layers can consume the inventory without making
+this scanner depend on their orchestration.
