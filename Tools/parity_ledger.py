@@ -24,7 +24,6 @@ import sys
 from collections import Counter, defaultdict
 from dataclasses import dataclass
 from decimal import Decimal, InvalidOperation
-from functools import lru_cache
 from pathlib import Path
 from typing import Iterable
 
@@ -232,22 +231,63 @@ def _relative(root: Path, path: Path) -> str:
     return path.relative_to(root).as_posix()
 
 
-@lru_cache(maxsize=None)
-def _read_cached(path: str, modified_ns: int, size: int) -> str:
-    del modified_ns, size
-    source = Path(path)
-    try:
-        return source.read_text(encoding="utf-8", errors="strict")
-    except UnicodeDecodeError as exc:
-        raise _InvalidSourceEncoding(source, str(exc)) from exc
-
-
 def _read(path: Path) -> str:
-    stat = path.stat()
-    return _read_cached(str(path), stat.st_mtime_ns, stat.st_size)
+    try:
+        return path.read_text(encoding="utf-8", errors="strict")
+    except UnicodeDecodeError as exc:
+        raise _InvalidSourceEncoding(path, str(exc)) from exc
 
 
-@lru_cache(maxsize=None)
+class _SourceSnapshot:
+    """Operation-local immutable source view; discarded after one top-level scan."""
+
+    def __init__(self) -> None:
+        self._text: dict[Path, str] = {}
+        self._masked: dict[tuple[Path, bool], str] = {}
+        self._functions: dict[tuple[Path, str], tuple[Declaration, ...]] = {}
+        self._properties: dict[tuple[Path, str], tuple[Declaration, ...]] = {}
+        self._constants: dict[tuple[Path, str], tuple[Constant, ...]] = {}
+
+    def text(self, path: Path) -> str:
+        resolved = path.resolve()
+        if resolved not in self._text:
+            self._text[resolved] = _read(resolved)
+        return self._text[resolved]
+
+    def masked(self, path: Path, *, kotlin_templates: bool = False) -> str:
+        resolved = path.resolve()
+        key = (resolved, kotlin_templates)
+        if key not in self._masked:
+            self._masked[key] = _mask_non_code(
+                self.text(resolved), kotlin_templates=kotlin_templates
+            )
+        return self._masked[key]
+
+    def functions(self, root: Path, path: Path, language: str) -> tuple[Declaration, ...]:
+        key = (path.resolve(), language)
+        if key not in self._functions:
+            self._functions[key] = _parse_functions_content(
+                str(root.resolve()), str(key[0]), language, self.text(key[0]), self.masked(key[0])
+            )
+        return self._functions[key]
+
+    def properties(self, root: Path, path: Path, language: str) -> tuple[Declaration, ...]:
+        key = (path.resolve(), language)
+        if key not in self._properties:
+            self._properties[key] = _parse_properties_content(
+                str(root.resolve()), str(key[0]), language, self.text(key[0]), self.masked(key[0])
+            )
+        return self._properties[key]
+
+    def constants(self, root: Path, path: Path, language: str) -> tuple[Constant, ...]:
+        key = (path.resolve(), language)
+        if key not in self._constants:
+            self._constants[key] = _parse_constants_content(
+                str(root.resolve()), str(key[0]), language, self.text(key[0]), self.masked(key[0])
+            )
+        return self._constants[key]
+
+
 def _mask_non_code(text: str, kotlin_templates: bool = False) -> str:
     """Replace comments and string contents with spaces, preserving newlines."""
     if kotlin_templates:
@@ -610,15 +650,12 @@ def _receiver_owner(header: str) -> str | None:
     return names[0] if names else None
 
 
-@lru_cache(maxsize=None)
-def _parse_functions_cached(
-    root_string: str, path_string: str, language: str, modified_ns: int, size: int
+def _parse_functions_content(
+    root_string: str, path_string: str, language: str, text: str, masked: str | None = None
 ) -> tuple[Declaration, ...]:
-    del modified_ns, size
     root = Path(root_string)
     path = Path(path_string)
-    text = _read(path)
-    masked = _mask_non_code(text)
+    masked = masked if masked is not None else _mask_non_code(text)
     pattern = SWIFT_FUNC if language == "swift" else KOTLIN_FUNC
     rel = _relative(root, path)
     fallback_owner = path.stem.replace("+Trace", "Trace")
@@ -664,24 +701,20 @@ def _parse_functions_cached(
 
 
 def parse_functions(root: Path, path: Path, language: str) -> list[Declaration]:
-    stat = path.stat()
     return list(
-        _parse_functions_cached(
-            str(root.resolve()), str(path.resolve()), language, stat.st_mtime_ns, stat.st_size
+        _parse_functions_content(
+            str(root.resolve()), str(path.resolve()), language, _read(path)
         )
     )
 
 
-@lru_cache(maxsize=None)
-def _parse_properties_cached(
-    root_string: str, path_string: str, language: str, modified_ns: int, size: int
+def _parse_properties_content(
+    root_string: str, path_string: str, language: str, text: str, masked: str | None = None
 ) -> tuple[Declaration, ...]:
     """Inventory computed properties/getters, excluding stored fields."""
-    del modified_ns, size
     root = Path(root_string)
     path = Path(path_string)
-    text = _read(path)
-    masked = _mask_non_code(text)
+    masked = masked if masked is not None else _mask_non_code(text)
     rel = _relative(root, path)
     fallback_owner = path.stem.replace("+Trace", "Trace")
     spans = _type_spans(masked, language)
@@ -716,10 +749,9 @@ def _parse_properties_cached(
 
 
 def parse_properties(root: Path, path: Path, language: str) -> list[Declaration]:
-    stat = path.stat()
     return list(
-        _parse_properties_cached(
-            str(root.resolve()), str(path.resolve()), language, stat.st_mtime_ns, stat.st_size
+        _parse_properties_content(
+            str(root.resolve()), str(path.resolve()), language, _read(path)
         )
     )
 
@@ -865,15 +897,12 @@ def _literal(raw: str) -> tuple[str, str] | None:
         return None
 
 
-@lru_cache(maxsize=None)
-def _parse_constants_cached(
-    root_string: str, path_string: str, language: str, modified_ns: int, size: int
+def _parse_constants_content(
+    root_string: str, path_string: str, language: str, text: str, masked: str | None = None
 ) -> tuple[Constant, ...]:
-    del modified_ns, size
     root = Path(root_string)
     path = Path(path_string)
-    text = _read(path)
-    masked = _mask_non_code(text)
+    masked = masked if masked is not None else _mask_non_code(text)
     if language == "swift":
         pattern = re.compile(r"\blet\s+([A-Za-z_][A-Za-z0-9_]*)\s*(?::[^=\n]+)?=")
     else:
@@ -908,16 +937,16 @@ def _parse_constants_cached(
 
 
 def parse_constants(root: Path, path: Path, language: str) -> list[Constant]:
-    stat = path.stat()
     return list(
-        _parse_constants_cached(
-            str(root.resolve()), str(path.resolve()), language, stat.st_mtime_ns, stat.st_size
+        _parse_constants_content(
+            str(root.resolve()), str(path.resolve()), language, _read(path)
         )
     )
 
 
 def _inventory(
     root: Path,
+    snapshot: _SourceSnapshot | None = None,
 ) -> tuple[
     list[Path],
     list[Path],
@@ -928,14 +957,23 @@ def _inventory(
     list[Constant],
     list[Constant],
 ]:
+    snapshot = snapshot or _SourceSnapshot()
     swift_files = _paths(root, SWIFT_GLOBS)
     kotlin_files = _paths(root, KOTLIN_GLOBS)
-    swift_functions = [item for path in swift_files for item in parse_functions(root, path, "swift")]
-    kotlin_functions = [item for path in kotlin_files for item in parse_functions(root, path, "kotlin")]
-    swift_properties = [item for path in swift_files for item in parse_properties(root, path, "swift")]
-    kotlin_properties = [item for path in kotlin_files for item in parse_properties(root, path, "kotlin")]
-    swift_constants = [item for path in swift_files for item in parse_constants(root, path, "swift")]
-    kotlin_constants = [item for path in kotlin_files for item in parse_constants(root, path, "kotlin")]
+    swift_functions: list[Declaration] = []
+    kotlin_functions: list[Declaration] = []
+    swift_properties: list[Declaration] = []
+    kotlin_properties: list[Declaration] = []
+    swift_constants: list[Constant] = []
+    kotlin_constants: list[Constant] = []
+    for paths, language, functions, properties, constants in (
+        (swift_files, "swift", swift_functions, swift_properties, swift_constants),
+        (kotlin_files, "kotlin", kotlin_functions, kotlin_properties, kotlin_constants),
+    ):
+        for path in paths:
+            functions.extend(snapshot.functions(root, path, language))
+            properties.extend(snapshot.properties(root, path, language))
+            constants.extend(snapshot.constants(root, path, language))
     return (
         swift_files,
         kotlin_files,
@@ -948,9 +986,10 @@ def _inventory(
     )
 
 
-def _annotation_count(files: list[Path]) -> int:
+def _annotation_count(files: list[Path], snapshot: _SourceSnapshot | None = None) -> int:
+    snapshot = snapshot or _SourceSnapshot()
     pattern = re.compile(r"\b(?:twin|parity)\b", re.I)
-    return sum(len(pattern.findall(_read(path))) for path in files)
+    return sum(len(pattern.findall(snapshot.text(path))) for path in files)
 
 
 def _normal_name(name: str) -> str:
@@ -1000,7 +1039,14 @@ def _target(raw: str) -> tuple[str, str | None] | None:
     return name, owner
 
 
-def parse_twin_references(root: Path, files: list[Path], language: str, functions: list[Declaration]) -> list[TwinReference]:
+def parse_twin_references(
+    root: Path,
+    files: list[Path],
+    language: str,
+    functions: list[Declaration],
+    snapshot: _SourceSnapshot | None = None,
+) -> list[TwinReference]:
+    snapshot = snapshot or _SourceSnapshot()
     by_path: dict[str, list[Declaration]] = defaultdict(list)
     for declaration in functions:
         by_path[declaration.path].append(declaration)
@@ -1008,7 +1054,7 @@ def parse_twin_references(root: Path, files: list[Path], language: str, function
     expected = "kotlin" if language == "swift" else "swift"
     for path in files:
         rel = _relative(root, path)
-        text = _read(path)
+        text = snapshot.text(path)
         claim_ordinals: Counter[tuple[str, str | None]] = Counter()
         for start, end, comment in _comment_blocks(text, language):
             if "twin" not in comment.lower() or expected not in comment.lower():
@@ -1154,7 +1200,13 @@ def resolved_file_pairs(
     }
 
 
-def _symbol_owners(root: Path, files: list[Path], declarations: list[Declaration]) -> dict[str, set[str]]:
+def _symbol_owners(
+    root: Path,
+    files: list[Path],
+    declarations: list[Declaration],
+    snapshot: _SourceSnapshot | None = None,
+) -> dict[str, set[str]]:
+    snapshot = snapshot or _SourceSnapshot()
     symbols: dict[str, set[str]] = defaultdict(set)
     for item in declarations:
         symbols[_normal_name(item.name)].update((_normal_name(item.owner), _normal_name(Path(item.path).stem)))
@@ -1162,8 +1214,8 @@ def _symbol_owners(root: Path, files: list[Path], declarations: list[Declaration
         file_owner = _normal_name(path.stem)
         symbols[file_owner].add(file_owner)
         language = "swift" if path.suffix == ".swift" else "kotlin"
-        text = _read(path)
-        masked = _mask_non_code(text)
+        text = snapshot.text(path)
+        masked = snapshot.masked(path)
         spans = _type_spans(masked, language)
         for _, _, name in spans:
             symbols[_normal_name(name)].add(file_owner)
@@ -1268,22 +1320,44 @@ def _property_candidates(
     ]
 
 
-def _reference_declarations(root: Path) -> tuple[list[Path], list[Declaration]]:
+def _reference_declarations(
+    root: Path,
+    inventory_declarations: tuple[
+        list[Declaration], list[Declaration], list[Declaration], list[Declaration]
+    ] | None = None,
+    snapshot: _SourceSnapshot | None = None,
+) -> tuple[list[Path], list[Declaration]]:
+    snapshot = snapshot or _SourceSnapshot()
+    if inventory_declarations is None:
+        inventory = _inventory(root, snapshot)
+        inventory_declarations = (inventory[2], inventory[3], inventory[4], inventory[5])
     files = _paths(root, REFERENCE_GLOBS)
-    declarations = [
-        item for path in files
-        for item in (
-            parse_functions(root, path, "swift" if path.suffix == ".swift" else "kotlin")
-            + parse_properties(root, path, "swift" if path.suffix == ".swift" else "kotlin")
-        )
-    ]
+    governed: dict[str, list[Declaration]] = defaultdict(list)
+    for source_declarations in inventory_declarations:
+        for item in source_declarations:
+            governed[item.path].append(item)
+    declarations: list[Declaration] = []
+    for path in files:
+        relative = _relative(root, path)
+        existing = governed.get(relative, [])
+        if existing:
+            declarations.extend(existing)
+            continue
+        language = "swift" if path.suffix == ".swift" else "kotlin"
+        declarations.extend(snapshot.functions(root, path, language))
+        declarations.extend(snapshot.properties(root, path, language))
     return files, declarations
 
 
-def build_twin_map(root: Path, inventory: tuple | None = None) -> dict:
+def build_twin_map(
+    root: Path,
+    inventory: tuple | None = None,
+    snapshot: _SourceSnapshot | None = None,
+) -> dict:
     """Derive the full internal semantic inventory from source."""
     root = root.resolve()
-    inventory = inventory or _inventory(root)
+    snapshot = snapshot or _SourceSnapshot()
+    inventory = inventory or _inventory(root, snapshot)
     (
         sw_files,
         kt_files,
@@ -1294,11 +1368,13 @@ def build_twin_map(root: Path, inventory: tuple | None = None) -> dict:
         sw_consts,
         kt_consts,
     ) = inventory
-    reference_files, reference_declarations = _reference_declarations(root)
+    reference_files, reference_declarations = _reference_declarations(
+        root, (sw_funcs, kt_funcs, sw_properties, kt_properties), snapshot
+    )
     reference_functions = [item for item in reference_declarations if item.kind == "function"]
     repo_sw_funcs = [item for item in reference_functions if item.language == "swift"]
     repo_kt_funcs = [item for item in reference_functions if item.language == "kotlin"]
-    refs = parse_twin_references(root, sw_files, "swift", sw_funcs) + parse_twin_references(root, kt_files, "kotlin", kt_funcs)
+    refs = parse_twin_references(root, sw_files, "swift", sw_funcs, snapshot) + parse_twin_references(root, kt_files, "kotlin", kt_funcs, snapshot)
     pairs = set(resolved_attached_function_pairs(refs, repo_sw_funcs, repo_kt_funcs))
 
     paired_sw = {left for left, _ in pairs}
@@ -1371,11 +1447,13 @@ def semantic_authority(
     *,
     expanded: dict | None = None,
     inventory: tuple | None = None,
+    snapshot: _SourceSnapshot | None = None,
 ) -> dict[str, list[str]]:
     """Return exact canonical semantic sets, excluding descriptions and suggestions."""
     root = root.resolve()
-    inventory = inventory or _inventory(root)
-    expanded = expanded or build_twin_map(root, inventory)
+    snapshot = snapshot or _SourceSnapshot()
+    inventory = inventory or _inventory(root, snapshot)
+    expanded = expanded or build_twin_map(root, inventory, snapshot)
     (
         sw_files,
         kt_files,
@@ -1690,13 +1768,15 @@ def _call_sites(
     root: Path,
     globs: tuple[str, ...],
     errors: list[ScanError],
+    snapshot: _SourceSnapshot | None = None,
 ) -> dict[str, list[CallSite]]:
+    snapshot = snapshot or _SourceSnapshot()
     calls: dict[str, list[CallSite]] = {"swift": [], "kotlin": []}
     for path in _paths(root, globs):
         language = "swift" if path.suffix == ".swift" else "kotlin"
-        text = _read(path)
+        text = snapshot.text(path)
         try:
-            masked = _mask_non_code(text, kotlin_templates=language == "kotlin")
+            masked = snapshot.masked(path, kotlin_templates=language == "kotlin")
         except _MalformedKotlinTemplate as error:
             errors.append(
                 ScanError(
@@ -1707,7 +1787,7 @@ def _call_sites(
                 )
             )
             continue
-        declarations = parse_functions(root, path, language)
+        declarations = snapshot.functions(root, path, language)
         declaration_openings = {item.opening for item in declarations}
         spans = _type_spans(masked, language)
         fallback_owner = path.stem.replace("+Trace", "Trace")
@@ -1786,6 +1866,7 @@ def _declaration_call_counts(
 
 def scan(root: Path, twin_map: dict) -> ScanResult:
     root = root.resolve()
+    snapshot = _SourceSnapshot()
     compact_exemptions = twin_map.get("exemptions", [])
     accepted_missing_claimants = {
         item.get("identity")
@@ -1793,10 +1874,12 @@ def scan(root: Path, twin_map: dict) -> ScanResult:
         if isinstance(item, dict) and item.get("kind") == "bootstrap-unpaired-function"
     }
     try:
-        inventory = _inventory(root)
+        inventory = _inventory(root, snapshot)
         if twin_map.get("schema_version") == 3:
-            expanded = build_twin_map(root, inventory)
-            semantic_sets = semantic_authority(root, expanded=expanded, inventory=inventory)
+            expanded = build_twin_map(root, inventory, snapshot)
+            semantic_sets = semantic_authority(
+                root, expanded=expanded, inventory=inventory, snapshot=snapshot
+            )
             current = authority_manifest(semantic_sets)
             checked = twin_map.get("authority", {})
             authority_drift = [
@@ -1817,7 +1900,9 @@ def scan(root: Path, twin_map: dict) -> ScanResult:
             sw_consts,
             kt_consts,
         ) = inventory
-        reference_files, all_reference_declarations = _reference_declarations(root)
+        reference_files, all_reference_declarations = _reference_declarations(
+            root, (sw_funcs, kt_funcs, sw_properties, kt_properties), snapshot
+        )
         repo_sw_funcs = [item for item in all_reference_declarations if item.language == "swift" and item.kind == "function"]
         repo_kt_funcs = [item for item in all_reference_declarations if item.language == "kotlin" and item.kind == "function"]
     except _InvalidSourceEncoding as error:
@@ -1855,8 +1940,8 @@ def scan(root: Path, twin_map: dict) -> ScanResult:
     )
 
     source_refs = (
-        parse_twin_references(root, sw_files, "swift", sw_funcs)
-        + parse_twin_references(root, kt_files, "kotlin", kt_funcs)
+        parse_twin_references(root, sw_files, "swift", sw_funcs, snapshot)
+        + parse_twin_references(root, kt_files, "kotlin", kt_funcs, snapshot)
     )
     source_resolutions = attached_function_resolutions(
         source_refs, repo_sw_funcs, repo_kt_funcs
@@ -1999,16 +2084,12 @@ def scan(root: Path, twin_map: dict) -> ScanResult:
             )
 
     all_production_files = _paths(root, PRODUCTION_GLOBS)
-    all_functions = [
-        item
-        for path in all_production_files
-        for item in parse_functions(root, path, "swift" if path.suffix == ".swift" else "kotlin")
-    ]
-    all_properties = [
-        item
-        for path in all_production_files
-        for item in parse_properties(root, path, "swift" if path.suffix == ".swift" else "kotlin")
-    ]
+    all_functions: list[Declaration] = []
+    all_properties: list[Declaration] = []
+    for path in all_production_files:
+        language = "swift" if path.suffix == ".swift" else "kotlin"
+        all_functions.extend(snapshot.functions(root, path, language))
+        all_properties.extend(snapshot.properties(root, path, language))
     all_swift_files = [path for path in reference_files if path.suffix == ".swift"]
     all_kotlin_files = [path for path in reference_files if path.suffix == ".kt"]
     all_swift_functions = [item for item in all_functions if item.language == "swift"]
@@ -2016,21 +2097,24 @@ def scan(root: Path, twin_map: dict) -> ScanResult:
 
     reference_swift_declarations = [item for item in all_reference_declarations if item.language == "swift"]
     reference_kotlin_declarations = [item for item in all_reference_declarations if item.language == "kotlin"]
-    refs = parse_twin_references(root, all_swift_files, "swift", reference_swift_declarations) + parse_twin_references(
+    refs = parse_twin_references(root, all_swift_files, "swift", reference_swift_declarations, snapshot) + parse_twin_references(
         root,
         all_kotlin_files,
         "kotlin",
         reference_kotlin_declarations,
+        snapshot,
     )
     swift_symbols = _symbol_owners(
         root,
         all_swift_files,
         reference_swift_declarations,
+        snapshot,
     )
     kotlin_symbols = _symbol_owners(
         root,
         all_kotlin_files,
         reference_kotlin_declarations,
+        snapshot,
     )
     resolved_refs = 0
     for reference in refs:
@@ -2132,10 +2216,10 @@ def scan(root: Path, twin_map: dict) -> ScanResult:
 
     inventory_functions = sw_funcs + kt_funcs
     prod_calls = _declaration_call_counts(
-        inventory_functions, _call_sites(root, PRODUCTION_GLOBS, errors)
+        inventory_functions, _call_sites(root, PRODUCTION_GLOBS, errors, snapshot)
     )
     test_calls = _declaration_call_counts(
-        inventory_functions, _call_sites(root, TEST_GLOBS, errors)
+        inventory_functions, _call_sites(root, TEST_GLOBS, errors, snapshot)
     )
     for declaration in sw_funcs + kt_funcs:
         if test_calls.get(declaration.key, 0) > 0 and prod_calls.get(declaration.key, 0) == 0:
@@ -2201,8 +2285,8 @@ def scan(root: Path, twin_map: dict) -> ScanResult:
         "kotlin_properties": len(kt_properties),
         "swift_constants": len(sw_consts),
         "kotlin_constants": len(kt_consts),
-        "swift_parity_annotations": _annotation_count(sw_files),
-        "kotlin_parity_annotations": _annotation_count(kt_files),
+        "swift_parity_annotations": _annotation_count(sw_files, snapshot),
+        "kotlin_parity_annotations": _annotation_count(kt_files, snapshot),
         "declared_twin_references": len(refs),
         "resolved_twin_references": resolved_refs,
         "constant_pairs": len(dynamic_pairs | mapped_pairs),

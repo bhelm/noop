@@ -5,11 +5,13 @@ from __future__ import annotations
 import contextlib
 import io
 import json
+import os
 import subprocess
 import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 TOOLS = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(TOOLS))
@@ -427,6 +429,48 @@ enum Engine {
         self.assertIn("unmapped-declared-function-pair", rules)
         self.assertIn("stale-declared-function-pair", rules)
 
+    def test_same_metadata_retarget_is_rescanned_from_current_content(self) -> None:
+        self.swift.write_text(
+            """public enum Engine {
+    /// Kotlin twin: `Engine.score`.
+    public static func score(_ value: Int) -> Int { value }
+}
+"""
+        )
+        self.kotlin.write_text(
+            """object Engine {
+    fun score(value: Int): Int = value
+    fun other(value: Int): Int = value
+}
+"""
+        )
+        frozen_map = parity_ledger.build_twin_map(self.root)
+        original_stat = self.swift.stat()
+        original_size = original_stat.st_size
+
+        self.swift.write_text(self.swift.read_text().replace("Engine.score", "Engine.other"))
+        self.assertEqual(original_size, self.swift.stat().st_size)
+        os.utime(self.swift, ns=(original_stat.st_atime_ns, original_stat.st_mtime_ns))
+
+        rules = {item.rule for item in self.findings(frozen_map)}
+        self.assertIn("unmapped-declared-function-pair", rules)
+        self.assertIn("stale-declared-function-pair", rules)
+
+    def test_scan_uses_one_immutable_source_snapshot_per_file(self) -> None:
+        self.write_clean_tree()
+        twin_map = parity_ledger.build_twin_map(self.root)
+        original_read = parity_ledger._read
+        reads: list[Path] = []
+
+        def recording_read(path: Path) -> str:
+            reads.append(path)
+            return original_read(path)
+
+        with mock.patch.object(parity_ledger, "_read", side_effect=recording_read):
+            parity_ledger.scan(self.root, twin_map)
+
+        self.assertEqual(sorted([self.swift, self.kotlin]), sorted(reads))
+
     def test_retargeted_claims_cannot_hide_behind_stale_file_and_constant_pairs(self) -> None:
         swift_one = self.swift.with_name("One.swift")
         swift_two = self.swift.with_name("Two.swift")
@@ -650,6 +694,19 @@ enum SwiftTwo {
         rules = {finding.rule for finding in self.findings(twin_map)}
         self.assertIn("constant-value-mismatch", rules)
         self.assertEqual(1, self.exit_code(twin_map))
+
+    def test_same_metadata_constant_change_is_rescanned_from_current_content(self) -> None:
+        self.write_clean_tree()
+        twin_map = parity_ledger.build_twin_map(self.root)
+        original_stat = self.kotlin.stat()
+        original_size = original_stat.st_size
+
+        self.kotlin.write_text(self.kotlin.read_text().replace("SAMPLE_LIMIT = 3", "SAMPLE_LIMIT = 4"))
+        self.assertEqual(original_size, self.kotlin.stat().st_size)
+        os.utime(self.kotlin, ns=(original_stat.st_atime_ns, original_stat.st_mtime_ns))
+
+        rules = {finding.rule for finding in self.findings(twin_map)}
+        self.assertIn("constant-value-mismatch", rules)
 
     def test_platform_database_schema_versions_are_not_parity_twins(self) -> None:
         swift = self.root / "Packages/WhoopStore/Sources/WhoopStore/WhoopStore.swift"
