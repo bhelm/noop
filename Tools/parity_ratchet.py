@@ -30,12 +30,6 @@ import parity_ledger
 ROOT = Path(__file__).resolve().parent.parent
 TWIN_MAP_PATH = "Tools/parity_twin_map.json"
 LEDGER_BASELINE_PATH = "Tools/parity_ledger_baseline.json"
-SDNN_BOOTSTRAP_IDENTITY = (
-    "swift\0Packages/StrandAnalytics/Sources/StrandAnalytics/"
-    "HRVAnalyzer.swift::sdnnIndex/2#1"
-)
-
-
 class RatchetError(ValueError):
     """Raised when governance inputs cannot be interpreted safely."""
 
@@ -285,22 +279,6 @@ def _exemption_payload_has_identity(
     )
 
 
-def _bootstrap_payload_documents_sdnn(
-    issue: issue_ref.IssueRef, payload: dict | None, identity_sha256: str
-) -> bool:
-    """Bind the one pre-existing debt without pretending its old issue is newly fresh."""
-    if _exemption_payload_has_identity(issue, payload, identity_sha256):
-        return True
-    body = payload.get("body") if isinstance(payload, dict) else None
-    return (
-        issue == issue_ref.parse_current("bhelm/noop#18")
-        and _issue_payload_matches(issue, payload)
-        and isinstance(body, str)
-        and "HRVAnalyzer.swift:304" in body
-        and "sdnnIndex" in body
-    )
-
-
 def exemption_issue_is_bound(
     issue: issue_ref.IssueRef, identity_sha256: str, base_created_at: str
 ) -> bool:
@@ -409,7 +387,6 @@ def compare_metadata(root: Path, base: str, *, offline: bool) -> list[str]:
     old_map = _read_base(root, base, TWIN_MAP_PATH)
     old_baseline = _read_base(root, base, LEDGER_BASELINE_PATH)
     new_exemptions: list[dict] = []
-    bootstrap_exemptions: list[dict] = []
     if old_map is not None:
         _validate_twin_map(old_map, f"{base}:{TWIN_MAP_PATH}")
         with _base_tree(root, base) as base_root:
@@ -467,29 +444,11 @@ def compare_metadata(root: Path, base: str, *, offline: bool) -> list[str]:
         ]
     elif old_map is None:
         exemptions = current_map.get("exemptions", [])
-        reviewed_debt = parity_ledger.bootstrap_unpaired_debts(
-            root, {SDNN_BOOTSTRAP_IDENTITY}
-        )
-        if reviewed_debt and not exemptions:
-            errors.append(f"{TWIN_MAP_PATH}: existing sdnnIndex debt requires its exact issue 18 bootstrap exemption")
-        expected = {
-            "kind": "bootstrap-unpaired-function",
-            "identity": SDNN_BOOTSTRAP_IDENTITY,
-            "issue": "bhelm/noop#18",
-        }
-        if len(exemptions) > 1:
-            errors.append(f"{TWIN_MAP_PATH}: bootstrap permits only the single reviewed sdnnIndex exemption")
-        for exemption in exemptions:
-            if any(exemption.get(key) != value for key, value in expected.items()):
-                errors.append(f"{TWIN_MAP_PATH}: bootstrap exemption is not the exact reviewed sdnnIndex issue 18 debt")
-            elif not _exemption_applies(
-                (exemption["kind"], exemption["identity"]), current_sets,
-                {item.identity for item in current_scan.findings}, current_scan.counters,
-                current_scan.bootstrap_unpaired_debts,
-            ):
-                errors.append(f"{TWIN_MAP_PATH}: bootstrap exemption is stale or its exact attached claim is absent")
-            else:
-                bootstrap_exemptions.append(exemption)
+        if exemptions:
+            errors.append(
+                f"{TWIN_MAP_PATH}: bootstrap cannot introduce exemptions; "
+                "add issue-bound authority in a later reviewed change"
+            )
 
     if old_baseline is not None:
         _validate_baseline(old_baseline, f"{base}:{LEDGER_BASELINE_PATH}")
@@ -507,14 +466,6 @@ def compare_metadata(root: Path, base: str, *, offline: bool) -> list[str]:
             ):
                 errors.append(
                     f"issue {issue} is not fresh after the base or lacks the exact identity-hash marker"
-                )
-        for exemption in bootstrap_exemptions:
-            issue = issue_ref.parse_current(exemption["issue"])
-            if not _bootstrap_payload_documents_sdnn(
-                issue, payloads.get(issue), exemption["identity_sha256"]
-            ):
-                errors.append(
-                    f"issue {issue} lacks the exact bootstrap identity-hash marker or reviewed source tokens"
                 )
     return errors
 
