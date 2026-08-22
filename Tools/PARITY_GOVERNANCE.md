@@ -69,15 +69,8 @@ Review the expanded semantic diff before retaining generated hashes. A new
 unpaired item, a removed function/property/constant pair, or a new finding needs
 an exact `exemptions[]` entry containing `kind`, `identity`, `identity_sha256`,
 one fresh repository-qualified `issue`, and a narrow `reason`. Stale exemptions
-fail. The sole bootstrap exception is the exact existing Swift `sdnnIndex/2#1`
-missing-twin claim tracked by `bhelm/noop#18`: the local map binds its exact
-identity hash, while the pre-existing issue must either contain that marker or
-the reviewed exact `HRVAnalyzer.swift:304` and `sdnnIndex` source tokens. It is
-not artificially required to postdate the base. New exemptions still require
-both a fresh issue and the exact identity-hash marker.
-Removing the false comment does not hide the declaration debt; landing the real
-Kotlin counterpart makes the exemption stale. No other bootstrap exemption or
-downgrade is accepted, so the source-comment hygiene change can land independently.
+fail. New exemptions require both a fresh issue and the exact identity-hash
+marker; no bootstrap exemption or downgrade is accepted.
 Do not preserve stale findings or freeze commit hashes in tests; repository
 consistency is proved by independent rescanning and canonical set hashes.
 

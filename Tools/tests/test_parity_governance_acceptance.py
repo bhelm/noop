@@ -431,77 +431,28 @@ class GovernanceRatchetTests(unittest.TestCase):
         self.write("Tools/parity_ledger_baseline.json", parity_ledger.build_compact_baseline(parity_ledger.scan(self.root, compact)))
         self.assertEqual([], parity_ratchet.compare_metadata(self.root, base, offline=True))
 
-    def test_bootstrap_allows_only_the_exact_existing_sdnn_issue_18_debt(self) -> None:
-        swift = self.root / "Packages/StrandAnalytics/Sources/StrandAnalytics/HRVAnalyzer.swift"
-        kotlin = self.root / "android/app/src/main/java/com/noop/analytics/HrvAnalyzer.kt"
-        swift.parent.mkdir(parents=True, exist_ok=True)
-        kotlin.parent.mkdir(parents=True, exist_ok=True)
-        swift.write_text(
-            """enum HRVAnalyzer {
-    /// Kotlin twin: `HrvAnalyzer.sdnnIndex`.
-    static func sdnnIndex(_ rr: [Int], segmentSec: Int = 300) -> Int { 0 }
-}
-""",
-            encoding="utf-8",
-        )
-        kotlin.write_text("object HrvAnalyzer {}\n", encoding="utf-8")
+    def test_bootstrap_cannot_introduce_exemptions(self) -> None:
+        marker = self.root / "README"
+        marker.write_text("base\n", encoding="utf-8")
         base = self.commit()
         compact = parity_ledger.build_compact_twin_map(self.root)
-        identity = "swift\0Packages/StrandAnalytics/Sources/StrandAnalytics/HRVAnalyzer.swift::sdnnIndex/2#1"
+        identity = "swift\0Example.swift::invented/0#1"
         compact["exemptions"] = [{
             "kind": "bootstrap-unpaired-function",
             "identity": identity,
             "identity_sha256": parity_ledger._canonical_sha256(identity),
             "issue": "bhelm/noop#18",
-            "reason": "Issue 18 records the exact existing Swift-only sdnnIndex declaration debt.",
+            "reason": "Bootstrap must not accept pre-reviewed debt implicitly.",
         }]
         self.write("Tools/parity_twin_map.json", compact)
-        result = parity_ledger.scan(self.root, compact)
-        self.assertEqual([], result.errors)
-        self.write("Tools/parity_ledger_baseline.json", parity_ledger.build_compact_baseline(result))
-        self.assertEqual([], parity_ratchet.compare_metadata(self.root, base, offline=True))
-        payload = {
-            "number": 18,
-            "repository_url": "https://api.github.com/repos/bhelm/noop",
-            "html_url": "https://github.com/bhelm/noop/issues/18",
-            "created_at": "2020-01-01T00:00:00Z",
-            "body": "The issue exists but has no governance identity marker.",
-        }
-        with mock.patch.object(parity_ratchet, "_fetch_issue", return_value=payload):
-            online_errors = parity_ratchet.compare_metadata(self.root, base, offline=False)
-        self.assertTrue(any("identity-hash marker" in error for error in online_errors), online_errors)
-        payload["body"] = (
-            "HRVAnalyzer.swift:304 documents sdnnIndex as missing on Android; "
-            "the exact local declaration identity remains hash-bound by the map."
+        self.write(
+            "Tools/parity_ledger_baseline.json",
+            parity_ledger.build_compact_baseline(parity_ledger.scan(self.root, compact)),
         )
-        with mock.patch.object(parity_ratchet, "_fetch_issue", return_value=payload):
-            self.assertEqual([], parity_ratchet.compare_metadata(self.root, base, offline=False))
 
-        swift.write_text(swift.read_text().replace("    /// Kotlin twin: `HrvAnalyzer.sdnnIndex`.\n", ""), encoding="utf-8")
-        compact = parity_ledger.build_compact_twin_map(self.root) | {"exemptions": compact["exemptions"]}
-        self.write("Tools/parity_twin_map.json", compact)
-        self.assertEqual([], parity_ratchet.compare_metadata(self.root, base, offline=True))
-
-        without_exemption = parity_ledger.build_compact_twin_map(self.root)
-        self.write("Tools/parity_twin_map.json", without_exemption)
-        omission_errors = parity_ratchet.compare_metadata(self.root, base, offline=True)
-        self.assertTrue(
-            any("sdnnIndex debt requires" in error and "bootstrap exemption" in error for error in omission_errors),
-            omission_errors,
-        )
-        compact["exemptions"] = [{
-            "kind": "bootstrap-unpaired-function",
-            "identity": identity,
-            "identity_sha256": parity_ledger._canonical_sha256(identity),
-            "issue": "bhelm/noop#18",
-            "reason": "Issue 18 records the exact existing Swift-only sdnnIndex declaration debt.",
-        }]
-
-        kotlin.write_text("object HrvAnalyzer { fun sdnnIndex(rr: List<Int>, segmentSec: Int = 300) = 0 }\n", encoding="utf-8")
-        compact = parity_ledger.build_compact_twin_map(self.root) | {"exemptions": compact["exemptions"]}
-        self.write("Tools/parity_twin_map.json", compact)
         errors = parity_ratchet.compare_metadata(self.root, base, offline=True)
-        self.assertTrue(any("bootstrap exemption" in error for error in errors), errors)
+
+        self.assertTrue(any("bootstrap cannot introduce exemptions" in error for error in errors), errors)
 
     def test_same_issue_number_in_wrong_repository_fails_closed(self) -> None:
         ref = issue_ref.parse_current("bhelm/noop#77")
