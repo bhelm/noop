@@ -10,6 +10,20 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class PushProtocolTest {
+    @Test fun acknowledgementIgnoresUnknownOptionalMembersWithinTheNegotiatedMajor() {
+        val batch = PushProtocol.appendBatch(
+            PushAppendTable.HR_SAMPLE,
+            SOURCE_A,
+            "strap",
+            null,
+            listOf(hr(1, 10)),
+        )
+        val encoded = PushAck.fromBatch(batch).encode().toString(Charsets.UTF_8)
+        val extended = encoded.dropLast(1) + ",\"futureOptional\":true}"
+
+        assertTrue(PushAck.parse(extended.toByteArray()).exactlyMatches(batch))
+    }
+
     @Test
     fun appendRegistryIsExactlyTheEightDocumentedStreams() {
         assertEquals(

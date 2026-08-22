@@ -19,6 +19,9 @@ object PushProtocol {
     // A rolling window may be multipart, but client memory use is fail-closed and independent of DB size.
     internal const val MAX_MUTABLE_SNAPSHOT_RECORDS = 1_000
     internal const val MAX_MUTABLE_SNAPSHOT_ENCODED_BYTES = 2 * 1024 * 1024
+    internal val FORBIDDEN_REMOTE_CONTROL_MEMBERS = setOf(
+        "command", "commands", "endpoint", "url", "cadence", "schema", "fields",
+    )
 
     fun appendBatch(
         table: PushAppendTable,
@@ -490,8 +493,12 @@ data class PushAck(
                 "protocolVersion", "batchId", "stream", "deviceId", "endCursor",
                 "acceptedRows", "status",
             )
-            if (obj.keys().asSequence().toSet() != expectedMembers) {
-                throw PushProtocolException("ack members do not exactly match protocol 1.0")
+            val actualMembers = obj.keys().asSequence().toSet()
+            if (!actualMembers.containsAll(expectedMembers)) {
+                throw PushProtocolException("ack is missing required protocol 1.0 members")
+            }
+            if (actualMembers.any { it in PushProtocol.FORBIDDEN_REMOTE_CONTROL_MEMBERS }) {
+                throw PushProtocolException("ack contains forbidden remote-control metadata")
             }
             fun string(name: String): String = (obj.opt(name) as? String)?.takeIf { it.isNotEmpty() }
                 ?: throw PushProtocolException("ack.$name must be a non-empty string")
@@ -506,8 +513,8 @@ data class PushAck(
             val cursor = when (val raw = obj.opt("endCursor")) {
                 null, JSONObject.NULL -> null
                 is JSONObject -> {
-                    if (raw.keys().asSequence().toSet() != setOf("rowId", "keySha256")) {
-                        throw PushProtocolException("ack.endCursor members do not exactly match protocol 1.0")
+                    if (!raw.keys().asSequence().toSet().containsAll(setOf("rowId", "keySha256"))) {
+                        throw PushProtocolException("ack.endCursor is missing required protocol 1.0 members")
                     }
                     val row = raw.opt("rowId") as? Number
                         ?: throw PushProtocolException("ack.endCursor.rowId must be an integer")

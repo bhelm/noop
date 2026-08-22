@@ -19,18 +19,28 @@ does not open the health database or send a batch.
 GET /the/user-configured-path HTTP/1.1
 Accept: application/json
 Authorization: Bearer <user-supplied-token>
+NOOP-Push-Accept-Version: 1.0
 ```
 
-A successful capability response has exactly this shape:
+A successful capability response has these required members:
 
 ```json
-{"type":"capabilities","protocolVersion":"1.0","streams":["hrSample","rrInterval","dailyMetric"]}
+{"type":"capabilities","protocolVersion":"1.0","receiverStateId":"5fc7b9a0-8055-4e49-a308-3a290f98d81a","streams":["hrSample","rrInterval","dailyMetric"]}
 ```
 
-`streams` is a duplicate-free subset of the twelve names in the v1 registry; array order has no
-semantic meaning. An empty
-array is valid. Unknown names, duplicate names, additional members, an unsupported version, malformed
-JSON, or a response over 16 KiB fail closed before Room is opened or health data is encoded. The
+`NOOP-Push-Accept-Version` is a comma-separated, sender-preferred list of exact versions it can emit.
+The receiver selects the first version in that order it supports and returns it as `protocolVersion`; no common version fails
+with `406` before health data is read. `receiverStateId` is a canonical UUID persisted with receiver
+state. It remains stable across upgrades, database backups and migrations, and changes whenever the
+receiver no longer has continuity with previously acknowledged data. Restoring a stale receiver backup
+therefore requires the operator to rotate this ID. Rotation starts a new idempotency generation: the
+receiver retains health records but atomically discards old batch acknowledgements, replacement staging,
+and generation fences so deterministic baseline batch IDs are applied again rather than short-circuited.
+
+`streams` is a duplicate-free subset of the twelve names in the selected v1 registry; array order has
+no semantic meaning. An empty array is valid. Unknown names, duplicate names, a missing required member,
+an unsupported version, malformed JSON, or a response over 16 KiB fail closed before Room is opened or
+health data is encoded. Unknown optional object members are ignored within a supported major version. The
 receiver cannot add tables or fields: the effective registry is always the intersection of its list
 and the client's compiled v1 registry. Android performs no snapshot read and no batch `POST` for an
 unadvertised stream.
@@ -39,10 +49,10 @@ Capability changes affect future attempts only. A client retains progress for an
 stream, so advertising it again resumes from the existing cursor. Removing a stream from the list
 is not a deletion command and cannot remove records already stored by the receiver.
 
-For compatibility with pre-capability experimental v1 receivers, HTTP `404` or `405` from this exact
-authenticated `GET` means the complete v1 registry. Transport failures, `408`, `429`, and `5xx` are
-retryable and send no batch in that attempt; other failures are visible protocol/configuration errors.
-Redirects are never followed and the bearer token is never forwarded.
+There is no implicit capability fallback: `404`, `405`, a missing version response, and every invalid
+capability document send no health data. Transport failures, `408`, `429`, and `5xx` are retryable and
+send no batch in that attempt; other failures are visible protocol/configuration errors. Redirects are
+never followed and the bearer token is never forwarded.
 
 Batch delivery then uses:
 
@@ -102,6 +112,12 @@ Two installations that happen to use the same strap identifier must therefore no
 another. Reinstalling NOOP may create a new `sourceId`; reconciliation between installations is
 deliberately outside v1.
 
+Local progress is scoped by `(sourceId, normalized endpoint, selected protocolVersion,
+receiverStateId)`. A changed endpoint, negotiated version, or receiver state ID forces a fresh
+baseline. Rotating only the bearer token preserves progress. This prevents a newly initialized
+receiver at the same URL from silently missing data and lets a protocol upgrade replay older append
+records when their representation gains fields.
+
 ## NDJSON request
 
 Every line is one complete JSON object followed by LF (`0x0a`). There is no BOM, blank line, JSON
@@ -154,8 +170,12 @@ must reject duplicate keys within a batch or complete replacement window.
 
 ## Append delivery and cursors
 
-Each append highwater is local state scoped by `(sourceId, deviceId, stream)`. It is an opaque wire
-object backed by the SQLite insertion `rowid`, not a measurement timestamp or natural primary key.
+Each append highwater is local state scoped by `(sourceId, deviceId, stream)` inside the destination
+namespace above. It is an opaque receiver value carrying the sender's persistent monotonic insertion
+position, not a measurement timestamp or natural primary key. The v1 member is named `rowId` because
+NOOP's Android and Apple SQLite stores both map it to SQLite insertion `rowid`; a conforming non-SQLite
+sender may supply an equivalent durable insertion sequence. Receivers validate and echo it but must not
+interpret it as receiver state.
 The sender selects rows for that device whose `rowid` is greater than `startCursor.rowId`, orders by
 `rowid ASC`, and sets `endCursor.rowId` to the final row's insertion position. This matters because a
 later offload can insert old measurement timestamps; a timestamp or lexicographic natural-key
@@ -167,10 +187,10 @@ Before using a saved cursor, the sender must read
 that row and verify the natural-key fingerprint. A missing row or mismatch means a restore, prune,
 `VACUUM`/rowid rewrite, or database replacement invalidated the insertion positions. The sender must
 reset that stream's cursor to null and replay it; receiver primary-key upserts make the replay safe.
-Changing `sourceId` or the normalized endpoint selects a fresh progress namespace and sends a full
-baseline, avoiding acknowledgements being carried between destinations. Rotating the bearer token
-for the same normalized endpoint preserves progress. Implementations may store additional local
-database-generation evidence, but it is not transmitted.
+Changing `sourceId`, normalized endpoint, selected version, or `receiverStateId` selects a fresh
+progress namespace and sends a full baseline, avoiding acknowledgements being carried between
+destinations. Implementations may store additional local database-generation evidence, but it is not
+transmitted.
 
 The sender also remembers, per endpoint namespace, every device scope it has considered. Live
 database discovery is unioned with that encrypted set so deleting the final mutable row still emits
@@ -227,9 +247,8 @@ An empty window is represented by one zero-record part and is still authoritativ
 receiver rows in that scope and window. `startCursor` and `endCursor` are `null` for all parts.
 
 Daily checksums are an upload-elision mechanism, not receiver state or a synchronization command. A
-receiver remains responsible for durable storage once it acknowledges a batch. Changing the normalized
-endpoint selects a fresh progress namespace and forces the complete baseline; rotating only the bearer
-token preserves the accepted daily hashes.
+receiver remains responsible for durable storage once it acknowledges a batch. A changed destination
+namespace forces the complete baseline; rotating only the bearer token preserves accepted daily hashes.
 
 The receiver durably stages accepted parts. Only when every part is present does it atomically:
 
@@ -241,6 +260,12 @@ succeeds. Retrying any part is harmless. Conflicting reuse of a `replacementId`,
 `batchId` must be rejected. Rows outside the declared window are untouched. This absence-means-delete
 rule makes edits and deletions within the rolling window converge to NOOP's local state; v1 carries no
 tombstone for a row that has already aged out of that window.
+
+A sender must have at most one incomplete replacement generation per `(sourceId, deviceId, stream)`.
+Observing the first part of a different generation supersedes every older incomplete generation in that
+scope, even when its exact window bounds differ. A receiver rejects late parts of a superseded
+generation with `409`. Senders serialize replacement generations for a scope; retries remain safe and
+parts may arrive out of numerical order.
 
 ## Version 1 stream registry
 
@@ -322,6 +347,16 @@ or mismatched acknowledgements retain progress and surface a visible configurati
 they are retried only after a later trigger or configuration change. Responses are never consumed as
 health data.
 
+A receiver should return a bounded machine-readable body for non-2xx responses:
+
+```json
+{"type":"error","protocolVersion":"1.0","code":"registry_mismatch"}
+```
+
+`code` contains 1–64 lowercase ASCII letters, digits, or underscores and starts with a letter. Android
+may display and persist only this validated code alongside the HTTP status; it never retains arbitrary
+response text. Unknown error members are ignored.
+
 The Android client reports a safe, structured cause for self-hosting diagnostics: DNS resolution,
 TLS certificate or handshake, connection timeout/refused/unreachable/reset, numeric HTTP status,
 invalid capabilities or acknowledgement, local encoding limits, or local database state. These
@@ -331,7 +366,8 @@ network stacks and receiver errors can contain endpoint details, credentials, or
 
 ## Versioning and forward compatibility
 
-`protocolVersion` is `MAJOR.MINOR`:
+`protocolVersion` is `MAJOR.MINOR`. Capability discovery negotiates one exact version before Room is
+opened; senders never optimistically emit a version the receiver did not select.
 
 - A major version changes framing, required members, keys, or existing semantics. A receiver must
   reject an unsupported major version.
@@ -344,6 +380,14 @@ network stacks and receiver errors can contain endpoint details, credentials, or
 - Receivers must reject malformed known members rather than guessing. They should preserve unknown
   `data` members if their storage model permits, but must not assign semantics to them.
 
-Capability discovery only narrows the sender's compiled registry for the selected protocol version.
+Capability discovery only selects an offered version and narrows the sender's compiled registry for it.
 It is not general negotiation: the receiver cannot add schemas, change delivery modes, select an
 endpoint, request diagnostics, set cadence, or otherwise control NOOP.
+
+## Apple compatibility
+
+The contract is platform-neutral. NOOP on iOS/macOS uses GRDB/SQLite with the same natural keys and
+logical v1 streams, but every implementation uses explicit registry projections rather than reflection
+or `SELECT *`. A platform lacking a nullable exported column emits `null`; platform-only columns stay
+absent until a later negotiated registry version. Scheduling and credential storage are platform
+concerns and do not change NDJSON, acknowledgement, idempotency, or replacement semantics.
