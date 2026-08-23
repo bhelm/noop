@@ -40,9 +40,11 @@ non-negotiable (especially on the Bluetooth path).
 
 A few principles run through the whole codebase. Internalize them before opening a PR.
 
-1. **Offline by design.** There is no server, no telemetry, no account, no network call. A change
-   that phones home — for any reason — does not belong here. Strap data, imports, and computed
-   metrics live in a local SQLite database and never leave the device.
+1. **Offline by default.** There is no NOOP server, telemetry, or account. Strap data, imports, and
+   computed metrics live in local SQLite unless the user explicitly enables a documented narrow
+   exception: bring-your-own-key AI Coach, the opt-in Oura import, or Android's Experimental one-way
+   export to a user-owned endpoint. New hosted services or undisclosed network calls do not belong
+   here; see [Scope](SCOPE.md) and [Privacy & Security](PRIVACY_SECURITY.md).
 2. **Interoperability, not impersonation.** NOOP talks to a strap the user already owns. It does not
    log into a WHOOP account, bypass a paywall, or ship WHOOP's proprietary code/firmware/assets/logos.
    Keep contributions on the right side of that line, and keep all WHOOP references *nominative*
