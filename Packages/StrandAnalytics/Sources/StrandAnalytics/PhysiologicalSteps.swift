@@ -30,6 +30,18 @@ public enum PhysiologicalSteps {
             self.sleepId = sleepId; self.onset = onset; self.endExclusive = endExclusive
         }
     }
+    public struct OwnerSegment: Equatable, Sendable {
+        public let owner: String; public let onset: Int; public let endExclusive: Int
+        public init(owner: String, onset: Int, endExclusive: Int) {
+            self.owner = owner; self.onset = onset; self.endExclusive = endExclusive
+        }
+    }
+    public struct OwnerCoverage: Equatable, Sendable {
+        public let owner: String; public let onset: Int; public let endExclusive: Int; public let priority: Int
+        public init(owner: String, onset: Int, endExclusive: Int, priority: Int) {
+            self.owner = owner; self.onset = onset; self.endExclusive = endExclusive; self.priority = priority
+        }
+    }
     private static let minMainSleepSeconds = 3 * 3_600
 
     public static func classifyForCycle(_ blocks: [SleepBlock], offsetSec: Int,
@@ -73,6 +85,32 @@ public enum PhysiologicalSteps {
                 ? CycleWindow(sleepId: ordered[index].sleepId, onset: ordered[index].onset, endExclusive: end)
                 : nil
         }
+    }
+
+    /// Kotlin twin: `PhysiologicalSteps.ownerSegmentsFromCoverage`.
+    public static func ownerSegmentsFromCoverage(_ window: CycleWindow, coverage: [OwnerCoverage],
+                                                 fallbackOwner: String) -> [OwnerSegment] {
+        guard window.endExclusive > window.onset else { return [] }
+        let clipped = coverage.compactMap { item -> OwnerCoverage? in
+            let start = max(window.onset, item.onset), end = min(window.endExclusive, item.endExclusive)
+            return end > start ? OwnerCoverage(owner: item.owner, onset: start,
+                endExclusive: end, priority: item.priority) : nil
+        }
+        let seams = Set([window.onset, window.endExclusive] + clipped.flatMap { [$0.onset, $0.endExclusive] }).sorted()
+        var result: [OwnerSegment] = [], lastOwner = fallbackOwner
+        for index in 0..<(seams.count - 1) {
+            let start = seams[index], end = seams[index + 1]
+            let owner = clipped.filter { start >= $0.onset && start < $0.endExclusive }
+                .sorted { $0.priority == $1.priority ? $0.owner < $1.owner : $0.priority < $1.priority }
+                .first?.owner ?? lastOwner
+            if let last = result.last, last.owner == owner, last.endExclusive == start {
+                result[result.count - 1] = OwnerSegment(owner: owner, onset: last.onset, endExclusive: end)
+            } else {
+                result.append(OwnerSegment(owner: owner, onset: start, endExclusive: end))
+            }
+            lastOwner = owner
+        }
+        return result
     }
 
     /// Same later-sample attribution, class gate and plausibility gate as the Kotlin twin.

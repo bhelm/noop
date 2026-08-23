@@ -16,6 +16,25 @@ public enum SleepAwareStepCounter {
         public let rejectedIsolatedSleepTicks: Int
         public let rejectedActivityClassTicks: Int
         public let rejectedImplausibleTicks: Int
+        public let gravitySamplesAvailable: Int
+        public let auxSamplesAvailable: Int
+
+        public static let empty = Count(totalTicks: 0, acceptedOutsideSleepTicks: 0,
+            acceptedAwakeGapTicks: 0, acceptedSleepBoutTicks: 0, rejectedIsolatedSleepTicks: 0,
+            rejectedActivityClassTicks: 0, rejectedImplausibleTicks: 0,
+            gravitySamplesAvailable: 0, auxSamplesAvailable: 0)
+
+        public func adding(_ other: Count) -> Count {
+            Count(totalTicks: totalTicks + other.totalTicks,
+                acceptedOutsideSleepTicks: acceptedOutsideSleepTicks + other.acceptedOutsideSleepTicks,
+                acceptedAwakeGapTicks: acceptedAwakeGapTicks + other.acceptedAwakeGapTicks,
+                acceptedSleepBoutTicks: acceptedSleepBoutTicks + other.acceptedSleepBoutTicks,
+                rejectedIsolatedSleepTicks: rejectedIsolatedSleepTicks + other.rejectedIsolatedSleepTicks,
+                rejectedActivityClassTicks: rejectedActivityClassTicks + other.rejectedActivityClassTicks,
+                rejectedImplausibleTicks: rejectedImplausibleTicks + other.rejectedImplausibleTicks,
+                gravitySamplesAvailable: gravitySamplesAvailable + other.gravitySamplesAvailable,
+                auxSamplesAvailable: auxSamplesAvailable + other.auxSamplesAvailable)
+        }
     }
 
     /// Stateful, overlap-safe counter for database windows read in ascending pages.
@@ -25,6 +44,7 @@ public enum SleepAwareStepCounter {
         private var previous: StepSample?
         private var outside = 0, awake = 0, sleep = 0, rejectedSleep = 0
         private var rejectedClass = 0, rejectedImplausible = 0
+        private var gravityAvailable = 0, auxAvailable = 0
         private var pending: [(ts: Int, ticks: Int)] = []
         private var finished = false
 
@@ -59,13 +79,22 @@ public enum SleepAwareStepCounter {
             return self
         }
 
+        @discardableResult public func observeMotion(gravityCount: Int, auxCount: Int) -> Accumulator {
+            precondition(!finished)
+            gravityAvailable += gravityCount
+            auxAvailable += auxCount
+            return self
+        }
+
         public func finish() -> Count {
             if !finished { flush(); finished = true }
             return Count(totalTicks: outside + awake + sleep, acceptedOutsideSleepTicks: outside,
                          acceptedAwakeGapTicks: awake, acceptedSleepBoutTicks: sleep,
                          rejectedIsolatedSleepTicks: rejectedSleep,
                          rejectedActivityClassTicks: rejectedClass,
-                         rejectedImplausibleTicks: rejectedImplausible)
+                         rejectedImplausibleTicks: rejectedImplausible,
+                         gravitySamplesAvailable: gravityAvailable,
+                         auxSamplesAvailable: auxAvailable)
         }
 
         private func flush() {

@@ -62,6 +62,8 @@ public actor WhoopStore {
     /// v18 aux rows banked since the retention sweep last ran, PER DEVICE — the sweep is per device too,
     /// so a shared counter would let one strap spend another's budget. See `StreamStore`.
     var v18AuxRowsSincePrune: [String: Int] = [:]
+    var stepDataRevision: [String: Int] = [:]
+    let revisionInstanceToken = UUID().uuidString
     let dbWriter: any DatabaseWriter
 
     /// Read-only handle to the underlying GRDB writer for the synchronous `DeviceRegistryStore`.

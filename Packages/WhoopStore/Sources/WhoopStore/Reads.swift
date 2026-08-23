@@ -350,6 +350,19 @@ extension WhoopStore {
         }
     }
 
+    public func stepSamplesPage(deviceId: String, afterExclusive: Int, endExclusive: Int,
+                                limit: Int) async throws -> [StepSample] {
+        try syncRead { db in
+            try Row.fetchAll(db, sql: """
+                SELECT ts, counter, activityClass FROM stepSample
+                WHERE deviceId = ? AND ts > ? AND ts < ?
+                ORDER BY ts ASC LIMIT ?
+                """, arguments: [deviceId, afterExclusive, endExclusive, limit]).map {
+                    StepSample(ts: $0["ts"], counter: $0["counter"], activityClass: $0["activityClass"])
+                }
+        }
+    }
+
     /// Last counter sample before a cycle boundary, used to attribute the first in-cycle delta correctly.
     public func stepSampleBefore(deviceId: String, before: Int) async throws -> StepSample? {
         try syncRead { db in
@@ -368,6 +381,36 @@ extension WhoopStore {
                 SELECT EXISTS(SELECT 1 FROM stepSample
                 WHERE deviceId = ? AND ts >= ? AND ts < ? AND activityClass IS NOT NULL)
                 """, arguments: [deviceId, from, to]) == 1
+        }
+    }
+
+    public func stepTimestampCoverage(deviceId: String, from: Int, to: Int) async throws
+        -> (first: Int?, last: Int?) {
+        try syncRead { db in
+            let row = try Row.fetchOne(db, sql: """
+                SELECT MIN(ts) AS firstTs, MAX(ts) AS lastTs FROM stepSample
+                WHERE deviceId = ? AND ts >= ? AND ts < ?
+                """, arguments: [deviceId, from, to])
+            return (row?["firstTs"], row?["lastTs"])
+        }
+    }
+
+    /// O(1), process-local invalidator advanced by every actually inserted step batch. The instance token
+    /// prevents a static cycle cache surviving a store reopen from reusing a revision number from the old DB.
+    public func stepDataRevisionSignature(deviceId: String, from: Int, to: Int) async throws -> String {
+        "\(revisionInstanceToken):\(deviceId):\(from):\(to):\(stepDataRevision[deviceId, default: 0])"
+    }
+
+    public func stepDiagnosticMotionCounts(deviceId: String, from: Int, to: Int) async throws
+        -> (gravity: Int, aux: Int) {
+        try syncRead { db in
+            let gravity = try Int.fetchOne(db, sql: """
+                SELECT COUNT(*) FROM gravitySample WHERE deviceId = ? AND ts >= ? AND ts < ?
+                """, arguments: [deviceId, from, to]) ?? 0
+            let aux = try Int.fetchOne(db, sql: """
+                SELECT COUNT(*) FROM v18AuxSample WHERE deviceId = ? AND ts >= ? AND ts < ?
+                """, arguments: [deviceId, from, to]) ?? 0
+            return (gravity, aux)
         }
     }
 
