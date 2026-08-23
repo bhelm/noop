@@ -2670,4 +2670,11 @@
     <string name="l10n_health_screen_no_measured_temperature_for_these_nights_showing_the_differe_69d4efae">Aucune température mesurée pour ces nuits — l\'écart par rapport à votre référence est affiché. Une synchronisation réévalue les nuits récentes et le complète.</string>
     <string name="l10n_health_screen_only_nights_with_a_measured_temperature_are_shown_the_others_b6f7c45b">Seules les nuits avec une température mesurée sont affichées ; les autres n\'ont enregistré qu\'un écart par rapport à la référence.</string>
     <string name="l10n_today_screen_this_night_was_staged_from_heart_rate_4d0f1f9b">Cette nuit a été analysée à partir de la seule fréquence cardiaque, sans mouvement enregistré, donc la variabilité de la fréquence cardiaque et la fréquence cardiaque au repos n\'ont pas pu être mesurées. La cause habituelle est un bracelet qui n\'est pas entièrement appairé.</string>
+    <string name="settings_day_cycle_title">Cycle journalier</string>
+    <string name="settings_day_cycle_description">Choisissez quand les pas et l’Effort en cours repartent de zéro. Les siestes ne commencent jamais une nouvelle journée.</string>
+    <string name="settings_day_cycle_starts">Début de la journée</string>
+    <string name="settings_day_cycle_sleep">Sommeil principal</string>
+    <string name="settings_day_cycle_midnight">00:00</string>
+    <string name="settings_day_cycle_sleep_description">Par défaut. Le cycle suit le début du sommeil principal détecté. Si les données de sommeil sont absentes ou peu fiables, l’heure locale de minuit est utilisée.</string>
+    <string name="settings_day_cycle_midnight_description">Utilise une journée civile locale classique de 00:00 à 00:00.</string>
 </resources>

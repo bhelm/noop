@@ -2671,4 +2671,11 @@
     <string name="l10n_health_screen_no_measured_temperature_for_these_nights_showing_the_differe_69d4efae">No hay temperatura medida para estas noches: se muestra la diferencia respecto a tu referencia. Una sincronización vuelve a analizar las noches recientes y la completa.</string>
     <string name="l10n_health_screen_only_nights_with_a_measured_temperature_are_shown_the_others_b6f7c45b">Solo se muestran las noches con temperatura medida; en las demás solo se registró la diferencia respecto a la referencia.</string>
     <string name="l10n_today_screen_this_night_was_staged_from_heart_rate_4d0f1f9b">Esta noche se analizó solo a partir de la frecuencia cardíaca, sin movimiento registrado, por lo que no se pudieron medir la variabilidad de la frecuencia cardíaca ni la frecuencia cardíaca en reposo. La causa habitual es una correa que no está totalmente emparejada.</string>
+    <string name="settings_day_cycle_title">Ciclo diario</string>
+    <string name="settings_day_cycle_description">Elige cuándo se reinician los pasos y el Esfuerzo en curso. Las siestas nunca empiezan un nuevo día.</string>
+    <string name="settings_day_cycle_starts">El día empieza</string>
+    <string name="settings_day_cycle_sleep">Sueño principal</string>
+    <string name="settings_day_cycle_midnight">00:00</string>
+    <string name="settings_day_cycle_sleep_description">Predeterminado. El ciclo sigue el inicio del sueño principal detectado. Si faltan datos de sueño o no son fiables, se usa la medianoche local.</string>
+    <string name="settings_day_cycle_midnight_description">Usa un día natural local convencional de 00:00 a 00:00.</string>
 </resources>

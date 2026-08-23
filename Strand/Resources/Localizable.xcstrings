@@ -95351,6 +95351,39 @@
         }
       }
     },
+    "Day starts": { "localizations": {
+      "de": { "stringUnit": { "state": "translated", "value": "Tagesbeginn" } },
+      "es": { "stringUnit": { "state": "translated", "value": "El día empieza" } },
+      "fr": { "stringUnit": { "state": "translated", "value": "Début de la journée" } },
+      "it": { "stringUnit": { "state": "translated", "value": "Inizio giornata" } },
+      "pl": { "stringUnit": { "state": "translated", "value": "Początek dnia" } },
+      "pt-PT": { "stringUnit": { "state": "translated", "value": "O dia começa" } },
+      "ru": { "stringUnit": { "state": "translated", "value": "Начало дня" } },
+      "zh-Hans": { "stringUnit": { "state": "translated", "value": "一天开始于" } },
+      "zh-Hant": { "stringUnit": { "state": "translated", "value": "一天開始於" } }
+    } },
+    "Default. Steps and in-progress Effort restart at the beginning of detected main sleep. Naps do not start a new day; missing sleep falls back to local midnight.": { "localizations": {
+      "de": { "stringUnit": { "state": "translated", "value": "Standard. Schritte und die laufende Anstrengung beginnen mit dem erkannten Hauptschlaf neu. Nickerchen starten keinen neuen Tag; bei fehlendem Schlaf verwendet NOOP ersatzweise die lokale Mitternacht." } },
+      "es": { "stringUnit": { "state": "translated", "value": "Predeterminado. Los pasos y el Esfuerzo en curso se reinician al comienzo del sueño principal detectado. Las siestas no empiezan un nuevo día; si faltan datos de sueño, se usa la medianoche local." } },
+      "fr": { "stringUnit": { "state": "translated", "value": "Par défaut. Les pas et l’Effort en cours repartent de zéro au début du sommeil principal détecté. Les siestes ne commencent pas une nouvelle journée ; en l’absence de sommeil, l’heure locale de minuit est utilisée." } },
+      "it": { "stringUnit": { "state": "translated", "value": "Predefinito. I passi e lo Sforzo in corso ripartono all’inizio del sonno principale rilevato. I sonnellini non iniziano un nuovo giorno; se mancano dati sul sonno, viene usata la mezzanotte locale." } },
+      "pl": { "stringUnit": { "state": "translated", "value": "Domyślnie. Kroki i bieżący Wysiłek zaczynają się od nowa wraz z wykrytym głównym snem. Drzemki nie rozpoczynają nowego dnia; gdy brakuje danych o śnie, używana jest lokalna północ." } },
+      "pt-PT": { "stringUnit": { "state": "translated", "value": "Predefinição. Os passos e o Esforço em curso recomeçam no início do sono principal detetado. As sestas não iniciam um novo dia; se faltarem dados de sono, é usada a meia-noite local." } },
+      "ru": { "stringUnit": { "state": "translated", "value": "По умолчанию. Шаги и текущая Нагрузка обнуляются в начале распознанного основного сна. Дневной сон не начинает новый день; при отсутствии данных о сне используется местная полночь." } },
+      "zh-Hans": { "stringUnit": { "state": "translated", "value": "默认。步数和进行中的体力消耗从检测到的主要睡眠开始时重新计算。小睡不会开始新的一天；缺少睡眠数据时，将使用当地午夜。" } },
+      "zh-Hant": { "stringUnit": { "state": "translated", "value": "預設。步數和進行中的體力消耗從偵測到的主要睡眠開始時重新計算。小睡不會開始新的一天；缺少睡眠資料時，將使用當地午夜。" } }
+    } },
+    "Uses a conventional local calendar day from 00:00 to 00:00.": { "localizations": {
+      "de": { "stringUnit": { "state": "translated", "value": "Verwendet einen herkömmlichen lokalen Kalendertag von 00:00 bis 00:00 Uhr." } },
+      "es": { "stringUnit": { "state": "translated", "value": "Usa un día natural local convencional de 00:00 a 00:00." } },
+      "fr": { "stringUnit": { "state": "translated", "value": "Utilise une journée civile locale classique de 00:00 à 00:00." } },
+      "it": { "stringUnit": { "state": "translated", "value": "Usa un giorno di calendario locale convenzionale dalle 00:00 alle 00:00." } },
+      "pl": { "stringUnit": { "state": "translated", "value": "Używa zwykłego lokalnego dnia kalendarzowego od 00:00 do 00:00." } },
+      "pt-PT": { "stringUnit": { "state": "translated", "value": "Usa um dia civil local convencional das 00:00 às 00:00." } },
+      "ru": { "stringUnit": { "state": "translated", "value": "Использует обычный местный календарный день с 00:00 до 00:00." } },
+      "zh-Hans": { "stringUnit": { "state": "translated", "value": "使用从 00:00 到次日 00:00 的常规当地日历日。" } },
+      "zh-Hant": { "stringUnit": { "state": "translated", "value": "使用從 00:00 到次日 00:00 的一般當地日曆日。" } }
+    } },
     "Main sleep": {
       "localizations": {
         "de": {

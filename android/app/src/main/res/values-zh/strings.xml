@@ -2584,4 +2584,11 @@
     <string name="l10n_health_screen_no_measured_temperature_for_these_nights_showing_the_differe_69d4efae">这些夜晚没有实测温度，显示的是与基线的差值。同步后会重新计算近期夜晚并补上。</string>
     <string name="l10n_health_screen_only_nights_with_a_measured_temperature_are_shown_the_others_b6f7c45b">仅显示有实测温度的夜晚；其余夜晚只记录了与基线的差值。</string>
     <string name="l10n_today_screen_this_night_was_staged_from_heart_rate_4d0f1f9b">这一晚仅根据心率推算，没有记录到动作，因此无法测量心率变异性和静息心率。通常的原因是手环尚未完全配对。</string>
+    <string name="settings_day_cycle_title">每日周期</string>
+    <string name="settings_day_cycle_description">选择步数和进行中的体力消耗何时重新开始。小睡不会开始新的一天。</string>
+    <string name="settings_day_cycle_starts">一天开始于</string>
+    <string name="settings_day_cycle_sleep">主要睡眠</string>
+    <string name="settings_day_cycle_midnight">00:00</string>
+    <string name="settings_day_cycle_sleep_description">默认。周期从检测到的主要睡眠开始。睡眠数据缺失或不可靠时，将使用当地午夜。</string>
+    <string name="settings_day_cycle_midnight_description">使用从 00:00 到次日 00:00 的常规当地日历日。</string>
 </resources>
