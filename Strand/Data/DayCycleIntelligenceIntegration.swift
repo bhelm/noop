@@ -85,6 +85,7 @@ import WhoopStore
                         candidates: [(owner: String, priority: Int)], windowStart: Int,
                         now: Int, offsetSec: Int, habitualMidsleepSec: Int?, ticksPerStep: Double,
                         mode: DayCycleMode, cache: Cache,
+                        recoveryReader: BoundaryRecoveryReader? = nil,
                         trace: ((String) -> Void)? = nil) async -> Result {
         guard mode == .sleepOnset else {
             return Result(stepsByWakeDay: [:], onsetByWakeDay: [:], firstWakeDay: nil,
@@ -127,7 +128,7 @@ import WhoopStore
 
         let recovered: [PersistedBoundary]
         do {
-            let reader = BoundaryRecoveryReader(
+            let productionReader = BoundaryRecoveryReader(
                 sleepSessions: { source, from, to in
                     try await store.sleepSessions(deviceId: source, from: from, to: to, limit: 4_000)
                 },
@@ -135,7 +136,8 @@ import WhoopStore
                     try await store.metricSeries(
                         deviceId: source, key: onsetKey, from: fromDay, to: toDay)
                 })
-            recovered = try await recover(candidates: candidates, reader: reader,
+            recovered = try await recover(candidates: candidates,
+                reader: recoveryReader ?? productionReader,
                 claimedDays: Set(wakeDayById.values), windowStart: windowStart, now: now,
                 offsetSec: offsetSec, habitualMidsleepSec: habitualMidsleepSec)
         } catch {

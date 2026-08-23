@@ -1,4 +1,5 @@
 import XCTest
+import WhoopStore
 @testable import Strand
 
 @MainActor
@@ -38,5 +39,25 @@ final class DayCycleRecoveryTests: XCTestCase {
         } catch {
             XCTFail("unexpected error: \(error)")
         }
+    }
+
+    func testComputePreservesMarkersWhenRecoveryCannotBeRead() async throws {
+        let store = try await WhoopStore.inMemory()
+        let reader = DayCycleIntelligenceIntegration.BoundaryRecoveryReader(
+            sleepSessions: { _, _, _ in throw ReadFailure.injected },
+            markers: { _, _, _ in XCTFail("marker read must not follow a failed session read"); return [] })
+
+        let result = await DayCycleIntelligenceIntegration.compute(
+            nights: [], editedRows: [], store: store,
+            candidates: [(owner: "strap", priority: 0)],
+            windowStart: 1_700_000_000, now: 1_700_086_400, offsetSec: 0,
+            habitualMidsleepSec: nil, ticksPerStep: 1, mode: .sleepOnset,
+            cache: DayCycleIntelligenceIntegration.Cache(), recoveryReader: reader)
+
+        guard case .preserve = result.markerUpdate else {
+            return XCTFail("an unread marker namespace must never become an authoritative replacement")
+        }
+        XCTAssertTrue(result.stepsByWakeDay.isEmpty)
+        XCTAssertTrue(result.onsetByWakeDay.isEmpty)
     }
 }
