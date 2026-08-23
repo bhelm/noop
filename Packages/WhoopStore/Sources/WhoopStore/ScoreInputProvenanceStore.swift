@@ -25,7 +25,8 @@ extension WhoopStore {
         provenance: [ScoreInputProvenanceRow],
         deviceId: String,
         from: String,
-        to: String
+        to: String,
+        replaceMetricKeys: [String] = []
     ) async throws {
         // #1196: an empty scoring pass must not destructively rewrite the window — with no daily rows to
         // write, the provenance wide-delete below would blank the window's attribution while a degenerate
@@ -35,6 +36,10 @@ extension WhoopStore {
         guard !dailyMetrics.isEmpty else { return }
         try syncWrite { db in
             _ = try Self.upsertDailyMetrics(dailyMetrics, deviceId: deviceId, in: db)
+            for key in replaceMetricKeys {
+                try db.execute(sql: "DELETE FROM metricSeries WHERE deviceId = ? AND key = ? AND day >= ? AND day <= ?",
+                               arguments: [deviceId, key, from, to])
+            }
             _ = try Self.upsertMetricSeries(metricPoints, deviceId: deviceId, in: db)
 
             try db.execute(sql: """

@@ -39,6 +39,7 @@ class BackupSettingsCodecTest {
             "units.system" to "imperial",
             "units.temperature" to "celsius",
             "effort.scale" to "whoop",
+            "dayCycle.mode" to "sleep_onset",
             // #today-hosted-cards: the one layout pref carried, a JSON [String] stored under the String kind.
             "today.hostedCards" to "[\"sleep.sleepMarks\"]",
             // #1361: custom journal behaviours, a newline-joined name list — the embedded newline must
@@ -58,6 +59,7 @@ class BackupSettingsCodecTest {
         assertEquals("imperial", back["units.system"])
         assertEquals("celsius", back["units.temperature"])
         assertEquals("whoop", back["effort.scale"])
+        assertEquals("sleep_onset", back["dayCycle.mode"])
         assertEquals("[\"sleep.sleepMarks\"]", back["today.hostedCards"])
         assertEquals("Cold plunge\nMagnesium", back["journal.customBehaviors"])
         assertEquals(values.size, back.size)

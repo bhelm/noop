@@ -297,6 +297,27 @@ extension WhoopStore {
         }
     }
 
+    /// Last counter sample before a cycle boundary, used to attribute the first in-cycle delta correctly.
+    public func stepSampleBefore(deviceId: String, before: Int) async throws -> StepSample? {
+        try syncRead { db in
+            try Row.fetchOne(db, sql: """
+                SELECT ts, counter, activityClass FROM stepSample
+                WHERE deviceId = ? AND ts < ? ORDER BY ts DESC LIMIT 1
+                """, arguments: [deviceId, before]).map {
+                    StepSample(ts: $0["ts"], counter: $0["counter"], activityClass: $0["activityClass"])
+                }
+        }
+    }
+
+    public func hasStepActivityClasses(deviceId: String, from: Int, to: Int) async throws -> Bool {
+        try syncRead { db in
+            try Int.fetchOne(db, sql: """
+                SELECT EXISTS(SELECT 1 FROM stepSample
+                WHERE deviceId = ? AND ts >= ? AND ts < ? AND activityClass IS NOT NULL)
+                """, arguments: [deviceId, from, to]) == 1
+        }
+    }
+
     public func respSamples(deviceId: String, from: Int, to: Int, limit: Int) async throws -> [RespSample] {
         try syncRead { db in
             try Row.fetchAll(db, sql: """

@@ -286,6 +286,11 @@ internal object PhysiologicalStepCycleEngine {
                         "awakeGap=${result.count.acceptedAwakeGapTicks} " +
                         "sleepBout=${result.count.acceptedSleepBoutTicks} " +
                         "rejectedIsolatedSleep=${result.count.rejectedIsolatedSleepTicks} " +
+                        "rejectedClass=${result.count.rejectedActivityClassTicks} " +
+                        "rejectedImplausible=${result.count.rejectedImplausibleTicks} " +
+                        "gravitySamples=${result.count.gravitySamplesAvailable} " +
+                        "auxSamples=${result.count.auxSamplesAvailable} " +
+                        "ticksPerStep=$stepTicksPerStep " +
                         "scaledSteps=$scaled",
                 )
             }

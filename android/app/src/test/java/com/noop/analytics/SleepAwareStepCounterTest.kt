@@ -24,6 +24,9 @@ class SleepAwareStepCounterTest {
 
         assertEquals(StepsCounter.stepsInWindow(samples), SleepAwareStepCounter.stepsInWindow(samples, emptyList()))
         assertEquals(9, SleepAwareStepCounter.stepsInWindow(samples, emptyList()))
+        val detail = SleepAwareStepCounter.count(samples, emptyList())
+        assertEquals(3, detail.rejectedActivityClassTicks)
+        assertEquals(8, detail.rejectedImplausibleTicks)
     }
 
     @Test fun awakeGapInsideSleepCountsWithNormalRules() {
