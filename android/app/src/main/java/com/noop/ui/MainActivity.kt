@@ -256,6 +256,19 @@ object NoopPrefs {
     /** "Keep connected in the background", drives [com.noop.ble.WhoopConnectionService]. Default on. */
     const val KEY_BACKGROUND_CONNECTION = "noop.backgroundConnection"
 
+    /** Boundary used by additive daily metrics. Sleep onset is the product default; midnight restores
+     * the conventional civil-day view. Naps never become boundaries. */
+    const val KEY_DAY_CYCLE_MODE = "noop.dayCycleMode"
+
+    fun dayCycleMode(context: Context): com.noop.analytics.DayCycleMode =
+        com.noop.analytics.DayCycleMode.fromPersisted(
+            of(context).getString(KEY_DAY_CYCLE_MODE, null),
+        )
+
+    fun setDayCycleMode(context: Context, mode: com.noop.analytics.DayCycleMode) {
+        of(context).edit().putString(KEY_DAY_CYCLE_MODE, mode.persistedValue).apply()
+    }
+
     /** "Continuous HRV capture", when on (AND background connection is on), NOOP holds the dense
      *  realtime HR stream armed even with no Live screen open, so the strap banks beat-to-beat R-R 24/7
      *  for far better overnight HRV/recovery/sleep. Uses more battery (continuous HR streaming). Default

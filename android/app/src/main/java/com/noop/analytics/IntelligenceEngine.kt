@@ -161,6 +161,7 @@ object IntelligenceEngine {
 
     /** Read cap per stream read , matches the Swift 200_000 bound. */
     const val STREAM_LIMIT: Int = 200_000
+    internal const val PHYSIOLOGICAL_STEP_PAGE_SIZE: Int = 10_000
 
     private const val SECONDS_PER_DAY: Long = 86_400L
 
@@ -410,6 +411,7 @@ object IntelligenceEngine {
         // #1545: the Effort TRIMP recipe. The Context-aware caller reads NoopPrefs.effortMethod(context)
         // and passes it down, keeping this layer Context-free. EDWARDS default = byte-identical.
         effortMethod: StrainScorer.Method = StrainScorer.Method.EDWARDS,
+        dayCycleMode: DayCycleMode = DayCycleMode.SLEEP_ONSET,
     ): List<Computed> = withContext(Dispatchers.Default) {
         // #1005: time the whole pass so a re-score STORM is visible in the strap log (the trigger lines
         // record WHY each pass runs; this records how many nights and how long — the CPU cost per run).
@@ -422,7 +424,7 @@ object IntelligenceEngine {
                 nowSeconds, ownerSource, manualStepCoefficient, persistStepsCalibration, baselineEpoch,
                 recoveryEpoch, diag, useExperimentalSleepV2, useMotionAwareWake, sleepTraceSink, recoveryTraceSink,
                 stepsTraceSink, universalSink, workoutsTraceSink, hrvTraceSink, deepHrvWindow,
-                spo2CandidateDisplay, effortMethod)
+                spo2CandidateDisplay, effortMethod, dayCycleMode)
             if (healed == 0) out
             // #899 heal re-pass: the pass above deleted overlapping duplicate sleep sessions AFTER its days
             // were scored, and the read-side dedup those days consumed had no bank-recency witness (the fresh
@@ -433,7 +435,7 @@ object IntelligenceEngine {
                 nowSeconds, ownerSource, manualStepCoefficient, persistStepsCalibration, baselineEpoch,
                 recoveryEpoch, diag, useExperimentalSleepV2, useMotionAwareWake, sleepTraceSink, recoveryTraceSink,
                 stepsTraceSink, universalSink, workoutsTraceSink, hrvTraceSink, deepHrvWindow,
-                spo2CandidateDisplay, effortMethod).first
+                spo2CandidateDisplay, effortMethod, dayCycleMode).first
         }
         diag("re-score: done — scored ${scored.size} night(s) in ${(System.nanoTime() - reScoreStart) / 1_000_000} ms (#1005)")
         scored
@@ -537,6 +539,7 @@ object IntelligenceEngine {
         spo2CandidateDisplay: Boolean = false,
         // #1545: the Effort TRIMP recipe, threaded from the public wrapper.
         effortMethod: StrainScorer.Method = StrainScorer.Method.EDWARDS,
+        dayCycleMode: DayCycleMode = DayCycleMode.SLEEP_ONSET,
         // #899 heal re-pass: the second component of the return is how many overlapping duplicate sleep
         // sessions the heal below deleted this pass. The public wrapper re-runs ONCE when it is non-zero
         // so the affected days re-score against the cleaned store.
@@ -597,6 +600,8 @@ object IntelligenceEngine {
         // on. Keyed by the local day.
         val readOwnerByDay = LinkedHashMap<String, OwnerRead>()
         val resolvedScoreOwnerByDay = LinkedHashMap<String, String>()
+        // Boundary/cache witness assembled from the already-computed day result. The independent O(1)
+        // repository revision below handles step-only inserts even when the HR-keyed day cache is reused.
         // HRV baseline honours the manual "Recalibrate baseline" epoch (noop.hrvBaselineEpoch): pass the
         // per-value "yyyy-MM-dd" day keys (parallel to the values) so foldHistory drops every night before
         // the epoch. baselineEpoch is threaded down from the Context-aware caller (0.0 = no recalibration).
@@ -728,6 +733,7 @@ object IntelligenceEngine {
             // produced under one method is stale the moment the user switches — serving it would show a
             // window of days scored by a recipe the user just turned off, with nothing to explain it.
             effortMethod.toString(),
+            dayCycleMode.persistedValue,
         ).joinToString("|")
         // Drop the whole cache on a config change. Under [analyzeGate] (this whole pass runs holding the
         // lock), so mutating the object-level cache here is race-free.
@@ -1489,6 +1495,12 @@ object IntelligenceEngine {
             .appleDaily(WhoopRepository.APPLE_HEALTH_SOURCE, "0000-01-01", "9999-12-31")
             .map { it.day }.toHashSet()
 
+        val physiologicalSteps = DayCycleIntelligenceIntegration.compute(
+            scoredNights, editedRows, resolvedScoreOwnerByDay, candidatePriorities, repo,
+            tzOffsetSeconds, habitualMidsleepSec, windowStart, nowSeconds, profile.stepTicksPerStep,
+            stepsTraceSink, dayCycleMode,
+        )
+
         for (res in scoredNights) {
             // #299: scope the edits to THIS day before folding. A userEdited row / hand-logged nap belongs
             // to exactly ONE day — the day its night ENDS on, matching the daily's end-day bucket
@@ -1502,10 +1514,11 @@ object IntelligenceEngine {
             val editOnsetByStart: Map<Long, Long> = dayEditedRows.associate { it.startTs to it.effectiveStartTs }
             // Substitute an edited block's (reshaped) stages for its detected twin before the daily
             // sleep aggregate feeds Rest + recovery. No edit touching this night → `daily` is unchanged.
-            val daily = sleepEditedDaily(
+            var daily = sleepEditedDaily(
                 res.daily, res.sleepSessions, editsByStart, editOnsetByStart,
                 tzOffsetSeconds, habitualMidsleepSec,
             )
+            daily = DayCycleIntelligenceIntegration.apply(daily, physiologicalSteps, computedId, restRows)
             val recovery = recomputeRecovery(daily, baselines2)
             // Charge term-breakdown trace (Test Centre Group G): only when the Recovery test mode is on
             // (recoveryTraceSink non-null). Emits which term moved Charge and which was nil and forced the
@@ -1580,8 +1593,9 @@ object IntelligenceEngine {
             // Scoped to computed days: an imported-total-only day legitimately has a total without our
             // sessions, so it is NOT a divergence.
             val imported = daily.day in importedWhoopDays || daily.day in appleHealthDays
-            if (!imported && daily.totalSleepMin != null && res.sleepSessions.isEmpty()) {
-                diag(sleepDivergenceLogLine(daily.day, Math.round(daily.totalSleepMin).toInt(), dayEditedRows.size))
+            val finalSleepMin = daily.totalSleepMin
+            if (!imported && finalSleepMin != null && res.sleepSessions.isEmpty()) {
+                diag(sleepDivergenceLogLine(daily.day, Math.round(finalSleepMin).toInt(), dayEditedRows.size))
             }
             // #195: one always-on line per scored night with the computed HRV value + the window it used,
             // so an "HRV reads high / deep-sleep window not changing" report is self-diagnosing straight
@@ -1787,30 +1801,22 @@ object IntelligenceEngine {
         // this only fills the days the strap collected but no import covered.
         // Persist metric-level input provenance in the SAME Room transaction. dayOwnership remains
         // exclusively a resolver override, and a failed write can never relabel an older score.
-        val provenanceByCell = LinkedHashMap<Pair<String, String>, ScoreInputProvenanceRow>()
-        for (daily in dailies) {
-            val source = resolvedScoreOwnerByDay[daily.day] ?: continue
-            if (daily.recovery != null) {
-                provenanceByCell[daily.day to "recovery"] =
-                    ScoreInputProvenanceRow(computedId, daily.day, "recovery", source)
-            }
-            if (daily.strain != null) {
-                provenanceByCell[daily.day to "strain"] =
-                    ScoreInputProvenanceRow(computedId, daily.day, "strain", source)
-            }
-        }
-        for (point in restRows) {
-            val source = resolvedScoreOwnerByDay[point.day] ?: continue
-            provenanceByCell[point.day to point.key] =
-                ScoreInputProvenanceRow(computedId, point.day, point.key, source)
-        }
+        val provenance = IntelligencePersistence.scoreProvenance(
+            computedId, dailies, restRows, resolvedScoreOwnerByDay,
+        )
         repo.replaceComputedScoreWindow(
             deviceId = computedId,
             from = oldestDay,
             to = newestDay,
             dailyMetrics = dailies,
-            metricPoints = restRows,
-            provenance = provenanceByCell.values.toList(),
+            metricPoints = (restRows + physiologicalSteps.recoveredOwnerMarkerRows)
+                .distinctBy { Triple(it.deviceId, it.day, it.key) },
+            provenance = provenance,
+            replaceMetricKeys = listOf(DayCycleIntelligenceIntegration.ONSET_KEY),
+            replaceMetricSourceIds = DayCycleIntelligenceIntegration.markerRewriteSourceIds(
+                repo.computedSourceIds(importedDeviceId),
+                candidatePriorities.map { (owner, _) -> repo.computedDeviceId(owner) },
+            ),
         )
 
         persistFitnessVitalityAndSteps(
@@ -1850,37 +1856,8 @@ object IntelligenceEngine {
         val dismissedWindows = repo.dismissedSleeps(importedDeviceId).map { it.startTs to it.endTs }
         val skipWindows = editedWindows + dismissedWindows
         val sleepKept = DismissedSleepGuard.keeping(sleepRows, skipWindows) { it.startTs to it.endTs }
-        if (sleepKept.isNotEmpty()) repo.upsertSleepSessions(sleepKept)
-        // ── Persist per-epoch motion (H8) beside each kept session's stagesJSON ──────────────────────────
-        // The sleepSession rows exist now (just upserted), so the targeted motion UPDATE lands. Persist ONLY
-        // for the sessions actually kept (not edited/dismissed), keyed by the detected start analyzeDay
-        // returned. A session whose gravity wouldn't grid was omitted from the map and is left as NULL , an
-        // absent motion series stays absent, never a fabricated zero array. Mirrors Swift.
+        IntelligencePersistence.persistDetectedSleepDetails(repo, computedId, sleepKept, scoredNights)
         val keptStarts = sleepKept.map { it.startTs }.toHashSet()
-        val motionByStart = HashMap<Long, List<Double>>()
-        for (res in scoredNights) {
-            for ((start, motion) in res.sessionMotionByStart) {
-                if (start in keptStarts) motionByStart[start] = motion
-            }
-        }
-        for ((start, motion) in motionByStart) {
-            repo.persistSessionMotion(computedId, start, motion)
-        }
-        // ── Persist per-epoch BAND sleep_state (#175) beside each kept session's stagesJSON ──────────────
-        // This is the source `sleepStateJSON` lacked (the write path had no producer because the raw stream
-        // was dropped at extraction). Now analyzeDay grids the RAW `sleepStateSample` stream per session;
-        // persist it here so the NEXT pass's bandSleepStateSamples read (the H7 confirm) and the display can
-        // see the strap's OWN scored band. ONLY for kept (not edited/dismissed) sessions; a session with no
-        // band samples was omitted (no key) and stays NULL — an absent signal stays absent. Mirrors Swift.
-        val sleepStateByStart = HashMap<Long, List<Int>>()
-        for (res in scoredNights) {
-            for ((start, states) in res.sessionSleepStateByStart) {
-                if (start in keptStarts) sleepStateByStart[start] = states
-            }
-        }
-        for ((start, states) in sleepStateByStart) {
-            repo.persistSessionSleepState(computedId, start, states)
-        }
         // ── Overlap-aware banked-sleep heal (#899) ────────────────────────────────────────────────────
         // An unstable strap clock re-banks the SAME night under a shifted timebase, so successive passes
         // detect it at shifted bounds and the upsert above lands a SECOND row beside the stale one (the
