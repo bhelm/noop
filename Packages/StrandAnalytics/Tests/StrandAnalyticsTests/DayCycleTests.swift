@@ -21,4 +21,16 @@ final class DayCycleTests: XCTestCase {
                                                      reliableAwakeCoverage: false).source,
                        .syntheticMidnight)
     }
+
+    func testCoverageSegmentsPreferPriorityWithoutCrossingDeviceCounters() {
+        let window = PhysiologicalSteps.CycleWindow(sleepId: "night", onset: 100, endExclusive: 500)
+        let segments = PhysiologicalSteps.ownerSegmentsFromCoverage(window, coverage: [
+            .init(owner: "secondary", onset: 100, endExclusive: 350, priority: 1),
+            .init(owner: "active", onset: 200, endExclusive: 500, priority: 0),
+        ], fallbackOwner: "secondary")
+        XCTAssertEqual(segments, [
+            .init(owner: "secondary", onset: 100, endExclusive: 200),
+            .init(owner: "active", onset: 200, endExclusive: 500),
+        ])
+    }
 }

@@ -1527,6 +1527,19 @@ final class IntelligenceEngine: ObservableObject {
         // already staged from raw (idempotent) and for imported nights (raw never dense). This MUST run
         // before the scoring loop so the healed stages flow into Rest/recovery this same pass.
         let editedRows = await repo.selfHealEditedStages(from: windowStart, to: now)
+        var cycleCandidates: [(owner: String, priority: Int)] = regDevices
+            .filter { $0.status != .archived }
+            .map { device in
+                let priority: Int
+                if device.id == regActiveId { priority = 0 }
+                else if device.sourceKind == .activityFile { priority = 3 }
+                else if device.isImportSource { priority = 2 }
+                else { priority = 1 }
+                return (device.id, priority)
+            }
+        if !cycleCandidates.contains(where: { $0.owner == regActiveId }) {
+            cycleCandidates.append((regActiveId, 0))
+        }
         let physiologicalSteps = await DayCycleIntelligenceIntegration.compute(
             nights: scoredNights.map { night in
                 DayCycleIntelligenceIntegration.Night(
@@ -1536,6 +1549,8 @@ final class IntelligenceEngine: ObservableObject {
             },
             editedRows: editedRows,
             store: store,
+            candidates: cycleCandidates,
+            windowStart: windowStart,
             now: now,
             offsetSec: tzOffset,
             habitualMidsleepSec: habitualMidsleepSec,
@@ -1885,7 +1900,11 @@ final class IntelligenceEngine: ObservableObject {
             deviceId: computedId,
             from: oldestDay,
             to: newestDay,
-            replaceMetricKeys: [DayCycleIntelligenceIntegration.onsetKey]
+            replaceMetricKeys: [DayCycleIntelligenceIntegration.onsetKey],
+            additionalMetricPoints: physiologicalSteps.recoveredMarkers.map {
+                SourcedMetricPoint(deviceId: $0.deviceId, point: $0.point)
+            },
+            replaceMetricSourceIds: physiologicalSteps.markerSourceIds
         )
 
         // Now evict only the STALE computed rows in the window , those a prior (e.g. UTC-keyed) run left
