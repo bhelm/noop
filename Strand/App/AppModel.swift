@@ -744,6 +744,20 @@ final class AppModel: ObservableObject {
         w.pausedAt = snap.pausedAtSec.map { Date(timeIntervalSince1970: TimeInterval($0)) }
         w.pausedDuration = TimeInterval(snap.pausedDurationSec ?? 0)
         activeWorkout = w
+
+        // Rebuild the transient GPS lifecycle flag as well as the durable workout value. Without this,
+        // a distance workout restored after an OS kill resumes as a non-GPS workout: Resume never
+        // restarts CoreLocation and End never asks the recorder for its route. Re-arm from the original
+        // start so newly captured fixes keep the workout's elapsed-time basis; leave a restored paused
+        // session paused until the user explicitly resumes it.
+        activeWorkoutIsGps = WorkoutCatalog.sport(named: snap.sport)?.isDistanceSport ?? false
+        if activeWorkoutIsGps {
+            gpsRecorder.restore(
+                startMs: Int64(snap.startSec) * 1000,
+                pausedAtMs: snap.pausedAtSec.map { Int64($0) * 1000 },
+                pausedDurationMs: Int64(snap.pausedDurationSec ?? 0) * 1000
+            )
+        }
     }
 
     func toggleWorkoutPause() {
