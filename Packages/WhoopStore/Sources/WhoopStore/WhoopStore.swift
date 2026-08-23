@@ -274,9 +274,10 @@ public actor WhoopStore {
     }
 }
 
-/// Bounded process-local cache witness keyed by owner and UTC day. Cycle windows move with `now`, so
+/// Compact process-local cache witness keyed by owner and UTC day. Cycle windows move with `now`, so
 /// using their exact end timestamp as a cache key would invalidate an otherwise unchanged active cycle
 /// every second. Keeping revisions per UTC day makes the signature stable until a row in that day lands.
+/// Its process-lifetime size is proportional to owners × UTC days that receive new step rows.
 struct StepDataRevisionIndex {
     private static let utcDaySeconds = 86_400
     private var nextRevision = 0

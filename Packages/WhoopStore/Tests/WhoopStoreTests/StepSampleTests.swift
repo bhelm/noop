@@ -39,9 +39,9 @@ final class StepSampleTests: XCTestCase {
             StepSample(ts: day + 100, counter: 1),
         ]), deviceId: "strap")
 
-        let first = try await store.stepDataRevisionSignature(
+        let first = await store.stepDataRevisionSignature(
             deviceId: "strap", from: day, to: day + 1_000)
-        let later = try await store.stepDataRevisionSignature(
+        let later = await store.stepDataRevisionSignature(
             deviceId: "strap", from: day, to: day + 2_000)
 
         XCTAssertEqual(first, later)
@@ -53,29 +53,31 @@ final class StepSampleTests: XCTestCase {
         _ = try await store.insert(Streams(steps: [
             StepSample(ts: day + 100, counter: 1),
         ]), deviceId: "strap")
-        let firstDayBefore = try await store.stepDataRevisionSignature(
+        let firstDayBefore = await store.stepDataRevisionSignature(
             deviceId: "strap", from: day, to: day + 86_400)
+        let secondDayBefore = await store.stepDataRevisionSignature(
+            deviceId: "strap", from: day + 86_400, to: day + 172_800)
 
         _ = try await store.insert(Streams(steps: [
             StepSample(ts: day + 86_500, counter: 2),
         ]), deviceId: "strap")
-        let firstDayAfter = try await store.stepDataRevisionSignature(
+        let firstDayAfter = await store.stepDataRevisionSignature(
             deviceId: "strap", from: day, to: day + 86_400)
-        let secondDay = try await store.stepDataRevisionSignature(
+        let secondDayAfter = await store.stepDataRevisionSignature(
             deviceId: "strap", from: day + 86_400, to: day + 172_800)
 
         XCTAssertEqual(firstDayBefore, firstDayAfter)
-        XCTAssertNotEqual(firstDayAfter, secondDay)
+        XCTAssertNotEqual(secondDayBefore, secondDayAfter)
     }
 
     func testDuplicateStepInsertDoesNotInvalidateRevision() async throws {
         let store = try await WhoopStore.inMemory()
         let sample = StepSample(ts: 1_780_916_150, counter: 50)
         _ = try await store.insert(Streams(steps: [sample]), deviceId: "strap")
-        let before = try await store.stepDataRevisionSignature(
+        let before = await store.stepDataRevisionSignature(
             deviceId: "strap", from: sample.ts - 1, to: sample.ts + 1)
         _ = try await store.insert(Streams(steps: [sample]), deviceId: "strap")
-        let after = try await store.stepDataRevisionSignature(
+        let after = await store.stepDataRevisionSignature(
             deviceId: "strap", from: sample.ts - 1, to: sample.ts + 1)
         XCTAssertEqual(before, after)
     }
