@@ -57,7 +57,7 @@ enum ActiveWorkoutPersistence {
             peakHr: max(0, raw.peakHr),
             liveStrain: raw.liveStrain.isFinite ? max(0, raw.liveStrain) : 0,
             pausedAtSec: raw.pausedAtSec.flatMap { $0 > 0 ? $0 : nil },
-            pausedDurationSec: max(0, raw.pausedDurationSec ?? 0),
+            pausedDurationSec: raw.pausedDurationSec.map { max(0, $0) },
         )
     }
 

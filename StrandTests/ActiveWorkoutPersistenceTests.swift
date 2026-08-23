@@ -121,4 +121,16 @@ final class ActiveWorkoutPersistenceTests: XCTestCase {
         XCTAssertEqual(decoded!.peakHr, 0)
         XCTAssertEqual(decoded!.liveStrain, 0, accuracy: 1e-9)
     }
+
+    func testDecodePreservesAbsentPauseDurationAndClampsPresentNegative() {
+        let absent = snapshot()
+        XCTAssertNil(ActiveWorkoutPersistence.decode(ActiveWorkoutPersistence.encode(absent))?.pausedDurationSec)
+
+        var negative = snapshot()
+        negative.pausedDurationSec = -5
+        XCTAssertEqual(
+            ActiveWorkoutPersistence.decode(ActiveWorkoutPersistence.encode(negative))?.pausedDurationSec,
+            0
+        )
+    }
 }
