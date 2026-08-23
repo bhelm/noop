@@ -399,11 +399,11 @@ extension WhoopStore {
         }
     }
 
-    /// O(1), process-local invalidator advanced by every actually inserted step batch. The instance token
-    /// prevents a static cycle cache surviving a store reopen from reusing a revision number from the old DB.
+    /// Bounded process-local invalidator over the UTC days touched by this window. The instance token
+    /// prevents a static cycle cache surviving a store reopen from reusing revisions from the old DB.
     /// Kotlin twin: `WhoopRepository.stepDataRevisionSignature`.
     public func stepDataRevisionSignature(deviceId: String, from: Int, to: Int) async throws -> String {
-        "\(revisionInstanceToken):\(deviceId):\(from):\(to):\(stepDataRevision[deviceId, default: 0])"
+        "\(revisionInstanceToken):\(deviceId):\(stepDataRevision.signature(deviceId: deviceId, from: from, to: to))"
     }
 
     public func stepDiagnosticMotionCounts(deviceId: String, from: Int, to: Int) async throws

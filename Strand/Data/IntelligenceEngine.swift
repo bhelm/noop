@@ -1764,10 +1764,10 @@ final class IntelligenceEngine: ObservableObject {
         // before the scoring loop so the healed stages flow into Rest/recovery this same pass.
         let editedRows = await repo.selfHealEditedStages(from: windowStart, to: now)
         var cycleCandidates: [(owner: String, priority: Int)] = regDevices
-            .filter { $0.status != .archived }
             .map { device in
                 let priority: Int
                 if device.id == regActiveId { priority = 0 }
+                else if device.status == .archived { priority = 4 }
                 else if device.sourceKind == .activityFile { priority = 3 }
                 else if device.isImportSource { priority = 2 }
                 else { priority = 1 }
@@ -2142,6 +2142,14 @@ final class IntelligenceEngine: ObservableObject {
             provenanceByCell["\(point.day)\u{1F}\(point.key)"] =
                 ScoreInputProvenanceRow(day: point.day, key: point.key, sourceId: source)
         }
+        let markerKeys = physiologicalSteps.shouldReplaceMarkers
+            ? [DayCycleIntelligenceIntegration.onsetKey] : []
+        let markerPoints = physiologicalSteps.shouldReplaceMarkers
+            ? physiologicalSteps.recoveredMarkers.map {
+                SourcedMetricPoint(deviceId: $0.deviceId, point: $0.point)
+            } : []
+        let markerSources = physiologicalSteps.shouldReplaceMarkers
+            ? physiologicalSteps.markerSourceIds : []
         try? await store.persistComputedScores(
             dailyMetrics: dailies,
             metricPoints: restPoints,
@@ -2149,11 +2157,9 @@ final class IntelligenceEngine: ObservableObject {
             deviceId: computedId,
             from: oldestDay,
             to: newestDay,
-            replaceMetricKeys: [DayCycleIntelligenceIntegration.onsetKey],
-            additionalMetricPoints: physiologicalSteps.recoveredMarkers.map {
-                SourcedMetricPoint(deviceId: $0.deviceId, point: $0.point)
-            },
-            replaceMetricSourceIds: physiologicalSteps.markerSourceIds
+            replaceMetricKeys: markerKeys,
+            additionalMetricPoints: markerPoints,
+            replaceMetricSourceIds: markerSources
         )
 
         // Now evict only the STALE computed rows in the window , those a prior (e.g. UTC-keyed) run left

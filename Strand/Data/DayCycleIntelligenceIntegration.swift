@@ -15,6 +15,9 @@ import WhoopStore
         let firstWakeDay: String?
         let recoveredMarkers: [SourcedMarker]
         let markerSourceIds: [String]
+        /// False only when marker state is unknown (for example after a failed recovery read). Callers
+        /// must then preserve persisted markers instead of interpreting an empty array as authoritative.
+        let shouldReplaceMarkers: Bool
     }
     private struct PersistedBoundary {
         let boundary: PhysiologicalSteps.CycleBoundary
@@ -31,7 +34,7 @@ import WhoopStore
 
     private static func recover(candidates: [(owner: String, priority: Int)], store: WhoopStore,
                                 claimedDays: Set<String>, windowStart: Int, now: Int,
-                                offsetSec: Int, habitualMidsleepSec: Int?) async -> [PersistedBoundary] {
+                                offsetSec: Int, habitualMidsleepSec: Int?) async throws -> [PersistedBoundary] {
         var claimed = claimedDays, output: [PersistedBoundary] = []
         let fromDay = AnalyticsEngine.dayString(windowStart, offsetSec: offsetSec)
         let toDay = AnalyticsEngine.dayString(now, offsetSec: offsetSec)
@@ -39,10 +42,10 @@ import WhoopStore
             $0.priority == $1.priority ? $0.owner < $1.owner : $0.priority < $1.priority
         }) {
             let source = computedId(candidate.owner)
-            let sessions = (try? await store.sleepSessions(
-                deviceId: source, from: windowStart, to: now, limit: 4_000)) ?? []
-            let points = (try? await store.metricSeries(
-                deviceId: source, key: onsetKey, from: fromDay, to: toDay)) ?? []
+            let sessions = try await store.sleepSessions(
+                deviceId: source, from: windowStart, to: now, limit: 4_000)
+            let points = try await store.metricSeries(
+                deviceId: source, key: onsetKey, from: fromDay, to: toDay)
             let markers = Dictionary(points.compactMap { point -> (String, Int)? in
                 let value = Int(point.value)
                 return point.value == Double(value) ? (point.day, value) : nil
@@ -80,7 +83,7 @@ import WhoopStore
                         mode: DayCycleMode, trace: ((String) -> Void)? = nil) async -> Result {
         guard mode == .sleepOnset else {
             return Result(stepsByWakeDay: [:], onsetByWakeDay: [:], firstWakeDay: nil,
-                          recoveredMarkers: [], markerSourceIds: [])
+                          recoveredMarkers: [], markerSourceIds: [], shouldReplaceMarkers: true)
         }
         let editsByDay = Dictionary(grouping: editedRows) {
             AnalyticsEngine.dayString($0.endTs, offsetSec: offsetSec)
@@ -116,9 +119,18 @@ import WhoopStore
             wakeDayById[winner.id] = night.daily.day; ownerById[winner.id] = night.owner
         }
 
-        let recovered = await recover(candidates: candidates, store: store,
-            claimedDays: Set(wakeDayById.values), windowStart: windowStart, now: now,
-            offsetSec: offsetSec, habitualMidsleepSec: habitualMidsleepSec)
+        let recovered: [PersistedBoundary]
+        do {
+            recovered = try await recover(candidates: candidates, store: store,
+                claimedDays: Set(wakeDayById.values), windowStart: windowStart, now: now,
+                offsetSec: offsetSec, habitualMidsleepSec: habitualMidsleepSec)
+        } catch {
+            // Fail closed: an unread namespace is unknown, not empty. Returning no replacement source IDs
+            // prevents the persistence transaction from deleting valid markers after a transient read error.
+            trace?("stepsCycle status=error error=boundaryRecoveryRead")
+            return Result(stepsByWakeDay: [:], onsetByWakeDay: [:], firstWakeDay: nil,
+                          recoveredMarkers: [], markerSourceIds: [], shouldReplaceMarkers: false)
+        }
         for item in recovered {
             boundaries.append(item.boundary); wakeDayById[item.boundary.sleepId] = item.wakeDay
             ownerById[item.boundary.sleepId] = item.owner; sleepContexts.append(item.sleepContext)
@@ -238,7 +250,8 @@ import WhoopStore
             point: MetricPoint(day: $0.wakeDay, key: onsetKey, value: Double($0.boundary.onset))) }
         return Result(stepsByWakeDay: steps, onsetByWakeDay: onsets,
             firstWakeDay: wakeDayById.values.min(), recoveredMarkers: recoveredMarkers,
-            markerSourceIds: Array(Set(candidates.map { computedId($0.owner) })).sorted())
+            markerSourceIds: Array(Set(candidates.map { computedId($0.owner) })).sorted(),
+            shouldReplaceMarkers: true)
     }
 
     static func applying(_ result: Result, to daily: DailyMetric) -> DailyMetric {
