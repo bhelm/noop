@@ -21,6 +21,7 @@ final class IntelligenceEngine: ObservableObject {
     /// is worth the few characters.
     static let minHrSamples = 200
 
+    private let dayCycleCache = DayCycleIntelligenceIntegration.Cache()
     private let repo: Repository
     private let profile: ProfileStore
     /// The CANONICAL id under whose `-noop` sibling this engine WRITES the computed daily rows, and from
@@ -1792,6 +1793,7 @@ final class IntelligenceEngine: ObservableObject {
             habitualMidsleepSec: habitualMidsleepSec,
             ticksPerStep: up.stepTicksPerStep,
             mode: dayCycleMode,
+            cache: dayCycleCache,
             trace: stepsTraceActive ? { self.diagnosticSink?($0, .steps) } : nil)
         // #299: `editsByStart` is now built PER DAY inside the scoring loop (scoped to the day each edit
         // belongs to), NOT window-wide here. sleepEditedDaily folds any edited row that isn't a twin of THIS
@@ -2142,14 +2144,19 @@ final class IntelligenceEngine: ObservableObject {
             provenanceByCell["\(point.day)\u{1F}\(point.key)"] =
                 ScoreInputProvenanceRow(day: point.day, key: point.key, sourceId: source)
         }
-        let markerKeys = physiologicalSteps.shouldReplaceMarkers
-            ? [DayCycleIntelligenceIntegration.onsetKey] : []
-        let markerPoints = physiologicalSteps.shouldReplaceMarkers
-            ? physiologicalSteps.recoveredMarkers.map {
+        let markerKeys: [String]
+        let markerPoints: [SourcedMetricPoint]
+        let markerSources: [String]
+        switch physiologicalSteps.markerUpdate {
+        case .preserve:
+            markerKeys = []; markerPoints = []; markerSources = []
+        case let .replace(points, sourceIds):
+            markerKeys = [DayCycleIntelligenceIntegration.onsetKey]
+            markerPoints = points.map {
                 SourcedMetricPoint(deviceId: $0.deviceId, point: $0.point)
-            } : []
-        let markerSources = physiologicalSteps.shouldReplaceMarkers
-            ? physiologicalSteps.markerSourceIds : []
+            }
+            markerSources = sourceIds
+        }
         try? await store.persistComputedScores(
             dailyMetrics: dailies,
             metricPoints: restPoints,
