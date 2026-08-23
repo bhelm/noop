@@ -350,6 +350,7 @@ extension WhoopStore {
         }
     }
 
+    /// Kotlin twin: `WhoopDao.stepSamplesPage`.
     public func stepSamplesPage(deviceId: String, afterExclusive: Int, endExclusive: Int,
                                 limit: Int) async throws -> [StepSample] {
         try syncRead { db in
@@ -364,6 +365,7 @@ extension WhoopStore {
     }
 
     /// Last counter sample before a cycle boundary, used to attribute the first in-cycle delta correctly.
+    /// Kotlin twin: `WhoopDao.stepSampleBefore`.
     public func stepSampleBefore(deviceId: String, before: Int) async throws -> StepSample? {
         try syncRead { db in
             try Row.fetchOne(db, sql: """
@@ -375,6 +377,7 @@ extension WhoopStore {
         }
     }
 
+    /// Kotlin twin: `WhoopDao.hasStepActivityClasses`.
     public func hasStepActivityClasses(deviceId: String, from: Int, to: Int) async throws -> Bool {
         try syncRead { db in
             try Int.fetchOne(db, sql: """
@@ -384,6 +387,7 @@ extension WhoopStore {
         }
     }
 
+    /// Kotlin twin: `WhoopRepository.stepTimestampCoverage`.
     public func stepTimestampCoverage(deviceId: String, from: Int, to: Int) async throws
         -> (first: Int?, last: Int?) {
         try syncRead { db in
@@ -397,6 +401,7 @@ extension WhoopStore {
 
     /// O(1), process-local invalidator advanced by every actually inserted step batch. The instance token
     /// prevents a static cycle cache surviving a store reopen from reusing a revision number from the old DB.
+    /// Kotlin twin: `WhoopRepository.stepDataRevisionSignature`.
     public func stepDataRevisionSignature(deviceId: String, from: Int, to: Int) async throws -> String {
         "\(revisionInstanceToken):\(deviceId):\(from):\(to):\(stepDataRevision[deviceId, default: 0])"
     }

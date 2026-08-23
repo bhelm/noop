@@ -15,9 +15,6 @@ public enum PhysiologicalSteps {
             self.onset = onset; self.end = end; self.id = id ?? String(onset)
             self.editedOnset = editedOnset; self.kind = kind
         }
-        fileprivate func withKind(_ kind: SleepKind) -> SleepBlock {
-            SleepBlock(onset: onset, end: end, id: id, editedOnset: editedOnset, kind: kind)
-        }
     }
     public struct CycleBoundary: Equatable, Sendable {
         public let sleepId: String
@@ -44,6 +41,7 @@ public enum PhysiologicalSteps {
     }
     private static let minMainSleepSeconds = 3 * 3_600
 
+    /// Kotlin twin: `PhysiologicalSteps.classifyForCycle`.
     public static func classifyForCycle(_ blocks: [SleepBlock], offsetSec: Int,
                                         habitualMidsleepSec: Int?) -> [SleepBlock] {
         guard !blocks.isEmpty else { return [] }
@@ -72,9 +70,15 @@ public enum PhysiologicalSteps {
                                                                 habitualMidsleepSec: habitualMidsleepSec) ?? []
             selected = Set(picked.map { selectable[eligible[$0]] })
         }
-        return blocks.indices.map { blocks[$0].withKind(selected.contains($0) ? .mainSleep : .nap) }
+        return blocks.indices.map { index in
+            let block = blocks[index]
+            return SleepBlock(onset: block.onset, end: block.end, id: block.id,
+                              editedOnset: block.editedOnset,
+                              kind: selected.contains(index) ? .mainSleep : .nap)
+        }
     }
 
+    /// Kotlin twin: `PhysiologicalSteps.cycleWindows`.
     public static func cycleWindows(_ boundaries: [CycleBoundary], now: Int) -> [CycleWindow] {
         var ids = Set<String>()
         let ordered = boundaries.filter { $0.onset <= now && ids.insert($0.sleepId).inserted }
@@ -114,6 +118,7 @@ public enum PhysiologicalSteps {
     }
 
     /// Same later-sample attribution, class gate and plausibility gate as the Kotlin twin.
+    /// Kotlin twin: `PhysiologicalSteps.stepsInCycle`.
     public static func stepsInCycle(_ samples: [StepSample], onsetInclusive: Int,
                                     endExclusive: Int, sleepSessions: [SleepSession]) -> Int? {
         guard endExclusive > onsetInclusive else { return 0 }

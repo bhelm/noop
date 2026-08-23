@@ -1792,7 +1792,7 @@ final class IntelligenceEngine: ObservableObject {
             habitualMidsleepSec: habitualMidsleepSec,
             ticksPerStep: up.stepTicksPerStep,
             mode: dayCycleMode,
-            trace: stepsTraceActive ? { diagnosticSink?($0, .steps) } : nil)
+            trace: stepsTraceActive ? { self.diagnosticSink?($0, .steps) } : nil)
         // #299: `editsByStart` is now built PER DAY inside the scoring loop (scoped to the day each edit
         // belongs to), NOT window-wide here. sleepEditedDaily folds any edited row that isn't a twin of THIS
         // day's detected sessions in as a "manual" block, so a window-wide edit set let ONE user edit /
