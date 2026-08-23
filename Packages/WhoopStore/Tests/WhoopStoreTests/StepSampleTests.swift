@@ -32,6 +32,54 @@ final class StepSampleTests: XCTestCase {
         XCTAssertEqual(n2, 2)
     }
 
+    func testStepRevisionSignatureIsStableAsActiveWindowAdvances() async throws {
+        let store = try await WhoopStore.inMemory()
+        let day = 1_780_876_800
+        _ = try await store.insert(Streams(steps: [
+            StepSample(ts: day + 100, counter: 1),
+        ]), deviceId: "strap")
+
+        let first = try await store.stepDataRevisionSignature(
+            deviceId: "strap", from: day, to: day + 1_000)
+        let later = try await store.stepDataRevisionSignature(
+            deviceId: "strap", from: day, to: day + 2_000)
+
+        XCTAssertEqual(first, later)
+    }
+
+    func testStepRevisionOnlyInvalidatesTouchedUtcDays() async throws {
+        let store = try await WhoopStore.inMemory()
+        let day = 1_780_876_800
+        _ = try await store.insert(Streams(steps: [
+            StepSample(ts: day + 100, counter: 1),
+        ]), deviceId: "strap")
+        let firstDayBefore = try await store.stepDataRevisionSignature(
+            deviceId: "strap", from: day, to: day + 86_400)
+
+        _ = try await store.insert(Streams(steps: [
+            StepSample(ts: day + 86_500, counter: 2),
+        ]), deviceId: "strap")
+        let firstDayAfter = try await store.stepDataRevisionSignature(
+            deviceId: "strap", from: day, to: day + 86_400)
+        let secondDay = try await store.stepDataRevisionSignature(
+            deviceId: "strap", from: day + 86_400, to: day + 172_800)
+
+        XCTAssertEqual(firstDayBefore, firstDayAfter)
+        XCTAssertNotEqual(firstDayAfter, secondDay)
+    }
+
+    func testDuplicateStepInsertDoesNotInvalidateRevision() async throws {
+        let store = try await WhoopStore.inMemory()
+        let sample = StepSample(ts: 1_780_916_150, counter: 50)
+        _ = try await store.insert(Streams(steps: [sample]), deviceId: "strap")
+        let before = try await store.stepDataRevisionSignature(
+            deviceId: "strap", from: sample.ts - 1, to: sample.ts + 1)
+        _ = try await store.insert(Streams(steps: [sample]), deviceId: "strap")
+        let after = try await store.stepDataRevisionSignature(
+            deviceId: "strap", from: sample.ts - 1, to: sample.ts + 1)
+        XCTAssertEqual(before, after)
+    }
+
     /// v19 migration: the @63 activity-class column exists on stepSample (#316).
     func testV19AddsActivityClassColumn() async throws {
         let store = try await WhoopStore.inMemory()
