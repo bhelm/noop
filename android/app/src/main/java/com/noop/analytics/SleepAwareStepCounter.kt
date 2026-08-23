@@ -29,6 +29,8 @@ object SleepAwareStepCounter {
         val acceptedAwakeGapTicks: Int,
         val acceptedSleepBoutTicks: Int,
         val rejectedIsolatedSleepTicks: Int,
+        val rejectedActivityClassTicks: Int,
+        val rejectedImplausibleTicks: Int,
         /** Availability only; neither raw stream changes the production decision yet. */
         val gravitySamplesAvailable: Int,
         val auxSamplesAvailable: Int,
@@ -39,12 +41,14 @@ object SleepAwareStepCounter {
             acceptedAwakeGapTicks + other.acceptedAwakeGapTicks,
             acceptedSleepBoutTicks + other.acceptedSleepBoutTicks,
             rejectedIsolatedSleepTicks + other.rejectedIsolatedSleepTicks,
+            rejectedActivityClassTicks + other.rejectedActivityClassTicks,
+            rejectedImplausibleTicks + other.rejectedImplausibleTicks,
             gravitySamplesAvailable + other.gravitySamplesAvailable,
             auxSamplesAvailable + other.auxSamplesAvailable,
         )
 
         companion object {
-            val EMPTY = Count(0, 0, 0, 0, 0, 0, 0)
+            val EMPTY = Count(0, 0, 0, 0, 0, 0, 0, 0, 0)
         }
     }
 
@@ -107,6 +111,8 @@ object SleepAwareStepCounter {
         private var awakeGap = 0
         private var sleepBout = 0
         private var rejectedSleep = 0
+        private var rejectedClass = 0
+        private var rejectedImplausible = 0
         private var gravityAvailable = 0
         private var auxAvailable = 0
         private var finished = false
@@ -130,9 +136,14 @@ object SleepAwareStepCounter {
                 if (prior == null) continue
 
                 val delta = (current.counter - prior.counter) and 0xFFFF
-                val valid = StepsCounter.shouldCountDelta(current.activityClass, hasActivityClasses) &&
-                    StepsCounter.isPlausibleDelta(prior.ts, current.ts, delta)
-                if (!valid) continue
+                if (!StepsCounter.shouldCountDelta(current.activityClass, hasActivityClasses)) {
+                    rejectedClass += delta
+                    continue
+                }
+                if (!StepsCounter.isPlausibleDelta(prior.ts, current.ts, delta)) {
+                    rejectedImplausible += delta
+                    continue
+                }
 
                 when (contextAt(current.ts, sessions)) {
                     Context.OUTSIDE_SLEEP -> {
@@ -165,6 +176,8 @@ object SleepAwareStepCounter {
                 acceptedAwakeGapTicks = awakeGap,
                 acceptedSleepBoutTicks = sleepBout,
                 rejectedIsolatedSleepTicks = rejectedSleep,
+                rejectedActivityClassTicks = rejectedClass,
+                rejectedImplausibleTicks = rejectedImplausible,
                 gravitySamplesAvailable = gravityAvailable,
                 auxSamplesAvailable = auxAvailable,
             )

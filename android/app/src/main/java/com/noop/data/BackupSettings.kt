@@ -57,6 +57,7 @@ object BackupSettingsCodec {
         "units.temperature" to Kind.STRING,
         "units.skinTempDisplay" to Kind.STRING,   // #1846, carried like the other display units
         "effort.scale" to Kind.STRING,
+        "dayCycle.mode" to Kind.STRING,
         // The ONE layout pref carried (#today-hosted-cards): the Trends/Sleep cards the user chose to host
         // in Today, a JSON [String] of ids. Unlike section order, this is a deliberate composition the user
         // built and expects across a restore. Its POSITION (the addedCards slot in today.sectionOrder) is
@@ -154,6 +155,9 @@ object BackupSettingsBridge {
         if (noop.contains(UnitPrefs.KEY_EFFORT_SCALE)) {
             noop.getString(UnitPrefs.KEY_EFFORT_SCALE, null)?.let { values["effort.scale"] = it }
         }
+        if (noop.contains(NoopPrefs.KEY_DAY_CYCLE_MODE)) {
+            noop.getString(NoopPrefs.KEY_DAY_CYCLE_MODE, null)?.let { values["dayCycle.mode"] = it }
+        }
         if (noop.contains(HostedCardPrefs.KEY_SELECTION)) {
             noop.getString(HostedCardPrefs.KEY_SELECTION, null)?.let { values[HostedCardPrefs.KEY_SELECTION] = it }
         }
@@ -198,6 +202,7 @@ object BackupSettingsBridge {
             else editor.putString(NoopPrefs.KEY_SKIN_TEMP_DISPLAY, raw)
         }
         (values["effort.scale"] as? String)?.let { editor.putString(UnitPrefs.KEY_EFFORT_SCALE, it) }
+        (values["dayCycle.mode"] as? String)?.let { editor.putString(NoopPrefs.KEY_DAY_CYCLE_MODE, it) }
         (values[HostedCardPrefs.KEY_SELECTION] as? String)?.let { editor.putString(HostedCardPrefs.KEY_SELECTION, it) }
         // #1361: restore custom behaviours — write the names to the legacy custom key, clear stale hidden,
         // and drop the v2 blob so the next catalog load re-migrates them (restart-gated, #57). Mirrors iOS.
