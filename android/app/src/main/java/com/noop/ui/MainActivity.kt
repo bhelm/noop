@@ -211,6 +211,29 @@ object NoopPrefs {
      *  derived-biosignal rule (CLAUDE.md). Mirrors iOS `PuffinExperiment.stressPersonalBaselineKey`. */
     const val KEY_STRESS_PERSONAL_BASELINE = "noop.stressPersonalBaseline"
 
+    /** Opt-in "Banister Effort" (#1545): score Effort with Banister's EXPONENTIAL TRIMP instead of the
+     *  default Edwards 5-zone summation.
+     *
+     *  Edwards is time-in-zone and pays NOTHING below 50% HRR. A reporter's weightlifting session scored
+     *  1.7 while a walk scored higher — working that back gives a TRIMP of about 1, i.e. the model saw
+     *  essentially no time above the floor for the whole session. An hour held at 45% HRR scores 0.00
+     *  under Edwards and about 43 under Banister: the difference between under-rating intermittent work
+     *  and not seeing it at all.
+     *
+     *  Default OFF and it must stay a choice, not become the default — it re-scores every day in the
+     *  window against a different recipe, so flipping it silently would move a headline metric's whole
+     *  history. Each method maps a theoretical maximum day to exactly 100 via its own log denominator
+     *  ([StrainScorer.logMapDenominator]), so the two share an axis. Mirrors iOS
+     *  `PuffinExperiment.banisterEffortKey`. */
+    const val KEY_BANISTER_EFFORT = "noop.banisterEffort"
+
+    fun banisterEffort(context: Context): Boolean = of(context).getBoolean(KEY_BANISTER_EFFORT, false)
+
+    /** The TRIMP recipe every Effort computation on this device should use. */
+    fun effortMethod(context: Context): com.noop.analytics.StrainScorer.Method =
+        if (banisterEffort(context)) com.noop.analytics.StrainScorer.Method.BANISTER
+        else com.noop.analytics.StrainScorer.Method.EDWARDS
+
     /** The calendar day (yyyy-MM-dd) on which the morning-journal nudge was last shown, keeps the
      *  Sleep screen's "Good morning" sheet to at most once per day. */
     const val KEY_LAST_JOURNAL_PROMPT = "noop.lastJournalPromptDay"
@@ -487,6 +510,10 @@ object NoopPrefs {
         of(context).edit().putBoolean(KEY_STRESS_PERSONAL_BASELINE, enabled).apply()
     }
 
+    fun setBanisterEffort(context: Context, enabled: Boolean) {
+        of(context).edit().putBoolean(KEY_BANISTER_EFFORT, enabled).apply()
+    }
+
     /** Whether the strap log is mirrored to logcat. Default false (normal users don't log to adb). */
     fun debugLogging(context: Context): Boolean =
         of(context).getBoolean(KEY_DEBUG_LOGGING, false)
@@ -607,6 +634,19 @@ object NoopPrefs {
 
     /** Health Connect writeback (NOOP's computed metrics → HC, for other apps). Default OFF. */
     const val KEY_HC_WRITEBACK = "noop.hcWriteback"
+    const val KEY_HC_VO2MAX_ASKED = "noop.hcVo2MaxAsked"
+
+    /**
+     * #1525: have we already asked this install for the VO2 max write permission? Health Connect grants
+     * are per-permission, so a user who set NOOP up before VO2 max existed passes the writeback's own
+     * gate and is never prompted for it. We ask ONCE on the next writeback and remember that we did --
+     * a decline must not turn every subsequent sync into another dialog.
+     */
+    fun hcVo2MaxAsked(context: Context): Boolean = of(context).getBoolean(KEY_HC_VO2MAX_ASKED, false)
+
+    fun setHcVo2MaxAsked(context: Context, asked: Boolean) {
+        of(context).edit().putBoolean(KEY_HC_VO2MAX_ASKED, asked).apply()
+    }
 
     fun hcWriteback(context: Context): Boolean =
         of(context).getBoolean(KEY_HC_WRITEBACK, false)

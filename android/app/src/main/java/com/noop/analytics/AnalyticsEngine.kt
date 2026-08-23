@@ -399,6 +399,12 @@ object AnalyticsEngine {
         // the whole-night mean. Display-only preference threaded from the caller (UnitPrefs.hrvWindow). The
         // default (false) is byte-identical to the historical whole-night value.
         deepHrvWindow: Boolean = false,
+        // #1545: which TRIMP recipe scores Effort. EDWARDS (the default) is time-in-zone and pays NOTHING
+        // below 50% HRR, so intermittent work — a lifting session, once the sets are averaged against the
+        // rests — can score near zero however long it lasts. BANISTER is exponential in %HRR with no floor.
+        // Threaded rather than read from a global so this stays a pure function, and defaulted so every
+        // existing caller and test is byte-identical.
+        effortMethod: StrainScorer.Method = StrainScorer.Method.EDWARDS,
     ): DayResult {
 
         // Precompute the day's UTC bounds ONCE (#996). isoDay is a FIXED-UTC formatter, so
@@ -549,6 +555,14 @@ object AnalyticsEngine {
                 if (weight > 0) total / weight else null
             }
         }
+
+        // Five-minute SDNN index over R-R intervals inside the matched sleep sessions. This preserves the
+        // timestamps needed for segmentation and stays distinct from avgHrv (RMSSD). The half-open sleep
+        // bounds match every other in-bed aggregate; no qualifying 20-clean-beat segment means null.
+        val avgSDNNDaily = HrvAnalyzer.sdnnIndex(
+            rr.filter { sample -> matched.any { sample.ts >= it.start && sample.ts < it.end } },
+            segmentSec = 300,
+        )
 
         // ── HRV & Autonomic nightly trace (#141) ──────────────────────────────
         // Per-5-min-window RMSSD tagged by the sleep stage at its center, then a night summary comparing
@@ -716,6 +730,7 @@ object AnalyticsEngine {
             hr = dayHr ?: hr,
             maxHR = effMaxHR,
             restingHR = restForStrain,
+            method = effortMethod,
             sex = profile.sex,
         )
 
@@ -728,9 +743,25 @@ object AnalyticsEngine {
             hr = dayHr ?: hr,
             gravity = dayGravity ?: gravity,
             restingHR = restingHRDaily?.toDouble(),
-            maxHR = maxHROverride,
+            // #1545: the DAY's effective HRmax, not just the override. Passing maxHROverride meant an
+            // install with no override left the detector to fall back to StrainScorer.estimateHRmax,
+            // which returns max(observed p99.5, Tanaka) -- so every bout was measured against a HRmax at
+            // least as high as, and usually higher than, the one its own day used. A higher HRmax is a
+            // bigger reserve and therefore a SMALLER %HRR, so bouts were held to a stricter yardstick
+            // than the day containing them: for age 30 / RHR 60 with an observed 195, a 125 bpm minute is
+            // zone 1 for the day and zone 0 for the bout. Same day-disagrees-with-its-own-workouts
+            // failure #1562 fixed for the TRIMP method.
+            //
+            // This also feeds the z2+ qualification gate below, so it changes which bouts are DETECTED,
+            // not only how they score -- in the direction of no longer dropping a workout by a standard
+            // its own day never applied. Still null for an age-less profile.
+            maxHR = effMaxHR,
             age = if (profile.age > 0) profile.age else null,
             profile = profile,
+            // #1545: the bouts inside a day MUST be scored by the same recipe as the day itself. A day
+            // on Banister whose workouts were still on Edwards would show a session scoring less than
+            // the day it sits inside, which is a worse inconsistency than either method.
+            effortMethod = effortMethod,
         )
 
         // ── Steps (APPROXIMATE) ───────────────────────────────────────────────
@@ -810,6 +841,7 @@ object AnalyticsEngine {
             activeKcalEst = activeKcalEst,
             spo2Red = nightlySpo2Raw?.first,
             spo2Ir = nightlySpo2Raw?.second,
+            avgSdnn = avgSDNNDaily,
         )
 
         // ── Per-score confidence tiers (mirror Swift ScoreConfidence.derive decisions) ──

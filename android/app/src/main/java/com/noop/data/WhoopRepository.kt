@@ -1068,6 +1068,10 @@ class WhoopRepository(
         // as stored. Display-only; the durable value is written by IntelligenceEngine.rescoreManualWorkouts.
         strainMaxHR: Double? = null,
         strainSex: String = "male",
+        // #1545: the TRIMP recipe for that display-only refill. A parameter rather than a NoopPrefs read
+        // because this class holds no Context; the two UI callers pass the user's choice. EDWARDS by
+        // default so a caller that does not care stays byte-identical.
+        effortMethod: com.noop.analytics.StrainScorer.Method = com.noop.analytics.StrainScorer.Method.EDWARDS,
     ): List<WorkoutRow> {
         var budget = cap
         return rows.map { row ->
@@ -1097,7 +1101,8 @@ class WhoopRepository(
             // let StrainScorer return null on a still-too-thin window (never a fabricated number).
             val filledStrain = if (needsStrainFill && strainMaxHR != null) {
                 val samples = dao.hrSamples(hrIds[0], row.startTs, row.endTs, 8000)
-                com.noop.analytics.StrainScorer.strain(samples, maxHR = strainMaxHR, sex = strainSex)
+                com.noop.analytics.StrainScorer.strain(
+                    samples, maxHR = strainMaxHR, method = effortMethod, sex = strainSex)
             } else null
             if (strapNative) {
                 // True mean / peak of the very samples the graph + zones + effort use; FILL a null Effort
@@ -2275,6 +2280,7 @@ class WhoopRepository(
                 // Independent columns: each stands alone, so a plain per-column fill is safe.
                 restingHr = winner.restingHr ?: filler.restingHr,
                 avgHrv = winner.avgHrv ?: filler.avgHrv,
+                avgSdnn = winner.avgSdnn ?: filler.avgSdnn,
                 recovery = winner.recovery ?: filler.recovery,
                 strain = winner.strain ?: filler.strain,
                 exerciseCount = winner.exerciseCount ?: filler.exerciseCount,
@@ -2376,6 +2382,7 @@ class WhoopRepository(
                     disturbances = d.disturbances ?: c.disturbances,
                     restingHr = d.restingHr ?: c.restingHr,
                     avgHrv = d.avgHrv ?: c.avgHrv,
+                    avgSdnn = d.avgSdnn ?: c.avgSdnn,
                     recovery = d.recovery ?: c.recovery,
                     strain = d.strain ?: c.strain,
                     exerciseCount = d.exerciseCount ?: c.exerciseCount,
