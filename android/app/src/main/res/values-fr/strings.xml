@@ -2432,4 +2432,11 @@
     <string name="l10n_sleep_screen_sleep_outside_the_new_times_was_6229881e">Le sommeil en dehors des nouveaux horaires a été supprimé. NOOP ne le détectera plus.</string>
     <string name="l10n_settings_screen_effort_exponential_scale">Effort : échelle d’intensité exponentielle</string>
     <string name="l10n_settings_screen_effort_exponential_scale_desc">Calcule l’Effort selon une courbe d’intensité exponentielle (TRIMP de Banister) au lieu des zones de fréquence cardiaque par défaut (Edwards). Le réglage par défaut ne compte rien en dessous de la moitié de votre réserve de fréquence cardiaque : une heure de musculation — où les séries dures se compensent avec les temps de repos — peut donc être notée presque zéro. La courbe exponentielle n’a pas de seuil et pondère bien davantage les efforts courts et intenses. Recalcule votre historique, et les deux échelles atteignent le même maximum. Désactivé par défaut.</string>
+    <string name="settings_day_cycle_title">Cycle journalier</string>
+    <string name="settings_day_cycle_description">Choisissez quand les pas et l’Effort en cours repartent de zéro. Les siestes ne commencent jamais une nouvelle journée.</string>
+    <string name="settings_day_cycle_starts">Début de la journée</string>
+    <string name="settings_day_cycle_sleep">Sommeil principal</string>
+    <string name="settings_day_cycle_midnight">00:00</string>
+    <string name="settings_day_cycle_sleep_description">Par défaut. Le cycle suit le début du sommeil principal détecté. Si les données de sommeil sont absentes ou peu fiables, l’heure locale de minuit est utilisée.</string>
+    <string name="settings_day_cycle_midnight_description">Utilise une journée civile locale classique de 00:00 à 00:00.</string>
 </resources>

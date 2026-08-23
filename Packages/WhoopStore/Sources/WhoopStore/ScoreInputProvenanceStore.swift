@@ -1,6 +1,12 @@
 import Foundation
 import GRDB
 
+public struct SourcedMetricPoint: Sendable {
+    public let deviceId: String
+    public let point: MetricPoint
+    public init(deviceId: String, point: MetricPoint) { self.deviceId = deviceId; self.point = point }
+}
+
 /// The source whose inputs produced one persisted NOOP-computed score.
 /// Natural key: (computed device namespace, day, metric key).
 public struct ScoreInputProvenanceRow: Equatable, Codable, Sendable {
@@ -25,7 +31,10 @@ extension WhoopStore {
         provenance: [ScoreInputProvenanceRow],
         deviceId: String,
         from: String,
-        to: String
+        to: String,
+        replaceMetricKeys: [String] = [],
+        additionalMetricPoints: [SourcedMetricPoint] = [],
+        replaceMetricSourceIds: [String] = []
     ) async throws {
         // #1196: an empty scoring pass must not destructively rewrite the window — with no daily rows to
         // write, the provenance wide-delete below would blank the window's attribution while a degenerate
@@ -35,7 +44,16 @@ extension WhoopStore {
         guard !dailyMetrics.isEmpty else { return }
         try syncWrite { db in
             _ = try Self.upsertDailyMetrics(dailyMetrics, deviceId: deviceId, in: db)
+            for source in Set(replaceMetricSourceIds + [deviceId]) {
+                for key in replaceMetricKeys {
+                    try db.execute(sql: "DELETE FROM metricSeries WHERE deviceId = ? AND key = ? AND day >= ? AND day <= ?",
+                                   arguments: [source, key, from, to])
+                }
+            }
             _ = try Self.upsertMetricSeries(metricPoints, deviceId: deviceId, in: db)
+            for group in Dictionary(grouping: additionalMetricPoints, by: \.deviceId) {
+                _ = try Self.upsertMetricSeries(group.value.map(\.point), deviceId: group.key, in: db)
+            }
 
             try db.execute(sql: """
                 DELETE FROM scoreInputProvenance

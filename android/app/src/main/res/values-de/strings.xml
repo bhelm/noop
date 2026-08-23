@@ -2447,4 +2447,11 @@
     <string name="l10n_sleep_screen_sleep_outside_the_new_times_was_6229881e">Schlaf außerhalb der neuen Zeiten wurde entfernt. NOOP erkennt ihn nicht erneut.</string>
     <string name="l10n_settings_screen_effort_exponential_scale">Anstrengung: exponentielle Intensitätsskala</string>
     <string name="l10n_settings_screen_effort_exponential_scale_desc">Bewertet die Anstrengung mit einer exponentiellen Intensitätskurve (Banister-TRIMP) statt der voreingestellten Herzfrequenzzonen (Edwards). Die Voreinstellung zählt nichts unter der Hälfte deiner Herzfrequenzreserve, sodass eine Stunde Krafttraining – bei der sich harte Sätze mit den Pausen ausmitteln – nahezu null ergeben kann. Die exponentielle Kurve hat keine Untergrenze und gewichtet kurze, intensive Belastungen deutlich stärker. Bewertet deine Historie neu; beide Skalen erreichen dasselbe Maximum. Standardmäßig aus.</string>
+    <string name="settings_day_cycle_title">Tageszyklus</string>
+    <string name="settings_day_cycle_description">Lege fest, wann Schritte und die laufende Anstrengung neu beginnen. Nickerchen starten keinen neuen Tag.</string>
+    <string name="settings_day_cycle_starts">Tagesbeginn</string>
+    <string name="settings_day_cycle_sleep">Hauptschlaf</string>
+    <string name="settings_day_cycle_midnight">00:00</string>
+    <string name="settings_day_cycle_sleep_description">Standard. Der Zyklus folgt dem Beginn deines erkannten Hauptschlafs. Bei fehlenden oder unzuverlässigen Schlafdaten verwendet NOOP ersatzweise die lokale Mitternacht.</string>
+    <string name="settings_day_cycle_midnight_description">Verwendet einen herkömmlichen lokalen Kalendertag von 00:00 bis 00:00 Uhr.</string>
 </resources>
