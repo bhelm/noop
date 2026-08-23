@@ -367,19 +367,23 @@ def _exemption_applies(
     return False
 
 
-def compare_metadata(root: Path, base: str, *, offline: bool) -> list[str]:
+def compare_metadata(
+    root: Path,
+    base: str,
+    *,
+    offline: bool,
+    warnings: list[str] | None = None,
+) -> list[str]:
     """Compare current governance metadata with the exact requested base."""
     root = root.resolve()
     errors: list[str] = []
+    warnings = warnings if warnings is not None else []
     current_map = _read_current(root, TWIN_MAP_PATH)
     current_baseline = _read_current(root, LEDGER_BASELINE_PATH)
     _validate_twin_map(current_map, TWIN_MAP_PATH)
     _validate_baseline(current_baseline, LEDGER_BASELINE_PATH)
-    issues = _issues(current_map) | _issues(current_baseline)
     current_sets = parity_ledger.semantic_authority(root)
     current_manifest = parity_ledger.authority_manifest(current_sets)
-    if current_map["authority"] != current_manifest:
-        errors.append(f"{TWIN_MAP_PATH}: authority does not match independently derived current semantic sets")
     current_scan_map = parity_ledger.build_compact_twin_map(root)
     current_scan_map["exemptions"] = current_map["exemptions"]
     current_scan = parity_ledger.scan(root, current_scan_map)
@@ -387,6 +391,7 @@ def compare_metadata(root: Path, base: str, *, offline: bool) -> list[str]:
     old_map = _read_base(root, base, TWIN_MAP_PATH)
     old_baseline = _read_base(root, base, LEDGER_BASELINE_PATH)
     new_exemptions: list[dict] = []
+    active_exemptions: list[dict] = []
     if old_map is not None:
         _validate_twin_map(old_map, f"{base}:{TWIN_MAP_PATH}")
         with _base_tree(root, base) as base_root:
@@ -398,12 +403,23 @@ def compare_metadata(root: Path, base: str, *, offline: bool) -> list[str]:
                 )
             base_scan_map = parity_ledger.build_compact_twin_map(base_root)
             base_scan = parity_ledger.scan(base_root, base_scan_map)
+        base_findings = {item.identity for item in base_scan.findings}
+        current_findings = {item.identity for item in current_scan.findings}
         required = _required_v3_exemptions(
             base_sets,
             current_sets,
-            {item.identity for item in base_scan.findings},
-            {item.identity for item in current_scan.findings},
+            base_findings,
+            current_findings,
         )
+        if current_map["authority"] != current_manifest:
+            if current_map["authority"] == old_map["authority"]:
+                warnings.append(
+                    f"{TWIN_MAP_PATH}: debt decreased; checked authority may be cleaned up later"
+                )
+            else:
+                errors.append(
+                    f"{TWIN_MAP_PATH}: authority matches neither the current tree nor the exact base"
+                )
         for name, value in current_scan.counters.items():
             old_value = base_scan.counters.get(name, 0)
             if value > old_value:
@@ -417,32 +433,53 @@ def compare_metadata(root: Path, base: str, *, offline: bool) -> list[str]:
             for item in old_map.get("exemptions", [])
         }
         inherited: set[tuple[str, str]] = set()
-        current_findings = {item.identity for item in current_scan.findings}
         for key, old_item in old_by_key.items():
-            applies = _exemption_applies(
+            applied_at_base = _exemption_applies(
+                key, base_sets, base_findings, base_scan.counters,
+                base_scan.bootstrap_unpaired_debts,
+            )
+            applies_now = _exemption_applies(
                 key, current_sets, current_findings, current_scan.counters,
                 current_scan.bootstrap_unpaired_debts,
             )
             current_item = current_by_key.get(key)
-            if applies and current_item is None:
+            if applied_at_base and applies_now and current_item is None:
                 errors.append(f"{TWIN_MAP_PATH}: inherited exemption was removed {key[0]} {key[1]}")
-            elif applies and current_item != old_item:
+            elif applied_at_base and applies_now and current_item != old_item:
                 errors.append(f"{TWIN_MAP_PATH}: inherited exemption changed {key[0]} {key[1]}")
-            elif applies:
+            elif applied_at_base and applies_now:
                 inherited.add(key)
-            elif current_item is not None:
-                errors.append(f"{TWIN_MAP_PATH}: stale exemption {key[0]} {key[1]}")
-        checked = set(current_by_key)
+            elif current_item is not None and not applies_now:
+                warnings.append(
+                    f"{TWIN_MAP_PATH}: obsolete exemption {key[0]} {key[1]}; cleanup is optional"
+                )
+            elif current_item is not None and applies_now:
+                warnings.append(
+                    f"{TWIN_MAP_PATH}: obsolete exemption cannot authorize reintroduced debt {key[0]} {key[1]}"
+                )
+        checked = {
+            key for key in current_by_key
+            if key not in old_by_key or key in inherited
+        }
         for kind, identity in sorted(required - checked):
             errors.append(
                 f"{TWIN_MAP_PATH}: derived inventory changed without an exact issue-bound authority change: {kind} {identity}"
             )
         for kind, identity in sorted(checked - required - inherited - set(old_by_key)):
-            errors.append(f"{TWIN_MAP_PATH}: stale exemption {kind} {identity}")
+            warnings.append(
+                f"{TWIN_MAP_PATH}: obsolete exemption {kind} {identity}; cleanup is optional"
+            )
         new_exemptions = [
-            item for key, item in current_by_key.items() if key not in old_by_key
+            item for key, item in current_by_key.items()
+            if key not in old_by_key and key in required
+        ]
+        active_exemptions = [
+            item for key, item in current_by_key.items()
+            if key in inherited or key in required
         ]
     elif old_map is None:
+        if current_map["authority"] != current_manifest:
+            errors.append(f"{TWIN_MAP_PATH}: authority does not match independently derived current semantic sets")
         exemptions = current_map.get("exemptions", [])
         if exemptions:
             errors.append(
@@ -454,6 +491,7 @@ def compare_metadata(root: Path, base: str, *, offline: bool) -> list[str]:
         _validate_baseline(old_baseline, f"{base}:{LEDGER_BASELINE_PATH}")
 
     if not offline:
+        issues = _issues(current_baseline) | _issues(active_exemptions)
         payloads = {issue: _fetch_issue(issue) for issue in sorted(issues)}
         for issue, payload in payloads.items():
             if not _issue_payload_matches(issue, payload):
@@ -470,22 +508,45 @@ def compare_metadata(root: Path, base: str, *, offline: bool) -> list[str]:
     return errors
 
 
-def repository_consistency_errors(root: Path) -> list[str]:
-    """Prove checked-in metadata describes the current source tree exactly."""
+def repository_consistency_errors(
+    root: Path, *, warnings: list[str] | None = None
+) -> list[str]:
+    """Reject current-tree regressions while allowing proven debt reductions."""
     root = root.resolve()
+    warnings = warnings if warnings is not None else []
     twin_map = _read_current(root, TWIN_MAP_PATH)
     baseline = _read_current(root, LEDGER_BASELINE_PATH)
     _validate_twin_map(twin_map, TWIN_MAP_PATH)
     _validate_baseline(baseline, LEDGER_BASELINE_PATH)
-    result = parity_ledger.scan(root, twin_map)
+    scan_map = parity_ledger.build_compact_twin_map(root)
+    scan_map["exemptions"] = twin_map["exemptions"]
+    result = parity_ledger.scan(root, scan_map)
     errors = [finding.output() for finding in result.errors]
-    drift = parity_ledger.compact_baseline_drift(result, baseline)
-    if drift:
-        errors.append(
-            f"{LEDGER_BASELINE_PATH}: compact accepted identity groups drifted: {', '.join(drift)}"
-        )
-    if result.counters != baseline["counters"]:
-        errors.append(f"{LEDGER_BASELINE_PATH}: counters do not match the current scan")
+    current = parity_ledger.build_compact_baseline(result)
+    checked_groups = {
+        (item["rule"], item["scope"]): item
+        for item in baseline["accepted_findings"]
+    }
+    current_groups = {
+        (item["rule"], item["scope"]): item
+        for item in current["accepted_findings"]
+    }
+    for key in sorted(set(checked_groups) | set(current_groups)):
+        old = checked_groups.get(key)
+        new = current_groups.get(key)
+        label = "|".join(key)
+        if old is None:
+            errors.append(f"{LEDGER_BASELINE_PATH}: new accepted finding group {label}")
+        elif new is None or new["count"] < old["count"]:
+            warnings.append(f"{LEDGER_BASELINE_PATH}: debt decreased in {label}; cleanup is optional")
+        elif new["count"] > old["count"] or new["identities_sha256"] != old["identities_sha256"]:
+            errors.append(f"{LEDGER_BASELINE_PATH}: accepted finding group regressed {label}")
+    for name, value in result.counters.items():
+        old_value = baseline["counters"].get(name, 0)
+        if value > old_value:
+            errors.append(f"{LEDGER_BASELINE_PATH}: counter {name} increased from {old_value} to {value}")
+        elif value < old_value:
+            warnings.append(f"{LEDGER_BASELINE_PATH}: counter {name} decreased from {old_value} to {value}; cleanup is optional")
     return errors
 
 
@@ -506,8 +567,11 @@ def main(argv: list[str] | None = None) -> int:
     root = args.root.resolve()
     try:
         base = resolve_base(root, args.base)
-        errors = repository_consistency_errors(root)
-        errors.extend(compare_metadata(root, base, offline=args.offline))
+        warnings: list[str] = []
+        errors = repository_consistency_errors(root, warnings=warnings)
+        errors.extend(compare_metadata(root, base, offline=args.offline, warnings=warnings))
+        for warning in warnings:
+            print(f"WARNING: {warning}", file=sys.stderr)
         return _print_errors(errors)
     except (RatchetError, issue_ref.IssueRefError) as exc:
         print(f"ERROR: {exc}", file=sys.stderr)

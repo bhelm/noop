@@ -60,6 +60,7 @@ class ParityLedgerTests(unittest.TestCase):
         baseline: dict | None = None,
         *,
         no_baseline: bool = False,
+        base: str | None = None,
     ) -> tuple[int, str]:
         map_path = self.root / "map.json"
         baseline_path = self.root / "baseline.json"
@@ -69,6 +70,8 @@ class ParityLedgerTests(unittest.TestCase):
             baseline_path.write_text(json.dumps(baseline))
         if no_baseline:
             args.append("--no-baseline")
+        if base is not None:
+            args.extend(["--base", base])
         output = io.StringIO()
         with contextlib.redirect_stdout(output):
             code = parity_ledger.main(args)
@@ -79,6 +82,19 @@ class ParityLedgerTests(unittest.TestCase):
 
     def baseline_for(self, twin_map: dict) -> dict:
         return parity_ledger.build_compact_baseline(parity_ledger.scan(self.root, twin_map))
+
+    def mark_current_tree_as_origin_main(self) -> None:
+        subprocess.run(["git", "init", "-q"], cwd=self.root, check=True)
+        subprocess.run(["git", "add", "."], cwd=self.root, check=True)
+        subprocess.run(
+            [
+                "git", "-c", "user.name=Parity Test", "-c",
+                "user.email=parity@example.invalid", "commit", "-qm", "base",
+            ],
+            cwd=self.root,
+            check=True,
+        )
+        subprocess.run(["git", "branch", "origin/main", "HEAD"], cwd=self.root, check=True)
 
     def test_clean_synthetic_tree_has_no_findings(self) -> None:
         self.write_clean_tree()
@@ -1012,15 +1028,95 @@ fun broken(value: Int) = "broken ${run { Trace.suffix(value) }
         self.swift.write_text(self.swift.read_text() + "\nfunc newRegression() {}\n")
         self.assertEqual(1, self.run_cli(twin_map, baseline)[0])
 
-    def test_disappeared_baseline_finding_requires_reviewed_regeneration(self) -> None:
+    def test_disappeared_baseline_finding_is_warning_only(self) -> None:
         self.write_clean_tree()
         self.kotlin.write_text(self.kotlin.read_text().replace("SAMPLE_LIMIT = 3", "SAMPLE_LIMIT = 4"))
         twin_map = parity_ledger.build_twin_map(self.root)
         baseline = self.baseline_for(twin_map)
+        self.mark_current_tree_as_origin_main()
         self.kotlin.write_text(self.kotlin.read_text().replace("SAMPLE_LIMIT = 4", "SAMPLE_LIMIT = 3"))
         code, output = self.run_cli(twin_map, baseline)
+        self.assertEqual(0, code)
+        self.assertIn("WARNING debt decreased", output)
+
+    def test_lower_count_with_replacement_finding_still_blocks(self) -> None:
+        self.write_clean_tree()
+        self.swift.write_text(
+            self.swift.read_text().replace(
+                "public static let sampleLimit = 3",
+                "public static let sampleLimit = 3\n    public static let windowLimit = 5",
+            )
+        )
+        self.kotlin.write_text(
+            self.kotlin.read_text().replace(
+                "const val SAMPLE_LIMIT = 3",
+                "const val SAMPLE_LIMIT = 4\n    const val WINDOW_LIMIT = 6",
+            )
+        )
+        twin_map = parity_ledger.build_twin_map(self.root)
+        baseline = self.baseline_for(twin_map)
+        self.mark_current_tree_as_origin_main()
+
+        self.swift.write_text(
+            self.swift.read_text().replace(
+                "public static let windowLimit = 5",
+                "public static let windowLimit = 5\n    public static let newLimit = 8",
+            )
+        )
+        self.kotlin.write_text(
+            self.kotlin.read_text()
+            .replace("const val SAMPLE_LIMIT = 4", "const val SAMPLE_LIMIT = 3")
+            .replace("const val WINDOW_LIMIT = 6", "const val WINDOW_LIMIT = 5\n    const val NEW_LIMIT = 9")
+        )
+        current_map = parity_ledger.build_twin_map(self.root)
+        code, output = self.run_cli(current_map, baseline)
         self.assertEqual(1, code)
-        self.assertIn("compact baseline drift", output)
+        self.assertIn("replacement findings are new", output)
+        self.assertIn("newLimit", output)
+
+    def test_improvement_base_selection_and_missing_ref_are_fail_closed(self) -> None:
+        self.write_clean_tree()
+        self.kotlin.write_text(self.kotlin.read_text().replace("SAMPLE_LIMIT = 3", "SAMPLE_LIMIT = 4"))
+        twin_map = parity_ledger.build_twin_map(self.root)
+        baseline = self.baseline_for(twin_map)
+        self.mark_current_tree_as_origin_main()
+        base_sha = subprocess.check_output(
+            ["git", "rev-parse", "origin/main"], cwd=self.root, text=True
+        ).strip()
+        self.kotlin.write_text(self.kotlin.read_text().replace("SAMPLE_LIMIT = 4", "SAMPLE_LIMIT = 3"))
+
+        real = parity_ledger.finding_identities_at_git_ref
+        with mock.patch.object(parity_ledger, "finding_identities_at_git_ref", wraps=real) as scanned:
+            self.assertEqual(0, self.run_cli(twin_map, baseline)[0])
+            scanned.assert_called_once_with(self.root, "origin/main")
+        with mock.patch.object(parity_ledger, "finding_identities_at_git_ref", wraps=real) as scanned:
+            self.assertEqual(0, self.run_cli(twin_map, baseline, base=base_sha)[0])
+            scanned.assert_called_once_with(self.root, base_sha)
+        code, output = self.run_cli(twin_map, baseline, base="missing/shallow-base")
+        self.assertEqual(1, code)
+        self.assertIn("cannot scan exact base", output)
+
+    def test_base_ref_is_resolved_once_before_archive(self) -> None:
+        self.write_clean_tree()
+        self.mark_current_tree_as_origin_main()
+        expected = subprocess.check_output(
+            ["git", "rev-parse", "origin/main"], cwd=self.root, text=True
+        ).strip()
+        real = subprocess.check_output
+        calls: list[list[str]] = []
+
+        def recording(arguments, **kwargs):
+            calls.append(arguments)
+            return real(arguments, **kwargs)
+
+        with mock.patch.object(parity_ledger.subprocess, "check_output", side_effect=recording):
+            parity_ledger.finding_identities_at_git_ref(self.root, "origin/main")
+
+        self.assertEqual(
+            [["git", "rev-parse", "--verify", "origin/main^{commit}"],
+             ["git", "archive", "--format=tar", expected]],
+            calls,
+        )
 
     def test_counter_increase_beyond_baseline_is_rejected(self) -> None:
         self.write_clean_tree()
