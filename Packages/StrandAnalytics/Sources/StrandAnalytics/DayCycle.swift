@@ -5,6 +5,7 @@ public enum DayCycleMode: String, CaseIterable, Sendable {
     case midnight = "midnight"
 
     public static let storageKey = "noop.dayCycleMode"
+    /// Kotlin twin: `DayCycleMode.fromPersisted`.
     public static func persisted(_ value: String?) -> DayCycleMode {
         value.flatMap(Self.init(rawValue:)) ?? .sleepOnset
     }
@@ -28,6 +29,7 @@ public enum DayCycleResolver {
     public static let minSyntheticMidnightAgeSeconds = 18 * 3_600
     public static let absoluteMaxOpenSeconds = 40 * 3_600
 
+    /// Kotlin twin: `DayCycleResolver.calendarWindow`.
     public static func calendarWindow(now: Int, offsetSec: Int) -> DayCycleWindow {
         let local = now + offsetSec
         let dayNumber = Int(floor(Double(local) / Double(SleepStageTotals.secondsPerDay)))
@@ -37,6 +39,7 @@ public enum DayCycleResolver {
                               displayDay: day, source: .calendar)
     }
 
+    /// Kotlin twin: `DayCycleResolver.fallbackMidnightAfter`.
     public static func fallbackMidnight(after start: Int, offsetSec: Int) -> Int {
         let minimum = start + minSyntheticMidnightAgeSeconds
         let local = minimum + offsetSec
@@ -45,6 +48,7 @@ public enum DayCycleResolver {
         return midnight >= minimum ? midnight : (dayNumber + 1) * SleepStageTotals.secondsPerDay - offsetSec
     }
 
+    /// Kotlin twin: `DayCycleResolver.activeWindow`.
     public static func activeWindow(mode: DayCycleMode, latestSleep: DayCycleWindow?, now: Int,
                                     offsetSec: Int, reliableAwakeCoverage: Bool) -> DayCycleWindow {
         guard mode == .sleepOnset, let latestSleep else { return calendarWindow(now: now, offsetSec: offsetSec) }

@@ -4516,8 +4516,8 @@ struct TodayView: View {
         let liveStrainLocal: Double?
         if selectedDayOffset == 0 {
             let mode = DayCycleMode.persisted(UserDefaults.standard.string(forKey: DayCycleMode.storageKey))
-            let cycleOnset = dayCycleSeries.last(where: { $0.day <= selectedDayKey })?.value
-                .map { Int($0.rounded()) }
+            let cycleOnset = dayCycleSeries.last(where: { $0.day <= selectedDayKey })
+                .map { Int($0.value.rounded()) }
             let effortStart = mode == .sleepOnset ? (cycleOnset ?? windowStart) : windowStart
             let todayHr = await repo.hrSamples(from: effortStart, to: windowEnd)
             let maxHR = profile.age > 0 ? StrainScorer.tanakaHRmax(age: Double(profile.age)) : nil

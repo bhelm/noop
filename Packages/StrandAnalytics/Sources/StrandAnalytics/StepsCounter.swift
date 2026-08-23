@@ -19,6 +19,7 @@ public enum StepsCounter {
         samples.contains { $0.activityClass != nil }
     }
 
+    /// Kotlin twin: `StepsCounter.shouldCountDelta`.
     static func shouldCountDelta(activityClass: Int?, hasActivityClasses: Bool) -> Bool {
         !hasActivityClasses || activityClass.map(locomotionActivityClasses.contains) == true
     }
@@ -27,6 +28,7 @@ public enum StepsCounter {
     public static let maxStepDelta = 512
     public static let maxTicksPerSecond = 4
 
+    /// Kotlin twin: `StepsCounter.isPlausibleDelta`.
     static func isPlausibleDelta(previousTs: Int, currentTs: Int, delta: Int) -> Bool {
         guard delta >= 1, delta < maxStepDelta else { return false }
         let elapsed = currentTs - previousTs
