@@ -2438,4 +2438,11 @@
     <string name="l10n_sleep_screen_sleep_outside_the_new_times_was_6229881e">Sen poza nowymi godzinami został usunięty. NOOP nie wykryje go ponownie.</string>
     <string name="l10n_settings_screen_effort_exponential_scale">Wysiłek: wykładnicza skala intensywności</string>
     <string name="l10n_settings_screen_effort_exponential_scale_desc">Ocenia Wysiłek według wykładniczej krzywej intensywności (TRIMP Banistera) zamiast domyślnych stref tętna (Edwards). Ustawienie domyślne nie liczy niczego poniżej połowy rezerwy tętna, więc godzina treningu siłowego — gdzie ciężkie serie uśredniają się z przerwami — może dać wynik bliski zeru. Krzywa wykładnicza nie ma progu i znacznie mocniej waży krótkie, intensywne wysiłki. Przelicza historię, a obie skale osiągają to samo maksimum. Domyślnie wyłączone.</string>
+    <string name="settings_day_cycle_title">Cykl dobowy</string>
+    <string name="settings_day_cycle_description">Wybierz, kiedy kroki i bieżący Wysiłek zaczynają się od nowa. Drzemki nigdy nie rozpoczynają nowego dnia.</string>
+    <string name="settings_day_cycle_starts">Początek dnia</string>
+    <string name="settings_day_cycle_sleep">Główny sen</string>
+    <string name="settings_day_cycle_midnight">00:00</string>
+    <string name="settings_day_cycle_sleep_description">Domyślnie. Cykl rozpoczyna się wraz z wykrytym głównym snem. Gdy brakuje wiarygodnych danych o śnie, używana jest lokalna północ.</string>
+    <string name="settings_day_cycle_midnight_description">Używa zwykłego lokalnego dnia kalendarzowego od 00:00 do 00:00.</string>
 </resources>

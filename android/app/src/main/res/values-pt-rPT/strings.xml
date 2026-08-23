@@ -2426,4 +2426,11 @@
     <string name="l10n_sleep_screen_sleep_outside_the_new_times_was_6229881e">O sono fora dos novos horários foi removido. O NOOP não o voltará a detetar.</string>
     <string name="l10n_settings_screen_effort_exponential_scale">Esforço: escala de intensidade exponencial</string>
     <string name="l10n_settings_screen_effort_exponential_scale_desc">Pontua o Esforço numa curva de intensidade exponencial (TRIMP de Banister) em vez das zonas de frequência cardíaca predefinidas (Edwards). A predefinição não conta nada abaixo de metade da tua reserva de frequência cardíaca, por isso uma hora de musculação — em que as séries duras se compensam com os descansos — pode pontuar quase zero. A curva exponencial não tem limiar e pondera muito mais os esforços curtos e intensos. Volta a pontuar o teu histórico e ambas as escalas atingem o mesmo máximo. Desativado por predefinição.</string>
+    <string name="settings_day_cycle_title">Ciclo diário</string>
+    <string name="settings_day_cycle_description">Escolhe quando os passos e o Esforço em curso recomeçam. As sestas nunca iniciam um novo dia.</string>
+    <string name="settings_day_cycle_starts">O dia começa</string>
+    <string name="settings_day_cycle_sleep">Sono principal</string>
+    <string name="settings_day_cycle_midnight">00:00</string>
+    <string name="settings_day_cycle_sleep_description">Predefinição. O ciclo segue o início do sono principal detetado. Se os dados de sono estiverem em falta ou não forem fiáveis, é usada a meia-noite local.</string>
+    <string name="settings_day_cycle_midnight_description">Usa um dia civil local convencional das 00:00 às 00:00.</string>
 </resources>
