@@ -17,10 +17,13 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import io
 import json
 import re
 import subprocess
 import sys
+import tarfile
+import tempfile
 from collections import Counter, defaultdict
 from dataclasses import dataclass
 from decimal import Decimal, InvalidOperation
@@ -2428,6 +2431,69 @@ def compact_baseline_drift(result: ScanResult, baseline: dict) -> list[str]:
     ]
 
 
+def compact_baseline_changes(
+    result: ScanResult, baseline: dict
+) -> tuple[list[str], list[str]]:
+    """Return (regressions, improvements) for compact finding groups."""
+    try:
+        current = build_compact_baseline(result)
+    except ValueError as exc:
+        return [str(exc)], []
+    checked_groups = {
+        (item.get("rule"), item.get("scope")): item
+        for item in baseline.get("accepted_findings", [])
+        if isinstance(item, dict)
+    }
+    current_groups = {
+        (item["rule"], item["scope"]): item
+        for item in current["accepted_findings"]
+    }
+    regressions: list[str] = []
+    improvements: list[str] = []
+    for key in sorted(set(checked_groups) | set(current_groups)):
+        old = checked_groups.get(key)
+        new = current_groups.get(key)
+        label = f"{key[0]}|{key[1]}"
+        if old is None:
+            regressions.append(label)
+        elif new is None or new["count"] < old.get("count", 0):
+            improvements.append(label)
+        elif (new["count"] > old.get("count", 0)
+              or new["identities_sha256"] != old.get("identities_sha256")):
+            regressions.append(label)
+    return regressions, improvements
+
+
+def finding_identities_at_git_ref(root: Path, ref: str) -> set[str]:
+    """Independently scan an exact git tree for monotonic baseline proof."""
+    try:
+        resolved = subprocess.check_output(
+            ["git", "rev-parse", "--verify", f"{ref}^{{commit}}"],
+            cwd=root,
+            text=True,
+            stderr=subprocess.DEVNULL,
+        ).strip()
+        if re.fullmatch(r"[0-9a-f]{40}|[0-9a-f]{64}", resolved) is None:
+            raise ValueError(f"git returned an invalid commit for base {ref!r}")
+        archive = subprocess.check_output(
+            ["git", "archive", "--format=tar", resolved], cwd=root
+        )
+    except (FileNotFoundError, subprocess.CalledProcessError) as exc:
+        raise ValueError(f"cannot scan exact base {ref!r}") from exc
+    with tempfile.TemporaryDirectory() as directory:
+        base_root = Path(directory)
+        try:
+            with tarfile.open(fileobj=io.BytesIO(archive), mode="r:") as bundle:
+                bundle.extractall(base_root, filter="data")
+        except (tarfile.TarError, TypeError) as exc:
+            raise ValueError(f"cannot materialize exact base {ref!r}") from exc
+        base_map = build_compact_twin_map(base_root)
+        base_result = scan(base_root, base_map)
+        if base_result.errors:
+            raise ValueError(f"cannot prove improvement against invalid base {ref!r}")
+        return {finding.identity for finding in base_result.findings}
+
+
 def _summary(result: ScanResult) -> str:
     stats = result.stats
     return (
@@ -2452,6 +2518,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--no-baseline", action="store_true", help="show every current finding")
     parser.add_argument("--bootstrap-map", action="store_true", help="write a fresh inventory map before scanning")
     parser.add_argument("--write-baseline", action="store_true", help="rewrite the baseline with current findings")
+    parser.add_argument("--base", default="origin/main", help="exact git ref used to prove debt reductions")
     args = parser.parse_args(argv)
 
     root = args.root.resolve()
@@ -2493,7 +2560,7 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     baseline = _load_json(baseline_path, {})
-    compact_drift = compact_baseline_drift(result, baseline)
+    compact_drift, improvements = compact_baseline_changes(result, baseline)
     baseline_counters = baseline.get("counters", {})
     counter_regressions = [
         (name, baseline_counters[name], count)
@@ -2509,6 +2576,23 @@ def main(argv: list[str] | None = None) -> int:
                 print(f"  {item.output()}")
         print(f"\nScanned {_summary(result)}")
         return 1
+
+    if improvements:
+        try:
+            base_identities = finding_identities_at_git_ref(root, args.base)
+        except ValueError as exc:
+            print(f"FAIL {exc}; cannot prove that compact baseline drift is only a decrease")
+            return 1
+        new_identities = {
+            item.identity for item in result.findings
+        } - base_identities
+        if new_identities:
+            print("FAIL debt count decreased but replacement findings are new against the exact base:")
+            for identity in sorted(new_identities):
+                print(f"  {identity}")
+            return 1
+        for improvement in improvements:
+            print(f"WARNING debt decreased in {improvement}; baseline cleanup is optional")
 
     if counter_regressions:
         total = len(counter_regressions)

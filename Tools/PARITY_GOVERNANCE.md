@@ -18,6 +18,9 @@ The ledger must report no finding beyond the checked-in baseline. The ratchet
 also rescans the working tree, so editing a baseline without matching current
 sources fails closed. `--offline` skips only GitHub existence checks; it does
 not relax syntax, schema, current-tree, or exact-base checks.
+For a reported debt decrease, the ledger resolves `--base` (default
+`origin/main`) once to an immutable commit and proves the current identities are
+a subset of that exact tree. A missing or shallow base fails closed.
 
 The v3 twin map contains explicit source roots plus a count and SHA-256 for each
 canonical semantic set. The full file/function/property/constant inventory is
@@ -39,7 +42,10 @@ does not silently widen the unpaired-inventory roots.
 
 The compact baseline stores exact-identity-set hashes grouped by rule and narrow
 source scope. Every group has a review reason and provenance; no wildcard or
-umbrella issue matches findings.
+umbrella issue matches findings. Governance is intentionally asymmetric: new
+or changed debt blocks, while a proven decrease is green with a concise warning.
+No JSON regeneration or exemption cleanup is required merely to land an
+improvement.
 
 When the final stack PR wires this gate into CI, that invocation must omit
 `--offline`. Every governed `issue` field must use the exact
@@ -66,11 +72,15 @@ python3 Tools/parity_ratchet.py --base origin/main --offline
 ```
 
 Review the expanded semantic diff before retaining generated hashes. A new
-unpaired item, a removed function/property/constant pair, or a new finding needs
+unpaired item, a removed or retargeted function/property/constant pair, or a
+new finding needs
 an exact `exemptions[]` entry containing `kind`, `identity`, `identity_sha256`,
-one fresh repository-qualified `issue`, and a narrow `reason`. Stale exemptions
-fail. New exemptions require both a fresh issue and the exact identity-hash
-marker; no bootstrap exemption or downgrade is accepted.
+one fresh repository-qualified `issue`, and a narrow `reason`. An exemption
+whose debt has disappeared emits a warning and may be removed later; it never
+authorizes that debt if it is reintroduced against the current merge base. New
+exemptions require both a fresh issue and the exact identity-hash marker; no
+bootstrap exemption or downgrade is accepted. Removing or retargeting a real
+twin claim is a governance change, not debt reduction, and remains blocking.
 Do not preserve stale findings or freeze commit hashes in tests; repository
 consistency is proved by independent rescanning and canonical set hashes.
 

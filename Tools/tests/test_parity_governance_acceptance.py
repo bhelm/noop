@@ -36,6 +36,12 @@ class IssueReferenceTests(unittest.TestCase):
 
 
 class RepositoryBaselineTests(unittest.TestCase):
+    def test_tools_workflow_triggers_for_nested_governance_tests(self) -> None:
+        workflow = (REPOSITORY / ".github/workflows/tools-python.yml").read_text(
+            encoding="utf-8"
+        )
+        self.assertEqual(2, workflow.count("- 'Tools/tests/**'"))
+
     def test_checked_in_inventory_and_baseline_match_current_sources(self) -> None:
         twin_map = parity_ledger._load_json(TOOLS / "parity_twin_map.json", {})
         baseline = parity_ledger._load_json(TOOLS / "parity_ledger_baseline.json", {})
@@ -385,8 +391,140 @@ class GovernanceRatchetTests(unittest.TestCase):
             "Tools/parity_ledger_baseline.json",
             parity_ledger.build_compact_baseline(parity_ledger.scan(self.root, refreshed)),
         )
+        warnings: list[str] = []
+        errors = parity_ratchet.compare_metadata(
+            self.root, base, offline=True, warnings=warnings
+        )
+        self.assertEqual([], errors)
+        self.assertTrue(any("obsolete exemption" in warning for warning in warnings), warnings)
+        with mock.patch.object(parity_ratchet, "_fetch_issue") as fetched:
+            online_warnings: list[str] = []
+            self.assertEqual(
+                [],
+                parity_ratchet.compare_metadata(
+                    self.root, base, offline=False, warnings=online_warnings
+                ),
+            )
+        fetched.assert_not_called()
+
+    def test_debt_decrease_needs_no_metadata_rewrite_and_warns(self) -> None:
+        swift = self.root / "Packages/StrandAnalytics/Sources/StrandAnalytics/Engine.swift"
+        kotlin = self.root / "android/app/src/main/java/com/noop/analytics/Engine.kt"
+        swift.parent.mkdir(parents=True, exist_ok=True)
+        kotlin.parent.mkdir(parents=True, exist_ok=True)
+        swift.write_text("enum Engine { static func oldDebt() {} }\n", encoding="utf-8")
+        kotlin.write_text("object Engine {}\n", encoding="utf-8")
+        compact = parity_ledger.build_compact_twin_map(self.root)
+        baseline = parity_ledger.build_compact_baseline(parity_ledger.scan(self.root, compact))
+        self.write("Tools/parity_twin_map.json", compact)
+        self.write("Tools/parity_ledger_baseline.json", baseline)
+        base = self.commit()
+
+        swift.write_text("enum Engine {}\n", encoding="utf-8")
+        warnings: list[str] = []
+        self.assertEqual(
+            [],
+            parity_ratchet.compare_metadata(
+                self.root, base, offline=True, warnings=warnings
+            ),
+        )
+        self.assertTrue(any("debt decreased" in warning for warning in warnings), warnings)
+
+    def test_obsolete_inherited_exemption_cannot_authorize_reintroduction(self) -> None:
+        swift = self.root / "Packages/StrandAnalytics/Sources/StrandAnalytics/Engine.swift"
+        kotlin = self.root / "android/app/src/main/java/com/noop/analytics/Engine.kt"
+        swift.parent.mkdir(parents=True, exist_ok=True)
+        kotlin.parent.mkdir(parents=True, exist_ok=True)
+        swift.write_text("enum Engine {}\n", encoding="utf-8")
+        kotlin.write_text("object Engine {}\n", encoding="utf-8")
+        compact = parity_ledger.build_compact_twin_map(self.root)
+        identity = "swift\0Packages/StrandAnalytics/Sources/StrandAnalytics/Engine.swift::oldDebt/0#1"
+        compact["exemptions"] = [{
+            "kind": "add-unpaired-function",
+            "identity": identity,
+            "identity_sha256": parity_ledger._canonical_sha256(identity),
+            "issue": "bhelm/noop#78",
+            "reason": "Historical synthetic debt retained to prove stale authority cannot revive it.",
+        }]
+        baseline = parity_ledger.build_compact_baseline(parity_ledger.scan(self.root, compact))
+        self.write("Tools/parity_twin_map.json", compact)
+        self.write("Tools/parity_ledger_baseline.json", baseline)
+        base = self.commit()
+
+        swift.write_text("enum Engine { static func oldDebt() {} }\n", encoding="utf-8")
+        refreshed = parity_ledger.build_compact_twin_map(self.root)
+        refreshed["exemptions"] = compact["exemptions"]
+        self.write("Tools/parity_twin_map.json", refreshed)
+        self.write(
+            "Tools/parity_ledger_baseline.json",
+            parity_ledger.build_compact_baseline(parity_ledger.scan(self.root, refreshed)),
+        )
         errors = parity_ratchet.compare_metadata(self.root, base, offline=True)
-        self.assertTrue(any("stale exemption" in error for error in errors), errors)
+        self.assertTrue(any("add-unpaired-function" in error and "oldDebt" in error for error in errors), errors)
+
+    def test_removing_a_real_twin_claim_is_not_treated_as_debt_reduction(self) -> None:
+        swift = self.root / "Packages/StrandAnalytics/Sources/StrandAnalytics/Engine.swift"
+        kotlin = self.root / "android/app/src/main/java/com/noop/analytics/Engine.kt"
+        swift.parent.mkdir(parents=True, exist_ok=True)
+        kotlin.parent.mkdir(parents=True, exist_ok=True)
+        swift.write_text(
+            "enum Engine {\n    /// Kotlin twin: `Engine.score`.\n    static func score(_ value: Int) -> Int { value }\n}\n",
+            encoding="utf-8",
+        )
+        kotlin.write_text(
+            "object Engine { fun score(value: Int): Int = value }\n", encoding="utf-8"
+        )
+        compact = parity_ledger.build_compact_twin_map(self.root)
+        self.write("Tools/parity_twin_map.json", compact)
+        self.write(
+            "Tools/parity_ledger_baseline.json",
+            parity_ledger.build_compact_baseline(parity_ledger.scan(self.root, compact)),
+        )
+        base = self.commit()
+
+        swift.write_text(
+            "enum Engine { static func score(_ value: Int) -> Int { value } }\n",
+            encoding="utf-8",
+        )
+        refreshed = parity_ledger.build_compact_twin_map(self.root)
+        self.write("Tools/parity_twin_map.json", refreshed)
+        self.write(
+            "Tools/parity_ledger_baseline.json",
+            parity_ledger.build_compact_baseline(parity_ledger.scan(self.root, refreshed)),
+        )
+        errors = parity_ratchet.compare_metadata(self.root, base, offline=True)
+        self.assertTrue(any("remove-function-pair" in error for error in errors), errors)
+
+    def test_lower_debt_count_cannot_mask_replacement_identity_in_ratchet(self) -> None:
+        swift = self.root / "Packages/StrandAnalytics/Sources/StrandAnalytics/Engine.swift"
+        kotlin = self.root / "android/app/src/main/java/com/noop/analytics/Engine.kt"
+        swift.parent.mkdir(parents=True, exist_ok=True)
+        kotlin.parent.mkdir(parents=True, exist_ok=True)
+        swift.write_text(
+            "enum Engine { static func oldOne() {}\n static func oldTwo() {} }\n",
+            encoding="utf-8",
+        )
+        kotlin.write_text("object Engine {}\n", encoding="utf-8")
+        compact = parity_ledger.build_compact_twin_map(self.root)
+        self.write("Tools/parity_twin_map.json", compact)
+        self.write(
+            "Tools/parity_ledger_baseline.json",
+            parity_ledger.build_compact_baseline(parity_ledger.scan(self.root, compact)),
+        )
+        base = self.commit()
+
+        swift.write_text("enum Engine { static func replacement() {} }\n", encoding="utf-8")
+        refreshed = parity_ledger.build_compact_twin_map(self.root)
+        self.write("Tools/parity_twin_map.json", refreshed)
+        self.write(
+            "Tools/parity_ledger_baseline.json",
+            parity_ledger.build_compact_baseline(parity_ledger.scan(self.root, refreshed)),
+        )
+        errors = parity_ratchet.compare_metadata(self.root, base, offline=True)
+        self.assertTrue(
+            any("add-unpaired-function" in error and "replacement" in error for error in errors),
+            errors,
+        )
 
     def test_unchanged_inherited_exemption_stays_valid_without_refresh(self) -> None:
         swift = self.root / "Packages/StrandAnalytics/Sources/StrandAnalytics/Engine.swift"
