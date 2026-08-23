@@ -68,7 +68,7 @@ public enum SleepAwareStepCounter {
                                                     delta: delta) else {
                     rejectedImplausible += delta; continue
                 }
-                switch Self.context(current.ts, sessions: sessions) {
+                switch SleepAwareStepCounter.context(current.ts, sessions: sessions) {
                 case 0: flush(); outside += delta
                 case 1: flush(); awake += delta
                 default:
