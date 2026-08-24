@@ -262,6 +262,27 @@ class GroundTruthCollector private constructor(private val context: Context) {
             out.putNextEntry(ZipEntry("exclusions.csv"))
             out.writerEntry(exclusionsCsv(events))
 
+            out.putNextEntry(ZipEntry("algorithm-signals.csv"))
+            out.bufferedWriterNoClose().use { writer ->
+                writeAlgorithmSignalsCsv(
+                    writer,
+                    repo,
+                    deviceId.orEmpty(),
+                    sensorFrom,
+                    sensorTo,
+                    exclusions,
+                )
+                writer.flush()
+            }
+            out.closeEntry()
+
+            out.putNextEntry(ZipEntry("v18-aux.csv"))
+            out.bufferedWriterNoClose().use { writer ->
+                writeV18AuxCsv(writer, repo, deviceId.orEmpty(), sensorFrom, sensorTo)
+                writer.flush()
+            }
+            out.closeEntry()
+
             out.putNextEntry(ZipEntry("raw-sensors.csv"))
             out.bufferedWriterNoClose().use { writer ->
                 RawSensorExport.writeCsv(
@@ -353,6 +374,66 @@ class GroundTruthCollector private constructor(private val context: Context) {
 
     private fun csv(value: String): String = if (value.any { it == ',' || it == '"' || it == '\n' })
         "\"${value.replace("\"", "\"\"")}\"" else value
+
+    private suspend fun writeAlgorithmSignalsCsv(
+        out: java.io.Writer,
+        repo: WhoopRepository,
+        deviceId: String,
+        from: Long,
+        to: Long,
+        exclusions: List<Pair<Long, Long>>,
+    ) {
+        out.write("unix_s,counter,activity_class,gravity_x,gravity_y,gravity_z,dynamic_accel,cadence,heart_rate,band_sleep_state,excluded\n")
+        if (from > to || deviceId.isBlank()) return
+        val seconds = (to - from + 1L).coerceIn(1L, 86_400L).toInt()
+        val steps = repo.stepSamples(deviceId, from, to, seconds).associateBy { it.ts }
+        val gravity = repo.gravitySamples(deviceId, from, to, seconds).associateBy { it.ts }
+        val cadence = repo.v18AuxSamples(deviceId, from, to, seconds).associate { it.ts to it.stepCadence }
+        val heartRate = repo.rawHrSamples(deviceId, from, to, seconds).associate { it.ts to it.bpm }
+        val sleepState = repo.sleepStateSamples(deviceId, from, to, seconds).associate { it.ts to it.state }
+        val timestamps = (steps.keys + gravity.keys + cadence.keys + heartRate.keys + sleepState.keys).sorted()
+        for (ts in timestamps) {
+            val step = steps[ts]
+            val grav = gravity[ts]
+            val excluded = exclusions.any { ts * 1_000L <= it.second && ts * 1_000L + 999L >= it.first }
+            out.write(listOf(
+                ts,
+                step?.counter ?: "",
+                step?.activityClass ?: "",
+                grav?.x?.let(::decimal) ?: "",
+                grav?.y?.let(::decimal) ?: "",
+                grav?.z?.let(::decimal) ?: "",
+                grav?.dynAccel?.let(::decimal) ?: "",
+                cadence[ts] ?: "",
+                heartRate[ts] ?: "",
+                sleepState[ts] ?: "",
+                excluded,
+            ).joinToString(","))
+            out.write("\n")
+        }
+    }
+
+    private suspend fun writeV18AuxCsv(
+        out: java.io.Writer,
+        repo: WhoopRepository,
+        deviceId: String,
+        from: Long,
+        to: Long,
+    ) {
+        out.write(
+            "unix_s,record_index,rr_count,cardiac_flags,hr_quality_flags,heart_rate_alt,rr_packed," +
+                "cardiac_status,step_cadence,status_word,status_word_1,status_word_2,aux_byte_82," +
+                "optical_baseline_a,optical_baseline_b,optical_amp_a,optical_amp_b,unknown_f32_bits\n",
+        )
+        if (from > to || deviceId.isBlank()) return
+        val seconds = (to - from + 1L).coerceIn(1L, 86_400L).toInt()
+        for (row in repo.v18AuxSamples(deviceId, from, to, seconds)) {
+            out.write((listOf(row.ts) + row.slotValues.map { it ?: "" }).joinToString(","))
+            out.write("\n")
+        }
+    }
+
+    private fun decimal(value: Double): String = String.format(java.util.Locale.US, "%.9f", value)
 
     private suspend fun writeRawImuCsv(
         out: java.io.Writer,
