@@ -2533,6 +2533,7 @@
     <string name="ground_truth_manual_steps">Manuelle Schritte</string>
     <string name="ground_truth_stairs">Stufen</string>
     <string name="ground_truth_delta">NOOP − manuell: %1$s</string>
+    <string name="ground_truth_delta_cycle_changed">NOOP-Vergleich nicht verfügbar: Tageszyklus gewechselt</string>
     <string name="ground_truth_mapping_title">Hardware-Zuordnung</string>
     <string name="ground_truth_mapping_body">Verkleinern zählt einen Schritt. Vergrößern zählt eine Stufe und einen Schritt. Jede andere Taste wird angezeigt und protokolliert, ohne einen Zähler zu ändern.</string>
     <string name="ground_truth_no_key">Drücke eine Hardwaretaste, um ihren Tastencode zu sehen.</string>

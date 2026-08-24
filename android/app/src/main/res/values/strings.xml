@@ -2546,6 +2546,7 @@
     <string name="ground_truth_manual_steps">Manual steps</string>
     <string name="ground_truth_stairs">Stairs</string>
     <string name="ground_truth_delta">NOOP − manual: %1$s</string>
+    <string name="ground_truth_delta_cycle_changed">NOOP comparison unavailable: day cycle changed</string>
     <string name="ground_truth_mapping_title">Hardware mapping</string>
     <string name="ground_truth_mapping_body">Zoom Out adds one step. Zoom In adds one stair and one step. Every other key is shown and logged without changing a count.</string>
     <string name="ground_truth_no_key">Press a hardware button to inspect its key code.</string>

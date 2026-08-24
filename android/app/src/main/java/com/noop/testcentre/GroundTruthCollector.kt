@@ -37,6 +37,7 @@ class GroundTruthCollector private constructor(private val context: Context) {
         val lastKind: String?,
         val lastKey: KeyInfo?,
         val noopStepsAtStart: Int?,
+        val noopCycleIdAtStart: String?,
         val lastNoopSteps: Int?,
         val exported: Boolean,
     )
@@ -69,12 +70,13 @@ class GroundTruthCollector private constructor(private val context: Context) {
         lastKind = prefs.getString("lastKind", null),
         lastKey = prefs.getString("lastKey", null)?.let(::decodeKey),
         noopStepsAtStart = prefs.getInt("noopStepsAtStart", Int.MIN_VALUE).takeUnless { it == Int.MIN_VALUE },
+        noopCycleIdAtStart = prefs.getString("noopCycleIdAtStart", null),
         lastNoopSteps = prefs.getInt("lastNoopSteps", Int.MIN_VALUE).takeUnless { it == Int.MIN_VALUE },
         exported = prefs.getBoolean("exported", false),
     )
 
     @Synchronized
-    fun start(noopSteps: Int, deviceId: String, nowMs: Long = System.currentTimeMillis()): Snapshot {
+    fun start(noopSteps: Int, noopCycleId: String?, deviceId: String, nowMs: Long = System.currentTimeMillis()): Snapshot {
         val id = nowMs.toString()
         prefs.edit()
             .putBoolean("active", true)
@@ -85,12 +87,16 @@ class GroundTruthCollector private constructor(private val context: Context) {
             .putInt("steps", 0)
             .putInt("stairs", 0)
             .applyNoopStart(noopSteps)
+            .applyNoopCycleStart(noopCycleId)
             .applyNoop(noopSteps)
             .putString(sessionDeviceKey(id), deviceId)
             .putLong(sessionStartKey(id), nowMs)
             .putBoolean(sessionExportedKey(id), false)
             .apply()
-        append(id, event(nowMs, "start", 0, 0, noopSteps, null).put("strap_device_id", deviceId))
+        append(id, event(nowMs, "start", 0, 0, noopSteps, null).apply {
+            put("strap_device_id", deviceId)
+            if (noopCycleId != null) put("noop_cycle_id", noopCycleId)
+        })
         return snapshot()
     }
 
@@ -243,6 +249,7 @@ class GroundTruthCollector private constructor(private val context: Context) {
                 put("comment", summary.comment)
                 put("excluded_windows", summary.excludedWindows)
                 if (id == snap.sessionId && snap.noopStepsAtStart != null) put("noop_steps_at_start", snap.noopStepsAtStart)
+                if (id == snap.sessionId && snap.noopCycleIdAtStart != null) put("noop_cycle_id_at_start", snap.noopCycleIdAtStart)
                 if (id == snap.sessionId && snap.lastNoopSteps != null) put("noop_steps_at_end", snap.lastNoopSteps)
                 put("device_family", "Android")
                 put("app_version", BuildConfig.VERSION_NAME)
@@ -479,6 +486,10 @@ class GroundTruthCollector private constructor(private val context: Context) {
         if (value == null) remove("noopStepsAtStart") else putInt("noopStepsAtStart", value)
     }
 
+    private fun android.content.SharedPreferences.Editor.applyNoopCycleStart(value: String?) = apply {
+        if (value == null) remove("noopCycleIdAtStart") else putString("noopCycleIdAtStart", value)
+    }
+
     private fun sessionDeviceKey(id: String) = "session.$id.deviceId"
     private fun sessionStartKey(id: String) = "session.$id.startedAtMs"
     private fun sessionEndKey(id: String) = "session.$id.endedAtMs"
@@ -502,6 +513,12 @@ class GroundTruthCollector private constructor(private val context: Context) {
         private const val KIND_UNDO_STAIR = "undo_stair"
         private const val KIND_EXCLUDE = "exclude_window"
         private const val PREFS = "noop_ground_truth_collector"
+
+        internal fun sessionDelta(
+            startSteps: Int?, startCycleId: String?, currentSteps: Int?, currentCycleId: String?, manualSteps: Int,
+        ): Int? = if (startSteps != null && startCycleId != null && startCycleId == currentCycleId && currentSteps != null) {
+            currentSteps - startSteps - manualSteps
+        } else null
 
         fun from(context: Context) = GroundTruthCollector(context.applicationContext)
     }

@@ -50,6 +50,8 @@ fun GroundTruthCollectorScreen(vm: AppViewModel) {
     val cycle by vm.activeDayCycle.collectAsStateWithLifecycle()
     val days by vm.recentDays.collectAsStateWithLifecycle()
     val noopSteps = cycle?.steps ?: days.lastOrNull()?.steps
+    val noopCycleId = cycle?.let { "sleep:${it.ownerDay}:${it.onsetTs}" }
+        ?: days.lastOrNull()?.let { "calendar:${it.day}" }
     var state by remember { mutableStateOf(collector.snapshot()) }
     var haptics by remember { mutableStateOf(false) }
     var exportingSessionId by remember { mutableStateOf<String?>(null) }
@@ -94,10 +96,13 @@ fun GroundTruthCollectorScreen(vm: AppViewModel) {
                     CounterColumn(stringResource(R.string.ground_truth_manual_steps), state.steps.toString(), Modifier.weight(1f))
                     CounterColumn(stringResource(R.string.ground_truth_stairs), state.stairs.toString(), Modifier.weight(1f))
                 }
-                val noopSessionSteps = state.noopStepsAtStart?.let { start -> noopSteps?.minus(start) }
-                val delta = noopSessionSteps?.minus(state.steps)
+                val delta = GroundTruthCollector.sessionDelta(
+                    state.noopStepsAtStart, state.noopCycleIdAtStart, noopSteps, noopCycleId, state.steps,
+                )
                 Text(
-                    text = stringResource(R.string.ground_truth_delta, delta?.toString() ?: "-"),
+                    text = if (state.active && state.noopCycleIdAtStart != null && state.noopCycleIdAtStart != noopCycleId) {
+                        stringResource(R.string.ground_truth_delta_cycle_changed)
+                    } else stringResource(R.string.ground_truth_delta, delta?.toString() ?: "-"),
                     style = NoopType.subhead,
                     color = Palette.textSecondary,
                 )
@@ -172,7 +177,7 @@ fun GroundTruthCollectorScreen(vm: AppViewModel) {
                 fullWidth = true,
                 enabled = noopSteps != null && vm.activeStrapId.isNotBlank(),
                 onClick = {
-                    state = collector.start(requireNotNull(noopSteps), vm.activeStrapId)
+                    state = collector.start(requireNotNull(noopSteps), noopCycleId, vm.activeStrapId)
                     sessions = collector.sessions()
                 },
             )
