@@ -30,6 +30,5 @@
     "unpaired_functions": {"count": 3530, "sha256": "c0ad2a757f3aadb4c0bfbf5df0ed755806b461ae28d0d28093482e4be5261eda"},
     "unpaired_properties": {"count": 136, "sha256": "18bb71d1856310804c9154439080fb5c7530a98773421108020376a71aad5577"},
     "unpaired_constants": {"count": 496, "sha256": "0a887980a5ded1091bc7d123e2fc0f75bfe861b5be407b105514b0baa47d17db"}
-  },
-  "exemptions": []
+  }
 }

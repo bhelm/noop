@@ -44,43 +44,68 @@ The compact baseline stores exact-identity-set hashes grouped by rule and narrow
 source scope. Every group has a review reason and provenance; no wildcard or
 umbrella issue matches findings. Governance is intentionally asymmetric: new
 or changed debt blocks, while a proven decrease is green with a concise warning.
-No JSON regeneration or exemption cleanup is required merely to land an
+No JSON regeneration or disposition cleanup is required merely to land an
 improvement.
 
-When the final stack PR wires this gate into CI, that invocation must omit
+This PR is the governance foundation and executable demo: its Python self-tests
+run in the generic Tools workflow, but it does **not** gate product-source
+changes yet. PR2 adds the portable case layer, PR3 adds corpora and native
+runners, and PR4 wires product parity/differential checks into required CI.
+When PR4 wires this gate into CI, that invocation must omit
 `--offline`. Every governed `issue` field must use the exact
 `owner/repository#number` form. Online validation derives the API path from
 that value and verifies both the repository and issue number; pull requests do
-not satisfy an issue reference. A new exact exemption additionally needs its
+not satisfy an issue reference. A new experimental disposition additionally needs its
 own fresh issue, a specific reason, and this marker in the issue body:
 
 ```text
-parity-governance-identity-sha256: <the exemption's identity_sha256>
+parity-governance-identity-sha256: <the disposition's identity_sha256>
 ```
 
-Issues cannot be reused across exemptions, and `bhelm/noop#17` is explicitly
+Issues cannot be reused across dispositions, and `bhelm/noop#17` is explicitly
 forbidden as an umbrella.
 
 ## Updating the inventory
 
-After an intentional source change:
+Initial creation is deliberately one-shot:
 
 ```sh
 python3 Tools/parity_ledger.py --bootstrap-map --write-baseline
+```
+
+The two bootstrap flags are inseparable. Both snapshots are computed and
+validated before either is published; a scan or publication failure leaves
+both prior files byte-for-byte unchanged (or both absent on first creation).
+
+Once authority exists, refresh derived snapshots only through the guarded flow:
+
+```sh
+python3 Tools/parity_ledger.py --refresh-derived --base origin/main
 python3 Tools/parity_ledger.py
 python3 Tools/parity_ratchet.py --base origin/main --offline
 ```
 
-Review the expanded semantic diff before retaining generated hashes. A new
-unpaired item, a removed or retargeted function/property/constant pair, or a
-new finding needs
-an exact `exemptions[]` entry containing `kind`, `identity`, `identity_sha256`,
-one fresh repository-qualified `issue`, and a narrow `reason`. An exemption
-whose debt has disappeared emits a warning and may be removed later; it never
-authorizes that debt if it is reintroduced against the current merge base. New
-exemptions require both a fresh issue and the exact identity-hash marker; no
-bootstrap exemption or downgrade is accepted. Removing or retargeting a real
-twin claim is a governance change, not debt reduction, and remains blocking.
+Generation computes state; it never approves it. Refresh writes candidates,
+runs the identity-set ratchet against the exact base, and restores both snapshots
+on failure. There is no accept/force switch, and the generator never creates or
+edits `parity_dispositions.json`.
+
+For a new one-sided declaration, choose explicitly:
+
+1. Implement and test its Swift/Kotlin twin (required for shared bug fixes and
+   final shared features).
+2. Manually add an `experimental` disposition with exact identity/platform,
+   reason, fresh issue, and expiry date.
+3. Manually add a durable `platform_specific` disposition with exact
+   identity/platform and a concrete platform rationale.
+
+These are the only disposition types. They cannot waive removal/retargeting of
+an existing twin, a shared bug fix, or a final shared feature. The central typed
+registry is manually reviewed; regeneration cannot populate it. A disposition
+whose debt disappears emits a warning and may be removed later, but it never
+authorizes reintroduction against the current merge base. Debt reductions pass
+with a warning even when totals fall while another new identity remains
+blocking.
 Do not preserve stale findings or freeze commit hashes in tests; repository
 consistency is proved by independent rescanning and canonical set hashes.
 

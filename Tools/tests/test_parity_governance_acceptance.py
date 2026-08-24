@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import io
 import json
 import subprocess
 import sys
@@ -36,6 +37,12 @@ class IssueReferenceTests(unittest.TestCase):
 
 
 class RepositoryBaselineTests(unittest.TestCase):
+    def test_repository_has_one_typed_manual_disposition_registry(self) -> None:
+        registry = parity_ledger._load_json(TOOLS / "parity_dispositions.json", {})
+        parity_ratchet._validate_dispositions(registry, "fixture")
+        self.assertEqual(1, registry["schema_version"])
+        self.assertNotIn("exemptions", parity_ledger._load_json(TOOLS / "parity_twin_map.json", {}))
+
     def test_tools_workflow_triggers_for_nested_governance_tests(self) -> None:
         workflow = (REPOSITORY / ".github/workflows/tools-python.yml").read_text(
             encoding="utf-8"
@@ -283,6 +290,156 @@ class GovernanceRatchetTests(unittest.TestCase):
         subprocess.run(["git", "commit", "-qm", "base"], cwd=self.root, check=True)
         return subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=self.root, text=True).strip()
 
+    def experimental_registry(self, identity: str, issue: str = "bhelm/noop#78") -> dict:
+        return {"schema_version": 1, "dispositions": [{
+            "type": "experimental", "kind": "add-unpaired-function",
+            "identity": identity, "platform": identity.split("\0", 1)[0],
+            "identity_sha256": parity_ledger._canonical_sha256(identity),
+            "issue": issue, "reason": "Time-boxed synthetic experiment awaiting its parity implementation.",
+            "expires_on": "2026-12-31",
+        }]}
+
+    def test_typed_dispositions_require_explicit_platform_and_lifecycle_fields(self) -> None:
+        experimental = {
+            "schema_version": 1,
+            "dispositions": [{
+                "type": "experimental", "kind": "add-unpaired-function",
+                "identity": "swift\0Engine.swift::trial/0#1", "platform": "swift",
+                "identity_sha256": parity_ledger._canonical_sha256("swift\0Engine.swift::trial/0#1"),
+                "issue": "bhelm/noop#78", "reason": "Time-boxed experiment awaiting parity decision.",
+                "expires_on": "2026-12-31",
+            }],
+        }
+        parity_ratchet._validate_dispositions(experimental, "fixture")
+        malformed = json.loads(json.dumps(experimental))
+        del malformed["dispositions"][0]["expires_on"]
+        with self.assertRaisesRegex(parity_ratchet.RatchetError, "expires_on"):
+            parity_ratchet._validate_dispositions(malformed, "fixture")
+
+        platform_specific = {
+            "schema_version": 1,
+            "dispositions": [{
+                "type": "platform_specific", "kind": "add-unpaired-function",
+                "identity": "kotlin\0Engine.kt::androidOnly/0#1", "platform": "kotlin",
+                "identity_sha256": parity_ledger._canonical_sha256("kotlin\0Engine.kt::androidOnly/0#1"),
+                "rationale": "Uses an Android-only operating-system capability with no iOS equivalent.",
+            }],
+        }
+        parity_ratchet._validate_dispositions(platform_specific, "fixture")
+
+    def test_bootstrap_refuses_to_overwrite_existing_authority(self) -> None:
+        tools = self.root / "Tools"
+        tools.mkdir()
+        map_path = tools / "parity_twin_map.json"
+        baseline_path = tools / "parity_ledger_baseline.json"
+        map_path.write_bytes(b"map-old-bytes\n")
+        baseline_path.write_bytes(b"baseline-old-bytes\n")
+        output = io.StringIO()
+        with mock.patch("sys.stdout", output):
+            code = parity_ledger.main([
+                "--root", str(self.root), "--bootstrap-map", "--write-baseline",
+            ])
+        self.assertEqual(2, code)
+        self.assertIn("initial authority creation only", output.getvalue())
+        self.assertEqual(b"map-old-bytes\n", map_path.read_bytes())
+        self.assertEqual(b"baseline-old-bytes\n", baseline_path.read_bytes())
+
+    def test_bootstrap_and_baseline_flags_are_inseparable(self) -> None:
+        for flag in ("--bootstrap-map", "--write-baseline"):
+            with self.subTest(flag=flag):
+                output = io.StringIO()
+                with mock.patch("sys.stdout", output):
+                    code = parity_ledger.main(["--root", str(self.root), flag])
+                self.assertEqual(2, code)
+                self.assertIn("must be used together", output.getvalue())
+                self.assertFalse((self.root / "Tools/parity_twin_map.json").exists())
+                self.assertFalse((self.root / "Tools/parity_ledger_baseline.json").exists())
+
+    def test_bootstrap_scan_exception_preserves_prior_absence(self) -> None:
+        with mock.patch.object(parity_ledger, "scan", side_effect=RuntimeError("synthetic scan failure")):
+            with self.assertRaisesRegex(RuntimeError, "synthetic scan failure"):
+                parity_ledger.main([
+                    "--root", str(self.root), "--bootstrap-map", "--write-baseline",
+                ])
+        self.assertFalse((self.root / "Tools/parity_twin_map.json").exists())
+        self.assertFalse((self.root / "Tools/parity_ledger_baseline.json").exists())
+
+    def test_bootstrap_scan_error_preserves_prior_absence(self) -> None:
+        finding = mock.Mock()
+        finding.output.return_value = "synthetic scan error"
+        result = mock.Mock(errors=[finding])
+        output = io.StringIO()
+        with mock.patch.object(parity_ledger, "scan", return_value=result), mock.patch("sys.stdout", output):
+            code = parity_ledger.main([
+                "--root", str(self.root), "--bootstrap-map", "--write-baseline",
+            ])
+        self.assertEqual(1, code)
+        self.assertIn("snapshots unchanged", output.getvalue())
+        self.assertFalse((self.root / "Tools/parity_twin_map.json").exists())
+        self.assertFalse((self.root / "Tools/parity_ledger_baseline.json").exists())
+
+    def test_bootstrap_publication_failure_rolls_back_both_files(self) -> None:
+        real_replace = parity_ledger.os.replace
+        calls = 0
+
+        def fail_second(source, destination):
+            nonlocal calls
+            calls += 1
+            if calls == 2:
+                raise OSError("synthetic second replace failure")
+            return real_replace(source, destination)
+
+        with mock.patch.object(parity_ledger.os, "replace", side_effect=fail_second):
+            with self.assertRaisesRegex(OSError, "synthetic second replace failure"):
+                parity_ledger.main([
+                    "--root", str(self.root), "--bootstrap-map", "--write-baseline",
+                ])
+        self.assertFalse((self.root / "Tools/parity_twin_map.json").exists())
+        self.assertFalse((self.root / "Tools/parity_ledger_baseline.json").exists())
+
+    def test_refresh_restores_snapshots_when_new_debt_is_undisposed(self) -> None:
+        swift = self.root / "Packages/StrandAnalytics/Sources/StrandAnalytics/Engine.swift"
+        kotlin = self.root / "android/app/src/main/java/com/noop/analytics/Engine.kt"
+        swift.parent.mkdir(parents=True, exist_ok=True)
+        kotlin.parent.mkdir(parents=True, exist_ok=True)
+        swift.write_text("enum Engine {}\n", encoding="utf-8")
+        kotlin.write_text("object Engine {}\n", encoding="utf-8")
+        compact = parity_ledger.build_compact_twin_map(self.root)
+        baseline = parity_ledger.build_compact_baseline(parity_ledger.scan(self.root, compact))
+        self.write("Tools/parity_twin_map.json", compact)
+        self.write("Tools/parity_ledger_baseline.json", baseline)
+        self.write("Tools/parity_dispositions.json", {"schema_version": 1, "dispositions": []})
+        base = self.commit()
+        before_map = (self.root / "Tools/parity_twin_map.json").read_bytes()
+        before_baseline = (self.root / "Tools/parity_ledger_baseline.json").read_bytes()
+        before_dispositions = (self.root / "Tools/parity_dispositions.json").read_bytes()
+
+        swift.write_text("enum Engine { static func accidentalDrift() {} }\n", encoding="utf-8")
+        output = io.StringIO()
+        with mock.patch("sys.stdout", output):
+            code = parity_ledger.main([
+                "--root", str(self.root), "--refresh-derived", "--base", base,
+            ])
+        self.assertEqual(1, code)
+        self.assertIn("snapshots restored", output.getvalue())
+        self.assertEqual(before_map, (self.root / "Tools/parity_twin_map.json").read_bytes())
+        self.assertEqual(before_baseline, (self.root / "Tools/parity_ledger_baseline.json").read_bytes())
+        self.assertEqual(before_dispositions, (self.root / "Tools/parity_dispositions.json").read_bytes())
+
+    def test_expired_experimental_disposition_blocks(self) -> None:
+        marker = self.root / "README"
+        marker.write_text("base\n", encoding="utf-8")
+        base = self.commit()
+        compact = parity_ledger.build_compact_twin_map(self.root)
+        self.write("Tools/parity_twin_map.json", compact)
+        self.write("Tools/parity_ledger_baseline.json", parity_ledger.build_compact_baseline(parity_ledger.scan(self.root, compact)))
+        identity = "swift\0Example.swift::trial/0#1"
+        registry = self.experimental_registry(identity)
+        registry["dispositions"][0]["expires_on"] = "2020-01-01"
+        self.write("Tools/parity_dispositions.json", registry)
+        errors = parity_ratchet.compare_metadata(self.root, base, offline=True)
+        self.assertTrue(any("experimental disposition expired" in error for error in errors), errors)
+
     def test_unreadable_base_blob_is_not_treated_as_absent_bootstrap_metadata(self) -> None:
         self.write("Tools/parity_twin_map.json", {"schema_version": 3})
         base = self.commit()
@@ -371,13 +528,8 @@ class GovernanceRatchetTests(unittest.TestCase):
             item for item in parity_ledger.semantic_authority(self.root)["unpaired_functions"]
             if "newlyUnpaired" in item
         )
-        compact["exemptions"] = [{
-            "kind": "add-unpaired-function",
-            "identity": identity,
-            "identity_sha256": parity_ledger._canonical_sha256(identity),
-            "issue": "bhelm/noop#78",
-            "reason": "Exact synthetic unpaired function accepted for this focused ratchet test.",
-        }]
+        registry = self.experimental_registry(identity)
+        self.write("Tools/parity_dispositions.json", registry)
         baseline = parity_ledger.build_compact_baseline(parity_ledger.scan(self.root, compact))
         self.write("Tools/parity_twin_map.json", compact)
         self.write("Tools/parity_ledger_baseline.json", baseline)
@@ -385,7 +537,6 @@ class GovernanceRatchetTests(unittest.TestCase):
 
         swift.write_text("enum Engine {}\n", encoding="utf-8")
         refreshed = parity_ledger.build_compact_twin_map(self.root)
-        refreshed["exemptions"] = compact["exemptions"]
         self.write("Tools/parity_twin_map.json", refreshed)
         self.write(
             "Tools/parity_ledger_baseline.json",
@@ -396,7 +547,7 @@ class GovernanceRatchetTests(unittest.TestCase):
             self.root, base, offline=True, warnings=warnings
         )
         self.assertEqual([], errors)
-        self.assertTrue(any("obsolete exemption" in warning for warning in warnings), warnings)
+        self.assertTrue(any("obsolete disposition" in warning for warning in warnings), warnings)
         with mock.patch.object(parity_ratchet, "_fetch_issue") as fetched:
             online_warnings: list[str] = []
             self.assertEqual(
@@ -406,6 +557,31 @@ class GovernanceRatchetTests(unittest.TestCase):
                 ),
             )
         fetched.assert_not_called()
+
+    def test_platform_specific_disposition_allows_only_exact_one_sided_identity(self) -> None:
+        swift = self.root / "Packages/StrandAnalytics/Sources/StrandAnalytics/Engine.swift"
+        kotlin = self.root / "android/app/src/main/java/com/noop/analytics/Engine.kt"
+        swift.parent.mkdir(parents=True, exist_ok=True)
+        kotlin.parent.mkdir(parents=True, exist_ok=True)
+        swift.write_text("enum Engine {}\n", encoding="utf-8")
+        kotlin.write_text("object Engine {}\n", encoding="utf-8")
+        compact = parity_ledger.build_compact_twin_map(self.root)
+        self.write("Tools/parity_twin_map.json", compact)
+        self.write("Tools/parity_ledger_baseline.json", parity_ledger.build_compact_baseline(parity_ledger.scan(self.root, compact)))
+        base = self.commit()
+
+        kotlin.write_text("object Engine { fun androidOnly() = Unit }\n", encoding="utf-8")
+        compact = parity_ledger.build_compact_twin_map(self.root)
+        identity = next(item for item in parity_ledger.semantic_authority(self.root)["unpaired_functions"] if "androidOnly" in item)
+        self.write("Tools/parity_twin_map.json", compact)
+        self.write("Tools/parity_ledger_baseline.json", parity_ledger.build_compact_baseline(parity_ledger.scan(self.root, compact)))
+        self.write("Tools/parity_dispositions.json", {"schema_version": 1, "dispositions": [{
+            "type": "platform_specific", "kind": "add-unpaired-function",
+            "identity": identity, "platform": "kotlin",
+            "identity_sha256": parity_ledger._canonical_sha256(identity),
+            "rationale": "Uses an Android-only operating-system capability with no iOS equivalent.",
+        }]})
+        self.assertEqual([], parity_ratchet.compare_metadata(self.root, base, offline=True))
 
     def test_debt_decrease_needs_no_metadata_rewrite_and_warns(self) -> None:
         swift = self.root / "Packages/StrandAnalytics/Sources/StrandAnalytics/Engine.swift"
@@ -439,13 +615,7 @@ class GovernanceRatchetTests(unittest.TestCase):
         kotlin.write_text("object Engine {}\n", encoding="utf-8")
         compact = parity_ledger.build_compact_twin_map(self.root)
         identity = "swift\0Packages/StrandAnalytics/Sources/StrandAnalytics/Engine.swift::oldDebt/0#1"
-        compact["exemptions"] = [{
-            "kind": "add-unpaired-function",
-            "identity": identity,
-            "identity_sha256": parity_ledger._canonical_sha256(identity),
-            "issue": "bhelm/noop#78",
-            "reason": "Historical synthetic debt retained to prove stale authority cannot revive it.",
-        }]
+        self.write("Tools/parity_dispositions.json", self.experimental_registry(identity))
         baseline = parity_ledger.build_compact_baseline(parity_ledger.scan(self.root, compact))
         self.write("Tools/parity_twin_map.json", compact)
         self.write("Tools/parity_ledger_baseline.json", baseline)
@@ -453,7 +623,6 @@ class GovernanceRatchetTests(unittest.TestCase):
 
         swift.write_text("enum Engine { static func oldDebt() {} }\n", encoding="utf-8")
         refreshed = parity_ledger.build_compact_twin_map(self.root)
-        refreshed["exemptions"] = compact["exemptions"]
         self.write("Tools/parity_twin_map.json", refreshed)
         self.write(
             "Tools/parity_ledger_baseline.json",
@@ -538,13 +707,7 @@ class GovernanceRatchetTests(unittest.TestCase):
             item for item in parity_ledger.semantic_authority(self.root)["unpaired_functions"]
             if "inheritedDebt" in item
         )
-        compact["exemptions"] = [{
-            "kind": "add-unpaired-function",
-            "identity": identity,
-            "identity_sha256": parity_ledger._canonical_sha256(identity),
-            "issue": "bhelm/noop#78",
-            "reason": "Exact inherited synthetic debt retained while its source identity still exists.",
-        }]
+        self.write("Tools/parity_dispositions.json", self.experimental_registry(identity))
         baseline = parity_ledger.build_compact_baseline(parity_ledger.scan(self.root, compact))
         self.write("Tools/parity_twin_map.json", compact)
         self.write("Tools/parity_ledger_baseline.json", baseline)
@@ -555,6 +718,7 @@ class GovernanceRatchetTests(unittest.TestCase):
             "number": 78,
             "repository_url": "https://api.github.com/repos/bhelm/noop",
             "html_url": "https://github.com/bhelm/noop/issues/78",
+            "state": "open",
         }
         with mock.patch.object(parity_ratchet, "_fetch_issue", return_value=payload) as fetched:
             self.assertEqual([], parity_ratchet.compare_metadata(self.root, base, offline=False))
@@ -569,19 +733,13 @@ class GovernanceRatchetTests(unittest.TestCase):
         self.write("Tools/parity_ledger_baseline.json", parity_ledger.build_compact_baseline(parity_ledger.scan(self.root, compact)))
         self.assertEqual([], parity_ratchet.compare_metadata(self.root, base, offline=True))
 
-    def test_bootstrap_cannot_introduce_exemptions(self) -> None:
+    def test_bootstrap_cannot_introduce_dispositions(self) -> None:
         marker = self.root / "README"
         marker.write_text("base\n", encoding="utf-8")
         base = self.commit()
         compact = parity_ledger.build_compact_twin_map(self.root)
         identity = "swift\0Example.swift::invented/0#1"
-        compact["exemptions"] = [{
-            "kind": "bootstrap-unpaired-function",
-            "identity": identity,
-            "identity_sha256": parity_ledger._canonical_sha256(identity),
-            "issue": "bhelm/noop#18",
-            "reason": "Bootstrap must not accept pre-reviewed debt implicitly.",
-        }]
+        self.write("Tools/parity_dispositions.json", self.experimental_registry(identity, "bhelm/noop#18"))
         self.write("Tools/parity_twin_map.json", compact)
         self.write(
             "Tools/parity_ledger_baseline.json",
@@ -590,7 +748,7 @@ class GovernanceRatchetTests(unittest.TestCase):
 
         errors = parity_ratchet.compare_metadata(self.root, base, offline=True)
 
-        self.assertTrue(any("bootstrap cannot introduce exemptions" in error for error in errors), errors)
+        self.assertTrue(any("bootstrap cannot introduce dispositions" in error for error in errors), errors)
 
     def test_same_issue_number_in_wrong_repository_fails_closed(self) -> None:
         ref = issue_ref.parse_current("bhelm/noop#77")
@@ -627,6 +785,7 @@ class GovernanceRatchetTests(unittest.TestCase):
             "repository_url": "https://api.github.com/repos/bhelm/noop",
             "html_url": "https://github.com/bhelm/noop/issues/78",
             "created_at": "2026-08-21T12:00:00Z",
+            "state": "open",
             "body": "parity-governance-identity-sha256: " + "a" * 64,
         }
         response = subprocess.CompletedProcess([], 0, json.dumps(payload), "")
@@ -646,6 +805,14 @@ class GovernanceRatchetTests(unittest.TestCase):
                     ref, "a" * 64, "2026-08-21T13:00:00+00:00"
                 )
             )
+            payload["state"] = "closed"
+            response = subprocess.CompletedProcess([], 0, json.dumps(payload), "")
+            with mock.patch.object(parity_ratchet.subprocess, "run", return_value=response):
+                self.assertFalse(
+                    parity_ratchet.exemption_issue_is_bound(
+                        ref, "a" * 64, "2026-08-21T11:00:00+00:00"
+                    )
+                )
 
     def test_default_base_is_exact_current_origin_main_not_an_old_merge_base(self) -> None:
         marker = self.root / "marker"
