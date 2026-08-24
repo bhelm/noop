@@ -29,6 +29,7 @@ import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.noop.R
@@ -82,35 +83,37 @@ fun GroundTruthCollectorScreen(vm: AppViewModel) {
             },
     ) {
         NoopCard(tint = Palette.accent) {
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                CounterColumn(stringResource(R.string.ground_truth_noop_steps), noopSteps?.toString() ?: "-")
-                CounterColumn(stringResource(R.string.ground_truth_manual_steps), state.steps.toString())
-                CounterColumn(stringResource(R.string.ground_truth_stairs), state.stairs.toString())
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Row(Modifier.fillMaxWidth()) {
+                    CounterColumn(stringResource(R.string.ground_truth_noop_steps), noopSteps?.toString() ?: "-", Modifier.weight(1f))
+                    CounterColumn(stringResource(R.string.ground_truth_manual_steps), state.steps.toString(), Modifier.weight(1f))
+                    CounterColumn(stringResource(R.string.ground_truth_stairs), state.stairs.toString(), Modifier.weight(1f))
+                }
+                val noopSessionSteps = state.noopStepsAtStart?.let { start -> noopSteps?.minus(start) }
+                val delta = noopSessionSteps?.minus(state.steps)
+                Text(
+                    text = stringResource(R.string.ground_truth_delta, delta?.toString() ?: "-"),
+                    style = NoopType.subhead,
+                    color = Palette.textSecondary,
+                )
             }
-            val noopSessionSteps = state.noopStepsAtStart?.let { start -> noopSteps?.minus(start) }
-            val delta = noopSessionSteps?.minus(state.steps)
-            Text(
-                text = stringResource(R.string.ground_truth_delta, delta?.toString() ?: "-"),
-                style = NoopType.subhead,
-                color = Palette.textSecondary,
-                modifier = Modifier.padding(top = 12.dp),
-            )
         }
 
         NoopCard {
-            Text(stringResource(R.string.ground_truth_mapping_title), style = NoopType.headline, color = Palette.textPrimary)
-            Text(stringResource(R.string.ground_truth_mapping_body), style = NoopType.body, color = Palette.textSecondary)
-            val key = state.lastKey
-            Text(
-                text = if (key == null) stringResource(R.string.ground_truth_no_key)
-                else stringResource(
-                    R.string.ground_truth_key_detail,
-                    key.keyName, key.keyCode, key.scanCode, key.deviceName, key.deviceId, key.source,
-                ),
-                style = NoopType.caption,
-                color = Palette.textSecondary,
-                modifier = Modifier.padding(top = 12.dp),
-            )
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(stringResource(R.string.ground_truth_mapping_title), style = NoopType.headline, color = Palette.textPrimary)
+                Text(stringResource(R.string.ground_truth_mapping_body), style = NoopType.body, color = Palette.textSecondary)
+                val key = state.lastKey
+                Text(
+                    text = if (key == null) stringResource(R.string.ground_truth_no_key)
+                    else stringResource(
+                        R.string.ground_truth_key_detail,
+                        key.keyName, key.keyCode, key.scanCode, key.deviceName, key.deviceId, key.source,
+                    ),
+                    style = NoopType.caption,
+                    color = Palette.textSecondary,
+                )
+            }
         }
 
         NoopCard {
@@ -145,6 +148,12 @@ fun GroundTruthCollectorScreen(vm: AppViewModel) {
                 enabled = noopSteps != null && vm.activeStrapId.isNotBlank(),
                 onClick = { state = collector.start(requireNotNull(noopSteps), vm.activeStrapId) },
             )
+        } else {
+            Text(
+                text = stringResource(R.string.ground_truth_stopped_export_hint),
+                style = NoopType.subhead,
+                color = Palette.textSecondary,
+            )
         }
         NoopButton(
             text = if (exporting) stringResource(R.string.ground_truth_exporting) else stringResource(R.string.ground_truth_export),
@@ -165,10 +174,10 @@ fun GroundTruthCollectorScreen(vm: AppViewModel) {
 }
 
 @Composable
-private fun CounterColumn(label: String, value: String) {
-    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+private fun CounterColumn(label: String, value: String, modifier: Modifier = Modifier) {
+    Column(modifier = modifier.padding(horizontal = 4.dp), horizontalAlignment = Alignment.CenterHorizontally) {
         Text(value, style = NoopType.number(32f), color = Palette.textPrimary)
-        Text(label, style = NoopType.caption, color = Palette.textSecondary)
+        Text(label, style = NoopType.footnote, color = Palette.textSecondary, textAlign = TextAlign.Center, maxLines = 2)
     }
 }
 

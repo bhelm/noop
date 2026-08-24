@@ -2531,4 +2531,5 @@
     <string name="ground_truth_export">Exportar sesión</string>
     <string name="ground_truth_exporting">Creando exportación…</string>
     <string name="ground_truth_export_failed">No se pudo exportar la sesión: %1$s</string>
+    <string name="ground_truth_stopped_export_hint">Sesión finalizada. Expórtala antes de iniciar la siguiente.</string>
 </resources>
