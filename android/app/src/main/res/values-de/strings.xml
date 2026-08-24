@@ -2540,7 +2540,7 @@
     <string name="ground_truth_haptics">Bei gezähltem Druck vibrieren</string>
     <string name="ground_truth_haptics_desc">Optionale Bestätigung; standardmäßig aus, um bei langen Sessions Akku zu sparen.</string>
     <string name="ground_truth_start">Neue Session starten</string>
-    <string name="ground_truth_undo">Letzte Zählung rückgängig</string>
+    <string name="ground_truth_undo">Letzten Klick rückgängig</string>
     <string name="ground_truth_stop">Session beenden</string>
     <string name="ground_truth_export">Session exportieren</string>
     <string name="ground_truth_exporting">Export wird erstellt…</string>

@@ -2531,7 +2531,7 @@
     <string name="ground_truth_haptics">Wibruj po zliczeniu</string>
     <string name="ground_truth_haptics_desc">Opcjonalne potwierdzenie; domyślnie wyłączone, aby oszczędzać baterię podczas długich sesji.</string>
     <string name="ground_truth_start">Rozpocznij nową sesję</string>
-    <string name="ground_truth_undo">Cofnij ostatnie zliczenie</string>
+    <string name="ground_truth_undo">Cofnij ostatnie kliknięcie</string>
     <string name="ground_truth_stop">Zatrzymaj sesję</string>
     <string name="ground_truth_export">Eksportuj sesję</string>
     <string name="ground_truth_exporting">Tworzenie eksportu…</string>

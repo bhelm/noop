@@ -2525,7 +2525,7 @@
     <string name="ground_truth_haptics">Vibrer lors d’un comptage</string>
     <string name="ground_truth_haptics_desc">Confirmation facultative, désactivée par défaut pour économiser la batterie.</string>
     <string name="ground_truth_start">Démarrer une session</string>
-    <string name="ground_truth_undo">Annuler le dernier comptage</string>
+    <string name="ground_truth_undo">Annuler le dernier clic</string>
     <string name="ground_truth_stop">Arrêter la session</string>
     <string name="ground_truth_export">Exporter la session</string>
     <string name="ground_truth_exporting">Création de l’export…</string>

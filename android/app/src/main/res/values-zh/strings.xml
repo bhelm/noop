@@ -2440,7 +2440,7 @@
     <string name="ground_truth_haptics">计数时振动</string>
     <string name="ground_truth_haptics_desc">可选确认；默认关闭，以便在长时间会话中节省电量。</string>
     <string name="ground_truth_start">开始新会话</string>
-    <string name="ground_truth_undo">撤销上次计数</string>
+    <string name="ground_truth_undo">撤销上次点击</string>
     <string name="ground_truth_stop">停止会话</string>
     <string name="ground_truth_export">导出会话</string>
     <string name="ground_truth_exporting">正在生成导出文件…</string>

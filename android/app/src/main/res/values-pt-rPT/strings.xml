@@ -2519,7 +2519,7 @@
     <string name="ground_truth_haptics">Vibrar ao contar</string>
     <string name="ground_truth_haptics_desc">Confirmação opcional; desativada para poupar bateria em sessões longas.</string>
     <string name="ground_truth_start">Iniciar nova sessão</string>
-    <string name="ground_truth_undo">Desfazer última contagem</string>
+    <string name="ground_truth_undo">Desfazer último clique</string>
     <string name="ground_truth_stop">Parar sessão</string>
     <string name="ground_truth_export">Exportar sessão</string>
     <string name="ground_truth_exporting">A criar exportação…</string>
