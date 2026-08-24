@@ -2538,4 +2538,24 @@
     <string name="settings_day_cycle_midnight">00:00</string>
     <string name="settings_day_cycle_sleep_description">Default. The cycle follows the beginning of your detected main sleep. Missing or unreliable sleep data falls back to local midnight.</string>
     <string name="settings_day_cycle_midnight_description">Uses a conventional local calendar day from 00:00 to 00:00.</string>
+    <string name="ground_truth_title">Ground-truth collector</string>
+    <string name="ground_truth_subtitle">Count steps and stairs with a hardware button while NOOP records the matching sensor timeline.</string>
+    <string name="ground_truth_test_centre_desc">A foreground hardware-clicker session for step-algorithm research. It never changes your health data.</string>
+    <string name="ground_truth_open">Open collector</string>
+    <string name="ground_truth_noop_steps">NOOP steps</string>
+    <string name="ground_truth_manual_steps">Manual steps</string>
+    <string name="ground_truth_stairs">Stairs</string>
+    <string name="ground_truth_delta">NOOP − manual: %1$s</string>
+    <string name="ground_truth_mapping_title">Hardware mapping</string>
+    <string name="ground_truth_mapping_body">Zoom Out adds one step. Zoom In adds one stair and one step. Every other key is shown and logged without changing a count.</string>
+    <string name="ground_truth_no_key">Press a hardware button to inspect its key code.</string>
+    <string name="ground_truth_key_detail">%1$s · key %2$d · scan %3$d\n%4$s · device %5$d · source 0x%6$x</string>
+    <string name="ground_truth_haptics">Vibrate on a counted press</string>
+    <string name="ground_truth_haptics_desc">Optional confirmation; disabled by default to save battery during long sessions.</string>
+    <string name="ground_truth_start">Start new session</string>
+    <string name="ground_truth_undo">Undo last count</string>
+    <string name="ground_truth_stop">Stop session</string>
+    <string name="ground_truth_export">Export session</string>
+    <string name="ground_truth_exporting">Building export…</string>
+    <string name="ground_truth_export_failed">Couldn’t export session: %1$s</string>
 </resources>

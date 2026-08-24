@@ -2511,4 +2511,24 @@
     <string name="push_state_complete">Actualizado</string>
     <string name="push_state_failed">En pausa tras un error</string>
     <string name="push_settings_row_detail">Exportación unidireccional experimental a un endpoint que controlas. Desactivada de forma predeterminada.</string>
+    <string name="ground_truth_title">Contador de referencia</string>
+    <string name="ground_truth_subtitle">Cuenta pasos y escalones con un botón mientras NOOP registra la línea temporal de sensores.</string>
+    <string name="ground_truth_test_centre_desc">Una sesión de contador físico en primer plano para investigar el algoritmo de pasos. Nunca cambia tus datos de salud.</string>
+    <string name="ground_truth_open">Abrir contador</string>
+    <string name="ground_truth_noop_steps">Pasos NOOP</string>
+    <string name="ground_truth_manual_steps">Pasos manuales</string>
+    <string name="ground_truth_stairs">Escalones</string>
+    <string name="ground_truth_delta">NOOP − recuento manual: %1$s</string>
+    <string name="ground_truth_mapping_title">Asignación del mando</string>
+    <string name="ground_truth_mapping_body">Alejar añade un paso. Acercar añade un escalón y un paso. Las demás teclas se muestran y registran sin cambiar los contadores.</string>
+    <string name="ground_truth_no_key">Pulsa un botón para ver su código.</string>
+    <string name="ground_truth_key_detail">%1$s · tecla %2$d · escaneo %3$d\n%4$s · dispositivo %5$d · fuente 0x%6$x</string>
+    <string name="ground_truth_haptics">Vibrar al contar</string>
+    <string name="ground_truth_haptics_desc">Confirmación opcional; desactivada para ahorrar batería en sesiones largas.</string>
+    <string name="ground_truth_start">Iniciar sesión nueva</string>
+    <string name="ground_truth_undo">Deshacer último recuento</string>
+    <string name="ground_truth_stop">Detener sesión</string>
+    <string name="ground_truth_export">Exportar sesión</string>
+    <string name="ground_truth_exporting">Creando exportación…</string>
+    <string name="ground_truth_export_failed">No se pudo exportar la sesión: %1$s</string>
 </resources>

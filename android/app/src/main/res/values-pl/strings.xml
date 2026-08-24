@@ -2516,4 +2516,24 @@
     <string name="push_state_complete">Aktualne</string>
     <string name="push_state_failed">Wstrzymano po błędzie</string>
     <string name="push_settings_row_detail">Eksperymentalny eksport jednokierunkowy do kontrolowanego endpointu. Domyślnie wyłączony.</string>
+    <string name="ground_truth_title">Licznik referencyjny</string>
+    <string name="ground_truth_subtitle">Licz kroki i stopnie przyciskiem sprzętowym, podczas gdy NOOP rejestruje odpowiadającą im oś czasu czujników.</string>
+    <string name="ground_truth_test_centre_desc">Sesja z licznikiem sprzętowym na pierwszym planie do badania algorytmu kroków. Nigdy nie zmienia danych zdrowotnych.</string>
+    <string name="ground_truth_open">Otwórz licznik</string>
+    <string name="ground_truth_noop_steps">Kroki NOOP</string>
+    <string name="ground_truth_manual_steps">Kroki ręczne</string>
+    <string name="ground_truth_stairs">Stopnie</string>
+    <string name="ground_truth_delta">NOOP − licznik ręczny: %1$s</string>
+    <string name="ground_truth_mapping_title">Mapowanie przycisków</string>
+    <string name="ground_truth_mapping_body">Oddalenie dodaje krok. Przybliżenie dodaje stopień i krok. Każdy inny klawisz jest wyświetlany i zapisywany bez zmiany liczników.</string>
+    <string name="ground_truth_no_key">Naciśnij przycisk sprzętowy, aby sprawdzić jego kod.</string>
+    <string name="ground_truth_key_detail">%1$s · klawisz %2$d · skan %3$d\n%4$s · urządzenie %5$d · źródło 0x%6$x</string>
+    <string name="ground_truth_haptics">Wibruj po zliczeniu</string>
+    <string name="ground_truth_haptics_desc">Opcjonalne potwierdzenie; domyślnie wyłączone, aby oszczędzać baterię podczas długich sesji.</string>
+    <string name="ground_truth_start">Rozpocznij nową sesję</string>
+    <string name="ground_truth_undo">Cofnij ostatnie zliczenie</string>
+    <string name="ground_truth_stop">Zatrzymaj sesję</string>
+    <string name="ground_truth_export">Eksportuj sesję</string>
+    <string name="ground_truth_exporting">Tworzenie eksportu…</string>
+    <string name="ground_truth_export_failed">Nie udało się wyeksportować sesji: %1$s</string>
 </resources>

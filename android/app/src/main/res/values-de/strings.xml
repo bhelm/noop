@@ -2525,4 +2525,24 @@
     <string name="push_state_complete">Aktuell</string>
     <string name="push_state_failed">Nach einem Fehler pausiert</string>
     <string name="push_settings_row_detail">Experimenteller Einweg-Export an einen von dir kontrollierten Endpunkt. Standardmäßig aus.</string>
+    <string name="ground_truth_title">Ground-Truth-Zähler</string>
+    <string name="ground_truth_subtitle">Zähle Schritte und Stufen per Hardwaretaste, während NOOP die passende Sensor-Zeitachse aufzeichnet.</string>
+    <string name="ground_truth_test_centre_desc">Eine Hardware-Klicker-Session im Vordergrund für die Schrittalgorithmus-Forschung. Deine Gesundheitsdaten werden nie verändert.</string>
+    <string name="ground_truth_open">Zähler öffnen</string>
+    <string name="ground_truth_noop_steps">NOOP-Schritte</string>
+    <string name="ground_truth_manual_steps">Manuelle Schritte</string>
+    <string name="ground_truth_stairs">Stufen</string>
+    <string name="ground_truth_delta">NOOP − manuell: %1$s</string>
+    <string name="ground_truth_mapping_title">Hardware-Zuordnung</string>
+    <string name="ground_truth_mapping_body">Verkleinern zählt einen Schritt. Vergrößern zählt eine Stufe und einen Schritt. Jede andere Taste wird angezeigt und protokolliert, ohne einen Zähler zu ändern.</string>
+    <string name="ground_truth_no_key">Drücke eine Hardwaretaste, um ihren Tastencode zu sehen.</string>
+    <string name="ground_truth_key_detail">%1$s · Taste %2$d · Scan %3$d\n%4$s · Gerät %5$d · Quelle 0x%6$x</string>
+    <string name="ground_truth_haptics">Bei gezähltem Druck vibrieren</string>
+    <string name="ground_truth_haptics_desc">Optionale Bestätigung; standardmäßig aus, um bei langen Sessions Akku zu sparen.</string>
+    <string name="ground_truth_start">Neue Session starten</string>
+    <string name="ground_truth_undo">Letzte Zählung rückgängig</string>
+    <string name="ground_truth_stop">Session beenden</string>
+    <string name="ground_truth_export">Session exportieren</string>
+    <string name="ground_truth_exporting">Export wird erstellt…</string>
+    <string name="ground_truth_export_failed">Session konnte nicht exportiert werden: %1$s</string>
 </resources>

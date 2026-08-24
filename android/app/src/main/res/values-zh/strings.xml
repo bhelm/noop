@@ -2425,4 +2425,24 @@
     <string name="push_state_complete">已是最新</string>
     <string name="push_state_failed">出错后已暂停</string>
     <string name="push_settings_row_detail">向你控制的端点进行实验性单向导出。默认关闭。</string>
+    <string name="ground_truth_title">真实值计数器</string>
+    <string name="ground_truth_subtitle">使用硬件按钮记录步数和楼梯级数，同时由 NOOP 记录对应的传感器时间线。</string>
+    <string name="ground_truth_test_centre_desc">用于研究步数算法的前台硬件计数会话，不会更改你的健康数据。</string>
+    <string name="ground_truth_open">打开计数器</string>
+    <string name="ground_truth_noop_steps">NOOP 步数</string>
+    <string name="ground_truth_manual_steps">手动步数</string>
+    <string name="ground_truth_stairs">楼梯级数</string>
+    <string name="ground_truth_delta">NOOP − 手动计数：%1$s</string>
+    <string name="ground_truth_mapping_title">硬件按键映射</string>
+    <string name="ground_truth_mapping_body">缩小键增加一步，放大键增加一级楼梯并同时增加一步。其他按键只会显示并记录，不会更改计数。</string>
+    <string name="ground_truth_no_key">按下硬件按钮以查看其按键代码。</string>
+    <string name="ground_truth_key_detail">%1$s · 按键 %2$d · 扫描码 %3$d\n%4$s · 设备 %5$d · 来源 0x%6$x</string>
+    <string name="ground_truth_haptics">计数时振动</string>
+    <string name="ground_truth_haptics_desc">可选确认；默认关闭，以便在长时间会话中节省电量。</string>
+    <string name="ground_truth_start">开始新会话</string>
+    <string name="ground_truth_undo">撤销上次计数</string>
+    <string name="ground_truth_stop">停止会话</string>
+    <string name="ground_truth_export">导出会话</string>
+    <string name="ground_truth_exporting">正在生成导出文件…</string>
+    <string name="ground_truth_export_failed">无法导出会话：%1$s</string>
 </resources>

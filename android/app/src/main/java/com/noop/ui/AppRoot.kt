@@ -26,6 +26,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.CompareArrows
+import androidx.compose.material.icons.automirrored.filled.DirectionsWalk
 import androidx.compose.material.icons.automirrored.filled.TrendingUp
 import androidx.compose.material.icons.filled.Air
 import androidx.compose.material.icons.filled.Alarm
@@ -175,6 +176,7 @@ private enum class Destination(
     // Experimental and intentionally absent from More: reachable only through Settings > Advanced.
     SelfHostedPush("self_hosted_push", R.string.nav_self_hosted_push, Icons.Filled.CloudSync),
     TestCentre("test_centre", R.string.nav_test_centre, Icons.Filled.BugReport),
+    GroundTruthCollector("ground_truth_collector", R.string.ground_truth_title, Icons.AutoMirrored.Filled.DirectionsWalk),
 
     // The "More" tab: its own navigated page (mirroring the iOS More tab) that hosts the full
     // grouped destination list. It is NOT itself in any [DrawerGroup] — it's the door to them.
@@ -449,7 +451,12 @@ fun AppRoot(viewModel: AppViewModel = viewModel()) {
                     )
                 }
                 composable(Destination.SelfHostedPush.route) { SelfHostedPushScreen() }
-                composable(Destination.TestCentre.route) { TestCentreScreen(viewModel) }
+                composable(Destination.TestCentre.route) {
+                    TestCentreScreen(viewModel, onOpenGroundTruthCollector = {
+                        nav.navigate(Destination.GroundTruthCollector.route)
+                    })
+                }
+                composable(Destination.GroundTruthCollector.route) { GroundTruthCollectorScreen(viewModel) }
                 // The "More" page — the iOS More tab's twin: a navigated ScreenScaffold page hosting the
                 // full grouped destination list (was a pull-up sheet). A row navigates top-level.
                 composable(Destination.More.route) {
