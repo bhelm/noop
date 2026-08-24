@@ -10,7 +10,7 @@ Usage:
   python3 Tools/parity_ledger.py --no-baseline
   python3 Tools/parity_ledger.py --bootstrap-map --write-baseline
 
-New semantic debt is governed by exact issue-bound exemptions in the compact map.
+New semantic debt is governed by exact, manually reviewed typed dispositions.
 """
 
 from __future__ import annotations
@@ -19,6 +19,7 @@ import argparse
 import hashlib
 import io
 import json
+import os
 import re
 import subprocess
 import sys
@@ -1593,7 +1594,6 @@ def build_compact_twin_map(root: Path) -> dict:
             "kotlin_roots": [glob.split("/**", 1)[0] for glob in KOTLIN_GLOBS],
         },
         "authority": manifest,
-        "exemptions": [],
     }
 
 
@@ -2354,6 +2354,42 @@ def _write_json(path: Path, value: dict) -> None:
         path.write_text(json.dumps(value, indent=2, sort_keys=False) + "\n", encoding="utf-8")
 
 
+def _publish_json_pair(first_path: Path, first: dict, second_path: Path, second: dict) -> None:
+    """Publish two JSON snapshots as one rollback-safe operation."""
+    paths = (first_path, second_path)
+    values = (first, second)
+    old = [(path.exists(), path.read_bytes() if path.exists() else b"") for path in paths]
+    temporary: list[Path] = []
+    try:
+        for path, value in zip(paths, values):
+            path.parent.mkdir(parents=True, exist_ok=True)
+            descriptor, name = tempfile.mkstemp(prefix=f".{path.name}.", dir=path.parent)
+            os.close(descriptor)
+            candidate = Path(name)
+            temporary.append(candidate)
+            _write_json(candidate, value)
+        os.replace(temporary[0], first_path)
+        temporary.pop(0)
+        os.replace(temporary[0], second_path)
+        temporary.pop(0)
+    except BaseException:
+        for path, (existed, content) in zip(paths, old):
+            if existed:
+                descriptor, name = tempfile.mkstemp(prefix=f".{path.name}.rollback.", dir=path.parent)
+                try:
+                    with os.fdopen(descriptor, "wb") as handle:
+                        handle.write(content)
+                    os.replace(name, path)
+                finally:
+                    Path(name).unlink(missing_ok=True)
+            else:
+                path.unlink(missing_ok=True)
+        raise
+    finally:
+        for path in temporary:
+            path.unlink(missing_ok=True)
+
+
 BASELINE_REASONS = {
     "test-only-callsite": "Exact declaration is reached only from tests in the conservative lexical call graph; dynamic, callback and external entry points are intentionally not inferred.",
     "duplicate-implementation": "Exact platform-local implementation is retained as visible parity debt pending a source-level consolidation decision.",
@@ -2518,21 +2554,70 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--no-baseline", action="store_true", help="show every current finding")
     parser.add_argument("--bootstrap-map", action="store_true", help="write a fresh inventory map before scanning")
     parser.add_argument("--write-baseline", action="store_true", help="rewrite the baseline with current findings")
+    parser.add_argument("--refresh-derived", action="store_true", help="refresh existing derived snapshots only if the ratchet accepts the result")
     parser.add_argument("--base", default="origin/main", help="exact git ref used to prove debt reductions")
     args = parser.parse_args(argv)
 
     root = args.root.resolve()
     map_path = args.map_path or root / "Tools/parity_twin_map.json"
     baseline_path = args.baseline_path or root / "Tools/parity_ledger_baseline.json"
+    if args.bootstrap_map != args.write_baseline:
+        print("FAIL --bootstrap-map and --write-baseline must be used together")
+        return 2
+    if args.refresh_derived:
+        if args.bootstrap_map or args.write_baseline or args.no_baseline:
+            print("FAIL --refresh-derived cannot be combined with bootstrap, baseline, or display modes")
+            return 2
+        if not map_path.exists() or not baseline_path.exists():
+            print("FAIL --refresh-derived requires existing authority; use --bootstrap-map --write-baseline once")
+            return 2
+        if args.map_path is not None or args.baseline_path is not None:
+            print("FAIL --refresh-derived only supports the canonical checked-in snapshot paths")
+            return 2
+        old_map = map_path.read_bytes()
+        old_baseline = baseline_path.read_bytes()
+        candidate_map = build_compact_twin_map(root)
+        candidate_result = scan(root, candidate_map)
+        if candidate_result.errors:
+            print(f"FAIL {len(candidate_result.errors)} parity ledger scan error(s); snapshots unchanged")
+            return 1
+        accepted = False
+        try:
+            _write_json(map_path, candidate_map)
+            _write_json(baseline_path, build_compact_baseline(candidate_result))
+            command = [
+                sys.executable, str(Path(__file__).with_name("parity_ratchet.py")),
+                "--root", str(root), "--base", args.base, "--offline",
+            ]
+            completed = subprocess.run(command, cwd=root, text=True, capture_output=True)
+            if completed.returncode:
+                print("FAIL derived refresh rejected; snapshots restored")
+                print((completed.stderr or completed.stdout).strip())
+                return 1
+            accepted = True
+        finally:
+            if not accepted:
+                map_path.write_bytes(old_map)
+                baseline_path.write_bytes(old_baseline)
+        print(f"WROTE reviewed derived snapshots ({len(candidate_result.findings)} known findings)")
+        return 0
     if args.bootstrap_map:
-        previous = _load_json(map_path, {})
+        if map_path.exists() or baseline_path.exists():
+            print("FAIL --bootstrap-map is for initial authority creation only; use the reviewed refresh workflow for existing authority")
+            return 2
         twin_map = build_compact_twin_map(root)
-        if previous.get("schema_version") == 3:
-            twin_map["exemptions"] = previous.get("exemptions", [])
-        _write_json(map_path, twin_map)
+        result = scan(root, twin_map)
+        if result.errors:
+            print(f"FAIL {len(result.errors)} parity ledger scan error(s); snapshots unchanged")
+            for error in result.errors:
+                print(f"  {error.output()}")
+            return 1
+        baseline = build_compact_baseline(result)
+        _publish_json_pair(map_path, twin_map, baseline_path, baseline)
         expanded, drift = expand_twin_map(root, twin_map)
         assert not drift
-        print(f"WROTE {map_path} ({len(expanded['function_pairs'])} derived function pairs)")
+        print(f"WROTE {map_path} and {baseline_path} ({len(expanded['function_pairs'])} derived function pairs; {len(result.findings)} known findings)")
+        return 0
     else:
         twin_map = _load_json(map_path, {})
 
@@ -2542,13 +2627,6 @@ def main(argv: list[str] | None = None) -> int:
         for error in result.errors:
             print(f"  {error.output()}")
         return 1
-    if args.write_baseline:
-        baseline = build_compact_baseline(result)
-        _write_json(baseline_path, baseline)
-        print(f"WROTE {baseline_path} ({len(result.findings)} known findings)")
-        print(f"OK {_summary(result)}")
-        return 0
-
     if args.no_baseline:
         if result.findings:
             print(f"FAIL {len(result.findings)} current parity ledger finding(s):\n")

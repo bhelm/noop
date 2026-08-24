@@ -19,7 +19,7 @@ import sys
 import tarfile
 import tempfile
 from contextlib import contextmanager
-from datetime import datetime
+from datetime import date, datetime
 from pathlib import Path
 from typing import Iterable
 
@@ -30,6 +30,7 @@ import parity_ledger
 ROOT = Path(__file__).resolve().parent.parent
 TWIN_MAP_PATH = "Tools/parity_twin_map.json"
 LEDGER_BASELINE_PATH = "Tools/parity_ledger_baseline.json"
+DISPOSITIONS_PATH = "Tools/parity_dispositions.json"
 class RatchetError(ValueError):
     """Raised when governance inputs cannot be interpreted safely."""
 
@@ -59,6 +60,13 @@ def _read_current(root: Path, relative: str) -> dict:
     if not isinstance(value, dict):
         raise RatchetError(f"{relative}: JSON root must be an object")
     return value
+
+
+def _read_current_dispositions(root: Path) -> dict:
+    path = root / DISPOSITIONS_PATH
+    if not path.exists():
+        return {"schema_version": 1, "dispositions": []}
+    return _read_current(root, DISPOSITIONS_PATH)
 
 
 def _read_base(root: Path, base: str, relative: str) -> dict | None:
@@ -105,7 +113,7 @@ def _array(value: dict, key: str, location: str) -> list:
 def _validate_twin_map(value: dict, location: str) -> None:
     if value.get("schema_version") != 3:
         raise RatchetError(f"{location}: schema_version must be 3")
-    expected_keys = {"schema_version", "derivation", "scope", "authority", "exemptions"}
+    expected_keys = {"schema_version", "derivation", "scope", "authority"}
     if set(value) != expected_keys:
         raise RatchetError(f"{location}: v3 top-level keys must be exact")
     if value.get("derivation") != "parity_ledger.build_twin_map/v3":
@@ -126,39 +134,61 @@ def _validate_twin_map(value: dict, location: str) -> None:
                 or not isinstance(item.get("sha256"), str)
                 or re.fullmatch(r"[0-9a-f]{64}", item["sha256"]) is None):
             raise RatchetError(f"{location}: authority.{name} needs count and lowercase SHA-256")
-    exemptions = value.get("exemptions")
-    if not isinstance(exemptions, list):
-        raise RatchetError(f"{location}: exemptions must be an array")
+
+
+def _validate_dispositions(value: dict, location: str) -> None:
+    if value.get("schema_version") != 1 or set(value) != {"schema_version", "dispositions"}:
+        raise RatchetError(f"{location}: typed disposition registry keys must be exact")
+    dispositions = value.get("dispositions")
+    if not isinstance(dispositions, list):
+        raise RatchetError(f"{location}: dispositions must be an array")
     seen_identities: set[str] = set()
     seen_issues: set[issue_ref.IssueRef] = set()
     forbidden = issue_ref.parse_current("bhelm/noop#17")
-    expected_exemption_keys = {"kind", "identity", "identity_sha256", "issue", "reason"}
     allowed_kinds = {
         "add-unpaired-file", "add-unpaired-function", "add-unpaired-property",
-        "add-unpaired-constant", "remove-function-pair", "remove-property-pair",
-        "remove-constant-pair", "add-finding", "add-counter",
-        "bootstrap-unpaired-function",
+        "add-unpaired-constant",
     }
-    for index, item in enumerate(exemptions):
-        if not isinstance(item, dict) or set(item) != expected_exemption_keys:
-            raise RatchetError(f"{location}: exemptions[{index}] keys must be exact")
-        kind, identity, reason = item["kind"], item["identity"], item["reason"]
+    for index, item in enumerate(dispositions):
+        prefix = f"{location}: dispositions[{index}]"
+        if not isinstance(item, dict):
+            raise RatchetError(f"{prefix} must be an object")
+        disposition_type = item.get("type")
+        common = {"type", "kind", "identity", "identity_sha256", "platform"}
+        expected = {
+            "experimental": common | {"issue", "reason", "expires_on"},
+            "platform_specific": common | {"rationale"},
+        }.get(disposition_type)
+        if expected is None or set(item) != expected:
+            missing = "expires_on" if disposition_type == "experimental" and "expires_on" not in item else "keys"
+            raise RatchetError(f"{prefix} {missing} must be exact for type {disposition_type!r}")
+        kind, identity = item["kind"], item["identity"]
+        reason = item["reason"] if disposition_type == "experimental" else item["rationale"]
         if (not isinstance(kind, str) or not kind or not isinstance(identity, str)
                 or not identity or "*" in identity):
-            raise RatchetError(f"{location}: exemptions[{index}] needs exact kind and identity without globs")
+            raise RatchetError(f"{prefix} needs exact kind and identity without globs")
         if kind not in allowed_kinds:
-            raise RatchetError(f"{location}: exemptions[{index}] has unknown kind {kind!r}")
+            raise RatchetError(f"{prefix} cannot waive shared parity or pair removal: {kind!r}")
+        platform = item.get("platform")
+        if platform not in {"swift", "kotlin"} or not identity.startswith(platform + "\0"):
+            raise RatchetError(f"{prefix} platform must match the exact identity")
         if item["identity_sha256"] != parity_ledger._canonical_sha256(identity):
-            raise RatchetError(f"{location}: exemptions[{index}] identity hash mismatch")
+            raise RatchetError(f"{prefix} identity hash mismatch")
         if not isinstance(reason, str) or len(reason.strip()) < 20:
-            raise RatchetError(f"{location}: exemptions[{index}] needs a specific non-generic reason")
-        issue = issue_ref.parse_current(item["issue"])
+            raise RatchetError(f"{prefix} needs a specific non-generic rationale")
+        issue = issue_ref.parse_current(item["issue"]) if disposition_type == "experimental" else None
         if issue == forbidden:
-            raise RatchetError(f"{location}: umbrella issue bhelm/noop#17 is forbidden")
-        if identity in seen_identities or issue in seen_issues:
-            raise RatchetError(f"{location}: exemptions require one fresh issue per exact identity")
+            raise RatchetError(f"{prefix}: umbrella issue bhelm/noop#17 is forbidden")
+        if disposition_type == "experimental":
+            try:
+                datetime.strptime(item["expires_on"], "%Y-%m-%d")
+            except (TypeError, ValueError) as exc:
+                raise RatchetError(f"{prefix} expires_on must be YYYY-MM-DD") from exc
+        if identity in seen_identities or (issue is not None and issue in seen_issues):
+            raise RatchetError(f"{location}: dispositions require unique exact identities and issues")
         seen_identities.add(identity)
-        seen_issues.add(issue)
+        if issue is not None:
+            seen_issues.add(issue)
 
 
 def _validate_baseline(value: dict, location: str) -> None:
@@ -264,6 +294,7 @@ def _exemption_payload_is_bound(
         return False
     return (
         _exemption_payload_has_identity(issue, payload, identity_sha256)
+        and payload.get("state") == "open"
         and created > base_created
     )
 
@@ -380,16 +411,28 @@ def compare_metadata(
     warnings = warnings if warnings is not None else []
     current_map = _read_current(root, TWIN_MAP_PATH)
     current_baseline = _read_current(root, LEDGER_BASELINE_PATH)
+    current_registry = _read_current_dispositions(root)
     _validate_twin_map(current_map, TWIN_MAP_PATH)
     _validate_baseline(current_baseline, LEDGER_BASELINE_PATH)
+    _validate_dispositions(current_registry, DISPOSITIONS_PATH)
+    for disposition in current_registry["dispositions"]:
+        if (disposition["type"] == "experimental"
+                and date.fromisoformat(disposition["expires_on"]) < date.today()):
+            errors.append(
+                f"{DISPOSITIONS_PATH}: experimental disposition expired on {disposition['expires_on']}: {disposition['identity']}"
+            )
     current_sets = parity_ledger.semantic_authority(root)
     current_manifest = parity_ledger.authority_manifest(current_sets)
     current_scan_map = parity_ledger.build_compact_twin_map(root)
-    current_scan_map["exemptions"] = current_map["exemptions"]
+    current_scan_map["exemptions"] = current_registry["dispositions"]
     current_scan = parity_ledger.scan(root, current_scan_map)
 
     old_map = _read_base(root, base, TWIN_MAP_PATH)
     old_baseline = _read_base(root, base, LEDGER_BASELINE_PATH)
+    old_registry = _read_base(root, base, DISPOSITIONS_PATH)
+    if old_registry is None:
+        old_registry = {"schema_version": 1, "dispositions": []}
+    _validate_dispositions(old_registry, f"{base}:{DISPOSITIONS_PATH}")
     new_exemptions: list[dict] = []
     active_exemptions: list[dict] = []
     if old_map is not None:
@@ -426,11 +469,11 @@ def compare_metadata(
                 required.add(("add-counter", f"{name}\u0000{old_value}\u0000{value}"))
         current_by_key = {
             (item["kind"], item["identity"]): item
-            for item in current_map.get("exemptions", [])
+            for item in current_registry["dispositions"]
         }
         old_by_key = {
             (item["kind"], item["identity"]): item
-            for item in old_map.get("exemptions", [])
+            for item in old_registry["dispositions"]
         }
         inherited: set[tuple[str, str]] = set()
         for key, old_item in old_by_key.items():
@@ -451,11 +494,11 @@ def compare_metadata(
                 inherited.add(key)
             elif current_item is not None and not applies_now:
                 warnings.append(
-                    f"{TWIN_MAP_PATH}: obsolete exemption {key[0]} {key[1]}; cleanup is optional"
+                    f"{DISPOSITIONS_PATH}: obsolete disposition {key[0]} {key[1]}; cleanup is optional"
                 )
             elif current_item is not None and applies_now:
                 warnings.append(
-                    f"{TWIN_MAP_PATH}: obsolete exemption cannot authorize reintroduced debt {key[0]} {key[1]}"
+                    f"{DISPOSITIONS_PATH}: obsolete disposition cannot authorize reintroduced debt {key[0]} {key[1]}"
                 )
         checked = {
             key for key in current_by_key
@@ -467,7 +510,7 @@ def compare_metadata(
             )
         for kind, identity in sorted(checked - required - inherited - set(old_by_key)):
             warnings.append(
-                f"{TWIN_MAP_PATH}: obsolete exemption {kind} {identity}; cleanup is optional"
+                f"{DISPOSITIONS_PATH}: obsolete disposition {kind} {identity}; cleanup is optional"
             )
         new_exemptions = [
             item for key, item in current_by_key.items()
@@ -480,10 +523,10 @@ def compare_metadata(
     elif old_map is None:
         if current_map["authority"] != current_manifest:
             errors.append(f"{TWIN_MAP_PATH}: authority does not match independently derived current semantic sets")
-        exemptions = current_map.get("exemptions", [])
-        if exemptions:
+        dispositions = current_registry["dispositions"]
+        if dispositions:
             errors.append(
-                f"{TWIN_MAP_PATH}: bootstrap cannot introduce exemptions; "
+                f"{DISPOSITIONS_PATH}: bootstrap cannot introduce dispositions; "
                 "add issue-bound authority in a later reviewed change"
             )
 
@@ -496,8 +539,16 @@ def compare_metadata(
         for issue, payload in payloads.items():
             if not _issue_payload_matches(issue, payload):
                 errors.append(f"issue {issue} does not exist or is not accessible")
+        for disposition in active_exemptions:
+            if disposition["type"] != "experimental":
+                continue
+            issue = issue_ref.parse_current(disposition["issue"])
+            if (payloads.get(issue) or {}).get("state") != "open":
+                errors.append(f"experimental disposition issue {issue} must remain open")
         base_created_at = _git(root, ["show", "-s", "--format=%cI", base])
         for exemption in new_exemptions:
+            if exemption["type"] == "platform_specific":
+                continue
             issue = issue_ref.parse_current(exemption["issue"])
             if not _exemption_payload_is_bound(
                 issue, payloads.get(issue), exemption["identity_sha256"], base_created_at
@@ -516,10 +567,12 @@ def repository_consistency_errors(
     warnings = warnings if warnings is not None else []
     twin_map = _read_current(root, TWIN_MAP_PATH)
     baseline = _read_current(root, LEDGER_BASELINE_PATH)
+    registry = _read_current_dispositions(root)
     _validate_twin_map(twin_map, TWIN_MAP_PATH)
     _validate_baseline(baseline, LEDGER_BASELINE_PATH)
+    _validate_dispositions(registry, DISPOSITIONS_PATH)
     scan_map = parity_ledger.build_compact_twin_map(root)
-    scan_map["exemptions"] = twin_map["exemptions"]
+    scan_map["exemptions"] = registry["dispositions"]
     result = parity_ledger.scan(root, scan_map)
     errors = [finding.output() for finding in result.errors]
     current = parity_ledger.build_compact_baseline(result)
