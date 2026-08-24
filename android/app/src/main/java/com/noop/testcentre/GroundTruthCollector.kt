@@ -208,7 +208,7 @@ class GroundTruthCollector private constructor(private val context: Context) {
             putExtra(Intent.EXTRA_STREAM, uri)
             putExtra(Intent.EXTRA_SUBJECT, "NOOP ground-truth session")
             addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-        }, "Export ground-truth session"))
+        }, "Export ground-truth session").addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
     }
 
     private fun eventFile(id: String) = File(directory, "session-$id.jsonl")
@@ -264,7 +264,8 @@ class GroundTruthCollector private constructor(private val context: Context) {
     ) {
         out.write("unix_s,sample_index,ax_g,ay_g,az_g,gx_dps,gy_dps,gz_dps\n")
         if (from > to) return
-        for ((ts, columns) in repo.rawImuSamples(deviceId, from, to, limit = 200_000)) {
+        val secondsInWindow = (to - from + 1L).coerceIn(1L, 86_400L).toInt()
+        for ((ts, columns) in repo.rawImuSamples(deviceId, from, to, limit = secondsInWindow)) {
             if (columns.size < Whoop5RawImu.sampleCount * 6) continue
             for (i in 0 until Whoop5RawImu.sampleCount) {
                 val values = listOf(

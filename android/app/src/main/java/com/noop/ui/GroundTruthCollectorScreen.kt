@@ -157,10 +157,23 @@ fun GroundTruthCollectorScreen(vm: AppViewModel) {
             onClick = {
                 exporting = true
                 scope.launch {
-                    runCatching { collector.export(vm.repo) }
-                        .onSuccess { file -> state = collector.snapshot(); collector.share(file) }
-                        .onFailure { Toast.makeText(context, context.getString(R.string.ground_truth_export_failed, it.message ?: "?"), Toast.LENGTH_LONG).show() }
-                    exporting = false
+                    try {
+                        val file = collector.export(vm.repo)
+                        state = collector.snapshot()
+                        collector.share(file)
+                    } catch (failure: Throwable) {
+                        if (failure is kotlinx.coroutines.CancellationException) throw failure
+                        Toast.makeText(
+                            context,
+                            context.getString(
+                                R.string.ground_truth_export_failed,
+                                "${failure.javaClass.simpleName}: ${failure.message ?: "unknown error"}",
+                            ),
+                            Toast.LENGTH_LONG,
+                        ).show()
+                    } finally {
+                        exporting = false
+                    }
                 }
             },
         )
