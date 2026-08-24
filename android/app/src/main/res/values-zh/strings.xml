@@ -2445,5 +2445,4 @@
     <string name="ground_truth_export">导出会话</string>
     <string name="ground_truth_exporting">正在生成导出文件…</string>
     <string name="ground_truth_export_failed">无法导出会话：%1$s</string>
-    <string name="ground_truth_stopped_export_hint">会话已停止。请先导出，再开始下一次会话。</string>
 </resources>
