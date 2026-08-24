@@ -2570,4 +2570,5 @@
     <string name="ground_truth_export">Export session</string>
     <string name="ground_truth_exporting">Building export…</string>
     <string name="ground_truth_export_failed">Couldn’t export session: %1$s</string>
+    <string name="ground_truth_stopped_export_hint">Session stopped. Export it before starting the next session.</string>
 </resources>
