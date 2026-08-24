@@ -1510,15 +1510,12 @@ object IntelligenceEngine {
             // #547 effective-onset detail is preserved: editOnsetByStart still carries the user-CORRECTED
             // bedtime (startTsAdjusted ?: startTs) for this day's edited/manual blocks.
             val dayEditedRows = editedRowsForDay(editedRows, res.daily.day, tzOffsetSeconds)
-            val editsByStart: Map<Long, String?> = dayEditedRows.associate { it.startTs to it.stagesJSON }
-            val editOnsetByStart: Map<Long, Long> = dayEditedRows.associate { it.startTs to it.effectiveStartTs }
             // Substitute an edited block's (reshaped) stages for its detected twin before the daily
             // sleep aggregate feeds Rest + recovery. No edit touching this night → `daily` is unchanged.
-            var daily = sleepEditedDaily(
-                res.daily, res.sleepSessions, editsByStart, editOnsetByStart,
-                tzOffsetSeconds, habitualMidsleepSec,
+            val daily = editedCycleDaily(
+                res, dayEditedRows, tzOffsetSeconds, habitualMidsleepSec,
+                physiologicalSteps, computedId, restRows,
             )
-            daily = DayCycleIntelligenceIntegration.apply(daily, physiologicalSteps, computedId, restRows)
             val recovery = recomputeRecovery(daily, baselines2)
             // Charge term-breakdown trace (Test Centre Group G): only when the Recovery test mode is on
             // (recoveryTraceSink non-null). Emits which term moved Charge and which was nil and forced the
@@ -1801,23 +1798,11 @@ object IntelligenceEngine {
         // this only fills the days the strap collected but no import covered.
         // Persist metric-level input provenance in the SAME Room transaction. dayOwnership remains
         // exclusively a resolver override, and a failed write can never relabel an older score.
-        val provenance = IntelligencePersistence.scoreProvenance(
-            computedId, dailies, restRows, resolvedScoreOwnerByDay,
+        val computedWindow = IntelligencePersistence.prepareComputedWindow(
+            repo, importedDeviceId, computedId, oldestDay, newestDay, dailies, restRows, physiologicalSteps,
+            candidatePriorities, resolvedScoreOwnerByDay,
         )
-        repo.replaceComputedScoreWindow(
-            deviceId = computedId,
-            from = oldestDay,
-            to = newestDay,
-            dailyMetrics = dailies,
-            metricPoints = (restRows + physiologicalSteps.recoveredOwnerMarkerRows)
-                .distinctBy { Triple(it.deviceId, it.day, it.key) },
-            provenance = provenance,
-            replaceMetricKeys = listOf(DayCycleIntelligenceIntegration.ONSET_KEY),
-            replaceMetricSourceIds = DayCycleIntelligenceIntegration.markerRewriteSourceIds(
-                repo.computedSourceIds(importedDeviceId),
-                candidatePriorities.map { (owner, _) -> repo.computedDeviceId(owner) },
-            ),
-        )
+        repo.replaceComputedScoreWindow(computedWindow)
 
         persistFitnessVitalityAndSteps(
             repo = repo,
@@ -2407,6 +2392,24 @@ object IntelligenceEngine {
         day: String,
         tzOffsetSeconds: Long,
     ): List<SleepSession> = editedRows.filter { AnalyticsEngine.dayString(it.endTs, tzOffsetSeconds) == day }
+
+    private fun editedCycleDaily(
+        result: DayResult,
+        edits: List<SleepSession>,
+        tzOffsetSeconds: Long,
+        habitualMidsleepSec: Long?,
+        cycle: PhysiologicalStepCycleEngine.Result,
+        computedId: String,
+        metricRows: MutableList<MetricSeriesRow>,
+    ): DailyMetric {
+        val editsByStart = edits.associate { it.startTs to it.stagesJSON }
+        val onsetByStart = edits.associate { it.startTs to it.effectiveStartTs }
+        val edited = sleepEditedDaily(
+            result.daily, result.sleepSessions, editsByStart, onsetByStart,
+            tzOffsetSeconds, habitualMidsleepSec,
+        )
+        return DayCycleIntelligenceIntegration.apply(edited, cycle, computedId, metricRows)
+    }
 
     private fun sleepEditedDaily(
         daily: DailyMetric,

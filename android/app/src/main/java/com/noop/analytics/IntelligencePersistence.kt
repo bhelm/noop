@@ -8,6 +8,44 @@ import com.noop.data.WhoopRepository
 
 /** Persistence-only helpers kept out of the already large scoring orchestrator. */
 internal object IntelligencePersistence {
+    data class ComputedWindow(
+        val deviceId: String,
+        val from: String,
+        val to: String,
+        val dailies: List<DailyMetric>,
+        val metricRows: List<MetricSeriesRow>,
+        val provenance: List<ScoreInputProvenanceRow>,
+        val markerSourceIds: List<String>,
+    )
+
+    suspend fun prepareComputedWindow(
+        repo: WhoopRepository,
+        importedDeviceId: String,
+        computedId: String,
+        from: String,
+        to: String,
+        dailies: List<DailyMetric>,
+        metricRows: List<MetricSeriesRow>,
+        cycle: PhysiologicalStepCycleEngine.Result,
+        candidatePriorities: List<Pair<String, Int>>,
+        ownerByDay: Map<String, String>,
+    ): ComputedWindow {
+        val provenance = scoreProvenance(computedId, dailies, metricRows, ownerByDay)
+        return ComputedWindow(
+            deviceId = computedId,
+            from = from,
+            to = to,
+            dailies = dailies,
+            metricRows = (metricRows + cycle.recoveredOwnerMarkerRows)
+                .distinctBy { Triple(it.deviceId, it.day, it.key) },
+            provenance = provenance,
+            markerSourceIds = DayCycleIntelligenceIntegration.markerRewriteSourceIds(
+                repo.computedSourceIds(importedDeviceId),
+                candidatePriorities.map { (owner, _) -> repo.computedDeviceId(owner) },
+            ),
+        )
+    }
+
     fun scoreProvenance(
         computedId: String,
         dailies: List<DailyMetric>,
@@ -61,3 +99,17 @@ internal object IntelligencePersistence {
         for ((start, states) in sleepStateByStart) repo.persistSessionSleepState(computedId, start, states)
     }
 }
+
+/** Keep the oversized scoring orchestrator at a single, auditable transactional call site. */
+internal suspend fun WhoopRepository.replaceComputedScoreWindow(
+    window: IntelligencePersistence.ComputedWindow,
+) = replaceComputedScoreWindow(
+    deviceId = window.deviceId,
+    from = window.from,
+    to = window.to,
+    dailyMetrics = window.dailies,
+    metricPoints = window.metricRows,
+    provenance = window.provenance,
+    replaceMetricKeys = listOf(DayCycleIntelligenceIntegration.ONSET_KEY),
+    replaceMetricSourceIds = window.markerSourceIds,
+)
