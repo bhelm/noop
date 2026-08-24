@@ -26,12 +26,16 @@ class DayCycleResolverTest {
         )
     }
 
-    @Test fun missingCoverageFallsBackButMidnightModeNeverNeedsSleep() {
+    @Test fun missingCoverageKeepsSleepOnsetCycleOpenAcrossMidnight() {
         val sleep = DayCycleWindow("night", 23 * 3_600L, 0, "1970-01-02", DayCycleWindow.Source.DETECTED_SLEEP)
         assertEquals(
-            DayCycleWindow.Source.SYNTHETIC_MIDNIGHT,
+            DayCycleWindow.Source.DETECTED_SLEEP,
             DayCycleResolver.activeWindow(DayCycleMode.SLEEP_ONSET, sleep, 2 * 86_400L + 60, 0, false).source,
         )
+    }
+
+    @Test fun midnightModeStillResetsAtCalendarMidnight() {
+        val sleep = DayCycleWindow("night", 23 * 3_600L, 0, "1970-01-02", DayCycleWindow.Source.DETECTED_SLEEP)
         assertEquals(
             DayCycleWindow.Source.CALENDAR,
             DayCycleResolver.activeWindow(DayCycleMode.MIDNIGHT, sleep, 2 * 86_400L + 60, 0, true).source,
