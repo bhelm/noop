@@ -2570,4 +2570,11 @@
     <string name="ground_truth_export">Export session</string>
     <string name="ground_truth_exporting">Building export…</string>
     <string name="ground_truth_export_failed">Couldn’t export session: %1$s</string>
+    <string name="ground_truth_minutes">Minutes</string>
+    <string name="ground_truth_exclude_recent">Ignore recent period</string>
+    <string name="ground_truth_sessions">Recorded sessions</string>
+    <string name="ground_truth_no_sessions">No sessions recorded yet.</string>
+    <string name="ground_truth_session_summary">%1$d steps · %2$d stairs · %3$d excluded periods</string>
+    <string name="ground_truth_comment">Session comment</string>
+    <string name="ground_truth_legacy_no_sensors">Legacy session: event export is available, but its strap cannot be identified for sensor export.</string>
 </resources>

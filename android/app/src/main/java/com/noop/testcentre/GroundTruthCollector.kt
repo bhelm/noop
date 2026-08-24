@@ -41,6 +41,19 @@ class GroundTruthCollector private constructor(private val context: Context) {
         val exported: Boolean,
     )
 
+    data class SessionSummary(
+        val id: String,
+        val deviceId: String?,
+        val startedAtMs: Long,
+        val endedAtMs: Long?,
+        val steps: Int,
+        val stairs: Int,
+        val excludedWindows: Int,
+        val comment: String,
+        val active: Boolean,
+        val exported: Boolean,
+    )
+
     private val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
     private val directory = File(context.filesDir, "ground-truth").apply { mkdirs() }
 
@@ -63,7 +76,7 @@ class GroundTruthCollector private constructor(private val context: Context) {
     @Synchronized
     fun start(noopSteps: Int, deviceId: String, nowMs: Long = System.currentTimeMillis()): Snapshot {
         val id = nowMs.toString()
-        prefs.edit().clear()
+        prefs.edit()
             .putBoolean("active", true)
             .putBoolean("exported", false)
             .putString("sessionId", id)
@@ -73,9 +86,65 @@ class GroundTruthCollector private constructor(private val context: Context) {
             .putInt("stairs", 0)
             .applyNoopStart(noopSteps)
             .applyNoop(noopSteps)
+            .putString(sessionDeviceKey(id), deviceId)
+            .putLong(sessionStartKey(id), nowMs)
+            .putBoolean(sessionExportedKey(id), false)
             .apply()
-        append(id, event(nowMs, "start", 0, 0, noopSteps, null))
+        append(id, event(nowMs, "start", 0, 0, noopSteps, null).put("strap_device_id", deviceId))
         return snapshot()
+    }
+
+    @Synchronized
+    fun excludeLastMinutes(minutes: Int, nowMs: Long = System.currentTimeMillis()): Snapshot {
+        require(minutes in 1..240) { "Minutes must be between 1 and 240" }
+        val before = snapshot()
+        if (!before.active || before.sessionId == null) return before
+        val fromMs = maxOf(before.startedAtMs, nowMs - minutes * 60_000L)
+        append(before.sessionId, event(nowMs, KIND_EXCLUDE, before.steps, before.stairs, before.lastNoopSteps, null).apply {
+            put("from_ms", fromMs)
+            put("to_ms", nowMs)
+        })
+        return snapshot()
+    }
+
+    @Synchronized
+    fun setComment(sessionId: String, comment: String) {
+        prefs.edit().putString(sessionCommentKey(sessionId), comment.take(4_000)).apply()
+    }
+
+    @Synchronized
+    fun sessions(): List<SessionSummary> {
+        val current = snapshot()
+        return directory.listFiles { file -> file.name.startsWith("session-") && file.name.endsWith(".jsonl") }
+            .orEmpty()
+            .mapNotNull { file ->
+                val id = file.name.removePrefix("session-").removeSuffix(".jsonl")
+                val rows = runCatching {
+                    file.useLines { lines ->
+                        lines.filter { it.isNotBlank() }
+                            .mapNotNull { line -> runCatching { JSONObject(line) }.getOrNull() }
+                            .toList()
+                    }
+                }.getOrNull() ?: return@mapNotNull null
+                val first = rows.firstOrNull() ?: return@mapNotNull null
+                val last = rows.last()
+                val isCurrent = current.sessionId == id
+                SessionSummary(
+                    id = id,
+                    deviceId = prefs.getString(sessionDeviceKey(id), null)
+                        ?: first.optString("strap_device_id").takeIf(String::isNotBlank)
+                        ?: current.deviceId.takeIf { isCurrent },
+                    startedAtMs = prefs.getLong(sessionStartKey(id), first.optLong("at_ms")),
+                    endedAtMs = rows.lastOrNull { it.optString("kind") == "stop" }?.optLong("at_ms"),
+                    steps = last.optInt("steps_total"),
+                    stairs = last.optInt("stairs_total"),
+                    excludedWindows = rows.count { it.optString("kind") == KIND_EXCLUDE },
+                    comment = prefs.getString(sessionCommentKey(id), "").orEmpty(),
+                    active = isCurrent && current.active,
+                    exported = prefs.getBoolean(sessionExportedKey(id), isCurrent && current.exported),
+                )
+            }
+            .sortedByDescending { it.startedAtMs }
     }
 
     @Synchronized
@@ -129,41 +198,52 @@ class GroundTruthCollector private constructor(private val context: Context) {
         if (!before.active || before.sessionId == null) return before
         append(before.sessionId, event(nowMs, "stop", before.steps, before.stairs, noopSteps, null))
         prefs.edit().putBoolean("active", false).putLong("endedAtMs", nowMs)
+            .putLong(sessionEndKey(before.sessionId), nowMs)
             .applyNoop(noopSteps).apply()
         return snapshot()
     }
 
-    suspend fun export(repo: WhoopRepository): File = withContext(Dispatchers.IO) {
+    suspend fun export(repo: WhoopRepository, sessionId: String? = null): File = withContext(Dispatchers.IO) {
         val snap = snapshot()
-        require(!snap.active) { "Stop the session before exporting" }
-        val id = requireNotNull(snap.sessionId) { "No ground-truth session has been recorded" }
-        val deviceId = requireNotNull(snap.deviceId) { "The session has no recorded device" }
+        val id = sessionId ?: requireNotNull(snap.sessionId) { "No ground-truth session has been recorded" }
+        val summary = sessions().firstOrNull { it.id == id } ?: error("Ground-truth session is missing")
+        require(!summary.active) { "Stop the session before exporting" }
+        val deviceId = summary.deviceId
         val source = eventFile(id)
         require(source.isFile) { "Ground-truth event file is missing" }
-        val events = source.useLines { lines -> lines.filter { it.isNotBlank() }.map(::JSONObject).toList() }
-        val endMs = snap.endedAtMs.takeIf { it > 0 } ?: System.currentTimeMillis()
+        val events = source.useLines { lines ->
+            lines.filter { it.isNotBlank() }
+                .mapNotNull { line -> runCatching { JSONObject(line) }.getOrNull() }
+                .toList()
+        }
+        val endMs = summary.endedAtMs ?: events.lastOrNull()?.optLong("at_ms") ?: summary.startedAtMs
         // Sensor data is useful only around manually marked ground truth. An abandoned collector left
         // open overnight must not turn one tap on Export into a multi-gigabyte query/allocation.
         val markedEvents = events.filter {
             it.optString("kind") == KIND_STEP || it.optString("kind") == KIND_STAIR ||
                 it.optString("kind") == KIND_UNDO_STEP || it.optString("kind") == KIND_UNDO_STAIR
         }
-        val sensorFrom = markedEvents.firstOrNull()?.optLong("at_ms")?.div(1_000L)?.minus(5L) ?: 1L
-        val sensorTo = markedEvents.lastOrNull()?.optLong("at_ms")?.div(1_000L)?.plus(5L) ?: 0L
+        val exclusions = exclusionWindows(events)
+        val sensorBoundsMs = markedEvents.map { it.optLong("at_ms") } + exclusions.flatMap { listOf(it.first, it.second) }
+        val sensorFrom = if (deviceId == null) 1L else sensorBoundsMs.minOrNull()?.div(1_000L)?.minus(5L) ?: 1L
+        val sensorTo = if (deviceId == null) 0L else sensorBoundsMs.maxOrNull()?.div(1_000L)?.plus(5L) ?: 0L
         val outDir = File(context.cacheDir, "logs").apply { mkdirs() }
         val zip = File(outDir, "noop-ground-truth-$id.zip")
         ZipOutputStream(zip.outputStream().buffered()).use { out ->
             out.putNextEntry(ZipEntry("meta.json"))
             out.writerEntry(JSONObject().apply {
-                put("schema_version", 1)
+                put("schema_version", 2)
                 put("session_id", id)
-                put("device_id", deviceId)
-                put("started_at_ms", snap.startedAtMs)
+                if (deviceId != null) put("device_id", deviceId)
+                put("sensor_export_available", deviceId != null)
+                put("started_at_ms", summary.startedAtMs)
                 put("ended_at_ms", endMs)
-                put("manual_steps", snap.steps)
-                put("manual_stairs", snap.stairs)
-                if (snap.noopStepsAtStart != null) put("noop_steps_at_start", snap.noopStepsAtStart)
-                if (snap.lastNoopSteps != null) put("noop_steps_at_end", snap.lastNoopSteps)
+                put("manual_steps", summary.steps)
+                put("manual_stairs", summary.stairs)
+                put("comment", summary.comment)
+                put("excluded_windows", summary.excludedWindows)
+                if (id == snap.sessionId && snap.noopStepsAtStart != null) put("noop_steps_at_start", snap.noopStepsAtStart)
+                if (id == snap.sessionId && snap.lastNoopSteps != null) put("noop_steps_at_end", snap.lastNoopSteps)
                 put("device_family", "Android")
                 put("app_version", BuildConfig.VERSION_NAME)
                 put("ground_truth", "JX-05S hardware clicker; ZOOM_OUT=step, ZOOM_IN=stair")
@@ -177,12 +257,15 @@ class GroundTruthCollector private constructor(private val context: Context) {
             out.writerEntry(eventsCsv(events))
 
             out.putNextEntry(ZipEntry("seconds.csv"))
-            out.writerEntry(secondsCsv(events, snap.startedAtMs, endMs))
+            out.writerEntry(secondsCsv(events, sensorFrom * 1_000L, sensorTo * 1_000L))
+
+            out.putNextEntry(ZipEntry("exclusions.csv"))
+            out.writerEntry(exclusionsCsv(events))
 
             out.putNextEntry(ZipEntry("raw-sensors.csv"))
             out.bufferedWriterNoClose().use { writer ->
                 RawSensorExport.writeCsv(
-                    writer, repo, deviceId,
+                    writer, repo, deviceId.orEmpty(),
                     sensorFrom,
                     sensorTo,
                 )
@@ -192,12 +275,13 @@ class GroundTruthCollector private constructor(private val context: Context) {
 
             out.putNextEntry(ZipEntry("raw-imu.csv"))
             out.bufferedWriterNoClose().use { writer ->
-                writeRawImuCsv(writer, repo, deviceId, sensorFrom, sensorTo)
+                writeRawImuCsv(writer, repo, deviceId.orEmpty(), sensorFrom, sensorTo)
                 writer.flush()
             }
             out.closeEntry()
         }
-        prefs.edit().putBoolean("exported", true).apply()
+        prefs.edit().putBoolean(sessionExportedKey(id), true).apply()
+        if (id == snap.sessionId) prefs.edit().putBoolean("exported", true).apply()
         zip
     }
 
@@ -236,8 +320,9 @@ class GroundTruthCollector private constructor(private val context: Context) {
     }
 
     private fun secondsCsv(events: List<JSONObject>, startMs: Long, endMs: Long): String = buildString {
-        append("unix_s,manual_steps_delta,manual_stairs_delta,manual_steps_total,manual_stairs_total,noop_steps\n")
+        append("unix_s,manual_steps_delta,manual_stairs_delta,manual_steps_total,manual_stairs_total,noop_steps,excluded\n")
         val bySecond = events.groupBy { it.optLong("at_ms") / 1_000L }
+        val exclusions = exclusionWindows(events)
         var steps = 0; var stairs = 0; var noop: Int? = null
         for (second in startMs / 1_000L..endMs / 1_000L) {
             val rows = bySecond[second].orEmpty()
@@ -248,9 +333,23 @@ class GroundTruthCollector private constructor(private val context: Context) {
                 steps = last.optInt("steps_total", steps); stairs = last.optInt("stairs_total", stairs)
                 if (last.has("noop_steps")) noop = last.optInt("noop_steps")
             }
-            append("$second,$stepDelta,$stairDelta,$steps,$stairs,${noop ?: ""}\n")
+            val excluded = exclusions.any { second * 1_000L <= it.second && second * 1_000L + 999L >= it.first }
+            append("$second,$stepDelta,$stairDelta,$steps,$stairs,${noop ?: ""},$excluded\n")
         }
     }
+
+    private fun exclusionsCsv(events: List<JSONObject>): String = buildString {
+        append("from_ms,to_ms,from_unix_s,to_unix_s\n")
+        for ((from, to) in exclusionWindows(events)) append("$from,$to,${from / 1_000L},${to / 1_000L}\n")
+    }
+
+    private fun exclusionWindows(events: List<JSONObject>): List<Pair<Long, Long>> = events
+        .filter { it.optString("kind") == KIND_EXCLUDE }
+        .mapNotNull { row ->
+            val from = row.optLong("from_ms", -1L)
+            val to = row.optLong("to_ms", -1L)
+            if (from >= 0L && to >= from) from to to else null
+        }
 
     private fun csv(value: String): String = if (value.any { it == ',' || it == '"' || it == '\n' })
         "\"${value.replace("\"", "\"\"")}\"" else value
@@ -299,6 +398,12 @@ class GroundTruthCollector private constructor(private val context: Context) {
         if (value == null) remove("noopStepsAtStart") else putInt("noopStepsAtStart", value)
     }
 
+    private fun sessionDeviceKey(id: String) = "session.$id.deviceId"
+    private fun sessionStartKey(id: String) = "session.$id.startedAtMs"
+    private fun sessionEndKey(id: String) = "session.$id.endedAtMs"
+    private fun sessionCommentKey(id: String) = "session.$id.comment"
+    private fun sessionExportedKey(id: String) = "session.$id.exported"
+
     private fun ZipOutputStream.writerEntry(text: String) {
         write(text.toByteArray(Charsets.UTF_8)); closeEntry()
     }
@@ -314,6 +419,7 @@ class GroundTruthCollector private constructor(private val context: Context) {
         private const val KIND_KEY = "key"
         private const val KIND_UNDO_STEP = "undo_step"
         private const val KIND_UNDO_STAIR = "undo_stair"
+        private const val KIND_EXCLUDE = "exclude_window"
         private const val PREFS = "noop_ground_truth_collector"
 
         fun from(context: Context) = GroundTruthCollector(context.applicationContext)
