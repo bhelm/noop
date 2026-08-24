@@ -52,8 +52,8 @@ object DayCycleResolver {
     }
 
     /**
-     * Resolve the active window. Reliable, explicitly-awake coverage preserves a genuine all-nighter.
-     * Missing/untrustworthy coverage falls back to midnight; even claimed awake coverage is capped at 40 h.
+     * Resolve the active window. Sleep-onset mode stays open across midnight even when awake coverage is
+     * unavailable. The absolute cap still prevents a stale sleep boundary from remaining active forever.
      */
     fun activeWindow(
         mode: DayCycleMode,
@@ -66,8 +66,7 @@ object DayCycleResolver {
             return calendarWindow(now, tzOffsetSeconds)
         }
         val age = now - latestSleep.startInclusive
-        val mustFallback = age >= ABSOLUTE_MAX_OPEN_SECONDS ||
-            (!reliableAwakeCoverage && now >= fallbackMidnightAfter(latestSleep.startInclusive, tzOffsetSeconds))
+        val mustFallback = age >= ABSOLUTE_MAX_OPEN_SECONDS
         if (!mustFallback) return latestSleep.copy(endExclusive = now)
         val boundary = fallbackMidnightAfter(latestSleep.startInclusive, tzOffsetSeconds)
         val day = AnalyticsEngine.dayString(boundary, tzOffsetSeconds)

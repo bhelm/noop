@@ -54,7 +54,9 @@ public enum DayCycleResolver {
         guard mode == .sleepOnset, let latestSleep else { return calendarWindow(now: now, offsetSec: offsetSec) }
         let age = now - latestSleep.startInclusive
         let fallback = fallbackMidnight(after: latestSleep.startInclusive, offsetSec: offsetSec)
-        guard age < absoluteMaxOpenSeconds, reliableAwakeCoverage || now < fallback else {
+        // Sleep-onset mode remains anchored across midnight when awake coverage is unavailable.
+        // Only the absolute safety cap may synthesize a fallback boundary.
+        guard age < absoluteMaxOpenSeconds else {
             let day = AnalyticsEngine.dayString(fallback, offsetSec: offsetSec)
             return DayCycleWindow(id: "synthetic:\(day)", startInclusive: fallback, endExclusive: now,
                                   displayDay: day, source: .syntheticMidnight)

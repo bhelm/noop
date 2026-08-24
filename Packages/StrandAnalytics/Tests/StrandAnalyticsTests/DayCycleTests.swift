@@ -11,13 +11,23 @@ final class DayCycleTests: XCTestCase {
         XCTAssertEqual(window.source, .calendar)
     }
 
-    func testMissingWakeEvidenceFallsBackAtFirstSafeMidnight() {
+    func testMissingWakeEvidenceKeepsSleepOnsetCycleAcrossMidnight() {
         let sleep = DayCycleWindow(id: "sleep", startInclusive: 20 * 3_600, endExclusive: 0,
                                    displayDay: "1970-01-01", source: .detectedSleep)
         let fallback = DayCycleResolver.fallbackMidnight(after: sleep.startInclusive, offsetSec: 0)
         XCTAssertEqual(fallback, 2 * 86_400)
+        let active = DayCycleResolver.activeWindow(mode: .sleepOnset, latestSleep: sleep,
+                                                   now: fallback, offsetSec: 0,
+                                                   reliableAwakeCoverage: false)
+        XCTAssertEqual(active.source, .detectedSleep)
+        XCTAssertEqual(active.startInclusive, sleep.startInclusive)
+    }
+
+    func testAbsoluteCapStillUsesSyntheticMidnight() {
+        let sleep = DayCycleWindow(id: "sleep", startInclusive: 0, endExclusive: 0,
+                                   displayDay: "1970-01-01", source: .detectedSleep)
         XCTAssertEqual(DayCycleResolver.activeWindow(mode: .sleepOnset, latestSleep: sleep,
-                                                     now: fallback, offsetSec: 0,
+                                                     now: 40 * 3_600, offsetSec: 0,
                                                      reliableAwakeCoverage: false).source,
                        .syntheticMidnight)
     }

@@ -2702,6 +2702,6 @@
     <string name="settings_day_cycle_starts">Day starts</string>
     <string name="settings_day_cycle_sleep">Main sleep</string>
     <string name="settings_day_cycle_midnight">00:00</string>
-    <string name="settings_day_cycle_sleep_description">Default. The cycle follows the beginning of your detected main sleep. Missing or unreliable sleep data falls back to local midnight.</string>
+    <string name="settings_day_cycle_sleep_description">Default. The cycle follows the beginning of your detected main sleep. Before a main sleep is detected, local midnight is used.</string>
     <string name="settings_day_cycle_midnight_description">Uses a conventional local calendar day from 00:00 to 00:00.</string>
 </resources>
