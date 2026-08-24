@@ -2550,4 +2550,24 @@
     <string name="l10n_health_screen_your_strap_reports_a_blood_oxygen_349fe34a">Your strap reports a blood oxygen estimate, but it is unverified and off by default. Turn on the strap estimate in Settings to see it, or import a WHOOP export in Data Sources for the calibrated value.</string>
     <string name="l10n_health_screen_no_blood_oxygen_percentage_from_a_1d3d383e">No blood oxygen percentage from a WHOOP 4.0</string>
     <string name="l10n_health_screen_your_strap_banks_the_raw_optical_b52a0f80">Your strap banks the raw optical channels, but NOOP does not turn them into a blood oxygen percentage, so this stays empty however long you wear it. Import a WHOOP export in Data Sources to fill it from your account history.</string>
+    <string name="ground_truth_title">Ground-truth collector</string>
+    <string name="ground_truth_subtitle">Count steps and stairs with a hardware button while NOOP records the matching sensor timeline.</string>
+    <string name="ground_truth_test_centre_desc">A foreground hardware-clicker session for step-algorithm research. It never changes your health data.</string>
+    <string name="ground_truth_open">Open collector</string>
+    <string name="ground_truth_noop_steps">NOOP steps</string>
+    <string name="ground_truth_manual_steps">Manual steps</string>
+    <string name="ground_truth_stairs">Stairs</string>
+    <string name="ground_truth_delta">NOOP − manual: %1$s</string>
+    <string name="ground_truth_mapping_title">Hardware mapping</string>
+    <string name="ground_truth_mapping_body">Zoom Out adds one step. Zoom In adds one stair and one step. Every other key is shown and logged without changing a count.</string>
+    <string name="ground_truth_no_key">Press a hardware button to inspect its key code.</string>
+    <string name="ground_truth_key_detail">%1$s · key %2$d · scan %3$d\n%4$s · device %5$d · source 0x%6$x</string>
+    <string name="ground_truth_haptics">Vibrate on a counted press</string>
+    <string name="ground_truth_haptics_desc">Optional confirmation; disabled by default to save battery during long sessions.</string>
+    <string name="ground_truth_start">Start new session</string>
+    <string name="ground_truth_undo">Undo last count</string>
+    <string name="ground_truth_stop">Stop session</string>
+    <string name="ground_truth_export">Export session</string>
+    <string name="ground_truth_exporting">Building export…</string>
+    <string name="ground_truth_export_failed">Couldn’t export session: %1$s</string>
 </resources>
