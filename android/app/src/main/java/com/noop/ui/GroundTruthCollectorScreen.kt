@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -30,6 +31,8 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.noop.R
@@ -49,7 +52,9 @@ fun GroundTruthCollectorScreen(vm: AppViewModel) {
     val noopSteps = cycle?.steps ?: days.lastOrNull()?.steps
     var state by remember { mutableStateOf(collector.snapshot()) }
     var haptics by remember { mutableStateOf(false) }
-    var exporting by remember { mutableStateOf(false) }
+    var exportingSessionId by remember { mutableStateOf<String?>(null) }
+    var excludeMinutes by remember { mutableStateOf("5") }
+    var sessions by remember { mutableStateOf(collector.sessions()) }
 
     DisposableEffect(view) {
         val oldKeepScreenOn = view.keepScreenOn
@@ -58,7 +63,7 @@ fun GroundTruthCollectorScreen(vm: AppViewModel) {
             view.keepScreenOn = oldKeepScreenOn
         }
     }
-    LaunchedEffect(state.active, state.steps, state.stairs, exporting) { focusRequester.requestFocus() }
+    LaunchedEffect(state.active, state.steps, state.stairs) { focusRequester.requestFocus() }
 
     ScreenScaffold(
         title = stringResource(R.string.ground_truth_title),
@@ -138,7 +143,27 @@ fun GroundTruthCollectorScreen(vm: AppViewModel) {
                     text = stringResource(R.string.ground_truth_stop),
                     kind = NoopButtonKind.Destructive,
                     modifier = Modifier.weight(1f),
-                    onClick = { state = collector.stop(noopSteps) },
+                    onClick = { state = collector.stop(noopSteps); sessions = collector.sessions() },
+                )
+            }
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                OutlinedTextField(
+                    value = excludeMinutes,
+                    onValueChange = { value -> excludeMinutes = value.filter(Char::isDigit).take(3) },
+                    label = { Text(stringResource(R.string.ground_truth_minutes)) },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    singleLine = true,
+                    modifier = Modifier.weight(1f),
+                )
+                NoopButton(
+                    text = stringResource(R.string.ground_truth_exclude_recent),
+                    kind = NoopButtonKind.Secondary,
+                    modifier = Modifier.weight(2f),
+                    enabled = excludeMinutes.toIntOrNull() in 1..240,
+                    onClick = {
+                        excludeMinutes.toIntOrNull()?.let { collector.excludeLastMinutes(it) }
+                        sessions = collector.sessions()
+                    },
                 )
             }
         } else {
@@ -146,37 +171,88 @@ fun GroundTruthCollectorScreen(vm: AppViewModel) {
                 text = stringResource(R.string.ground_truth_start),
                 fullWidth = true,
                 enabled = noopSteps != null && vm.activeStrapId.isNotBlank(),
-                onClick = { state = collector.start(requireNotNull(noopSteps), vm.activeStrapId) },
+                onClick = {
+                    state = collector.start(requireNotNull(noopSteps), vm.activeStrapId)
+                    sessions = collector.sessions()
+                },
             )
         }
-        NoopButton(
-            text = if (exporting) stringResource(R.string.ground_truth_exporting) else stringResource(R.string.ground_truth_export),
-            kind = NoopButtonKind.Secondary,
-            fullWidth = true,
-            enabled = state.sessionId != null && !state.active && !exporting,
-            onClick = {
-                exporting = true
-                scope.launch {
-                    try {
-                        val file = collector.export(vm.repo)
-                        state = collector.snapshot()
-                        collector.share(file)
-                    } catch (failure: Throwable) {
-                        if (failure is kotlinx.coroutines.CancellationException) throw failure
-                        Toast.makeText(
-                            context,
-                            context.getString(
-                                R.string.ground_truth_export_failed,
-                                "${failure.javaClass.simpleName}: ${failure.message ?: "unknown error"}",
-                            ),
-                            Toast.LENGTH_LONG,
-                        ).show()
-                    } finally {
-                        exporting = false
-                    }
-                }
-            },
-        )
+        Text(stringResource(R.string.ground_truth_sessions), style = NoopType.title2, color = Palette.textPrimary)
+        if (sessions.isEmpty()) {
+            Text(stringResource(R.string.ground_truth_no_sessions), style = NoopType.body, color = Palette.textSecondary)
+        } else {
+            sessions.forEach { session ->
+                SessionCard(
+                    session = session,
+                    exporting = exportingSessionId == session.id,
+                    onComment = { comment ->
+                        collector.setComment(session.id, comment)
+                        sessions = sessions.map { if (it.id == session.id) it.copy(comment = comment) else it }
+                    },
+                    onExport = {
+                        exportingSessionId = session.id
+                        scope.launch {
+                            try {
+                                collector.share(collector.export(vm.repo, session.id))
+                                sessions = collector.sessions()
+                            } catch (failure: Throwable) {
+                                if (failure is kotlinx.coroutines.CancellationException) throw failure
+                                Toast.makeText(context, context.getString(R.string.ground_truth_export_failed,
+                                    "${failure.javaClass.simpleName}: ${failure.message ?: "unknown error"}"), Toast.LENGTH_LONG).show()
+                            } finally {
+                                exportingSessionId = null
+                            }
+                        }
+                    },
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun SessionCard(
+    session: GroundTruthCollector.SessionSummary,
+    exporting: Boolean,
+    onComment: (String) -> Unit,
+    onExport: () -> Unit,
+) {
+    val time = remember(session.startedAtMs) {
+        java.text.DateFormat.getDateTimeInstance(java.text.DateFormat.SHORT, java.text.DateFormat.SHORT)
+            .format(java.util.Date(session.startedAtMs))
+    }
+    NoopCard {
+        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Text(time, style = NoopType.headline, color = Palette.textPrimary)
+            Text(
+                stringResource(
+                    R.string.ground_truth_session_summary,
+                    session.steps,
+                    session.stairs,
+                    session.excludedWindows,
+                ),
+                style = NoopType.caption,
+                color = Palette.textSecondary,
+            )
+            OutlinedTextField(
+                value = session.comment,
+                onValueChange = onComment,
+                label = { Text(stringResource(R.string.ground_truth_comment)) },
+                modifier = Modifier.fillMaxWidth(),
+                minLines = 2,
+                maxLines = 4,
+            )
+            if (session.deviceId == null) {
+                Text(stringResource(R.string.ground_truth_legacy_no_sensors), style = NoopType.caption, color = Palette.textSecondary)
+            }
+            NoopButton(
+                text = if (exporting) stringResource(R.string.ground_truth_exporting) else stringResource(R.string.ground_truth_export),
+                kind = NoopButtonKind.Secondary,
+                fullWidth = true,
+                enabled = !session.active && !exporting,
+                onClick = onExport,
+            )
+        }
     }
 }
 
