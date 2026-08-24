@@ -1,13 +1,9 @@
 package com.noop.ui
 
-import android.app.Activity
-import android.content.Context
-import android.content.ContextWrapper
 import android.os.Build
 import android.view.HapticFeedbackConstants
 import android.view.InputDevice
 import android.view.KeyEvent
-import android.view.WindowManager
 import android.widget.Toast
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Arrangement
@@ -43,7 +39,6 @@ import kotlinx.coroutines.launch
 @Composable
 fun GroundTruthCollectorScreen(vm: AppViewModel) {
     val context = LocalContext.current
-    val activity = remember(context) { context.findActivity() }
     val collector = remember { GroundTruthCollector.from(context) }
     val focusRequester = remember { FocusRequester() }
     val view = LocalView.current
@@ -55,17 +50,14 @@ fun GroundTruthCollectorScreen(vm: AppViewModel) {
     var haptics by remember { mutableStateOf(false) }
     var exporting by remember { mutableStateOf(false) }
 
-    DisposableEffect(activity) {
-        val window = activity?.window
-        val oldBrightness = window?.attributes?.screenBrightness
-        window?.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
-        window?.attributes = window?.attributes?.apply { screenBrightness = 0.01f }
+    DisposableEffect(view) {
+        val oldKeepScreenOn = view.keepScreenOn
+        view.keepScreenOn = true
         onDispose {
-            window?.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
-            if (oldBrightness != null) window.attributes = window.attributes.apply { screenBrightness = oldBrightness }
+            view.keepScreenOn = oldKeepScreenOn
         }
     }
-    LaunchedEffect(Unit) { focusRequester.requestFocus() }
+    LaunchedEffect(state.active, state.steps, state.stairs, exporting) { focusRequester.requestFocus() }
 
     ScreenScaffold(
         title = stringResource(R.string.ground_truth_title),
@@ -131,28 +123,28 @@ fun GroundTruthCollectorScreen(vm: AppViewModel) {
             }
         }
 
-        if (!state.active && (state.sessionId == null || state.exported)) {
-            NoopButton(
-                text = stringResource(R.string.ground_truth_start),
-                fullWidth = true,
-                enabled = noopSteps != null && vm.activeStrapId.isNotBlank(),
-                onClick = { state = collector.start(requireNotNull(noopSteps), vm.activeStrapId); focusRequester.requestFocus() },
-            )
-        } else {
+        if (state.active) {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 NoopButton(
                     text = stringResource(R.string.ground_truth_undo),
                     kind = NoopButtonKind.Secondary,
                     modifier = Modifier.weight(1f),
-                    onClick = { state = collector.undo(noopSteps); focusRequester.requestFocus() },
+                    onClick = { state = collector.undo(noopSteps) },
                 )
                 NoopButton(
                     text = stringResource(R.string.ground_truth_stop),
                     kind = NoopButtonKind.Destructive,
                     modifier = Modifier.weight(1f),
-                    onClick = { state = collector.stop(noopSteps); focusRequester.requestFocus() },
+                    onClick = { state = collector.stop(noopSteps) },
                 )
             }
+        } else if (state.sessionId == null || state.exported) {
+            NoopButton(
+                text = stringResource(R.string.ground_truth_start),
+                fullWidth = true,
+                enabled = noopSteps != null && vm.activeStrapId.isNotBlank(),
+                onClick = { state = collector.start(requireNotNull(noopSteps), vm.activeStrapId) },
+            )
         }
         NoopButton(
             text = if (exporting) stringResource(R.string.ground_truth_exporting) else stringResource(R.string.ground_truth_export),
@@ -166,7 +158,6 @@ fun GroundTruthCollectorScreen(vm: AppViewModel) {
                         .onSuccess { file -> state = collector.snapshot(); collector.share(file) }
                         .onFailure { Toast.makeText(context, context.getString(R.string.ground_truth_export_failed, it.message ?: "?"), Toast.LENGTH_LONG).show() }
                     exporting = false
-                    focusRequester.requestFocus()
                 }
             },
         )
@@ -191,10 +182,4 @@ private fun KeyEvent.toCollectorKey(): GroundTruthCollector.KeyInfo {
         deviceName = input?.name ?: "unknown",
         source = source,
     )
-}
-
-private tailrec fun Context.findActivity(): Activity? = when (this) {
-    is Activity -> this
-    is ContextWrapper -> baseContext.findActivity()
-    else -> null
 }

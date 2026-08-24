@@ -7,6 +7,7 @@ import androidx.core.content.FileProvider
 import com.noop.BuildConfig
 import com.noop.data.WhoopRepository
 import com.noop.ingest.RawSensorExport
+import com.noop.protocol.Whoop5RawImu
 import java.io.File
 import java.util.zip.ZipEntry
 import java.util.zip.ZipOutputStream
@@ -181,6 +182,13 @@ class GroundTruthCollector private constructor(private val context: Context) {
                 writer.flush()
             }
             out.closeEntry()
+
+            out.putNextEntry(ZipEntry("raw-imu.csv"))
+            out.bufferedWriterNoClose().use { writer ->
+                writeRawImuCsv(writer, repo, deviceId, snap.startedAtMs / 1_000L - 5L, endMs / 1_000L + 5L)
+                writer.flush()
+            }
+            out.closeEntry()
         }
         prefs.edit().putBoolean("exported", true).apply()
         zip
@@ -239,6 +247,30 @@ class GroundTruthCollector private constructor(private val context: Context) {
 
     private fun csv(value: String): String = if (value.any { it == ',' || it == '"' || it == '\n' })
         "\"${value.replace("\"", "\"\"")}\"" else value
+
+    private suspend fun writeRawImuCsv(
+        out: java.io.Writer,
+        repo: WhoopRepository,
+        deviceId: String,
+        from: Long,
+        to: Long,
+    ) {
+        out.write("unix_s,sample_index,ax_g,ay_g,az_g,gx_dps,gy_dps,gz_dps\n")
+        for ((ts, columns) in repo.rawImuSamples(deviceId, from, to, limit = 200_000)) {
+            if (columns.size < Whoop5RawImu.sampleCount * 6) continue
+            for (i in 0 until Whoop5RawImu.sampleCount) {
+                val values = listOf(
+                    columns[i] * Whoop5RawImu.accelScale,
+                    columns[Whoop5RawImu.sampleCount + i] * Whoop5RawImu.accelScale,
+                    columns[Whoop5RawImu.sampleCount * 2 + i] * Whoop5RawImu.accelScale,
+                    columns[Whoop5RawImu.sampleCount * 3 + i] * Whoop5RawImu.gyroScale,
+                    columns[Whoop5RawImu.sampleCount * 4 + i] * Whoop5RawImu.gyroScale,
+                    columns[Whoop5RawImu.sampleCount * 5 + i] * Whoop5RawImu.gyroScale,
+                ).joinToString(",") { String.format(java.util.Locale.US, "%.8f", it) }
+                out.write("$ts,$i,$values\n")
+            }
+        }
+    }
 
     private fun encodeKey(key: KeyInfo) = JSONObject().apply {
         put("keyCode", key.keyCode); put("keyName", key.keyName); put("scanCode", key.scanCode)
