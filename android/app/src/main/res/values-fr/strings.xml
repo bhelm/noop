@@ -2530,4 +2530,11 @@
     <string name="ground_truth_export">Exporter la session</string>
     <string name="ground_truth_exporting">Création de l’export…</string>
     <string name="ground_truth_export_failed">Impossible d’exporter la session : %1$s</string>
+    <string name="ground_truth_minutes">Minutes</string>
+    <string name="ground_truth_exclude_recent">Ignorer la période récente</string>
+    <string name="ground_truth_sessions">Sessions enregistrées</string>
+    <string name="ground_truth_no_sessions">Aucune session enregistrée.</string>
+    <string name="ground_truth_session_summary">%1$d pas · %2$d marches · %3$d périodes exclues</string>
+    <string name="ground_truth_comment">Commentaire de session</string>
+    <string name="ground_truth_legacy_no_sensors">Ancienne session : les événements sont exportables, mais le bracelet des capteurs ne peut plus être identifié.</string>
 </resources>

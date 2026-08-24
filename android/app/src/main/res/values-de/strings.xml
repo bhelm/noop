@@ -2545,4 +2545,11 @@
     <string name="ground_truth_export">Session exportieren</string>
     <string name="ground_truth_exporting">Export wird erstellt…</string>
     <string name="ground_truth_export_failed">Session konnte nicht exportiert werden: %1$s</string>
+    <string name="ground_truth_minutes">Minuten</string>
+    <string name="ground_truth_exclude_recent">Letzten Zeitraum ignorieren</string>
+    <string name="ground_truth_sessions">Aufgezeichnete Sessions</string>
+    <string name="ground_truth_no_sessions">Noch keine Sessions aufgezeichnet.</string>
+    <string name="ground_truth_session_summary">%1$d Schritte · %2$d Stufen · %3$d ausgeschlossene Zeiträume</string>
+    <string name="ground_truth_comment">Kommentar zur Session</string>
+    <string name="ground_truth_legacy_no_sensors">Ältere Session: Ereignisse können exportiert werden, der zugehörige Strap für Sensordaten ist aber nicht mehr eindeutig.</string>
 </resources>

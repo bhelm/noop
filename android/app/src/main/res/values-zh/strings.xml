@@ -2445,4 +2445,11 @@
     <string name="ground_truth_export">导出会话</string>
     <string name="ground_truth_exporting">正在生成导出文件…</string>
     <string name="ground_truth_export_failed">无法导出会话：%1$s</string>
+    <string name="ground_truth_minutes">分钟</string>
+    <string name="ground_truth_exclude_recent">忽略最近时段</string>
+    <string name="ground_truth_sessions">已记录的会话</string>
+    <string name="ground_truth_no_sessions">尚未记录会话。</string>
+    <string name="ground_truth_session_summary">%1$d 步 · %2$d 级楼梯 · %3$d 个排除时段</string>
+    <string name="ground_truth_comment">会话备注</string>
+    <string name="ground_truth_legacy_no_sensors">旧会话：可导出事件，但无法识别对应设备，因此不能导出传感器数据。</string>
 </resources>

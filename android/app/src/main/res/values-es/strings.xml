@@ -2531,4 +2531,11 @@
     <string name="ground_truth_export">Exportar sesión</string>
     <string name="ground_truth_exporting">Creando exportación…</string>
     <string name="ground_truth_export_failed">No se pudo exportar la sesión: %1$s</string>
+    <string name="ground_truth_minutes">Minutos</string>
+    <string name="ground_truth_exclude_recent">Ignorar periodo reciente</string>
+    <string name="ground_truth_sessions">Sesiones registradas</string>
+    <string name="ground_truth_no_sessions">Todavía no hay sesiones.</string>
+    <string name="ground_truth_session_summary">%1$d pasos · %2$d escalones · %3$d periodos excluidos</string>
+    <string name="ground_truth_comment">Comentario de la sesión</string>
+    <string name="ground_truth_legacy_no_sensors">Sesión antigua: se pueden exportar los eventos, pero no se puede identificar el dispositivo para los sensores.</string>
 </resources>

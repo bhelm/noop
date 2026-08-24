@@ -2536,4 +2536,11 @@
     <string name="ground_truth_export">Eksportuj sesję</string>
     <string name="ground_truth_exporting">Tworzenie eksportu…</string>
     <string name="ground_truth_export_failed">Nie udało się wyeksportować sesji: %1$s</string>
+    <string name="ground_truth_minutes">Minuty</string>
+    <string name="ground_truth_exclude_recent">Pomiń ostatni okres</string>
+    <string name="ground_truth_sessions">Zapisane sesje</string>
+    <string name="ground_truth_no_sessions">Nie zapisano jeszcze żadnych sesji.</string>
+    <string name="ground_truth_session_summary">%1$d kroków · %2$d stopni · %3$d wykluczonych okresów</string>
+    <string name="ground_truth_comment">Komentarz do sesji</string>
+    <string name="ground_truth_legacy_no_sensors">Starsza sesja: zdarzenia można wyeksportować, ale nie da się ustalić urządzenia dla danych czujników.</string>
 </resources>
