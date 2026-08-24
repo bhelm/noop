@@ -62,7 +62,6 @@ class GroundTruthCollector private constructor(private val context: Context) {
 
     @Synchronized
     fun start(noopSteps: Int, deviceId: String, nowMs: Long = System.currentTimeMillis()): Snapshot {
-        check(snapshot().sessionId == null || snapshot().exported) { "Export the previous session before starting another" }
         val id = nowMs.toString()
         prefs.edit().clear()
             .putBoolean("active", true)
@@ -143,6 +142,14 @@ class GroundTruthCollector private constructor(private val context: Context) {
         require(source.isFile) { "Ground-truth event file is missing" }
         val events = source.useLines { lines -> lines.filter { it.isNotBlank() }.map(::JSONObject).toList() }
         val endMs = snap.endedAtMs.takeIf { it > 0 } ?: System.currentTimeMillis()
+        // Sensor data is useful only around manually marked ground truth. An abandoned collector left
+        // open overnight must not turn one tap on Export into a multi-gigabyte query/allocation.
+        val markedEvents = events.filter {
+            it.optString("kind") == KIND_STEP || it.optString("kind") == KIND_STAIR ||
+                it.optString("kind") == KIND_UNDO_STEP || it.optString("kind") == KIND_UNDO_STAIR
+        }
+        val sensorFrom = markedEvents.firstOrNull()?.optLong("at_ms")?.div(1_000L)?.minus(5L) ?: 1L
+        val sensorTo = markedEvents.lastOrNull()?.optLong("at_ms")?.div(1_000L)?.plus(5L) ?: 0L
         val outDir = File(context.cacheDir, "logs").apply { mkdirs() }
         val zip = File(outDir, "noop-ground-truth-$id.zip")
         ZipOutputStream(zip.outputStream().buffered()).use { out ->
@@ -176,8 +183,8 @@ class GroundTruthCollector private constructor(private val context: Context) {
             out.bufferedWriterNoClose().use { writer ->
                 RawSensorExport.writeCsv(
                     writer, repo, deviceId,
-                    snap.startedAtMs / 1_000L - 5L,
-                    endMs / 1_000L + 5L,
+                    sensorFrom,
+                    sensorTo,
                 )
                 writer.flush()
             }
@@ -185,7 +192,7 @@ class GroundTruthCollector private constructor(private val context: Context) {
 
             out.putNextEntry(ZipEntry("raw-imu.csv"))
             out.bufferedWriterNoClose().use { writer ->
-                writeRawImuCsv(writer, repo, deviceId, snap.startedAtMs / 1_000L - 5L, endMs / 1_000L + 5L)
+                writeRawImuCsv(writer, repo, deviceId, sensorFrom, sensorTo)
                 writer.flush()
             }
             out.closeEntry()
@@ -256,6 +263,7 @@ class GroundTruthCollector private constructor(private val context: Context) {
         to: Long,
     ) {
         out.write("unix_s,sample_index,ax_g,ay_g,az_g,gx_dps,gy_dps,gz_dps\n")
+        if (from > to) return
         for ((ts, columns) in repo.rawImuSamples(deviceId, from, to, limit = 200_000)) {
             if (columns.size < Whoop5RawImu.sampleCount * 6) continue
             for (i in 0 until Whoop5RawImu.sampleCount) {

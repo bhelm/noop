@@ -141,18 +141,12 @@ fun GroundTruthCollectorScreen(vm: AppViewModel) {
                     onClick = { state = collector.stop(noopSteps) },
                 )
             }
-        } else if (state.sessionId == null || state.exported) {
+        } else {
             NoopButton(
                 text = stringResource(R.string.ground_truth_start),
                 fullWidth = true,
                 enabled = noopSteps != null && vm.activeStrapId.isNotBlank(),
                 onClick = { state = collector.start(requireNotNull(noopSteps), vm.activeStrapId) },
-            )
-        } else {
-            Text(
-                text = stringResource(R.string.ground_truth_stopped_export_hint),
-                style = NoopType.subhead,
-                color = Palette.textSecondary,
             )
         }
         NoopButton(
