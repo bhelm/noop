@@ -107,6 +107,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
@@ -121,6 +122,7 @@ import com.noop.BuildConfig
 import com.noop.analytics.Baselines
 import com.noop.analytics.HrZoneSet
 import com.noop.analytics.HrZones
+import com.noop.analytics.UserProfile
 import com.noop.analytics.Zones
 import com.noop.R
 import com.noop.ble.PuffinExperiment
@@ -244,6 +246,26 @@ class ProfileStore(private val prefs: SharedPreferences) {
         set(v) = prefs.edit()
             .putFloat(KEY_STEP_SCALE, v.coerceIn(STEP_SCALE_MIN, STEP_SCALE_MAX).toFloat())
             .apply()
+
+    /**
+     * The analytics [UserProfile] for this store — the ONE place the mapping lives.
+     *
+     * Every field matters somewhere and a missing one fails silently rather than loudly. Dropping
+     * [waistCm] does not blank VO₂max, it swaps the estimator: `FitnessAgeEngine.compute` returns a
+     * waist-based Nes value only when a waist is supplied, and `fitnessAgeRows` otherwise falls back to
+     * the Uth HR-ratio formula and writes THAT under the same "vo2max_est" key. Two passes built two
+     * profiles, one of them lost the waist, and the card alternated between the two estimators with no
+     * visible cause — a fit user with a low resting HR saw it swing by ~14 (#1493). Build the profile
+     * here so a caller cannot omit a field by writing one out longhand.
+     */
+    fun toUserProfile(): UserProfile = UserProfile(
+        weightKg = weightKg,
+        heightCm = heightCm,
+        age = age.toDouble(),
+        sex = sex,
+        stepTicksPerStep = stepTicksPerStep,
+        waistCm = waistCm,
+    )
 
     // ── Steps ESTIMATE calibration (WHOOP 4.0; StepsEstimateEngine) ─────────────────────────────
     // Mirror of the macOS ProfileStore fields: the engine writes the auto-fit each analytics pass and
@@ -464,6 +486,7 @@ fun SettingsScreen(
     onOpenTestCentre: () -> Unit = {},
     onOpenBackupSync: () -> Unit = {},
     onOpenSelfHostedPush: () -> Unit = {},
+    onOpenStepsCalibration: () -> Unit = {},
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -535,11 +558,6 @@ fun SettingsScreen(
     // that feeds Charge from tonight onward; the standing analyze loop picks it up on its next pass.
     // Fixes a baseline poisoned by a bad first week (worn sick, or early nights that anchored too high).
     var showRecalibrateConfirm by remember { mutableStateOf(false) }
-
-    // Steps-estimate calibration screen (WHOOP 4.0), reached from the Profile card's "Steps estimate"
-    // tap-through. Mirrors the macOS StepsCalibrationSheet: honest explainer + current fit + a recent
-    // estimated-vs-phone table + a manual coefficient override. Full-screen Dialog like the guide above.
-    var showStepsCalibration by remember { mutableStateOf(false) }
 
     // Whether the "Advanced" disclosure (experimental probes, diagnostics, raw-sensor export, Trends
     // report) is expanded. Default FALSE so a first-run user lands on the everyday sections instead of
@@ -1108,7 +1126,7 @@ fun SettingsScreen(
                         .clickable(
                             interactionSource = stepsRowInteraction,
                             indication = null,
-                        ) { showStepsCalibration = true }
+                        ) { onOpenStepsCalibration() }
                         .semantics {
                             contentDescription =
                                 uiString(R.string.l10n_settings_screen_steps_estimate_calibration_stepssummary_opens_the_d6fbf995, stepsSummary)
@@ -1193,6 +1211,49 @@ fun SettingsScreen(
                         },
                     )
                 }
+                // #1545: sits directly under the Effort SCALE row on purpose. It shipped in the
+                // experimental block beside the sleep-staging toggles, where @dofimn could not find it —
+                // a setting built for a specific report is no use if the person who asked for it cannot
+                // locate it. The two rows are different concepts (that one is the display AXIS, this one
+                // is the computation RECIPE) but a user asking "how is my Effort worked out" reaches for
+                // the same place for both, and each row's own caption separates them.
+                // #1545: Effort on Banister's EXPONENTIAL TRIMP instead of Edwards' heart-rate zones.
+                // Edwards pays nothing below 50% HRR, so an hour of lifting — hard sets averaged against
+                // the rests — can score near zero. Default OFF: it re-scores the whole window against a
+                // different recipe. Both scales top out at 100 via their own log denominator. Mirrors iOS.
+                SettingsRowDivider()
+                var banisterEffort by remember { mutableStateOf(NoopPrefs.banisterEffort(context)) }
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(16.dp),
+                ) {
+                    Text(
+                        uiString(R.string.l10n_settings_screen_effort_exponential_scale),
+                        style = NoopType.subhead,
+                        color = Palette.textPrimary,
+                        modifier = Modifier.weight(1f),
+                    )
+                    Switch(
+                        checked = banisterEffort,
+                        onCheckedChange = {
+                            banisterEffort = it
+                            vm.setBanisterEffort(it)
+                        },
+                        colors = SwitchDefaults.colors(
+                            checkedThumbColor = Palette.surfaceBase,
+                            checkedTrackColor = Palette.accent,
+                            uncheckedThumbColor = Palette.textSecondary,
+                            uncheckedTrackColor = Palette.surfaceInset,
+                            uncheckedBorderColor = Palette.hairline,
+                        ),
+                    )
+                }
+                Text(
+                    uiString(R.string.l10n_settings_screen_effort_exponential_scale_desc),
+                    style = NoopType.caption,
+                    color = Palette.textTertiary,
+                )
             }
         }
 
@@ -1852,19 +1913,39 @@ fun SettingsScreen(
                     )
                 }
 
-                // "Keep NOOP alive overnight" (#386): the battery-optimisation whitelist. Shown ONLY while
-                // background connection is on (meaningless otherwise), so it never adds noise on a
-                // foreground-only setup. `checked` reflects the LIVE system exempt state, so an already-exempt
-                // phone shows it on and is never prompted again. POPUP DISCIPLINE: turning it ON fires exactly
-                // ONE system dialog; the OEM auto-start screen (aggressive vendors only) is a SEPARATE
-                // text-link, never chained onto that dialog, so one tap can't spawn two popups. The whitelist
-                // adds no battery cost of its own — it stops a premature kill; the real cost is the two
-                // toggles below.
-                if (backgroundConnection) {
-                    // Re-read the LIVE exempt state on every ON_RESUME so the toggle flips to on the moment
-                    // the user returns from the system whitelist dialog. Reading it plainly in composition
-                    // wouldn't recompose on resume — it'd show a stale "off", look like it failed, and invite
-                    // a SECOND (duplicate) popup, defeating the popup discipline.
+                // "Keep NOOP alive overnight" (#386): the battery-optimisation whitelist, as a one-way
+                // PROMPT rather than a setting.
+                //
+                // Shown only where it can actually change the outcome — background connection on, a ROM
+                // known to kill background work, and the exemption not yet granted. The whitelist helps a
+                // little on any phone (it also exempts from Doze deferral), but NOOP already survives the
+                // night wherever the AOSP foreground-service contract is honoured, so on those phones the
+                // row was noise about a permission the user did not need. A Pixel or Samsung never sees it.
+                //
+                // Deliberately NOT a toggle. Android lets an app ASK for this exemption and never hand it
+                // back, so a switch advertised an off direction it could not honour — which is exactly how
+                // it was reported broken, and why replacing it with a "Manage"/"Allow" action then read as
+                // the control having been taken away. A one-way grant gets a one-way control: state the
+                // problem, offer the single action that works, and DISAPPEAR once it is done. Nothing is
+                // ever on screen implying an off that does not exist. Revoking lives where it actually
+                // lives — Android's own battery settings — and the Test Centre reports the exempt state
+                // for anyone diagnosing a lost night.
+                //
+                // POPUP DISCIPLINE is unchanged: the tap fires exactly ONE system dialog, and the OEM
+                // auto-start screen stays a SEPARATE text-link, never chained onto it.
+
+                // Read unconditionally rather than folded into the `if`: `&&` short-circuits, so a
+                // `remember` inside the condition would go uncalled whenever background connection is off
+                // — a composable call in a conditionally-evaluated position, which is how a slot table
+                // gets corrupted once the condition flips. The gate is one string comparison; the work
+                // worth avoiding sits inside the body regardless.
+                val aggressiveVendor = remember { com.noop.ble.BackgroundHealth.isAggressiveVendor() }
+                if (backgroundConnection && aggressiveVendor) {
+                    // Re-read the LIVE exempt state on every ON_RESUME. This is what makes the row vanish
+                    // the moment the user returns from the grant dialog — and reappear if they later
+                    // revoke it in system settings. Reading it plainly in composition wouldn't recompose
+                    // on resume: the row would linger after a successful grant and invite a SECOND,
+                    // duplicate popup, defeating the popup discipline.
                     val lifecycleOwner = LocalLifecycleOwner.current
                     var batteryExempt by remember {
                         mutableStateOf(com.noop.ble.BackgroundHealth.isBatteryExempt(context))
@@ -1879,79 +1960,77 @@ fun SettingsScreen(
                         onDispose { lifecycleOwner.lifecycle.removeObserver(obs) }
                     }
                     val oemAutostart = remember { com.noop.ble.BackgroundHealth.oemAutostartIntent(context) }
-                    // Only NAME the manufacturer as a killer when it actually is one — a Pixel/Samsung
-                    // shouldn't read "especially Google". The whitelist still helps everyone (it also
-                    // exempts from Doze deferral), so the row still shows; only the copy is vendor-aware.
-                    val aggressiveVendor = remember { com.noop.ble.BackgroundHealth.isAggressiveVendor() }
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(16.dp),
-                    ) {
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                uiString(R.string.l10n_settings_screen_keep_noop_alive_overnight_e43b2fba),
-                                style = NoopType.subhead,
-                                color = Palette.textPrimary,
-                            )
-                            // #386: these were hardcoded literals — and INVISIBLE to the i18n gate, whose
-                            // Android regex only matches a literal directly after `Text(`. Inside a
-                            // `Text(if ...)` expression it slid past, so this whole warning shipped
-                            // English-only to de/es/fr while the audit reported clean. Now resources.
-                            // TWO "needed" strings rather than one with a %s subject fragment: verb
-                            // agreement differs once translated — German needs "Ihr Telefon … kann" but
-                            // "Manche Telefone … können", so a composed subject would be ungrammatical.
-                            Text(
-                                if (batteryExempt) {
-                                    uiString(R.string.keep_alive_allowed)
-                                } else if (aggressiveVendor) {
-                                    uiString(R.string.keep_alive_needed_vendor, android.os.Build.MANUFACTURER)
-                                } else {
-                                    uiString(R.string.keep_alive_needed_generic)
-                                },
-                                style = NoopType.footnote,
-                                color = Palette.textTertiary,
-                            )
-                            // Aggressive-OEM only, and only while not yet exempt: a SEPARATE, explicit link to
-                            // the vendor's auto-start screen (which the generic whitelist can't reach). One
-                            // extra tap by choice — never auto-opened alongside the whitelist dialog.
-                            if (!batteryExempt && oemAutostart != null) {
+
+                    if (!batteryExempt) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(16.dp),
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
                                 Text(
-                                    uiString(R.string.l10n_settings_screen_some_phones_also_need_auto_start_79b7147b),
-                                    style = NoopType.footnote,
-                                    color = Palette.accent,
-                                    modifier = Modifier
-                                        .padding(top = 6.dp)
-                                        .clickable { runCatching { context.startActivity(oemAutostart) } },
+                                    uiString(R.string.l10n_settings_screen_keep_noop_alive_overnight_e43b2fba),
+                                    style = NoopType.subhead,
+                                    color = Palette.textPrimary,
                                 )
+                                // #386: this was a hardcoded literal — and INVISIBLE to the i18n gate,
+                                // whose Android regex only matches a literal directly after `Text(`.
+                                // Inside a `Text(if ...)` expression it slid past, so the whole warning
+                                // shipped English-only while the audit reported clean. Now a resource.
+                                //
+                                // Only the vendor-named variant survives: the row no longer appears on a
+                                // phone that isn't one of these, so the generic "some phones" wording had
+                                // no reachable caller.
+                                Text(
+                                    uiString(
+                                        R.string.keep_alive_needed_vendor,
+                                        android.os.Build.MANUFACTURER,
+                                    ),
+                                    style = NoopType.footnote,
+                                    color = Palette.textTertiary,
+                                )
+                                // A SEPARATE, explicit link to the vendor's auto-start screen, which the
+                                // generic whitelist cannot reach. One extra tap by choice — never
+                                // auto-opened alongside the grant dialog.
+                                if (oemAutostart != null) {
+                                    Text(
+                                        uiString(R.string.l10n_settings_screen_some_phones_also_need_auto_start_79b7147b),
+                                        style = NoopType.footnote,
+                                        color = Palette.accent,
+                                        modifier = Modifier
+                                            .padding(top = 6.dp)
+                                            .clickable { runCatching { context.startActivity(oemAutostart) } },
+                                    )
+                                }
                             }
-                        }
-                        Switch(
-                            checked = batteryExempt,
-                            // A system grant can't be toggled OFF from here (that's a system action): a tap
-                            // only ever REQUESTS it, and when already exempt the switch is inert (no re-prompt).
-                            onCheckedChange = { wantOn ->
-                                if (wantOn && !batteryExempt) {
-                                    // The whole feature exists for ROMs that strip things — so the fallback
-                                    // is guarded too: if BOTH the exemption dialog and the app-settings page
-                                    // are missing, no-op rather than crash (the OEM link below is another path).
-                                    runCatching {
-                                        context.startActivity(com.noop.ble.BackgroundHealth.batteryExemptionIntent(context))
-                                    }.onFailure {
+                            // The single action. No second state to render: this row only exists while the
+                            // exemption is missing, so "Allow" is the only thing it can ever say.
+                            Text(
+                                uiString(R.string.l10n_settings_screen_allow_3ad0e369),
+                                style = NoopType.subhead,
+                                color = Palette.accent,
+                                modifier = Modifier
+                                    // A bare Text is ~20dp — under the 48dp minimum, and this is the only
+                                    // way to act on the row, so it has to be padded rather than merely
+                                    // present. `.clickable{}` BEFORE `.padding()`: modifiers apply
+                                    // outside-in, so this puts the padding inside the clickable node and
+                                    // grows the target; the reverse would not.
+                                    .clickable(role = Role.Button) {
+                                        // The whole feature exists for ROMs that strip things, so the
+                                        // fallback is guarded too: if the exemption dialog is missing, try
+                                        // the app-settings page; if that is missing as well, no-op rather
+                                        // than crash (the OEM link above is another path).
                                         runCatching {
-                                            context.startActivity(com.noop.ble.BackgroundHealth.appBatterySettingsIntent(context))
+                                            context.startActivity(com.noop.ble.BackgroundHealth.batteryExemptionIntent(context))
+                                        }.onFailure {
+                                            runCatching {
+                                                context.startActivity(com.noop.ble.BackgroundHealth.appBatterySettingsIntent(context))
+                                            }
                                         }
                                     }
-                                }
-                            },
-                            colors = SwitchDefaults.colors(
-                                checkedThumbColor = Palette.surfaceBase,
-                                checkedTrackColor = Palette.accent,
-                                uncheckedThumbColor = Palette.textSecondary,
-                                uncheckedTrackColor = Palette.surfaceInset,
-                                uncheckedBorderColor = Palette.hairline,
-                            ),
-                        )
+                                    .padding(vertical = 12.dp, horizontal = 8.dp),
+                            )
+                        }
                     }
                 }
 
@@ -2617,11 +2696,16 @@ fun SettingsScreen(
                     color = Palette.textTertiary,
                 )
 
-                // --- #103: Blood Oxygen strap estimate (spo2_candidate_82) — OFF by default. ---
-                // The WHOOP 5/MG strap computes a nightly SpO₂ candidate at byte @82 of the V18Aux stream.
-                // Cross-device evidence is split (corr +0.99 on 8 nights, but 2 nights moved opposite), so
-                // it ships behind a default-off toggle and is labelled "estimate" in the UI. Display-only:
-                // never fed into a downstream gate (recovery, illness). Mirrors the iOS toggle.
+                // --- #103/queue-11a: Blood Oxygen strap estimate — OFF by default. ---
+                // Device-conditional (see IntelligenceEngine.nightlySpo2CeilingMean / .nightlySpo2CandidateMean):
+                // a WHOOP 5/MG strap computes a nightly SpO₂ candidate at byte @82 of the V18Aux stream
+                // (cross-device evidence split, corr +0.99 on 8 nights but 2 nights moved opposite); an
+                // Oura ring's own decoded 0x6F SpO2 runs high on the wire, so this instead surfaces the
+                // ceiling@100 mean (each sample capped at 100% before averaging), which has matched the
+                // Oura app's own displayed value on every full night checked so far (n=3, 2026-08-22).
+                // Neither is a validated calibration; both ship behind this one default-off toggle,
+                // labelled "estimate" in the UI, never fed into a downstream gate (recovery, illness).
+                // Mirrors the iOS toggle.
                 SettingsRowDivider()
                 var spo2CandidateDisplay by remember { mutableStateOf(NoopPrefs.spo2CandidateDisplay(context)) }
                 Row(
@@ -2651,11 +2735,14 @@ fun SettingsScreen(
                     )
                 }
                 Text(
-                    "Surfaces the WHOOP 5/MG strap's nightly SpO₂ estimate (spo2_candidate_82) in the " +
-                        "Blood Oxygen tile when no calibrated percentage is available. This is an " +
-                        "UNVERIFIED strap-computed value — it matched a reference device closely on most " +
-                        "nights but moved in the opposite direction on some. Shown as an 'estimate' and " +
-                        "never fed into recovery or illness scoring. Off by default.",
+                    "Surfaces your strap's nightly SpO₂ estimate in the Blood Oxygen tile when no " +
+                        "calibrated percentage is available: a WHOOP 5.0/MG's @82 candidate byte, or an " +
+                        "Oura ring's own reading with each sample capped at 100% first (the ring's raw " +
+                        "reading runs high otherwise). This is an UNVERIFIED strap-computed value — the " +
+                        "WHOOP candidate matched a reference device closely on most nights but moved " +
+                        "opposite on some; the Oura one has only been checked against a few nights so " +
+                        "far. Shown as an 'estimate' and never fed into recovery or illness scoring. Off " +
+                        "by default.",
                     style = NoopType.caption,
                     color = Palette.textTertiary,
                 )
@@ -2693,6 +2780,7 @@ fun SettingsScreen(
                         ),
                     )
                 }
+
                 Text(
                     "Scores today's hour-by-hour stress timeline against YOUR own cross-day baseline " +
                         "(how your days usually run, Oura-style) instead of the day's own calm hours. The " +
@@ -3537,26 +3625,6 @@ fun SettingsScreen(
             ) {
                 Surface(modifier = Modifier.fillMaxSize(), color = Palette.surfaceBase) {
                     WhoopModelComparisonScreen(onClose = { showModelComparison = false })
-                }
-            }
-        }
-
-
-        // Steps-estimate calibration, opened from the Profile card's "Steps estimate" row. Same
-        // full-screen Dialog idiom; a manual-coefficient write bumps `rev` so the Profile summary
-        // row reflects the new state on dismiss.
-        if (showStepsCalibration) {
-            Dialog(
-                onDismissRequest = { showStepsCalibration = false },
-                properties = DialogProperties(usePlatformDefaultWidth = false),
-            ) {
-                Surface(modifier = Modifier.fillMaxSize(), color = Palette.surfaceBase) {
-                    StepsCalibrationScreen(
-                        vm = vm,
-                        profile = profile,
-                        onProfileChanged = { rev++ },
-                        onClose = { showStepsCalibration = false },
-                    )
                 }
             }
         }

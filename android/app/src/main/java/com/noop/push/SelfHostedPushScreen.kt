@@ -125,10 +125,14 @@ fun SelfHostedPushScreen() {
                         when (val result = settings.saveEndpoint(endpoint)) {
                             is PushEndpointPolicy.Result.Invalid -> validationMessage = result.reason
                             is PushEndpointPolicy.Result.Valid -> {
+                                val destinationChanged = snapshot.endpoint?.url != result.endpoint.url
                                 endpoint = result.endpoint.url
                                 if (token.isNotBlank()) settings.saveToken(token)
                                 token = ""
                                 snapshot = settings.snapshot()
+                                if (destinationChanged && snapshot.ready) {
+                                    SelfHostedPushScheduler.destinationChanged(context)
+                                }
                                 validationMessage = context.getString(R.string.push_saved)
                             }
                         }

@@ -332,6 +332,26 @@ struct BackfillContinuation {
     /// legitimate banks records two days ahead of the phone's clock.
     static let defaultFutureSkewSeconds = 48 * 3600
 
+    /// #1598: may a GET_CLOCK correlation be chased and DERIVED for this family? WHOOP 4.0 only.
+    ///
+    /// A 5/MG never establishes one **by design**: its historical (type-47) and live (puffin REALTIME)
+    /// records both carry the strap RTC's own real-unix seconds, so the identity ref the Backfiller falls
+    /// back to (device == wall ⇒ offset 0) is the CORRECT decode for it, not a degraded one. Two things
+    /// followed from not knowing that here:
+    ///
+    ///  * `beginBackfill` re-sent GET_CLOCK up to 3× on every 5/MG offload, chasing a reply that is never
+    ///    coming, and logged each attempt as a failure — so every 5/MG strap log carried clock-retry noise
+    ///    plus an `IDENTITY fallback` line naming the #700 misdating bug it did NOT have.
+    ///  * worse, the #700 Data-Range fallback then installed a NON-identity ref derived from
+    ///    `strapNewestTs`. On a 4.0 that difference IS the RTC skew, which is the whole point. On a 5/MG
+    ///    `newest` is already real-unix, so `wall - newest` is merely HOW LONG THE STRAP WENT UNRECORDED
+    ///    (unworn, charging, flat). Applied as a clock offset it silently shifts that offload's history
+    ///    forward by exactly that gap once it clears `histStaleClockThresholdSec` (1 day) — a strap off
+    ///    the wrist for a weekend would land its next backfill on the wrong days.
+    ///
+    /// Pure so the Kotlin twin (`WhoopBleClient.derivesClockCorrelation`) can assert the same rule.
+    static func derivesClockCorrelation(_ family: DeviceFamily) -> Bool { family == .whoop4 }
+
     /// #1012: is the strap-reported "newest banked record" FUTURE-dated beyond the skew allowance — more
     /// than `futureSkewSeconds` past the wall clock? The strap's clock is then almost certainly set in the
     /// future (#928), so its range answer AND its freshly-persisted rows are untrustworthy as backlog
@@ -920,12 +940,22 @@ public final class BLEManager: NSObject, ObservableObject {
     // The old reconnect armed a `DispatchQueue.main.asyncAfter` backoff, which does not fire in a suspended
     // app AND — the real damage — left NOTHING outstanding with CoreBluetooth after a failed connect, so iOS
     // had no reason to ever wake the app. Overnight that meant the strap stayed unreachable for hours
-    // (measured 10h46m on a 5/MG). After a few quick timed retries (the app is demonstrably awake there) the
-    // reconnect now hands off to a STANDING `central.connect`, which has no timeout, stays outstanding, and
-    // lets iOS wake the app when the strap re-advertises — including from suspension.
+    // (measured 10h46m on a 5/MG). The reconnect hands off to a STANDING `central.connect`, which has no
+    // timeout, stays outstanding, and lets iOS wake the app when the strap re-advertises — from suspension.
+    //
+    // #1413 follow-up: it hands off on the FIRST drop, not the third. Gating the handoff behind three
+    // consecutive failures made it unreachable in the case it was written for. A drop while suspended wakes
+    // the app just long enough to run the disconnect callback; that armed a 3-second timer and returned to
+    // suspension, where the timer never fires — so the attempt counter never reached two, let alone three,
+    // and nothing was outstanding with CoreBluetooth in the meantime. The escalation could only be reached
+    // by an app that was already awake, which is exactly when it is least needed. Reported with a measured
+    // overnight failure and this diagnosis by @justinjor-bit.
+    //
+    // A standing connect is passive — no timeout, no scan, nothing written to the strap — so issuing it
+    // immediately costs nothing that a timed retry was protecting against. The one shape that can hot-loop,
+    // a connect that fails near-instantly, is still broken by `standingConnectAfter`, and that can only
+    // happen with the app awake.
 
-    /// After this many consecutive failures, stop scheduling timed retries and leave a standing connect.
-    nonisolated static let standingConnectAfterAttempts = 3
     /// Floor between two standing connects, used ONLY for a near-instant failure (proves the app is awake).
     nonisolated static let standingConnectRetryFloor: TimeInterval = 30
     /// A standing connect that stayed outstanding at least this long before failing was not a hot loop —
@@ -937,20 +967,16 @@ public final class BLEManager: NSObject, ObservableObject {
     /// What to do after an involuntary drop or a failed connect. Pure so the policy is unit-testable with no
     /// CoreBluetooth (`BLEManagerReconnectPolicyTests`). Twin of `OuraLiveSource.ReconnectStep`.
     enum ReconnectStep: Equatable, Sendable {
-        case timedRetry(delay: TimeInterval)
         case standingConnect
         case standingConnectAfter(delay: TimeInterval)
     }
 
-    /// - Parameters:
-    ///   - attempt: 1-based consecutive failure count (`failedConnectAttempts` after incrementing).
-    ///   - secondsSinceStandingConnect: age of the outstanding standing connect, or nil when none is.
-    nonisolated static func reconnectStep(attempt: Int,
-                                          secondsSinceStandingConnect: TimeInterval?) -> ReconnectStep {
-        guard attempt >= standingConnectAfterAttempts else {
-            return .timedRetry(delay: min(60.0, 3.0 * pow(2.0, Double(max(0, attempt - 1)))))
-        }
-        // No standing connect outstanding reads as "long ago", so the first time here we hand off immediately.
+    /// - Parameter secondsSinceStandingConnect: age of the outstanding standing connect, nil when none is.
+    ///
+    /// The consecutive-failure count used to gate this and no longer does: see the note above. It is not a
+    /// parameter any more precisely so the handoff cannot be made conditional on being awake again.
+    nonisolated static func reconnectStep(secondsSinceStandingConnect: TimeInterval?) -> ReconnectStep {
+        // No standing connect outstanding reads as "long ago", so the first drop hands off immediately.
         let since = secondsSinceStandingConnect ?? .greatestFiniteMagnitude
         // Anything but a near-instant failure re-issues NOW, so suspension can never catch us holding nothing.
         guard since < standingConnectFastFailureS else { return .standingConnect }
@@ -963,14 +989,8 @@ public final class BLEManager: NSObject, ObservableObject {
     private func scheduleReconnect() {
         guard !intentionalDisconnect, !autoReconnectPausedForBondLoop else { return }
         failedConnectAttempts += 1
-        switch Self.reconnectStep(attempt: failedConnectAttempts,
-                                  secondsSinceStandingConnect: standingConnectAt.map { Date().timeIntervalSince($0) }) {
-        case .timedRetry(let delay):
-            log("Reconnecting in \(Int(delay))s (attempt \(failedConnectAttempts))")
-            DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
-                guard let self, !self.intentionalDisconnect, !self.autoReconnectPausedForBondLoop else { return }
-                self.connectFromSystem()
-            }
+        switch Self.reconnectStep(
+            secondsSinceStandingConnect: standingConnectAt.map { Date().timeIntervalSince($0) }) {
         case .standingConnect:
             issueStandingConnect()
         case .standingConnectAfter(let wait):
@@ -989,8 +1009,11 @@ public final class BLEManager: NSObject, ObservableObject {
     /// wakes the app when the strap advertises again, including while SUSPENDED — the whole point. Same call
     /// `connectFromSystem`'s targeted path already makes: no new outbound command, nothing written to the
     /// strap, so the BLE safety contract is unaffected. Twin of `OuraLiveSource.issueStandingConnect`.
-    private func issueStandingConnect() {
-        guard !intentionalDisconnect, !autoReconnectPausedForBondLoop else { return }
+    private func issueStandingConnect(whilePausedForBondLoop: Bool = false) {
+        guard !intentionalDisconnect else { return }
+        // #1539: the bond-loop pause suppresses this by default, but the paused paths deliberately opt in —
+        // a parked, timeout-free connect is what lets that pause end without the user.
+        guard whilePausedForBondLoop || !autoReconnectPausedForBondLoop else { return }
         guard central.state == .poweredOn else {
             log("Standing reconnect deferred — Bluetooth not powered on (state=\(central.state.rawValue))")
             return
@@ -1002,6 +1025,14 @@ public final class BLEManager: NSObject, ObservableObject {
             return peripheral
         }()
         guard let p = target else {
+            // #1539: while the bond-loop pause is latched this must stay PASSIVE. The scanning fallback is
+            // active radio work, which is precisely what the pause exists to stop, so with no cached
+            // peripheral to park against there is nothing safe to do here — the foreground probe remains
+            // the escape, exactly as on Android. Outside the pause the fallback is unchanged.
+            guard !whilePausedForBondLoop else {
+                log("Bond-loop pause: no cached strap to park a standing connect against — staying passive (#1539)")
+                return
+            }
             // No cached peripheral to hand CoreBluetooth — fall back to the scanning connect path.
             log("No cached strap for a standing connect — scanning instead")
             connectFromSystem()
@@ -1480,6 +1511,29 @@ public final class BLEManager: NSObject, ObservableObject {
         return s >= bondLoopSalvageFloorSeconds
     }
 
+    /// #1539: may the bond-loop pause hand CoreBluetooth a STANDING connect right now?
+    ///
+    /// The pause deliberately stops active rescanning, but before this it also suppressed
+    /// `issueStandingConnect`, which removed the one mechanism capable of ending it without the user: the
+    /// salvage probe fires on app-foreground, so a phone in a pocket at 23:19 never runs it. A strap freed
+    /// at midnight stayed unclaimed until someone opened the app — six hours in the report, and unbounded
+    /// in principle, which becomes real data loss once the gap outlives the strap's own buffer.
+    ///
+    /// A standing connect is the right escape because it is NOT hammering: `central.connect` has no
+    /// timeout, so it is one request the OS parks until the strap is reachable, with nothing written to the
+    /// strap and no wakeups in between. The floor still applies to REFRESHES, so a strap that is reachable
+    /// and keeps refusing the bond cannot spin connect → refuse → pause → connect; it gets one attempt per
+    /// window exactly as the foreground probe does. A nil elapsed time means the pause has only just
+    /// tripped, which is when the first standing connect must be armed.
+    nonisolated static func shouldStandingConnectWhilePaused(pausedForBondLoop: Bool,
+                                                             connected: Bool,
+                                                             intentionalDisconnect: Bool,
+                                                             secondsSincePauseTripped: TimeInterval?) -> Bool {
+        guard pausedForBondLoop, !connected, !intentionalDisconnect else { return false }
+        guard let s = secondsSincePauseTripped else { return true }
+        return s >= bondLoopSalvageFloorSeconds
+    }
+
     /// #78 hole-1: classify a "the strap refused the encrypted bond" error by its ATT CODE first,
     /// locale-proof. Foundation LOCALIZES CoreBluetooth error strings, so the old
     /// `localizedDescription.contains("encryption"/"authentication")` check silently never matched on a
@@ -1514,6 +1568,23 @@ public final class BLEManager: NSObject, ObservableObject {
         bondLoopPausedAt = now   // re-floor: max one probe per foreground AND per 10-min window
         log("Bond-loop pause: one salvage probe (the strap may have been freed since the give-up) - the give-up stays latched")
         connectFromSystem()
+    }
+
+    /// #1539: park a standing connect while the bond-loop pause is latched, so the pause can end without
+    /// the user. Called from the paused disconnect branch and from the trip itself — both run while the app
+    /// is backgrounded, which is exactly where the foreground probe cannot reach. Re-stamps
+    /// `bondLoopPausedAt` so a strap that is reachable and still refusing gets one attempt per window
+    /// rather than a connect/refuse spin.
+    func standingConnectWhilePausedIfDue(now: Date = Date(), justTripped: Bool = false) {
+        let since = justTripped ? nil : bondLoopPausedAt.map { now.timeIntervalSince($0) }
+        guard BLEManager.shouldStandingConnectWhilePaused(
+            pausedForBondLoop: autoReconnectPausedForBondLoop,
+            connected: state.connected,
+            intentionalDisconnect: intentionalDisconnect,
+            secondsSincePauseTripped: since) else { return }
+        bondLoopPausedAt = now
+        log("Bond-loop pause: parking a standing connect so the strap is claimed the moment it is reachable (#1539) - the give-up stays latched")
+        issueStandingConnect(whilePausedForBondLoop: true)
     }
 
     /// Observe the app-foreground notification and run the salvage probe. Installed once per manager from
@@ -1834,7 +1905,16 @@ public final class BLEManager: NSObject, ObservableObject {
             // 4-byte boundary, which this 12-byte payload needs. WHOOP 4.0 is untouched (79 + its own frame).
             let isHaptics = command == .runHapticsPattern
             let puffinCmd: UInt8 = isHaptics ? 0x13 : command.rawValue
-            let puffinPayload: [UInt8] = isHaptics ? [0x01, 47, 152, 0, 0, 0, 0, 0, 0, 0, 0, 0] : payload
+            // #926: build the body through the shared `MaverickHaptics.notificationBuzz` rather than a
+            // literal, so the caller's repeat count reaches the wire. The literal that used to sit here
+            // pinned overallLoop to 0, which is why every BuzzPattern — and the Breathe inhale/exhale cue,
+            // and the live-session long/short cues — felt identical on a 5/MG. The 4.0 payload this
+            // substitutes for is `[patternId, loops, …]`, so the count is byte 1. A single buzz still
+            // rebuilds the old literal EXACTLY (overallLoop = 1 - 1 = 0), so nothing changes for a caller
+            // that asked for one. Kotlin twin: `WhoopBleClient.maverickHapticBody`.
+            let buzzLoops = payload.count >= 2 ? Int(payload[1]) : 1
+            let puffinPayload: [UInt8] = isHaptics
+                ? MaverickHaptics.notificationBuzz(loops: buzzLoops) : payload
             seq = seq &+ 1
             let frame = puffinCommandFrame(cmd: puffinCmd, seq: seq, payload: puffinPayload)
             p.writeValue(Data(frame), for: ch, type: writeType)
@@ -1923,26 +2003,31 @@ public final class BLEManager: NSObject, ObservableObject {
     /// flag, kick the strap with sendHistoricalData, and arm the idle timeout.
     @discardableResult
     private func beginBackfill() -> Bool {
-        // #700: if backfill is about to start and we STILL have no clock correlation, re-send
-        // GET_CLOCK. The strap may have silently dropped the first response (observed on a reporter's
-        // WHOOP 4.0 — GET_CLOCK sent, no reply, entire session decodes under IDENTITY fallback, all
-        // rows land on the current day). Capped at 3 retries to avoid flooding.
-        if clockRef == nil && clockRetries < 3 {
-            clockRetries += 1
-            log("Clock: no correlation yet — re-sending GET_CLOCK (retry \(clockRetries)/3)")
-            send(.getClock, payload: [])
-            send(.getClock, payload: [0x00])
-        } else if clockRef == nil, let newest = strapNewestTs {
-            // #700 fallback: GET_CLOCK never responded even after retries. Derive a rough correlation
-            // from the Data Range's newest-banked timestamp (already parsed, always answered). The
-            // offset is approximate (the newest record could be minutes old) but vastly better than
-            // identity (offset 0), which mis-dates entire nights.
-            let wall = Int(Date().timeIntervalSince1970)
-            let ref = ClockRef(device: newest, wall: wall)
-            clockRef = ref
-            collector?.clockRef = ref
-            backfiller?.clockRef = ref
-            log("Clock: GET_CLOCK unresponsive — derived rough correlation from Data Range (device=\(newest) wall=\(wall), offset \(wall - newest)s)")
+        // #1598: this whole block is WHOOP 4.0 ONLY. A 5/MG has no GET_CLOCK correlation to chase —
+        // identity is its correct decode — and deriving one from the Data Range would misdate its
+        // history. See BackfillContinuation.derivesClockCorrelation for why.
+        if BackfillContinuation.derivesClockCorrelation(selectedModel.deviceFamily) {
+            // #700: if backfill is about to start and we STILL have no clock correlation, re-send
+            // GET_CLOCK. The strap may have silently dropped the first response (observed on a reporter's
+            // WHOOP 4.0 — GET_CLOCK sent, no reply, entire session decodes under IDENTITY fallback, all
+            // rows land on the current day). Capped at 3 retries to avoid flooding.
+            if clockRef == nil && clockRetries < 3 {
+                clockRetries += 1
+                log("Clock: no correlation yet — re-sending GET_CLOCK (retry \(clockRetries)/3)")
+                send(.getClock, payload: [])
+                send(.getClock, payload: [0x00])
+            } else if clockRef == nil, let newest = strapNewestTs {
+                // #700 fallback: GET_CLOCK never responded even after retries. Derive a rough correlation
+                // from the Data Range's newest-banked timestamp (already parsed, always answered). The
+                // offset is approximate (the newest record could be minutes old) but vastly better than
+                // identity (offset 0), which mis-dates entire nights.
+                let wall = Int(Date().timeIntervalSince1970)
+                let ref = ClockRef(device: newest, wall: wall)
+                clockRef = ref
+                collector?.clockRef = ref
+                backfiller?.clockRef = ref
+                log("Clock: GET_CLOCK unresponsive — derived rough correlation from Data Range (device=\(newest) wall=\(wall), offset \(wall - newest)s)")
+            }
         }
         // Never offload before the connect handshake has run: a racing foreground/restore trigger
         // firing SEND_HISTORICAL ahead of hello/SET_CLOCK was part of the storm that stopped serving.
@@ -2139,7 +2224,8 @@ public final class BLEManager: NSObject, ObservableObject {
             if let diag = Backfiller.sessionClockDiagLine(nightKeys: bf.sessionNightKeys,
                                                           device: bf.sessionClockDevice,
                                                           wall: bf.sessionClockWall,
-                                                          usedIdentityRef: bf.sessionUsedIdentityRef) {
+                                                          usedIdentityRef: bf.sessionUsedIdentityRef,
+                                                          family: bf.family) {
                 log(diag)
             }
         }
@@ -4816,6 +4902,10 @@ extension BLEManager: @preconcurrency CBCentralManagerDelegate {
             // is real; the stale OS pairing is the problem, which the guide tells the user how to clear.
             autoReconnectPausedForBondLoop = true
             bondLoopPausedAt = Date()   // the #78 hole-4 salvage probe covers this pause too (one bounded cycle)
+            // #1539: arm the parked connect in the same breath as the pause. The salvage probe only fires on
+            // app-foreground, so without this a pause tripped with the phone in a pocket strands the strap
+            // until someone opens the app.
+            standingConnectWhilePausedIfDue(justTripped: true)
             if TestCentre.active(.connection) {
                 state.append(log: "reconnect paused=bondLoop (#617: \(postBondLoop.consecutiveBondTimeouts) bond-then-timeout cycles)", domain: .connection)
             }
@@ -4943,6 +5033,9 @@ extension BLEManager: @preconcurrency CBCentralManagerDelegate {
             // can't bond (the epitaph + paused hint were already surfaced when the give-up tripped). The user
             // re-arms it by tapping Connect. We do NOT schedule a rescan here.
             log("Disconnected\(error.map { ": \($0.localizedDescription)" } ?? ""); auto-reconnect paused (strap keeps refusing to pair; tap Connect once it's free)")
+            // #1539: a connect attempt CONSUMES the parked request, so re-park it — floored, so a reachable
+            // strap that keeps refusing gets one attempt per window instead of a connect/refuse spin.
+            standingConnectWhilePausedIfDue()
             if TestCentre.active(.connection) {
                 state.append(log: "connect down (uptime ends)", domain: .connection)
                 state.append(log: "reconnect paused=bondLoop (strap refusing bond)", domain: .connection)
@@ -5012,12 +5105,19 @@ extension BLEManager: @preconcurrency CBCentralManagerDelegate {
         }
         // Any other connect failure (e.g. a weak-signal encrypted-handshake timeout on a 5/MG at the
         // edge of range — #414). The disconnect path reschedules a rescan, but didFailToConnect never
-        // did, so the loop died here until a manual reconnect. Reschedule with a capped exponential
-        // backoff (3, 6, 12, 24, 48, 60s…) so a strap that's genuinely out of range doesn't hammer BLE.
+        // did, so the loop died here until a manual reconnect.
         // #747: don't reschedule while the bond-loop pause is active; the user must free the strap first.
-        // #1413: hand off to the shared standing-connect regime. The first few failures still get the short
-        // timed backoff (the app is awake), then a standing central.connect stays outstanding so a suspended
-        // app is still woken when the strap returns — this callback is where the overnight reconnect died.
+        // #1413: hand off to the shared standing-connect regime — from the FIRST failure, not after a few
+        // timed retries. A standing central.connect stays outstanding, so a suspended app is still woken
+        // when the strap returns; this callback is where the overnight reconnect died. Out-of-range
+        // hammering is held off by the bond-loop pause and the refusal streak rather than by a timer,
+        // because a passive `central.connect` is not what hammers a strap.
+        // #1539: while the pause is latched `scheduleReconnect` below is a no-op, so a parked connect that
+        // FAILED — rather than staying parked, which is what happens when the strap is reachable but the
+        // handshake dies — would consume the request and strand us again with no disconnect callback ever
+        // coming to re-arm it. Re-park it here, floored, so the instantly-failing shape this callback warns
+        // about above cannot hot-loop. Inert when the pause is not latched (the gate checks it).
+        standingConnectWhilePausedIfDue()
         scheduleReconnect()
     }
 
@@ -5277,6 +5377,9 @@ extension BLEManager: @preconcurrency CBPeripheralDelegate {
                 if bondGiveUp.recordRefusal() {
                     autoReconnectPausedForBondLoop = true
                     bondLoopPausedAt = Date()   // starts the #78 hole-4 salvage-probe floor
+                    // #1539: same reasoning as the #617 trip — park a connect now so this pause can end
+                    // while the app is backgrounded, not only when the user next opens it.
+                    standingConnectWhilePausedIfDue(justTripped: true)
                     let opaque = BondRefusalGiveUp.opaqueId(fromLocalUUID: peripheral.identifier.uuidString)
                     log(BondRefusalGiveUp.epitaphLine(refusals: bondGiveUp.refusals, opaqueId: opaque))
                     state.pairingHint = BondRefusalGiveUp.pausedHint()

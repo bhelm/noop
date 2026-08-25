@@ -174,6 +174,8 @@ object WhoopCsvImporter {
             firstDay = firstDay,
             lastDay = lastDay,
             message = message,
+            columnCoverage = importColumnCoverage(cycles),
+            columnCoverageRows = cycles.size,
         )
     }
 
@@ -667,6 +669,7 @@ object WhoopCsvImporter {
         disturbances = base.disturbances ?: fill.disturbances,
         restingHr = base.restingHr ?: fill.restingHr,
         avgHrv = base.avgHrv ?: fill.avgHrv,
+        avgSdnn = base.avgSdnn ?: fill.avgSdnn,
         recovery = base.recovery ?: fill.recovery,
         strain = base.strain ?: fill.strain,
         exerciseCount = base.exerciseCount ?: fill.exerciseCount,

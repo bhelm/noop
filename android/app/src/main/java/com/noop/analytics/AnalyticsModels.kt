@@ -144,6 +144,11 @@ data class ExerciseSession(
     val hrmaxSource: String,
     val caloriesKcal: Double?,
     val caloriesKJ: Double?,
+    /** #1545: how much of the bout the HR sensor actually saw, as a percentage of 60-second buckets that
+     *  contain at least one reading. null when not measured. A WHOOP 4.0's optical sensor is weak under
+     *  gripping — exactly what lifting is — so a low Effort has two very different causes: the metric not
+     *  rating the work, or the strap not having seen it. Those deserve opposite advice. */
+    val hrCoveragePct: Double? = null,
 )
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -297,4 +302,10 @@ data class DayResult(
      * the value Swift's `analyzeDay` writes directly onto its `CachedSleepSession.stagingSparse`.
      */
     val gravitySparse: Boolean = false,
+    /**
+     * #1545: where the detector lost every candidate workout on this day. null only when detection did not
+     * run. Always populated otherwise — including (especially) when [workouts] is empty, which is the case
+     * the counts exist to explain. Trailing + defaulted so every existing construction site is unchanged.
+     */
+    val detectionFunnel: WorkoutDetector.DetectionFunnel? = null,
 )

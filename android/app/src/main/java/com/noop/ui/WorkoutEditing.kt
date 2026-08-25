@@ -38,6 +38,18 @@ object WorkoutEditing {
     }
 
     /**
+     * The pre-fill row behind "Duplicate as manual" on a READ-ONLY session (strap, Apple, lifting, file).
+     *
+     * Re-seeds `deviceId` to the manual namespace as well as `source`. deviceId is part of the workout
+     * primary key, so a copy that kept the original's id would hand [WhoopRepository.saveManualWorkout] a
+     * `replacing` key pointing INTO the source being copied from, and the save would retire the very row
+     * the menu promises not to touch — a strap session lives under the active strap id, which the delete
+     * path can reach. Re-seeding keeps every delete that save can issue inside "my-whoop". (#1488)
+     */
+    fun asManualCopy(row: WorkoutRow): WorkoutRow =
+        row.copy(source = "manual", deviceId = "my-whoop", sport = displaySport(row.sport))
+
+    /**
      * Sport-cell text. "detected" reads as a neutral "Activity". WHOOP sport names arrive as
      * concatenated camelCase (e.g. "TraditionalStrengthTraining"), which reads as one long
      * unbreakable word and truncates badly — split it into words on the lower→Upper boundary so it
@@ -69,6 +81,21 @@ object WorkoutEditing {
     fun isDismissed(row: WorkoutRow, markers: List<DismissedWorkout>): Boolean =
         classify(row.source) == WorkoutSource.DETECTED &&
             markers.any { row.startTs < it.endTs && it.startTs < row.endTs }
+
+    /**
+     * What the edit dialog should hand [WhoopRepository.saveManualWorkout] as `replacing`.
+     *
+     * Only a stored MANUAL or DETECTED row is genuinely being replaced. [isCopy] marks "Duplicate as
+     * manual", where the form pre-fills FROM a read-only session but the save is a pure ADD — and it has to
+     * be passed in, because the copy is built with source "manual" so the form treats it as editable, and
+     * so classifies as MANUAL. Testing the source alone silently let every duplicate through carrying the
+     * ORIGINAL's startTs. (#1488)
+     */
+    fun replacingRowFor(editing: WorkoutRow?, isCopy: Boolean): WorkoutRow? =
+        if (isCopy) null else editing?.takeIf {
+            val c = classify(it.source)
+            c == WorkoutSource.MANUAL || c == WorkoutSource.DETECTED
+        }
 
     /** The durable marker for a detected [row] (caller inserts it into `dismissedWorkout`). */
     fun dismissedMarker(row: WorkoutRow): DismissedWorkout =

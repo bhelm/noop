@@ -399,6 +399,12 @@ object AnalyticsEngine {
         // the whole-night mean. Display-only preference threaded from the caller (UnitPrefs.hrvWindow). The
         // default (false) is byte-identical to the historical whole-night value.
         deepHrvWindow: Boolean = false,
+        // #1545: which TRIMP recipe scores Effort. EDWARDS (the default) is time-in-zone and pays NOTHING
+        // below 50% HRR, so intermittent work — a lifting session, once the sets are averaged against the
+        // rests — can score near zero however long it lasts. BANISTER is exponential in %HRR with no floor.
+        // Threaded rather than read from a global so this stays a pure function, and defaulted so every
+        // existing caller and test is byte-identical.
+        effortMethod: StrainScorer.Method = StrainScorer.Method.EDWARDS,
     ): DayResult {
 
         // Precompute the day's UTC bounds ONCE (#996). isoDay is a FIXED-UTC formatter, so
@@ -549,6 +555,14 @@ object AnalyticsEngine {
                 if (weight > 0) total / weight else null
             }
         }
+
+        // Five-minute SDNN index over R-R intervals inside the matched sleep sessions. This preserves the
+        // timestamps needed for segmentation and stays distinct from avgHrv (RMSSD). The half-open sleep
+        // bounds match every other in-bed aggregate; no qualifying 20-clean-beat segment means null.
+        val avgSDNNDaily = HrvAnalyzer.sdnnIndex(
+            rr.filter { sample -> matched.any { sample.ts >= it.start && sample.ts < it.end } },
+            segmentSec = 300,
+        )
 
         // ── HRV & Autonomic nightly trace (#141) ──────────────────────────────
         // Per-5-min-window RMSSD tagged by the sleep stage at its center, then a night summary comparing
@@ -716,6 +730,7 @@ object AnalyticsEngine {
             hr = dayHr ?: hr,
             maxHR = effMaxHR,
             restingHR = restForStrain,
+            method = effortMethod,
             sex = profile.sex,
         )
 
@@ -724,13 +739,31 @@ object AnalyticsEngine {
         // afternoon/evening workout is caught on its own day rather than lagging until a later pass
         // re-reads it through the next night window (which ends at ≈ noon). Falls back to the night
         // window for pure-function callers/tests.
+        var detectionFunnel: WorkoutDetector.DetectionFunnel? = null
         val workouts = WorkoutDetector.detect(
             hr = dayHr ?: hr,
             gravity = dayGravity ?: gravity,
             restingHR = restingHRDaily?.toDouble(),
-            maxHR = maxHROverride,
+            // #1545: the DAY's effective HRmax, not just the override. Passing maxHROverride meant an
+            // install with no override left the detector to fall back to StrainScorer.estimateHRmax,
+            // which returns max(observed p99.5, Tanaka) -- so every bout was measured against a HRmax at
+            // least as high as, and usually higher than, the one its own day used. A higher HRmax is a
+            // bigger reserve and therefore a SMALLER %HRR, so bouts were held to a stricter yardstick
+            // than the day containing them: for age 30 / RHR 60 with an observed 195, a 125 bpm minute is
+            // zone 1 for the day and zone 0 for the bout. Same day-disagrees-with-its-own-workouts
+            // failure #1562 fixed for the TRIMP method.
+            //
+            // This also feeds the z2+ qualification gate below, so it changes which bouts are DETECTED,
+            // not only how they score -- in the direction of no longer dropping a workout by a standard
+            // its own day never applied. Still null for an age-less profile.
+            maxHR = effMaxHR,
             age = if (profile.age > 0) profile.age else null,
             profile = profile,
+            // #1545: the bouts inside a day MUST be scored by the same recipe as the day itself. A day
+            // on Banister whose workouts were still on Edwards would show a session scoring less than
+            // the day it sits inside, which is a worse inconsistency than either method.
+            effortMethod = effortMethod,
+            funnel = { detectionFunnel = it },
         )
 
         // ── Steps (APPROXIMATE) ───────────────────────────────────────────────
@@ -810,6 +843,7 @@ object AnalyticsEngine {
             activeKcalEst = activeKcalEst,
             spo2Red = nightlySpo2Raw?.first,
             spo2Ir = nightlySpo2Raw?.second,
+            avgSdnn = avgSDNNDaily,
         )
 
         // ── Per-score confidence tiers (mirror Swift ScoreConfidence.derive decisions) ──
@@ -868,6 +902,7 @@ object AnalyticsEngine {
             sessionMotionByStart = sessionMotionByStart,
             sessionSleepStateByStart = sessionSleepStateByStart,
             gravitySparse = gravitySparse,
+            detectionFunnel = detectionFunnel,
         )
     }
 
@@ -955,8 +990,12 @@ object AnalyticsEngine {
      * sub-70 nonzero values are diagnostic codes and bit-7 values are saturation sentinels, so averaging
      * them in would produce a number that is not a percentage of anything.
      *
-     * DIAGNOSTIC ONLY. Nothing scores this and it never writes `spo2Pct`. Byte-parity twin of the Swift
-     * `nightlySpo2CandidateMean`.
+     * DIAGNOSTIC ONLY. Nothing scores this and it never writes `spo2Pct`.
+     *
+     * The mean is ROUNDED (`roundToInt()`), not floored — `sum / kept` on two integer types truncates
+     * toward zero, silently biasing every candidate down by up to 0.99. All values here are positive
+     * (70..100), so the rounding-rule choice (half-up vs half-away-from-zero) is inert. Byte-parity
+     * twin of the Swift `nightlySpo2CandidateMean`.
      */
     internal fun nightlySpo2CandidateMean(
         sessions: List<DetectedSleep>,
@@ -973,7 +1012,57 @@ object AnalyticsEngine {
             kept += 1
         }
         if (kept == 0) return null
-        return Pair((sum / kept).toInt(), kept)
+        return Pair((sum.toDouble() / kept.toDouble()).roundToInt(), kept)
+    }
+
+    /**
+     * The plausible range for a raw Oura `0x6F` SpO2 sample before the ceiling transform below excludes
+     * the mis-scaled `dc_raw`/perfusion-channel contamination (-1016 .. 11,709,098, OURA_PROTOCOL.md
+     * §6.5.0.1) by three orders of magnitude. Same bounds as the Swift
+     * `AnalyticsEngine.spo2SingleChannelPlausible` (kept in sync manually).
+     */
+    internal val SPO2_SINGLE_CHANNEL_PLAUSIBLE = 50..110
+
+    /**
+     * Nightly **ceiling@100** mean of the Oura ring's own decoded SpO2 (`Spo2Sample.red`, `0x6F`) over
+     * the detected in-bed [sessions], paired with the sample count it rests on — or null when no
+     * plausible sample fell inside any span. Oura twin of [nightlySpo2CandidateMean] above; queue 11a's
+     * starting transform.
+     *
+     * WHY CEILING@100, NOT RAW OR THE OFFSET+CLAMP FIT. `0x6F`'s raw wire mean carries a consistent
+     * positive bias — 20-48% of samples on a contamination-clean night read above the physical 100%
+     * ceiling (OURA_PROTOCOL.md §6.5.0.1) — so the raw mean is the ONE transform that has missed the Oura
+     * app's own displayed value on every full-tier paired night measured so far (1/3 as of 2026-08-22,
+     * see §6.5.0). `min(sample, 100)` applied PER-SAMPLE before averaging (a clamp on the aggregate mean
+     * is a different, wrong number) has round-matched the app's displayed value on all 3 of those nights.
+     * Not a validated calibration (n=3, only the rounded integer) — per the derived-biosignal rule
+     * (CLAUDE.md), this ships the same way `spo2_candidate_82` ships: diagnostic-only, gated behind the
+     * display toggle, never written to `spo2Pct`, never scored.
+     *
+     * Gated to [SPO2_SINGLE_CHANNEL_PLAUSIBLE] (50..110) BEFORE the ceiling is applied, so a contaminated
+     * row (down to -1016) cannot drag the mean down — the ceiling alone only guards the top of the range.
+     *
+     * The mean is ROUNDED (`roundToInt()`), not floored — same fix, same reasoning, as
+     * [nightlySpo2CandidateMean] just above (found 2026-08-24 comparing a live-persisted 08-23/24 row
+     * against the Oura app: the transform's precise mean, 97.97, round-matched the app's 98%, but the
+     * shipped `sum / kept` integer division floored it to 97, a spurious miss). Byte-parity twin of the
+     * Swift `nightlySpo2CeilingMean`.
+     */
+    internal fun nightlySpo2CeilingMean(
+        sessions: List<DetectedSleep>,
+        spo2: List<Spo2Sample>,
+    ): Pair<Int, Int>? {
+        if (sessions.isEmpty() || spo2.isEmpty()) return null
+        var sum = 0L
+        var kept = 0
+        for (s in spo2) {
+            if (s.red !in SPO2_SINGLE_CHANNEL_PLAUSIBLE) continue
+            if (sessions.none { s.ts in it.start..it.end }) continue
+            sum += minOf(s.red, 100)
+            kept += 1
+        }
+        if (kept == 0) return null
+        return Pair((sum.toDouble() / kept.toDouble()).roundToInt(), kept)
     }
 
     /**

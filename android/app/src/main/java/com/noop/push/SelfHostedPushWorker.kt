@@ -210,6 +210,7 @@ class SelfHostedPushWorker(
             transport = transport,
             progress = progress,
             sourceId = sourceId,
+            destinationStillCurrent = { settings.enabledEndpoint() == endpoint },
         ).pushKnownDevices(startDeviceIndex, MAX_DEVICES_PER_RUN, capabilities)
         settings.recordAcceptedBatches(
             run.acceptedBatches,

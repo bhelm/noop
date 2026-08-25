@@ -110,6 +110,8 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.defaultMinSize
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Size
@@ -345,7 +347,7 @@ fun WorkoutsScreen(vm: AppViewModel) {
                     selectionMode = false; selectedKeys = emptySet()
                 },
                 onCancelSelect = { selectionMode = false; selectedKeys = emptySet() },
-                onEdit = { dialog = DialogTarget(it) },
+                onEdit = { editRow, isCopy -> dialog = DialogTarget(editRow, isCopy) },
                 onRelabel = { row, sport ->
                     vm.relabelDetected(row, sport)
                     pendingNoteSport = WorkoutEditing.displaySport(sport)
@@ -372,6 +374,7 @@ fun WorkoutsScreen(vm: AppViewModel) {
     dialog?.let { target ->
         ManualWorkoutDialog(
             editing = target.editing,
+            isCopy = target.isCopy,
             onDismiss = { dialog = null },
             onSave = { row, replacing ->
                 vm.saveManualWorkout(row, replacing)
@@ -382,8 +385,11 @@ fun WorkoutsScreen(vm: AppViewModel) {
     }
 }
 
-/** Drives the manual add/edit dialog. [editing] null = add a new workout, non-null = edit it. */
-private data class DialogTarget(val editing: WorkoutRow?)
+/** Drives the manual add/edit dialog. [editing] null = add a new workout, non-null = edit it.
+ *  [isCopy] marks "Duplicate as manual": the dialog pre-fills FROM a read-only row, but the save is a
+ *  pure ADD and must not travel on as `replacing`. Source alone cannot express this — the copy claims
+ *  "manual" precisely so the form treats it as editable. (#1488) */
+private data class DialogTarget(val editing: WorkoutRow?, val isCopy: Boolean = false)
 
 private data class WorkoutRecoveryTrendPoint(
     val startTs: Long,
@@ -432,22 +438,49 @@ private fun PostLogNoteBanner(text: String) {
     }
 }
 
-/** The "Add workout" pill — opens the manual add dialog. Shown on both the populated screen
- *  (in the range bar) and the empty state, so a user with no imports can still log a session. */
+/**
+ * The "Add workout" pill — opens the manual add dialog. Shown on both the populated screen
+ * (in the range bar) and the empty state, so a user with no imports can still log a session.
+ *
+ * #1602: this sits beside a Material3 [Button] in the Workouts action row, and the two are built by
+ * different mechanisms — so their metrics have to be matched deliberately or they drift. A `Button`
+ * carries `defaultMinSize(minHeight = ButtonDefaults.MinHeight)`; a bare `Row` has no minimum at all,
+ * so its height was whatever the content happened to be plus its padding, and the pair rendered at
+ * different heights with different label sizes.
+ *
+ * Both are pinned here: the same minimum height as a `Button`, and the same [NoopType.captionNumber]
+ * the Start button uses. iOS has never had this because both of its buttons come from ONE primitive
+ * (`NoopButton`, differing only by `kind`) — the real fix is an Android equivalent, and until that
+ * exists this is the seam that has to be held by hand.
+ */
 @Composable
 internal fun AddWorkoutButton(onAdd: () -> Unit, modifier: Modifier = Modifier) {
     Row(
         modifier = modifier
+            // Material's constant, not a NOOP token: the goal is not "be 40.dp", it is "be whatever the
+            // Button beside me is". Android has no control-height token to reach for (iOS keeps one,
+            // `NoopMetrics.controlHeight` = 48), and minting one at today's value would match by
+            // coincidence and drift the moment Material changed its default.
+            .defaultMinSize(minHeight = ButtonDefaults.MinHeight)
             .clip(RoundedCornerShape(50))
             .background(Palette.accentMuted)
             .clickable(onClick = onAdd)
-            .padding(horizontal = 14.dp, vertical = 10.dp),
+            // 10.dp matches the Start button's contentPadding; this used to carry 14.dp. Invisible in
+            // English — width is fixed by `weight(1f)` — but this button already gives up 22.dp to an
+            // icon and spacer that Start has not, and the long translations are comparable in length
+            // ("Ajouter un entraînement" against "Démarrer l'entraînement"), so the extra 8.dp only
+            // decided which label ellipsized first.
+            .padding(horizontal = 10.dp, vertical = 10.dp),
         horizontalArrangement = Arrangement.Center,
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Icon(Icons.Filled.Add, contentDescription = null, tint = Palette.accent, modifier = Modifier.size(16.dp))
         Spacer(Modifier.width(6.dp))
-        Text(uiString(R.string.l10n_workouts_screen_add_workout_a196a2cc), style = NoopType.subhead, color = Palette.accent)
+        Text(
+            uiString(R.string.l10n_workouts_screen_add_workout_a196a2cc),
+            style = NoopType.captionNumber,
+            color = Palette.accent,
+        )
     }
 }
 
@@ -1149,7 +1182,7 @@ private fun SessionsSection(
     onMerge: (List<WorkoutRow>) -> Unit,
     onBulkDelete: (List<WorkoutRow>) -> Unit,
     onCancelSelect: () -> Unit,
-    onEdit: (WorkoutRow) -> Unit,
+    onEdit: (WorkoutRow, Boolean) -> Unit,
     onRelabel: (WorkoutRow, String) -> Unit,
     onDismiss: (WorkoutRow) -> Unit,
     onDelete: (WorkoutRow) -> Unit,
@@ -1349,7 +1382,7 @@ private fun SessionRow(
     selectionMode: Boolean,
     selected: Boolean,
     onToggleRow: (WorkoutRow) -> Unit,
-    onEdit: (WorkoutRow) -> Unit,
+    onEdit: (WorkoutRow, Boolean) -> Unit,
     onRelabel: (WorkoutRow, String) -> Unit,
     onDismiss: (WorkoutRow) -> Unit,
     onDelete: (WorkoutRow) -> Unit,
@@ -1905,7 +1938,7 @@ private fun DetailRow(label: String, value: String) {
 @Composable
 private fun RowActionsMenu(
     row: WorkoutRow,
-    onEdit: (WorkoutRow) -> Unit,
+    onEdit: (WorkoutRow, Boolean) -> Unit,
     onRelabel: (WorkoutRow, String) -> Unit,
     onDismiss: (WorkoutRow) -> Unit,
     onDelete: (WorkoutRow) -> Unit,
@@ -1926,7 +1959,7 @@ private fun RowActionsMenu(
                     )
                     DropdownMenuItem(
                         text = { Text(uiString(R.string.l10n_workouts_screen_edit_details_9e62bb59), style = NoopType.body, color = Palette.textPrimary) },
-                        onClick = { open = false; onEdit(row) },
+                        onClick = { open = false; onEdit(row, false) },
                     )
                     DropdownMenuItem(
                         text = { Text(uiString(R.string.l10n_workouts_screen_dismiss_not_a_workout_560c7bb5), style = NoopType.body, color = Palette.statusCritical) },
@@ -1936,7 +1969,7 @@ private fun RowActionsMenu(
                 WorkoutSource.MANUAL -> {
                     DropdownMenuItem(
                         text = { Text(uiString(R.string.l10n_workouts_screen_edit_b454359e), style = NoopType.body, color = Palette.textPrimary) },
-                        onClick = { open = false; onEdit(row) },
+                        onClick = { open = false; onEdit(row, false) },
                     )
                     DropdownMenuItem(
                         text = { Text(uiString(R.string.l10n_workouts_screen_delete_f6fdbe48), style = NoopType.body, color = Palette.statusCritical) },
@@ -1946,7 +1979,7 @@ private fun RowActionsMenu(
                 WorkoutSource.WHOOP, WorkoutSource.APPLE, WorkoutSource.LIFTING, WorkoutSource.ACTIVITY_FILE -> {
                     DropdownMenuItem(
                         text = { Text(uiString(R.string.l10n_workouts_screen_duplicate_as_manual_2d580d46), style = NoopType.body, color = Palette.textPrimary) },
-                        onClick = { open = false; onEdit(row.copy(source = "manual", sport = WorkoutEditing.displaySport(row.sport))) },
+                        onClick = { open = false; onEdit(WorkoutEditing.asManualCopy(row), true) },
                     )
                 }
             }
@@ -1987,6 +2020,7 @@ private fun Cell(text: String, modifier: Modifier, color: Color? = null) {
 @Composable
 private fun ManualWorkoutDialog(
     editing: WorkoutRow?,
+    isCopy: Boolean = false,
     onDismiss: () -> Unit,
     onSave: (row: WorkoutRow, replacing: WorkoutRow?) -> Unit,
 ) {
@@ -2108,10 +2142,14 @@ private fun ManualWorkoutDialog(
             // it: a manual key change deletes the stale row; a detected original is durably dismissed).
             // Duplicating an imported WHOOP/Apple row is a pure ADD — never pass it, or a changed key
             // would delete the imported original.
-            val replacing = editing?.takeIf {
-                val c = WorkoutEditing.classify(it.source)
-                c == WorkoutSource.MANUAL || c == WorkoutSource.DETECTED
-            }
+            //
+            // The source test alone never enforced that. A duplicate is built with source "manual" so the
+            // form treats it as editable, so it classified as MANUAL and passed straight through, carrying
+            // the ORIGINAL's startTs. That reaches the Health Connect write-back, which deletes by startTs
+            // ALONE (`noop-workout-<startTs>`, no deviceId in the key) — so duplicating a strap session
+            // removed the original's records, and a duplicate saved at a new start left them deleted with
+            // nothing to restore them. [DialogTarget.isCopy] carries what the source cannot. (#1488)
+            val replacing = WorkoutEditing.replacingRowFor(editing, isCopy)
             val context = LocalContext.current
             TextButton(onClick = {
                 built?.let {

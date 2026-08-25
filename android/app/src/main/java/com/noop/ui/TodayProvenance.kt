@@ -1,10 +1,13 @@
 package com.noop.ui
 
+import androidx.annotation.StringRes
 import androidx.compose.ui.graphics.Color
+import com.noop.R
 import com.noop.analytics.FusionSource
 import com.noop.analytics.ReadinessEngine
 import com.noop.ble.WhoopBleClient
 import com.noop.data.WhoopRepository
+import com.noop.data.Vo2MaxEstimator
 
 /**
  * The Today provenance label for the day's REAL merge winner, extends the existing By-Day badge
@@ -23,14 +26,19 @@ internal fun dayOwnerSource(deviceId: String?): FusionSource? = when {
     else -> FusionSource.WHOOP_IMPORT
 }
 
-internal fun provenanceBadgeLabel(owner: FusionSource?): String? = when (owner) {
-    FusionSource.NOOP_COMPUTED -> "On-device"
-    FusionSource.WHOOP_IMPORT -> "Whoop"
-    FusionSource.APPLE_HEALTH -> "Apple Health"
-    FusionSource.HEALTH_CONNECT -> "Health Connect"
-    FusionSource.XIAOMI_BAND -> "Mi Band"
-    FusionSource.NUTRITION_CSV -> "Nutrition"
-    FusionSource.LOCAL_CACHE -> "Cached"
+internal sealed interface DisplayText {
+    data class Resource(@StringRes val id: Int, val args: List<Any> = emptyList()) : DisplayText
+    data class Dynamic(val value: String) : DisplayText
+}
+
+internal fun provenanceBadgeLabel(owner: FusionSource?): DisplayText? = when (owner) {
+    FusionSource.NOOP_COMPUTED -> DisplayText.Resource(R.string.today_source_on_device)
+    FusionSource.WHOOP_IMPORT -> DisplayText.Resource(R.string.today_source_whoop)
+    FusionSource.APPLE_HEALTH -> DisplayText.Resource(R.string.today_source_apple_health)
+    FusionSource.HEALTH_CONNECT -> DisplayText.Resource(R.string.today_source_health_connect)
+    FusionSource.XIAOMI_BAND -> DisplayText.Resource(R.string.today_source_mi_band)
+    FusionSource.NUTRITION_CSV -> DisplayText.Resource(R.string.today_source_nutrition)
+    FusionSource.LOCAL_CACHE -> DisplayText.Resource(R.string.today_source_cached)
     null -> null
 }
 
@@ -49,20 +57,40 @@ internal fun provenanceBadgeLabel(owner: FusionSource?): String? = when (owner) 
 internal fun provenanceDisplayLabel(
     rawSource: String,
     deviceId: String = WhoopRepository.WHOOP_SOURCE,
-): String {
-    if (rawSource.endsWith("-noop")) return "On-device"
-    if (rawSource == deviceId || rawSource == WhoopRepository.WHOOP_SOURCE) return "Whoop"
-    if (rawSource == WhoopRepository.APPLE_HEALTH_SOURCE) return "Apple Health"
+): DisplayText {
+    if (rawSource.startsWith(VO2_MAX_ATTRIBUTION_PREFIX)) {
+        val raw = rawSource.removePrefix(VO2_MAX_ATTRIBUTION_PREFIX)
+        return DisplayText.Resource(vo2MaxAttributionLabelRes(Vo2MaxEstimator.fromProvenanceId(raw)))
+    }
+    // #103/queue-11a follow-up: the spo2 candidate-fallback rows in the vital-detail readings table
+    // (see [SPO2_CANDIDATE_ATTRIBUTION_SOURCE]) must read "strap estimate (unverified)" — the SAME
+    // string every other candidate-fallback surface uses — never a device name, which would
+    // misrepresent an unvalidated estimate as a calibrated reading in this table's Source column.
+    if (rawSource == SPO2_CANDIDATE_ATTRIBUTION_SOURCE) {
+        return DisplayText.Resource(R.string.spo2_strap_estimate_caption)
+    }
+    if (rawSource.endsWith("-noop")) return DisplayText.Resource(R.string.today_source_on_device)
+    if (rawSource == deviceId || rawSource == WhoopRepository.WHOOP_SOURCE) return DisplayText.Resource(R.string.today_source_whoop)
+    if (rawSource == WhoopRepository.APPLE_HEALTH_SOURCE) return DisplayText.Resource(R.string.today_source_apple_health)
     // Fall back to the FusionSource display name for any other known source; else the raw id verbatim.
-    return FusionSource.entries.firstOrNull { it.id == rawSource }?.displayName ?: rawSource
+    return FusionSource.entries.firstOrNull { it.id == rawSource }
+        ?.let { source -> provenanceBadgeLabel(source) }
+        ?: DisplayText.Dynamic(rawSource)
+}
+
+@StringRes
+internal fun vo2MaxAttributionLabelRes(estimator: Vo2MaxEstimator?): Int = when (estimator) {
+    Vo2MaxEstimator.NES -> R.string.vo2max_method_nes
+    Vo2MaxEstimator.UTH -> R.string.vo2max_method_uth
+    null -> R.string.vo2max_method_unknown
 }
 
 /** Today uses the audience-facing sensor name for Apple Health scores, matching the Swift Today lane. */
 internal fun todayProvenanceChipLabel(
     rawSource: String,
     deviceId: String = WhoopRepository.WHOOP_SOURCE,
-): String = if (rawSource == WhoopRepository.APPLE_HEALTH_SOURCE) {
-    "Apple Watch"
+): DisplayText = if (rawSource == WhoopRepository.APPLE_HEALTH_SOURCE) {
+    DisplayText.Resource(R.string.today_source_apple_watch)
 } else {
     provenanceDisplayLabel(rawSource, deviceId)
 }
@@ -71,24 +99,25 @@ internal fun todayProvenanceChipLabel(
 internal data class ScoreInputProvider(val sourceId: String, val brand: String? = null)
 
 /** Provider-facing hero wording. Registered brands cover live devices; stable import ids cover imports. */
-internal fun todayScoreProviderLabel(provider: ScoreInputProvider): String {
+internal fun todayScoreProviderLabel(provider: ScoreInputProvider): DisplayText {
     val source = provider.sourceId.lowercase()
     return when (source) {
-        WhoopRepository.APPLE_HEALTH_SOURCE -> "Apple Watch"
-        WhoopRepository.HEALTH_CONNECT_SOURCE -> "Health Connect"
-        "oura-import", "oura-api" -> "Oura"
-        "fitbit-import" -> "Fitbit"
-        "garmin-import" -> "Garmin"
-        "xiaomi-band" -> "Mi Band"
-        WhoopRepository.ACTIVITY_FILE_SOURCE -> "Workout files"
+        WhoopRepository.APPLE_HEALTH_SOURCE -> DisplayText.Resource(R.string.today_source_apple_watch)
+        WhoopRepository.HEALTH_CONNECT_SOURCE -> DisplayText.Resource(R.string.today_source_health_connect)
+        "oura-import", "oura-api" -> DisplayText.Resource(R.string.today_source_oura)
+        "fitbit-import" -> DisplayText.Resource(R.string.today_source_fitbit)
+        "garmin-import" -> DisplayText.Resource(R.string.today_source_garmin)
+        "xiaomi-band" -> DisplayText.Resource(R.string.today_source_mi_band)
+        WhoopRepository.ACTIVITY_FILE_SOURCE -> DisplayText.Resource(R.string.today_source_workout_files)
         else -> {
             val brand = provider.brand?.trim().orEmpty()
             when {
-                brand.equals("WHOOP", ignoreCase = true) -> "Whoop"
-                brand.isNotEmpty() -> brand
-                source == WhoopRepository.WHOOP_SOURCE -> "Whoop"
-                else -> FusionSource.entries.firstOrNull { it.id == provider.sourceId }?.displayName
-                    ?: provider.sourceId
+                brand.equals(FusionSource.WHOOP_IMPORT.displayName, ignoreCase = true) -> DisplayText.Resource(R.string.today_source_whoop)
+                brand.isNotEmpty() -> DisplayText.Dynamic(brand)
+                source == WhoopRepository.WHOOP_SOURCE -> DisplayText.Resource(R.string.today_source_whoop)
+                else -> FusionSource.entries.firstOrNull { it.id == provider.sourceId }
+                    ?.let { provenanceBadgeLabel(it) }
+                    ?: DisplayText.Dynamic(provider.sourceId)
             }
         }
     }
@@ -101,13 +130,13 @@ internal fun todayScoreProviderLabel(provider: ScoreInputProvider): String {
  */
 internal fun heroSourceLabel(
     providers: List<ScoreInputProvider>,
-): String? {
-    val labels = LinkedHashSet<String>()
+): List<DisplayText> {
+    val labels = LinkedHashSet<DisplayText>()
     for (provider in providers) {
         labels.add(todayScoreProviderLabel(provider))
         if (labels.size == 2) break
     }
-    return labels.takeIf { it.isNotEmpty() }?.joinToString(" + ")
+    return labels.toList()
 }
 
 /**
@@ -120,7 +149,7 @@ internal fun scoreHeroSourceLabel(
     providerByMetric: Map<String, ScoreInputProvider>,
     carriedRecoveryProvider: ScoreInputProvider?,
     usesCarriedRecovery: Boolean,
-): String? {
+): List<DisplayText> {
     val recoveryProvider = providerByMetric["recovery"]
         ?: if (usesCarriedRecovery) carriedRecoveryProvider else null
     return heroSourceLabel(
@@ -143,10 +172,10 @@ internal fun todayPullToSyncEnabled(
 /** The tint for a per-metric provenance badge, keyed on the resolved LABEL, gold for Whoop, cyan for
  *  Apple Health, the positive status hue for on-device (and anything else). Matches the Data Sources
  *  footer + the Swift `provenanceTint` so the same source reads the same colour on Today. */
-internal fun provenanceLabelTint(label: String): Color = when (label) {
-    "Whoop" -> Palette.accent
-    "Apple Health" -> Palette.metricCyan
-    "Health Connect" -> Palette.metricPurple
+internal fun provenanceLabelTint(label: DisplayText): Color = when ((label as? DisplayText.Resource)?.id) {
+    R.string.today_source_whoop -> Palette.accent
+    R.string.today_source_apple_health -> Palette.metricCyan
+    R.string.today_source_health_connect -> Palette.metricPurple
     else -> Palette.statusPositive
 }
 
@@ -156,11 +185,12 @@ internal fun provenanceLabelTint(label: String): Color = when (label) {
  * returns null (the hero then shows no word, matching the old card hiding itself). Byte-identical twin of
  * the Swift TodayView.readinessWord.
  */
-internal fun readinessWord(level: ReadinessEngine.Level): String? = when (level) {
-    ReadinessEngine.Level.PRIMED -> "Push"
-    ReadinessEngine.Level.BALANCED -> "Maintain"
-    ReadinessEngine.Level.STRAINED -> "Rest"
-    ReadinessEngine.Level.RUNDOWN -> "Rest"
+@StringRes
+internal fun readinessWord(level: ReadinessEngine.Level): Int? = when (level) {
+    ReadinessEngine.Level.PRIMED -> R.string.today_readiness_push
+    ReadinessEngine.Level.BALANCED -> R.string.today_readiness_maintain
+    ReadinessEngine.Level.STRAINED -> R.string.today_readiness_rest
+    ReadinessEngine.Level.RUNDOWN -> R.string.today_readiness_rest
     ReadinessEngine.Level.INSUFFICIENT -> null
 }
 
@@ -171,12 +201,12 @@ internal fun readinessWord(level: ReadinessEngine.Level): String? = when (level)
  * hasHealthConnect source - Health Connect is named for what it is, never folded under "Apple Watch"
  * (issue #176).
  */
-internal fun syncedFromSummary(hasWhoop: Boolean, hasApple: Boolean, hasHealthConnect: Boolean = false, hasXiaomi: Boolean): String {
+internal fun syncedFromSummary(hasWhoop: Boolean, hasApple: Boolean, hasHealthConnect: Boolean = false, hasXiaomi: Boolean): List<DisplayText> {
     val names = buildList {
-        if (hasWhoop) add("WHOOP")
-        if (hasApple) add("Apple Watch")
-        if (hasHealthConnect) add("Health Connect")
-        if (hasXiaomi) add("Mi Band")
+        if (hasWhoop) add(DisplayText.Resource(R.string.today_source_whoop))
+        if (hasApple) add(DisplayText.Resource(R.string.today_source_apple_watch))
+        if (hasHealthConnect) add(DisplayText.Resource(R.string.today_source_health_connect))
+        if (hasXiaomi) add(DisplayText.Resource(R.string.today_source_mi_band))
     }
-    return if (names.isEmpty()) "No sources yet" else "Synced from: " + names.joinToString(", ")
+    return names
 }

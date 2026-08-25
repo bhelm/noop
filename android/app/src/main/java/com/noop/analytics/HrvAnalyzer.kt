@@ -119,6 +119,32 @@ object HrvAnalyzer {
         return sqrt(ss / (nn.size - 1).toDouble())
     }
 
+    /**
+     * Task Force SDNN index: mean sample-SDNN across consecutive [segmentSec]-second segments.
+     * Each segment uses the same range + Malik cleaning as [analyze]; segments with fewer than
+     * [MIN_BEATS] clean intervals are skipped. Timestamps are Unix seconds and segment boundaries are
+     * inclusive, matching the Swift `HRVAnalyzer.sdnnIndex` twin. This is deliberately distinct from
+     * whole-night SDNN, whose slow between-stage heart-rate drift can dominate the result.
+     */
+    fun sdnnIndex(rr: List<RrInterval>, segmentSec: Int = 300): Double? {
+        if (segmentSec <= 0 || rr.isEmpty()) return null
+        val first = rr.minOf { it.ts }
+        val segmentLength = segmentSec.toLong()
+
+        // Bucket in one pass while preserving input order within each segment. This is equivalent to the
+        // Swift twin's repeated inclusive window filters, without rescanning a whole night per segment.
+        val segments = LinkedHashMap<Long, MutableList<RrInterval>>()
+        for (sample in rr) {
+            val bucket = (sample.ts - first) / segmentLength
+            segments.getOrPut(bucket) { ArrayList() }.add(sample)
+        }
+        val values = segments.keys.sorted().mapNotNull { bucket ->
+            val start = first + bucket * segmentLength
+            analyze(segments.getValue(bucket), windowStart = start, windowEnd = start + segmentLength - 1).sdnn
+        }
+        return if (values.isEmpty()) null else values.sum() / values.size.toDouble()
+    }
+
     // ── Cleaning ─────────────────────────────────────────────────────────────
 
     /** Range filter: keep only intervals in [RR_MIN_MS, RR_MAX_MS], preserving order. */
@@ -661,6 +687,78 @@ object HrvAnalyzer {
             " multiSec=${pct(multiSecs, secs)}% multiRows=${pct(multiRows, known)}%" +
             " multiMs=${pct(msToInt(multiMs), msToInt(knownMs))}%" +
             " maxDeliv=$maxDeliv secsNoStart=$secsNoStart ordUnknown=$unknown"
+    }
+
+    /**
+     * One second's worth of duplicate-pair bookkeeping: how many rows landed on it, the first two
+     * intervals, and whether every row claimed `ord == 0`. Only a second with EXACTLY two rows, both
+     * `ord 0`, is an unambiguous two-delivery pair — see [duplicatePairRatios]. Twin of Swift `PairTally`.
+     */
+    private class PairTally {
+        var count = 0
+        var first = 0
+        var second = 0
+        var allOrdZero = true
+        fun qualifies(): Boolean = count == 2 && allOrdZero
+        fun add(ms: Int, ord: Int) {
+            count += 1
+            if (count == 1) first = ms else if (count == 2) second = ms
+            if (ord != 0) allOrdZero = false
+        }
+    }
+
+    /**
+     * #1505: when two deliveries wrote the same second, how do their two intervals COMPARE?
+     *
+     * [deliveryHistogram] counts how many deliveries wrote each second; it never looks at what they wrote.
+     * That is the measurement the R-R unit question turns on. A WHOOP 5 emits the beat train live over
+     * `0x2A37` (spec-fixed 1/1024-second units, converted on the way in) and again inside its v18
+     * historical record (stored as read). If those are the same beat in two units, a duplicated second
+     * holds two values 1024/1000 apart. If they are genuinely different beats, the ratios scatter.
+     *
+     * Restricted to the unambiguous case: seconds carrying EXACTLY two rows, both `ord == 0`. `ord`
+     * restarts per delivery, so that is two deliveries each contributing their first beat — not two
+     * consecutive beats from one record's array, which would read `0` then `1`.
+     *
+     * A single such pair proves nothing: 872 vs 893 ms is both the 1024/1000 ratio and an utterly ordinary
+     * beat-to-beat difference. A POPULATION of them separates the two — a tight cluster at 1.024 is a unit
+     * mismatch, a broad spread is normal variability. This reports the distribution and takes no view.
+     *
+     * Parts-per-thousand in integer arithmetic so Kotlin and Swift cannot round a tie differently.
+     * Twin of Swift `HRVAnalyzer.duplicatePairRatios`.
+     */
+    fun duplicatePairRatios(tsSec: List<Long>, rrMs: List<Double>, ords: List<Int?>): String {
+        val n = minOf(tsSec.size, rrMs.size, ords.size)
+        if (n == 0) return ""
+        // A tally per second rather than a list per second, matching `SecondTally` above: this runs over a
+        // whole night's beats on the same path, and the histogram beside it was deliberately reduced to one
+        // map and no per-second allocation for exactly that reason.
+        val bySec = HashMap<Long, PairTally>()
+        for (i in 0 until n) {
+            val o = ords[i] ?: continue
+            val ms = msToInt(rrMs[i])
+            if (ms <= 0) continue
+            bySec.getOrPut(tsSec[i]) { PairTally() }.add(ms, o)
+        }
+        val ppts = ArrayList<Int>()
+        for ((_, t) in bySec) {
+            if (!t.qualifies()) continue
+            val lo = minOf(t.first, t.second)
+            val hi = maxOf(t.first, t.second)
+            if (lo <= 0) continue
+            // Long so the multiply cannot overflow on a corrupt row — Kotlin's Int is 32-bit and would wrap
+            // where Swift's would not, and a diagnostic that disagrees across platforms is worthless.
+            ppts.add(((hi.toLong() * 1000L + lo / 2L) / lo.toLong()).toInt())   // half-up, parts per thousand
+        }
+        if (ppts.isEmpty()) return "rr dupPairs n=0"
+        ppts.sort()
+        // Identical (both deliveries stored the same number), the 1024/1000 signature, or neither.
+        val same = ppts.count { it <= 1_005 }
+        val tick = ppts.count { it in 1_019..1_029 }
+        val med = if (ppts.size % 2 == 1) ppts[ppts.size / 2]
+                  else (ppts[ppts.size / 2 - 1] + ppts[ppts.size / 2]) / 2
+        return "rr dupPairs n=${ppts.size} same=$same tick=$tick" +
+            " other=${ppts.size - same - tick} medPPT=$med spread=${ppts[0]}-${ppts[ppts.size - 1]}"
     }
 
     /**

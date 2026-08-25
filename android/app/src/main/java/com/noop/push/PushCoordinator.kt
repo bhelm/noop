@@ -13,6 +13,7 @@ class PushCoordinator(
     private val sourceId: String,
     private val today: () -> LocalDate = { LocalDate.now() },
     private val zoneId: ZoneId = ZoneId.systemDefault(),
+    private val destinationStillCurrent: () -> Boolean = { true },
 ) {
     suspend fun pushAppend(table: PushAppendTable, deviceId: String): PushResult {
         val stored = try {
@@ -260,6 +261,9 @@ class PushCoordinator(
     }
 
     private suspend fun deliver(batch: PushBatch): PushResult {
+        if (!destinationStillCurrent()) {
+            throw CancellationException("push destination changed")
+        }
         val response = try {
             transport.post(batch)
         } catch (cancelled: CancellationException) {

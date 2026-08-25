@@ -151,8 +151,9 @@ fun DataSourcesScreen(vm: AppViewModel) {
     suspend fun refreshCounts() {
         val nowS = System.currentTimeMillis() / 1000
         // #1304/#512: count across the active-strap UNION (active ∪ canonical), so a 2nd strap's data
-        // under "whoop-<uuid>" is included instead of silently under-reported. `daysMerged` is the exact
-        // twin of Swift's `repo.days` (mergeActivityFileSteps(mergeDaily(imported, computed))) — so this
+        // under "whoop-<uuid>" is included instead of silently under-reported. `daysMerged` is Android's
+        // merged-history counterpart to Swift `Repository.days`
+        // (mergeActivityFileSteps(mergeDaily(imported, computed))), so this
         // matches the iOS badge count, including a strap-only user's computed-only ("-noop") days that an
         // imported-only count would miss. workoutsUnion mirrors Swift's dataVolumeSnapshot workout union.
         whoopDays = vm.repo.daysMerged(vm.activeStrapId).size
@@ -325,6 +326,9 @@ fun DataSourcesScreen(vm: AppViewModel) {
     val hcWritePermissionLauncher = rememberLauncherForActivityResult(
         PermissionController.createRequestPermissionResultContract(),
     ) { granted ->
+        // #1525: this prompt already included VO2 max, so whatever the answer was, do not ask again
+        // through the targeted one-shot below.
+        NoopPrefs.setHcVo2MaxAsked(context, true)
         if (granted.containsAll(HealthConnectWriter.PERMISSIONS)) {
             vm.writebackHealthConnectNow()
         } else {
@@ -334,6 +338,20 @@ fun DataSourcesScreen(vm: AppViewModel) {
     }
 
     // Write immediately if the write permissions are already granted, otherwise request them first.
+    /**
+     * #1525: the one-shot ask for the VO2 max write permission, for installs that were set up before it
+     * existed. The outcome is deliberately ignored — VO2 max records are written in their own attempt, so
+     * a decline costs that metric and nothing else, and blocking the writeback on it would be the very
+     * regression keeping VO2 max out of the gate avoids. Either way we mark it asked, so a "no" is
+     * respected instead of re-prompted on every sync.
+     */
+    val hcVo2MaxPermissionLauncher = rememberLauncherForActivityResult(
+        PermissionController.createRequestPermissionResultContract(),
+    ) { _ ->
+        NoopPrefs.setHcVo2MaxAsked(context, true)
+        vm.writebackHealthConnectNow()
+    }
+
     fun startWriteback() {
         scope.launch {
             val granted = runCatching {
@@ -342,13 +360,29 @@ fun DataSourcesScreen(vm: AppViewModel) {
             // Gate on vitals AND exercise perms so a user who enabled writeback before exercise
             // writeback shipped (vitals-only grant) still gets re-prompted for WRITE_EXERCISE/
             // WRITE_DISTANCE — otherwise their workouts silently never reach Health Connect (#412).
+            // #1525: VO2 max is ASKED FOR below but deliberately absent from this gate. Adding it here
+            // would mean every existing user, who granted the older set, fails `containsAll` and gets
+            // re-prompted — and blocks their whole writeback until they accept. Out of the gate, a decline
+            // costs only VO2 max, whose records are written in their own attempt.
             if (granted.containsAll(HealthConnectWriter.PERMISSIONS + HealthConnectWriter.EXERCISE_PERMISSIONS)) {
-                vm.writebackHealthConnectNow()
+                // #1525: this branch is where an existing install lands — it granted everything that
+                // existed at the time, so it never reaches the launcher below and would never be offered
+                // VO2 max. Ask exactly once, then write regardless of the answer.
+                if (!granted.containsAll(HealthConnectWriter.VO2MAX_PERMISSIONS) &&
+                    !NoopPrefs.hcVo2MaxAsked(context)
+                ) {
+                    hcVo2MaxPermissionLauncher.launch(HealthConnectWriter.VO2MAX_PERMISSIONS)
+                } else {
+                    vm.writebackHealthConnectNow()
+                }
             } else {
                 // Request vitals + exercise-session write perms together so GPS workouts can write
                 // back too (the launcher-result handler stays keyed on the vital PERMISSIONS, so
                 // exercise writeback is opt-in + non-fatal if the user declines it). v1.71 / #412.
-                hcWritePermissionLauncher.launch(HealthConnectWriter.PERMISSIONS + HealthConnectWriter.EXERCISE_PERMISSIONS)
+                hcWritePermissionLauncher.launch(
+                    HealthConnectWriter.PERMISSIONS + HealthConnectWriter.EXERCISE_PERMISSIONS +
+                        HealthConnectWriter.VO2MAX_PERMISSIONS,
+                )
             }
         }
     }
@@ -1009,6 +1043,27 @@ internal fun emitImportTrace(
         // rowsOut is UNVERIFIED on Android (Room reports no store-write count); never claim "(all written)".
         vm.ble.externalLog(
             com.noop.analytics.ImportTrace.stageLineUnverified(category, rowsIn = count),
+            com.noop.testcentre.TestDomain.IMPORT,
+        )
+    }
+    // #1617: which metric COLUMNS the file actually carried. rowsOut stays unverified here because Room
+    // reports no write count, but this is known at PARSE time and so is exact on both platforms — and it
+    // separates "the store never got it" from "the export never had it", which the stage lines alone
+    // cannot. Emitted only when the importer produced daily rows.
+    // Emitted generically here for any summary carrying coverage, while the Swift twin emits it inside
+    // WhoopImporter — so a NEW importer that starts filling columnCoverage would produce this line on
+    // Android and silently not on Swift. Give it the Swift twin at the same time.
+    if (summary.columnCoverage.isNotEmpty()) {
+        vm.ble.externalLog(
+            com.noop.analytics.ImportTrace.columnCoverageLine(
+                // The literal, not categoryWire: that function maps RAW TABLE KEYS to wire categories
+                // ("dailyMetric" -> "cycles"), so handing it a category already in wire form only works
+                // through its `else -> rawKey` fallthrough, and would break the day anyone adds a
+                // "cycles" branch. The Swift twin passes the same literal.
+                stage = "cycles",
+                rows = summary.columnCoverageRows,
+                counts = summary.columnCoverage,
+            ),
             com.noop.testcentre.TestDomain.IMPORT,
         )
     }

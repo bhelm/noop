@@ -1,5 +1,6 @@
 package com.noop.ui
 
+import com.noop.data.Vo2MaxEstimator
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 import java.util.Locale
@@ -14,6 +15,39 @@ internal data class VitalReading(
     val value: Double,
     val source: String,
 )
+
+internal const val VO2_MAX_ATTRIBUTION_PREFIX = "vo2max-estimator:"
+
+/**
+ * #103/queue-11a follow-up: display-source token for a `spo2` reading that came from the
+ * `spo2_candidate` fallback (WHOOP `spo2_candidate_82` or Oura ceiling@100 `0x6F`, device-conditional)
+ * rather than a calibrated `spo2Pct` day. Every OTHER surface with this fallback (the Key Metrics tile
+ * via [vitalsFor]) already labels it via `R.string.spo2_strap_estimate_caption` — this vital-detail
+ * screen (`VitalDetailScreen`/"Your Cards" drill-in) had no candidate fallback at all until now (found
+ * 2026-08-24: an Oura-only or WHOOP-4.0-only install with the toggle ON saw a real number on the tile
+ * but nothing here past the last calibrated import). Same prefix-token idiom as
+ * [vo2MaxAttributionSource] just above.
+ */
+internal const val SPO2_CANDIDATE_ATTRIBUTION_SOURCE = "spo2-candidate-estimate"
+
+/** Display-source token for a VO₂max reading. A missing legacy tag stays unknown; it must never inherit
+ *  the method implied by today's profile because the waist measurement may have changed after scoring. */
+internal fun vo2MaxAttributionSource(estimator: Vo2MaxEstimator?): String =
+    VO2_MAX_ATTRIBUTION_PREFIX + (estimator?.provenanceId ?: "unknown")
+
+/** Sequential ids for a method-aware trend. Nes → Uth → Nes becomes three segments rather than joining
+ *  the non-adjacent Nes runs across an incompatible estimator. */
+internal fun vo2MaxTrendSegmentIds(readings: List<VitalReading>): List<String> {
+    var previous: String? = null
+    var group = -1
+    return readings.map { reading ->
+        if (reading.source != previous) {
+            group++
+            previous = reading.source
+        }
+        "$group:${reading.source}"
+    }
+}
 
 /** #377: merge the three step stores into one per-day series with the SAME precedence as the Today
  *  Steps tile — a REAL on-device count ([real], WHOOP 5/MG @57 → DailyMetric.steps) wins, else an
@@ -40,7 +74,7 @@ internal fun mergeReadings(vararg stores: Map<String, VitalReading>): List<Vital
 internal data class VitalReadingRow(
     val time: String,
     val value: String,
-    val source: String,
+    val source: DisplayText,
 )
 
 /**

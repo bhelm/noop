@@ -11,6 +11,51 @@ import java.time.ZoneId
 
 class PushCoordinatorTest {
     @Test
+    fun endpointChangeFencesRemainingPostsToCapturedDestination() = runBlocking {
+        val settings = SelfHostedPushSettings.forTest(
+            SelfHostedPushSettingsTest.FakePushPrefs(),
+            SelfHostedPushSettingsTest.FakePushPrefs(),
+        )
+        val first = (PushEndpointPolicy.validate("https://one.example/push") as PushEndpointPolicy.Result.Valid).endpoint
+        val second = (PushEndpointPolicy.validate("https://two.example/push") as PushEndpointPolicy.Result.Valid).endpoint
+        settings.saveEndpoint(first.url)
+        settings.saveToken("secret")
+        assertTrue(settings.setEnabled(true))
+        val source = FakePushSource(
+            append = mutableMapOf(
+                key(PushAppendTable.HR_SAMPLE, "a") to mutableListOf(hr(1, 100)),
+                key(PushAppendTable.BATTERY, "a") to mutableListOf(
+                    PushAppendRecord(2, linkedMapOf("ts" to 101L), linkedMapOf("soc" to 80.0, "mv" to null, "charging" to false)),
+                ),
+            ),
+        )
+        val transport = object : PushTransport {
+            var posts = 0
+            override suspend fun post(batch: PushBatch): PushTransportResponse {
+                posts++
+                if (posts == 1) settings.saveEndpoint(second.url)
+                return PushTransportResponse(200, PushAck.fromBatch(batch).encode())
+            }
+        }
+
+        try {
+            PushCoordinator(
+                source, transport, MemoryProgress(), SOURCE_A,
+                destinationStillCurrent = { settings.enabledEndpoint() == first },
+            ).pushKnownDevices(
+                capabilities = PushCapabilities(
+                    appendTables = setOf(PushAppendTable.HR_SAMPLE, PushAppendTable.BATTERY),
+                    mutableTables = emptySet(),
+                ),
+            )
+        } catch (_: kotlinx.coroutines.CancellationException) {
+            // Destination rotation deliberately aborts the captured run before another POST.
+        }
+
+        assertEquals(1, transport.posts)
+    }
+
+    @Test
     fun exactAckIsRequiredBeforeCursorAdvances() = runBlocking {
         val row = hr(1, 100)
         val source = FakePushSource(append = mutableMapOf(key(PushAppendTable.HR_SAMPLE, "a") to mutableListOf(row)))

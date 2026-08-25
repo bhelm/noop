@@ -1,5 +1,6 @@
 package com.noop.ui
 
+import com.noop.R
 import com.noop.data.WhoopRepository
 import java.time.LocalDate
 import java.util.Locale
@@ -45,7 +46,14 @@ class VitalReadingsTableTest {
     @Test fun sourceLabelsResolvePerSample() {
         val rows = vitalReadingRows(spo2Readings, "%", strap, spo2Format)
         // Newest-first, so: Apple Health (03), Health Connect (02), Whoop strap (01).
-        assertEquals(listOf("Apple Health", "Health Connect", "Whoop"), rows.map { it.source })
+        assertEquals(
+            listOf(
+                DisplayText.Resource(R.string.today_source_apple_health),
+                DisplayText.Resource(R.string.today_source_health_connect),
+                DisplayText.Resource(R.string.today_source_whoop),
+            ),
+            rows.map { it.source },
+        )
     }
 
     @Test fun computedStrapSiblingReadsOnDevice() {
@@ -55,7 +63,23 @@ class VitalReadingsTableTest {
             strap,
             { it.roundToInt().toString() },
         )
-        assertEquals("On-device", rows.single().source)
+        assertEquals(DisplayText.Resource(R.string.today_source_on_device), rows.single().source)
+    }
+
+    /**
+     * #103/queue-11a follow-up: a spo2 candidate-fallback row (see [SPO2_CANDIDATE_ATTRIBUTION_SOURCE])
+     * must resolve to "strap estimate (unverified)" — the SAME caption every other candidate-fallback
+     * surface uses — never a device name, which would misrepresent an unvalidated estimate as a
+     * calibrated reading.
+     */
+    @Test fun spo2CandidateSourceReadsStrapEstimateUnverified() {
+        val rows = vitalReadingRows(
+            listOf(VitalReading("2026-08-24", 97.0, SPO2_CANDIDATE_ATTRIBUTION_SOURCE)),
+            "%",
+            strap,
+            spo2Format,
+        )
+        assertEquals(DisplayText.Resource(R.string.spo2_strap_estimate_caption), rows.single().source)
     }
 
     @Test fun valueReusesModelFormatAndUnit() {

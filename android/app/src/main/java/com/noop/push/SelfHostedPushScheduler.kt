@@ -58,6 +58,14 @@ object SelfHostedPushScheduler {
 
     fun enqueueManualCatchUp(context: Context) = enqueueExternal(context)
 
+    /** Revoke an in-flight destination snapshot before queueing a baseline for the newly saved URL. */
+    fun destinationChanged(context: Context) {
+        val app = context.applicationContext
+        PushRunSignal.clear(app)
+        WorkManager.getInstance(app).cancelUniqueWork(UNIQUE_WORK)
+        enqueueExternal(app)
+    }
+
     /** Queue the next healthy pagination/device slice without WorkManager's failure backoff. */
     internal suspend fun enqueueContinuation(
         context: Context,

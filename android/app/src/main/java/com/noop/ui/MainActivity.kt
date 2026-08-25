@@ -32,6 +32,10 @@ import com.noop.data.WhoopRepository
 import com.noop.push.SelfHostedPushScheduler
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.channels.awaitClose
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.callbackFlow
+import kotlinx.coroutines.flow.distinctUntilChanged
 
 /**
  * Single-activity host. Requests the runtime BLE permissions the strap connection
@@ -217,6 +221,29 @@ object NoopPrefs {
      *  margin is single-subject so far, so it ships as a chooseable lens, not a silent default, per the
      *  derived-biosignal rule (CLAUDE.md). Mirrors iOS `PuffinExperiment.stressPersonalBaselineKey`. */
     const val KEY_STRESS_PERSONAL_BASELINE = "noop.stressPersonalBaseline"
+
+    /** Opt-in "Banister Effort" (#1545): score Effort with Banister's EXPONENTIAL TRIMP instead of the
+     *  default Edwards 5-zone summation.
+     *
+     *  Edwards is time-in-zone and pays NOTHING below 50% HRR. A reporter's weightlifting session scored
+     *  1.7 while a walk scored higher — working that back gives a TRIMP of about 1, i.e. the model saw
+     *  essentially no time above the floor for the whole session. An hour held at 45% HRR scores 0.00
+     *  under Edwards and about 43 under Banister: the difference between under-rating intermittent work
+     *  and not seeing it at all.
+     *
+     *  Default OFF and it must stay a choice, not become the default — it re-scores every day in the
+     *  window against a different recipe, so flipping it silently would move a headline metric's whole
+     *  history. Each method maps a theoretical maximum day to exactly 100 via its own log denominator
+     *  ([StrainScorer.logMapDenominator]), so the two share an axis. Mirrors iOS
+     *  `PuffinExperiment.banisterEffortKey`. */
+    const val KEY_BANISTER_EFFORT = "noop.banisterEffort"
+
+    fun banisterEffort(context: Context): Boolean = of(context).getBoolean(KEY_BANISTER_EFFORT, false)
+
+    /** The TRIMP recipe every Effort computation on this device should use. */
+    fun effortMethod(context: Context): com.noop.analytics.StrainScorer.Method =
+        if (banisterEffort(context)) com.noop.analytics.StrainScorer.Method.BANISTER
+        else com.noop.analytics.StrainScorer.Method.EDWARDS
 
     /** The calendar day (yyyy-MM-dd) on which the morning-journal nudge was last shown, keeps the
      *  Sleep screen's "Good morning" sheet to at most once per day. */
@@ -480,6 +507,45 @@ object NoopPrefs {
     fun spo2CandidateDisplay(context: Context): Boolean =
         of(context).getBoolean(KEY_SPO2_CANDIDATE_DISPLAY, false)
 
+    /**
+     * [spo2CandidateDisplay] as a flow that re-emits when the user changes it.
+     *
+     * The plain getter is a point read, which is right for a composable that re-reads on every
+     * recomposition and wrong for a `StateFlow` built once. `AppViewModel.spo2CandidateByDay` combined
+     * against `flowOf(spo2CandidateDisplay(…))` — a flow that emits once and completes — so the toggle
+     * was frozen at ViewModel construction: turning the setting off left the Key Metrics tile showing
+     * strap estimates until the process restarted, and turning it on showed nothing until then. iOS reads
+     * `PuffinExperiment.spo2CandidateDisplayEnabled` per render and has never had the lag.
+     *
+     * Named for this one key rather than generic, so it sits beside the getter it mirrors and the two
+     * cannot drift on the default.
+     */
+    fun spo2CandidateDisplayFlow(context: Context): Flow<Boolean> = callbackFlow {
+        // `applicationContext`, unlike every other accessor here. Those are point reads that return
+        // before the caller's Context can matter; this one captures it in a flow that lives as long as
+        // something collects, so an Activity passed by a future caller would be held across a rotation.
+        // The only caller today already passes an application Context — this makes it not depend on that.
+        val prefs = of(context.applicationContext)
+        // Strong local for the flow's lifetime: Android holds these listeners WEAKLY, so one referenced
+        // only by the register call is collected and silently stops firing (same reason SettingsScreen's
+        // experiment listener keeps one).
+        val listener = SharedPreferences.OnSharedPreferenceChangeListener { changed, key ->
+            // `key` is @Nullable on modern SDKs — it arrives null when the whole file is cleared, which
+            // reads as "everything changed". The null check is required to compile, not just defensive.
+            if (key == null || key == KEY_SPO2_CANDIDATE_DISPLAY) {
+                trySend(changed.getBoolean(KEY_SPO2_CANDIDATE_DISPLAY, false))
+            }
+        }
+        prefs.registerOnSharedPreferenceChangeListener(listener)
+        // Seed AFTER registering, not before. A write landing between the read and the register would
+        // otherwise be missed entirely, and — since nothing re-reads until the NEXT change — the flow
+        // would serve a stale value indefinitely, which is the failure this whole function exists to
+        // remove. In this order the same interleaving costs at most a duplicate emit, and
+        // `distinctUntilChanged` drops it.
+        trySend(prefs.getBoolean(KEY_SPO2_CANDIDATE_DISPLAY, false))
+        awaitClose { prefs.unregisterOnSharedPreferenceChangeListener(listener) }
+    }.distinctUntilChanged()
+
     fun setSpo2CandidateDisplay(context: Context, enabled: Boolean) {
         of(context).edit().putBoolean(KEY_SPO2_CANDIDATE_DISPLAY, enabled).apply()
     }
@@ -492,6 +558,10 @@ object NoopPrefs {
 
     fun setStressPersonalBaseline(context: Context, enabled: Boolean) {
         of(context).edit().putBoolean(KEY_STRESS_PERSONAL_BASELINE, enabled).apply()
+    }
+
+    fun setBanisterEffort(context: Context, enabled: Boolean) {
+        of(context).edit().putBoolean(KEY_BANISTER_EFFORT, enabled).apply()
     }
 
     /** Whether the strap log is mirrored to logcat. Default false (normal users don't log to adb). */
@@ -614,6 +684,19 @@ object NoopPrefs {
 
     /** Health Connect writeback (NOOP's computed metrics → HC, for other apps). Default OFF. */
     const val KEY_HC_WRITEBACK = "noop.hcWriteback"
+    const val KEY_HC_VO2MAX_ASKED = "noop.hcVo2MaxAsked"
+
+    /**
+     * #1525: have we already asked this install for the VO2 max write permission? Health Connect grants
+     * are per-permission, so a user who set NOOP up before VO2 max existed passes the writeback's own
+     * gate and is never prompted for it. We ask ONCE on the next writeback and remember that we did --
+     * a decline must not turn every subsequent sync into another dialog.
+     */
+    fun hcVo2MaxAsked(context: Context): Boolean = of(context).getBoolean(KEY_HC_VO2MAX_ASKED, false)
+
+    fun setHcVo2MaxAsked(context: Context, asked: Boolean) {
+        of(context).edit().putBoolean(KEY_HC_VO2MAX_ASKED, asked).apply()
+    }
 
     fun hcWriteback(context: Context): Boolean =
         of(context).getBoolean(KEY_HC_WRITEBACK, false)

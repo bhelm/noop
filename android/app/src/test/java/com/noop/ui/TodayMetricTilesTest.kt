@@ -66,7 +66,7 @@ class TodayMetricTilesTest {
     fun weightTile_usesLatestReading_metric() {
         val t = weightTile(latestWeightKg = 74.5, profileWeightKg = 90.0, system = UnitSystem.METRIC)
         assertEquals("74.5 kg", t.value)
-        assertEquals("latest", t.caption)
+        assertEquals(WeightCaption.LATEST, t.caption)
     }
 
     @Test
@@ -74,14 +74,14 @@ class TodayMetricTilesTest {
         val t = weightTile(latestWeightKg = 100.0, profileWeightKg = 90.0, system = UnitSystem.IMPERIAL)
         // 100 kg * 2.20462 = 220.462 lb
         assertEquals("220.5 lb", t.value)
-        assertEquals("latest", t.caption)
+        assertEquals(WeightCaption.LATEST, t.caption)
     }
 
     @Test
     fun weightTile_fallsBackToProfile_withHonestCaption() {
         val t = weightTile(latestWeightKg = null, profileWeightKg = 75.0, system = UnitSystem.METRIC)
         assertEquals("75.0 kg", t.value)
-        assertEquals("from profile", t.caption)
+        assertEquals(WeightCaption.FROM_PROFILE, t.caption)
     }
 
     @Test
@@ -89,7 +89,7 @@ class TodayMetricTilesTest {
         val t = weightTile(latestWeightKg = null, profileWeightKg = 75.0, system = UnitSystem.IMPERIAL)
         // 75 kg * 2.20462 = 165.3465 lb
         assertEquals("165.3 lb", t.value)
-        assertEquals("from profile", t.caption)
+        assertEquals(WeightCaption.FROM_PROFILE, t.caption)
     }
 
     // MARK: stepsForDay — Today Steps-tile fallback to imported Apple Health / Health Connect (#150)
@@ -129,12 +129,12 @@ class TodayMetricTilesTest {
 
     @Test
     fun buildingHint_rest_today_isTheWearItTonightCopy() {
-        assertEquals("Building, wear it tonight", buildingHint(KeyMetric.REST, isToday = true))
+        assertEquals(com.noop.R.string.today_building_wear_tonight, buildingHint(KeyMetric.REST, isToday = true))
     }
 
     @Test
     fun buildingHint_effort_today_isTheMovesAsYouDoCopy() {
-        assertEquals("Building, moves as you do", buildingHint(KeyMetric.EFFORT, isToday = true))
+        assertEquals(com.noop.R.string.today_building_moves_with_you, buildingHint(KeyMetric.EFFORT, isToday = true))
     }
 
     @Test
@@ -149,19 +149,19 @@ class TodayMetricTilesTest {
     @Test
     fun buildingHint_charge_today_isTheWearItTonightCopy() {
         // H10: a cold-start Charge (no score, not calibrating, nothing carried) reads "building", not blank.
-        assertEquals("Building, wear it tonight", buildingHint(KeyMetric.CHARGE, isToday = true))
+        assertEquals(com.noop.R.string.today_building_wear_tonight, buildingHint(KeyMetric.CHARGE, isToday = true))
     }
 
     @Test
     fun buildingHint_bloodOxygen_today_buildsLikeTheOtherOvernightVitals() {
         // H10: the overnight SpO₂ fills in from sleep, like Rest.
-        assertEquals("Building, wear it tonight", buildingHint(KeyMetric.BLOOD_OXYGEN, isToday = true))
+        assertEquals(com.noop.R.string.today_building_wear_tonight, buildingHint(KeyMetric.BLOOD_OXYGEN, isToday = true))
     }
 
     @Test
     fun buildingHint_steps_today_movesAsYouDo() {
         // H10: on-device steps accrue across the day, like Effort.
-        assertEquals("Building, moves as you do", buildingHint(KeyMetric.STEPS, isToday = true))
+        assertEquals(com.noop.R.string.today_building_moves_with_you, buildingHint(KeyMetric.STEPS, isToday = true))
     }
 
     @Test
@@ -181,12 +181,12 @@ class TodayMetricTilesTest {
     }
 
     @Test
-    fun buildingHint_copy_hasNoEmDash() {
-        // House style: user-facing strings carry no em-dashes (the #1 AI tell).
-        for (m in listOf(KeyMetric.REST, KeyMetric.EFFORT, KeyMetric.CHARGE, KeyMetric.BLOOD_OXYGEN, KeyMetric.STEPS)) {
-            val hint = buildingHint(m, isToday = true)!!
-            assert(!hint.contains('—')) { "buildingHint($m) must not contain an em-dash: $hint" }
-        }
+    fun buildingHint_returnsLocalizedResourceContracts() {
+        assertEquals(com.noop.R.string.today_building_wear_tonight, buildingHint(KeyMetric.REST, true))
+        assertEquals(com.noop.R.string.today_building_moves_with_you, buildingHint(KeyMetric.EFFORT, true))
+        assertEquals(com.noop.R.string.today_building_wear_tonight, buildingHint(KeyMetric.CHARGE, true))
+        assertEquals(com.noop.R.string.today_building_wear_tonight, buildingHint(KeyMetric.BLOOD_OXYGEN, true))
+        assertEquals(com.noop.R.string.today_building_moves_with_you, buildingHint(KeyMetric.STEPS, true))
     }
 
     // MARK: restStageLowConfidence — H9. Surfaces the core ScoreConfidence rule: a high-efficiency night
@@ -562,5 +562,57 @@ class TodayMetricTilesTest {
             fieldDay("2999-01-01", skinTemp = 2.1),
         )
         assertEquals("2026-06-16", lastSkinTempRow(days, todayKey = "2026-06-19")?.day)
+    }
+
+    // MARK: spo2 spark source — which series the Blood Oxygen tile plots (#1599)
+
+    /**
+     * THE reported case, and the one a value-gated rule misses.
+     *
+     * One old imported reading carries the tile's value forward indefinitely, so the value is never "—"
+     * — but the 14-day window it has to plot holds nothing. Gating the swap on the value (what the Apple
+     * tile does) leaves this user exactly where they started: a number above a blank panel. Gating it on
+     * whether a series can be drawn fixes it.
+     */
+    @Test fun aCarriedValueWithAnEmptyWindowStillGetsTheCandidateLine() {
+        val candidate = listOf(95.0, 96.0, 94.0)
+        assertEquals(candidate, spo2SparkSeries(calibrated = emptyList(), candidate = candidate))
+        assertEquals(candidate, spo2SparkSeries(calibrated = listOf(97.0), candidate = candidate))
+    }
+
+    /** A drawable calibrated series is kept — the candidate is a fallback for having nothing to plot,
+     *  never a replacement for real measurements. */
+    @Test fun aDrawableCalibratedSeriesIsKept() {
+        val cal = listOf(97.0, 98.0)
+        assertEquals(cal, spo2SparkSeries(calibrated = cal, candidate = listOf(90.0, 91.0, 92.0)))
+    }
+
+    /** Toggle OFF hands this an empty candidate, and the series must stay exactly what it was. */
+    @Test fun anEmptyCandidateLeavesTheCalibratedSeriesUntouched() {
+        assertEquals(listOf(97.0), spo2SparkSeries(calibrated = listOf(97.0), candidate = emptyList()))
+        assertEquals(emptyList<Double>(), spo2SparkSeries(emptyList(), emptyList()))
+    }
+
+    /** Neither drawable → unchanged, and nothing invented to fill the space. A single candidate point is
+     *  not promoted into a line. */
+    @Test fun oneCandidatePointIsNotEnoughToSwap() {
+        assertEquals(emptyList<Double>(), spo2SparkSeries(calibrated = emptyList(), candidate = listOf(96.0)))
+    }
+
+    /**
+     * The swap is WHOLE-SERIES, never interleaved: a line mixing a measured import with an unverified
+     * strap estimate would have points of two provenances plotted as one trend.
+     */
+    @Test fun theSwapIsWholeSeriesNotPerDay() {
+        val cand = listOf(90.0, 91.0, 92.0)
+        assertEquals(cand, spo2SparkSeries(calibrated = listOf(97.0), candidate = cand))
+    }
+
+    /** The caption describes the VALUE, which is what it renders under — not the line, which can differ
+     *  when an unbounded carry outlives its window. */
+    @Test fun theCaptionFlagsExactlyWhenTheVALUEIsAnEstimate() {
+        assertTrue(spo2UsingCandidate(calibratedValue = null, candidateToday = 96.0))
+        assertFalse(spo2UsingCandidate(calibratedValue = 97.0, candidateToday = 96.0))
+        assertFalse(spo2UsingCandidate(calibratedValue = null, candidateToday = null))
     }
 }

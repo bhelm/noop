@@ -174,6 +174,13 @@ private enum class Destination(
     Settings("settings", R.string.nav_settings, Icons.Filled.Settings),
     // Experimental and intentionally absent from More: reachable only through Settings > Advanced.
     SelfHostedPush("self_hosted_push", R.string.nav_self_hosted_push, Icons.Filled.CloudSync),
+    // Nested Settings destination shared by the Settings row and a blank WHOOP 4.0 Steps tile (#1515).
+    // Deliberately absent from [drawerGroups]: it is contextual, not another top-level More item.
+    StepsCalibration(
+        "steps_calibration",
+        R.string.l10n_settings_screen_steps_estimate_ce7a604d,
+        Icons.Filled.Tune,
+    ),
     TestCentre("test_centre", R.string.nav_test_centre, Icons.Filled.BugReport),
 
     // The "More" tab: its own navigated page (mirroring the iOS More tab) that hosts the full
@@ -341,6 +348,9 @@ fun AppRoot(viewModel: AppViewModel = viewModel()) {
                         // Every metric/vital card opens its OWN focused detail trend (vital_detail/<key>),
                         // not the shared Health hub (2026-07-03). Mirrors the iOS liquidCard metricDetail.
                         onOpenMetric = { key -> nav.navigate("vital_detail/$key") },
+                        // A blank, uncalibrated WHOOP 4.0 Steps tile opens the same calibration screen as
+                        // Settings. A normal push returns Back to Today (#1515).
+                        onOpenStepsCalibration = { nav.navigate(Destination.StepsCalibration.route) },
                         onOpenSleep = { nav.navigateTopLevel(Destination.Sleep.route) },
                         // Optional Coupled view card (task #43): a normal push so back returns to Today.
                         onOpenCoupled = { nav.navigate(Destination.CoupledView.route) },
@@ -446,14 +456,29 @@ fun AppRoot(viewModel: AppViewModel = viewModel()) {
                         onOpenTestCentre = { nav.navigate(Destination.TestCentre.route) },
                         onOpenBackupSync = { nav.navigate(Destination.BackupSync.route) },
                         onOpenSelfHostedPush = { nav.navigate(Destination.SelfHostedPush.route) },
+                        onOpenStepsCalibration = { nav.navigate(Destination.StepsCalibration.route) },
+                    )
+                }
+                composable(Destination.StepsCalibration.route) {
+                    val profile = remember(context) { ProfileStore.from(context) }
+                    var revision by remember { mutableStateOf(0) }
+                    // ProfileStore wraps SharedPreferences rather than snapshot state. Reading this counter
+                    // makes manual coefficient changes repaint the canonical screen immediately.
+                    @Suppress("UNUSED_VARIABLE") val tick = revision
+                    StepsCalibrationScreen(
+                        vm = viewModel,
+                        profile = profile,
+                        onProfileChanged = { revision++ },
+                        onClose = { nav.popBackStack() },
                     )
                 }
                 composable(Destination.SelfHostedPush.route) { SelfHostedPushScreen() }
                 composable(Destination.TestCentre.route) { TestCentreScreen(viewModel) }
                 // The "More" page — the iOS More tab's twin: a navigated ScreenScaffold page hosting the
-                // full grouped destination list (was a pull-up sheet). A row navigates top-level.
+                // full grouped destination list (was a pull-up sheet). A row pushes its destination so
+                // Android Back returns to More instead of skipping straight to Today.
                 composable(Destination.More.route) {
-                    MoreScreen(onNavigate = { nav.navigateTopLevel(it) })
+                    MoreScreen(onNavigate = { nav.navigate(it) })
                 }
             }
         }
@@ -593,7 +618,7 @@ fun AppRoot(viewModel: AppViewModel = viewModel()) {
 // ([drawerGroups]) inside a [ScreenScaffold], with the exact section-header + row styling the sheet
 // used (uppercase [Overline] group labels, icon + label [NavigationDrawerItem] rows) — now with a
 // trailing chevron so each row reads as a navigation push, matching the iOS disclosure rows. Tapping a
-// row navigates top-level; there is no sheet to dismiss. The floating bottom bar stays visible because
+// row pushes its destination; there is no sheet to dismiss. The floating bottom bar stays visible because
 // this is just another NavHost destination under the same Scaffold.
 
 /** The full grouped destination list as a navigated page (the iOS More tab's twin). */
