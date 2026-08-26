@@ -7,7 +7,11 @@ import WhoopProtocol
 final class ImuSessionFileStore {
     static let shared = ImuSessionFileStore()
 
-    private struct Window: Codable { let id, deviceId: String; var from, to: Int64? }
+    private struct Window: Codable {
+        let id, deviceId: String
+        let from: Int64
+        var to: Int64?
+    }
     private let defaults = UserDefaults.standard
     private let key = "imu-session-windows-v1"
     private let directory: URL
