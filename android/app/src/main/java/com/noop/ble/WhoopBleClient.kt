@@ -90,6 +90,10 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.util.UUID
+import java.io.BufferedOutputStream
+import java.io.DataOutputStream
+import java.io.File
+import java.io.FileOutputStream
 import java.util.concurrent.ConcurrentLinkedQueue
 import java.util.concurrent.atomic.AtomicInteger
 
@@ -391,6 +395,16 @@ class RealGattOps(private val gatt: BluetoothGatt) : GattOps {
     override fun setPreferredPhyCompat(txPhy: Int, rxPhy: Int, phyOptions: Int) =
         gatt.setPreferredPhy(txPhy, rxPhy, phyOptions)
 }
+
+/** Foreground ground-truth diagnostics. Kept separate from [LiveState] so production UI/state stays clean. */
+data class GroundTruthImuStatus(
+    val sessionId: String? = null,
+    val requested: Boolean = false,
+    val packets: Long = 0,
+    val bytes: Long = 0,
+    val lastPacketAtMs: Long? = null,
+    val note: String = "Not started",
+)
 
 class WhoopBleClient(
     private val context: Context,
@@ -1763,6 +1777,9 @@ class WhoopBleClient(
     )
     val state: StateFlow<LiveState> = _state.asStateFlow()
 
+    private val _groundTruthImuStatus = MutableStateFlow(GroundTruthImuStatus())
+    val groundTruthImuStatus: StateFlow<GroundTruthImuStatus> = _groundTruthImuStatus.asStateFlow()
+
     /** Monotonic event for the in-memory/exportable strap log. Test Centre panels collect it only while
      * active and coalesce bursts, so a new tagged line refreshes its readout without mutating LiveState. */
     private val _logRevision = MutableStateFlow(0L)
@@ -2164,6 +2181,96 @@ class WhoopBleClient(
     /** @Volatile: set on the GATT binder thread at service discovery, but read in send() on the main
      *  thread (user actions) - the barrier makes a main-thread send see the current characteristic. */
     @Volatile private var cmdCharacteristic: BluetoothGattCharacteristic? = null
+
+    @Volatile private var groundTruthImuCommandAllowed = false
+    private var groundTruthImuSessionId: String? = null
+    private var groundTruthImuOut: DataOutputStream? = null
+
+    /** Start the hardware-confirmed WHOOP 5 realtime IMU mode for an explicit ground-truth session. */
+    @Synchronized
+    fun startGroundTruthImuCapture(sessionId: String): Boolean {
+        if (gatt == null || cmdCharacteristic == null) {
+            _groundTruthImuStatus.value = GroundTruthImuStatus(
+                sessionId = sessionId,
+                note = "Band not connected / command channel not ready",
+            )
+            return false
+        }
+        if (connectedFamily != DeviceFamily.WHOOP5) {
+            _groundTruthImuStatus.value = GroundTruthImuStatus(
+                sessionId = sessionId,
+                note = "Realtime IMU unsupported for connected family: $connectedFamily",
+            )
+            return false
+        }
+        if (groundTruthImuSessionId != sessionId || groundTruthImuOut == null) {
+            closeGroundTruthImuFile()
+            val dir = File(context.filesDir, "ground-truth").apply { mkdirs() }
+            val file = File(dir, "realtime-imu-$sessionId.bin")
+            // Append lets a foreground collector resume the same session after an Android process restart.
+            groundTruthImuOut = DataOutputStream(BufferedOutputStream(FileOutputStream(file, true), 64 * 1024))
+            groundTruthImuSessionId = sessionId
+            _groundTruthImuStatus.value = GroundTruthImuStatus(sessionId = sessionId, note = "Capture file open")
+        }
+        groundTruthImuCommandAllowed = true
+        try {
+            send(CommandNumber.TOGGLE_IMU_MODE, byteArrayOf(1, 1), withResponse = true)
+        } finally {
+            groundTruthImuCommandAllowed = false
+        }
+        log("Ground-truth realtime IMU requested ON (session=$sessionId)")
+        _groundTruthImuStatus.update { it.copy(requested = true, note = "IMU requested; waiting for packets") }
+        return true
+    }
+
+    /** Stop the realtime IMU before closing its lossless length-prefixed frame file. */
+    @Synchronized
+    fun stopGroundTruthImuCapture() {
+        if (connectedFamily == DeviceFamily.WHOOP5 && gatt != null && cmdCharacteristic != null) {
+            groundTruthImuCommandAllowed = true
+            try {
+                send(CommandNumber.TOGGLE_IMU_MODE, byteArrayOf(1, 0), withResponse = true)
+            } finally {
+                groundTruthImuCommandAllowed = false
+            }
+        }
+        log("Ground-truth realtime IMU requested OFF (session=${groundTruthImuSessionId ?: "none"})")
+        _groundTruthImuStatus.update { it.copy(requested = false, note = "Stopped") }
+        closeGroundTruthImuFile()
+    }
+
+    @Synchronized
+    private fun recordGroundTruthImuFrame(frame: ByteArray) {
+        if (frame.size <= 8 || (frame[8].toInt() and 0xFF) != 51) return
+        groundTruthImuOut?.let { out ->
+            runCatching {
+                out.writeLong(System.currentTimeMillis())
+                out.writeInt(frame.size)
+                out.write(frame)
+                val now = System.currentTimeMillis()
+                _groundTruthImuStatus.update {
+                    it.copy(
+                        packets = it.packets + 1,
+                        bytes = it.bytes + frame.size,
+                        lastPacketAtMs = now,
+                        note = "Receiving realtime IMU",
+                    )
+                }
+            }.onFailure {
+                log("Ground-truth realtime IMU write failed (${it.javaClass.simpleName}); capture stopped")
+                _groundTruthImuStatus.update { status -> status.copy(requested = false, note = "Write failed: ${it.javaClass.simpleName}") }
+                closeGroundTruthImuFile()
+            }
+        }
+    }
+
+    @Synchronized
+    private fun closeGroundTruthImuFile() {
+        runCatching { groundTruthImuOut?.flush() }
+        runCatching { groundTruthImuOut?.close() }
+        groundTruthImuOut = null
+        groundTruthImuSessionId = null
+    }
 
     /** Frame reassembler for the fragmented custom notify chars (port of Reassembler). Reassigned per
      *  connection with the detected family — WHOOP5/MG frames use a different length encoding. */
@@ -3448,7 +3555,9 @@ class WhoopBleClient(
             // 5/MG allow-list: live HR, buzz, and the historical-offload pair (trigger + ack). The
             // offload commands ride the SAME proven puffin COMMAND frame as the Swift path
             // (whoop5HistoricalAckFrame = puffinCommandFrame(23, [0x01]+endData)). (#78)
-            if (cmd != CommandNumber.TOGGLE_REALTIME_HR && cmd != CommandNumber.RUN_HAPTICS_PATTERN &&
+            if (cmd != CommandNumber.TOGGLE_REALTIME_HR &&
+                !(cmd == CommandNumber.TOGGLE_IMU_MODE && groundTruthImuCommandAllowed) &&
+                cmd != CommandNumber.RUN_HAPTICS_PATTERN &&
                 cmd != CommandNumber.SEND_HISTORICAL_DATA && cmd != CommandNumber.HISTORICAL_DATA_RESULT &&
                 // ABORT_HISTORICAL_TRANSMITS (20) over puffin: stop an offload already in flight. Allowed
                 // ONLY while one actually is, so a default install can never form these bytes on a 5/MG —
@@ -5948,6 +6057,7 @@ class WhoopBleClient(
                     // A frame replayed as part of the historical offload (type 47/48/… during a backfill)
                     // must not drive LIVE-only state (the charging pill). Mirrors iOS, where the offload
                     // path skips the live router entirely. (PR #568 reimpl)
+                    recordGroundTruthImuFrame(frame)
                     handleFrame(frame, parsed, replayedOffload = offloadFrame)
 
                     // Capture the strap's newest stored record from a GET_DATA_RANGE reply, feeding

@@ -57,6 +57,9 @@ class GroundTruthCollector private constructor(private val context: Context) {
     private val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
     private val directory = File(context.filesDir, "ground-truth").apply { mkdirs() }
 
+    fun realtimeImuBytes(sessionId: String): Long =
+        File(directory, "realtime-imu-$sessionId.bin").takeIf(File::isFile)?.length() ?: 0L
+
     @Synchronized
     fun snapshot(): Snapshot = Snapshot(
         active = prefs.getBoolean("active", false),
@@ -300,6 +303,13 @@ class GroundTruthCollector private constructor(private val context: Context) {
                 writer.flush()
             }
             out.closeEntry()
+
+            val realtimeImu = File(directory, "realtime-imu-$id.bin")
+            if (realtimeImu.isFile) {
+                out.putNextEntry(ZipEntry("realtime-imu.bin"))
+                realtimeImu.inputStream().use { it.copyTo(out) }
+                out.closeEntry()
+            }
         }
         prefs.edit().putBoolean(sessionExportedKey(id), true).apply()
         if (id == snap.sessionId) prefs.edit().putBoolean("exported", true).apply()
