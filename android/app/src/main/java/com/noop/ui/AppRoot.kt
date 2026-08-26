@@ -182,7 +182,7 @@ private enum class Destination(
         Icons.Filled.Tune,
     ),
     TestCentre("test_centre", R.string.nav_test_centre, Icons.Filled.BugReport),
-    GroundTruthCollector("ground_truth_collector", R.string.ground_truth_title, Icons.AutoMirrored.Filled.DirectionsWalk),
+    GroundTruthCollector("ground_truth_collector", R.string.ground_truth_title, Icons.Filled.Sensors),
 
     // The "More" tab: its own navigated page (mirroring the iOS More tab) that hosts the full
     // grouped destination list. It is NOT itself in any [DrawerGroup] — it's the door to them.

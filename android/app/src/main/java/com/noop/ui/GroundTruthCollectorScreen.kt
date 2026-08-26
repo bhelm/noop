@@ -40,7 +40,7 @@ import com.noop.testcentre.GroundTruthCollector
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
-/** Foreground-only hardware-clicker capture. Production steps never depend on this research surface. */
+/** Bounded 5/MG raw-data capture. Manual clicker labels are an optional fork extension. */
 @Composable
 fun GroundTruthCollectorScreen(vm: AppViewModel) {
     val context = LocalContext.current
@@ -48,11 +48,12 @@ fun GroundTruthCollectorScreen(vm: AppViewModel) {
     val focusRequester = remember { FocusRequester() }
     val view = LocalView.current
     val scope = rememberCoroutineScope()
-    val cycle by vm.activeDayCycle.collectAsStateWithLifecycle()
     val days by vm.recentDays.collectAsStateWithLifecycle()
     val live by vm.live.collectAsStateWithLifecycle()
     val imuStatus by vm.ble.groundTruthImuStatus.collectAsStateWithLifecycle()
-    val noopSteps = cycle?.steps ?: days.lastOrNull()?.steps
+    // Optional fork overlay only. The raw collector itself must not depend on the still-separate
+    // physiological day-cycle work; use the latest published total when the step counter is present.
+    val noopSteps = days.lastOrNull()?.steps
     var state by remember { mutableStateOf(collector.snapshot()) }
     var haptics by remember { mutableStateOf(false) }
     var exportingSessionId by remember { mutableStateOf<String?>(null) }
@@ -121,7 +122,7 @@ fun GroundTruthCollectorScreen(vm: AppViewModel) {
 
         NoopCard {
             Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                Text("Capture diagnostics", style = NoopType.headline, color = Palette.textPrimary)
+                Text("Capture coverage", style = NoopType.headline, color = Palette.textPrimary)
                 Text(
                     if (live.connected) "Band: connected${if (live.bonded) " + paired" else "; pairing"}"
                     else "Band: disconnected${if (live.scanning) "; searching" else ""}",
@@ -222,9 +223,9 @@ fun GroundTruthCollectorScreen(vm: AppViewModel) {
             NoopButton(
                 text = stringResource(R.string.ground_truth_start),
                 fullWidth = true,
-                enabled = noopSteps != null && vm.activeStrapId.isNotBlank(),
+                enabled = vm.activeStrapId.isNotBlank(),
                 onClick = {
-                    state = collector.start(requireNotNull(noopSteps), vm.activeStrapId)
+                    state = collector.start(noopSteps, vm.activeStrapId)
                     sessions = collector.sessions()
                 },
             )

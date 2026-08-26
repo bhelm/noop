@@ -15,7 +15,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
 
-/** App-private, explicitly user-started manual ground-truth capture. No production metric reads this. */
+/** App-private, explicitly user-started bounded 5/MG raw-data capture with optional manual labels. */
 class GroundTruthCollector private constructor(private val context: Context) {
     data class KeyInfo(
         val keyCode: Int,
@@ -77,7 +77,7 @@ class GroundTruthCollector private constructor(private val context: Context) {
     )
 
     @Synchronized
-    fun start(noopSteps: Int, deviceId: String, nowMs: Long = System.currentTimeMillis()): Snapshot {
+    fun start(noopSteps: Int?, deviceId: String, nowMs: Long = System.currentTimeMillis()): Snapshot {
         val id = nowMs.toString()
         prefs.edit()
             .putBoolean("active", true)
@@ -220,22 +220,18 @@ class GroundTruthCollector private constructor(private val context: Context) {
                 .toList()
         }
         val endMs = summary.endedAtMs ?: events.lastOrNull()?.optLong("at_ms") ?: summary.startedAtMs
-        // Sensor data is useful only around manually marked ground truth. An abandoned collector left
-        // open overnight must not turn one tap on Export into a multi-gigabyte query/allocation.
-        val markedEvents = events.filter {
-            it.optString("kind") == KIND_STEP || it.optString("kind") == KIND_STAIR ||
-                it.optString("kind") == KIND_UNDO_STEP || it.optString("kind") == KIND_UNDO_STAIR
-        }
         val exclusions = exclusionWindows(events)
-        val sensorBoundsMs = markedEvents.map { it.optLong("at_ms") } + exclusions.flatMap { listOf(it.first, it.second) }
-        val sensorFrom = if (deviceId == null) 1L else sensorBoundsMs.minOrNull()?.div(1_000L)?.minus(5L) ?: 1L
-        val sensorTo = if (deviceId == null) 0L else sensorBoundsMs.maxOrNull()?.div(1_000L)?.plus(5L) ?: 0L
+        // A raw-data session is useful even without manual step labels. Export its complete bounded
+        // interval; labels and exclusion windows are optional annotations, not a prerequisite for data.
+        val sensorFrom = if (deviceId == null) 1L else summary.startedAtMs / 1_000L
+        val sensorTo = if (deviceId == null) 0L else endMs / 1_000L
         val outDir = File(context.cacheDir, "logs").apply { mkdirs() }
         val zip = File(outDir, "noop-ground-truth-$id.zip")
         ZipOutputStream(zip.outputStream().buffered()).use { out ->
             out.putNextEntry(ZipEntry("meta.json"))
             out.writerEntry(JSONObject().apply {
-                put("schema_version", 2)
+                put("schema_version", 3)
+                put("capture_kind", "whoop_5mg_raw_data")
                 put("session_id", id)
                 if (deviceId != null) put("device_id", deviceId)
                 put("sensor_export_available", deviceId != null)
@@ -249,7 +245,7 @@ class GroundTruthCollector private constructor(private val context: Context) {
                 if (id == snap.sessionId && snap.lastNoopSteps != null) put("noop_steps_at_end", snap.lastNoopSteps)
                 put("device_family", "Android")
                 put("app_version", BuildConfig.VERSION_NAME)
-                put("ground_truth", "JX-05S hardware clicker; ZOOM_OUT=step, ZOOM_IN=stair")
+                put("manual_labels", "optional; JX-05S ZOOM_OUT=step, ZOOM_IN=stair")
             }.toString(2))
 
             out.putNextEntry(ZipEntry("events.jsonl"))
@@ -321,9 +317,9 @@ class GroundTruthCollector private constructor(private val context: Context) {
         context.startActivity(Intent.createChooser(Intent(Intent.ACTION_SEND).apply {
             type = "application/zip"
             putExtra(Intent.EXTRA_STREAM, uri)
-            putExtra(Intent.EXTRA_SUBJECT, "NOOP ground-truth session")
+            putExtra(Intent.EXTRA_SUBJECT, "NOOP 5/MG raw-data session")
             addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-        }, "Export ground-truth session").addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+        }, "Export raw-data session").addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
     }
 
     private fun eventFile(id: String) = File(directory, "session-$id.jsonl")

@@ -35,6 +35,7 @@ struct TestCentreView: View {
     // Retention (#650): how many scheduled-export generations to keep, and the manual clear confirm.
     @State private var debugExportKeep = ScheduledDebugExport.keepCount
     @State private var showClearExportsConfirm = false
+    @State private var rawMotionCaptureActive = false
 
     /// The strap model the user last picked, the same key SettingsView's showFiveMGControls gate reads.
     @AppStorage("selectedWhoopModel") private var selectedWhoopModelRaw = WhoopModel.whoop4.rawValue
@@ -77,6 +78,7 @@ struct TestCentreView: View {
             VStack(alignment: .leading, spacing: NoopMetrics.sectionSpacing) {
                 domainModesCard.staggeredAppear(index: 0)
                 diagnosticToolsCard.staggeredAppear(index: 1)
+                if is5MG { rawDataCollectorCard.staggeredAppear(index: 2) }
                 exportCard.staggeredAppear(index: 2)
                 experimentalAlgorithmsCard.staggeredAppear(index: 3)
             }
@@ -131,6 +133,38 @@ struct TestCentreView: View {
     }
 
     // MARK: - Section 2: Diagnostic tools (strap log + recalibrate + env dump)
+
+    @ViewBuilder private var rawDataCollectorCard: some View {
+        NoopCard {
+            VStack(alignment: .leading, spacing: NoopMetrics.space3) {
+                Text("5/MG RAW DATA COLLECTOR")
+                    .font(StrandFont.overline).tracking(StrandFont.overlineTracking)
+                    .foregroundStyle(StrandPalette.textSecondary)
+                Text("Records a bounded 60-second, 100 Hz motion window. The verified start/stop sequence is used only while this user-started session is active; normal sync is unchanged.")
+                    .font(StrandFont.caption).foregroundStyle(StrandPalette.textTertiary)
+                    .fixedSize(horizontal: false, vertical: true)
+                NoopButton(
+                    rawMotionCaptureActive ? "Capturing 100 Hz motion…" : "Capture 60 seconds",
+                    systemImage: rawMotionCaptureActive ? "waveform.path.ecg" : "record.circle",
+                    kind: .primary
+                ) {
+                    guard !rawMotionCaptureActive else { return }
+                    rawMotionCaptureActive = true
+                    model.ble.captureRawAccel(seconds: 60)
+                    Task { @MainActor in
+                        try? await Task.sleep(nanoseconds: 60_000_000_000)
+                        rawMotionCaptureActive = false
+                    }
+                }
+                .disabled(rawMotionCaptureActive || !live.connected)
+                Text(live.connected
+                     ? "The bounded raw window is persisted locally and can be included in Test Centre diagnostics."
+                     : "Connect your WHOOP 5/MG to start a capture.")
+                    .font(StrandFont.caption)
+                    .foregroundStyle(live.connected ? StrandPalette.textSecondary : StrandPalette.statusWarning)
+            }
+        }
+    }
 
     @ViewBuilder private var diagnosticToolsCard: some View {
         NoopCard {

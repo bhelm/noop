@@ -1756,8 +1756,14 @@ public final class BLEManager: NSObject, ObservableObject {
         rawCaptureInFlight = true
         let secs = RawCaptureWindow.clamp(seconds)
         collector?.beginRawCapture(seconds: secs)
-        send(.startRawData, payload: [0x01])
-        send(.toggleIMUMode, payload: [0x01])
+        // Hardware-verified on WHOOP 5/MG: opcode 106 alone acknowledges but does not start the
+        // producer. START_RAW_DATA must precede the two-byte realtime IMU selector.
+        send(.startRawData, payload: [0x01], writeType: .withResponse)
+        if selectedModel.deviceFamily == .whoop5 {
+            send(.toggleIMUMode, payload: [0x01, 0x01], writeType: .withResponse)
+        } else {
+            send(.toggleIMUMode, payload: [0x01], writeType: .withResponse)
+        }
         log("Raw-accel capture: started for \(secs)s")
         DispatchQueue.main.asyncAfter(deadline: .now() + secs) { [weak self] in
             guard let self else { return }
@@ -1765,7 +1771,10 @@ public final class BLEManager: NSObject, ObservableObject {
             // continuous stream must keep running — we just flush/upload the bounded window we
             // captured without halting the wider session.
             if !UserDefaults.standard.bool(forKey: "enableRawCapture") {
-                self.send(.stopRawData, payload: [0x01])
+                self.send(.stopRawData, payload: [0x01], writeType: .withResponse)
+                if self.selectedModel.deviceFamily == .whoop5 {
+                    self.send(.toggleIMUMode, payload: [0x01, 0x00], writeType: .withResponse)
+                }
             }
             self.rawCaptureInFlight = false
             Task { @MainActor in
@@ -1857,6 +1866,10 @@ public final class BLEManager: NSObject, ObservableObject {
                 || (DeviceConfigReadProbe.isReadOnlyOpcode(command.rawValue) && deviceConfigReport != nil)
                 || command == .sendHistoricalData || command == .historicalDataResult
                 || command == .setClock || command == .getClock
+                // Bounded Raw Data Collector only. These writes remain impossible unless the explicit
+                // user-started capture window is in flight; normal sync never enables this gate.
+                || (rawCaptureInFlight && (command == .startRawData
+                    || command == .stopRawData || command == .toggleIMUMode))
                 // SET_CONFIG / SET_FF_VALUE (120), ENABLE direction — the R22 deep-stream unlock. Allowed
                 // only while the deep-data experiment is opted in, and only for a KEY and a VALUE the gate
                 // recognises: one of the sixteen R22 flags carrying that key's own enable value. The clause
