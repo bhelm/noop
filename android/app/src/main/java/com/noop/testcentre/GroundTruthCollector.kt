@@ -150,6 +150,42 @@ class GroundTruthCollector private constructor(private val context: Context) {
             .sortedByDescending { it.startedAtMs }
     }
 
+    /** Delete one completed capture and all app-private files and metadata belonging to it. */
+    @Synchronized
+    fun deleteSession(sessionId: String): Boolean {
+        val current = snapshot()
+        if (current.active && current.sessionId == sessionId) return false
+
+        val files = listOf(
+            eventFile(sessionId),
+            File(directory, "realtime-imu-$sessionId.bin"),
+            File(context.cacheDir, "logs/noop-ground-truth-$sessionId.zip"),
+        )
+        // Evaluate every deletion even if one fails, so a stale export ZIP never survives merely
+        // because an earlier file could not be removed.
+        val filesDeleted = files.map { file -> !file.exists() || file.delete() }.all { it }
+        if (eventFile(sessionId).exists()) return false
+
+        prefs.edit()
+            .remove(sessionDeviceKey(sessionId))
+            .remove(sessionStartKey(sessionId))
+            .remove(sessionEndKey(sessionId))
+            .remove(sessionCommentKey(sessionId))
+            .remove(sessionExportedKey(sessionId))
+            .apply {
+                if (current.sessionId == sessionId) clearCurrentSession()
+            }
+            .apply()
+        return filesDeleted
+    }
+
+    /** Delete every completed capture. Active captures are deliberately retained. */
+    @Synchronized
+    fun deleteAllSessions(): Int {
+        val completedIds = sessions().filterNot(SessionSummary::active).map(SessionSummary::id)
+        return completedIds.count(::deleteSession)
+    }
+
     @Synchronized
     fun record(kind: String, key: KeyInfo, noopSteps: Int?, nowMs: Long = System.currentTimeMillis()): Snapshot {
         val before = snapshot()
@@ -483,6 +519,21 @@ class GroundTruthCollector private constructor(private val context: Context) {
 
     private fun android.content.SharedPreferences.Editor.applyNoopStart(value: Int?) = apply {
         if (value == null) remove("noopStepsAtStart") else putInt("noopStepsAtStart", value)
+    }
+
+    private fun android.content.SharedPreferences.Editor.clearCurrentSession() = apply {
+        remove("active")
+        remove("exported")
+        remove("sessionId")
+        remove("deviceId")
+        remove("startedAtMs")
+        remove("endedAtMs")
+        remove("steps")
+        remove("stairs")
+        remove("lastKind")
+        remove("lastKey")
+        remove("noopStepsAtStart")
+        remove("lastNoopSteps")
     }
 
     private fun sessionDeviceKey(id: String) = "session.$id.deviceId"

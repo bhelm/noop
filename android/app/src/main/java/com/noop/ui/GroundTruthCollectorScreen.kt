@@ -14,6 +14,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -60,6 +62,8 @@ fun GroundTruthCollectorScreen(vm: AppViewModel) {
     var excludeMinutes by remember { mutableStateOf("5") }
     var sessions by remember { mutableStateOf(collector.sessions()) }
     var latestSensorTs by remember { mutableStateOf<Long?>(null) }
+    var sessionPendingDelete by remember { mutableStateOf<GroundTruthCollector.SessionSummary?>(null) }
+    var confirmDeleteAll by remember { mutableStateOf(false) }
 
     LaunchedEffect(vm.activeStrapId) {
         while (true) {
@@ -234,6 +238,13 @@ fun GroundTruthCollectorScreen(vm: AppViewModel) {
         if (sessions.isEmpty()) {
             Text(stringResource(R.string.ground_truth_no_sessions), style = NoopType.body, color = Palette.textSecondary)
         } else {
+            NoopButton(
+                text = stringResource(R.string.ground_truth_delete_all),
+                kind = NoopButtonKind.Destructive,
+                fullWidth = true,
+                enabled = sessions.none { it.active },
+                onClick = { confirmDeleteAll = true },
+            )
             sessions.forEach { session ->
                 SessionCard(
                     session = session,
@@ -259,9 +270,56 @@ fun GroundTruthCollectorScreen(vm: AppViewModel) {
                             }
                         }
                     },
+                    onDelete = { sessionPendingDelete = session },
                 )
             }
         }
+    }
+
+    sessionPendingDelete?.let { session ->
+        AlertDialog(
+            onDismissRequest = { sessionPendingDelete = null },
+            title = { Text(stringResource(R.string.ground_truth_delete_session_title)) },
+            text = { Text(stringResource(R.string.ground_truth_delete_session_message, sessionTimeRange(session))) },
+            dismissButton = {
+                TextButton(onClick = { sessionPendingDelete = null }) {
+                    Text(stringResource(R.string.ground_truth_cancel))
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    collector.deleteSession(session.id)
+                    sessions = collector.sessions()
+                    state = collector.snapshot()
+                    sessionPendingDelete = null
+                }) {
+                    Text(stringResource(R.string.ground_truth_delete_confirm), color = Palette.statusCritical)
+                }
+            },
+        )
+    }
+
+    if (confirmDeleteAll) {
+        AlertDialog(
+            onDismissRequest = { confirmDeleteAll = false },
+            title = { Text(stringResource(R.string.ground_truth_delete_all_title)) },
+            text = { Text(stringResource(R.string.ground_truth_delete_all_message, sessions.size)) },
+            dismissButton = {
+                TextButton(onClick = { confirmDeleteAll = false }) {
+                    Text(stringResource(R.string.ground_truth_cancel))
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    collector.deleteAllSessions()
+                    sessions = collector.sessions()
+                    state = collector.snapshot()
+                    confirmDeleteAll = false
+                }) {
+                    Text(stringResource(R.string.ground_truth_delete_confirm), color = Palette.statusCritical)
+                }
+            },
+        )
     }
 }
 
@@ -273,11 +331,9 @@ private fun SessionCard(
     exporting: Boolean,
     onComment: (String) -> Unit,
     onExport: () -> Unit,
+    onDelete: () -> Unit,
 ) {
-    val time = remember(session.startedAtMs) {
-        java.text.DateFormat.getDateTimeInstance(java.text.DateFormat.SHORT, java.text.DateFormat.SHORT)
-            .format(java.util.Date(session.startedAtMs))
-    }
+    val time = remember(session.startedAtMs, session.endedAtMs) { sessionTimeRange(session) }
     NoopCard {
         Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
             val sensorCovered = session.endedAtMs?.let { end -> latestSensorTs?.times(1000)?.let { it >= end } } == true
@@ -321,7 +377,26 @@ private fun SessionCard(
                 enabled = !session.active && !exporting,
                 onClick = onExport,
             )
+            NoopButton(
+                text = stringResource(R.string.ground_truth_delete_session),
+                kind = NoopButtonKind.Destructive,
+                fullWidth = true,
+                enabled = !session.active && !exporting,
+                onClick = onDelete,
+            )
         }
+    }
+}
+
+private fun sessionTimeRange(session: GroundTruthCollector.SessionSummary): String {
+    val date = java.text.DateFormat.getDateInstance(java.text.DateFormat.SHORT)
+    val time = java.text.DateFormat.getTimeInstance(java.text.DateFormat.SHORT)
+    val from = java.util.Date(session.startedAtMs)
+    val to = session.endedAtMs?.let { java.util.Date(it) }
+    return if (to == null) {
+        "${date.format(from)} · ${time.format(from)}–…"
+    } else {
+        "${date.format(from)} · ${time.format(from)}–${time.format(to)}"
     }
 }
 
