@@ -20,6 +20,7 @@ final class ImuChunkArchiveStore {
     }
 
     func pin(sessionId: String, deviceId: String, from: Int, to: Int, ble: BLEManager) async -> [ImuChunkMeta] {
+        ImuSessionFileStore.shared.prepareForRead(sessionId)
         let existing = await ble.groundTruthImuChunks(from: from, to: to)
             .filter { $0.pinnedUntil == Int.max && file($0).isFileURL && FileManager.default.fileExists(atPath: file($0).path) }
         if existing.contains(where: { $0.startTs <= from && $0.endTs >= to
@@ -76,28 +77,36 @@ final class ImuChunkArchiveStore {
         guard let data = try? Data(contentsOf: url) else { return [] }
         let bytes = [UInt8](data); var offset = 0
         var rows: [(Int, [Int16])] = []
-        while offset + 24 <= bytes.count {
-            let headerTs = Int64(bigEndianBytes: bytes, at: offset); offset += 16 // strap + receipt timestamps
-            let length = Int(bytes[offset]) << 24 | Int(bytes[offset + 1]) << 16
-                | Int(bytes[offset + 2]) << 8 | Int(bytes[offset + 3])
-            offset += 4
-            let compressedLength = Int(bytes[offset]) << 24 | Int(bytes[offset + 1]) << 16
-                | Int(bytes[offset + 2]) << 8 | Int(bytes[offset + 3]); offset += 4
-            guard length > 0, length <= 1_048_576, compressedLength > 0,
-                  compressedLength <= 1_048_576, offset + compressedLength <= bytes.count else { break }
+        while offset + 12 <= bytes.count {
+            let count = int32(bytes, offset); let rawLength = int32(bytes, offset + 4)
+            let compressedLength = int32(bytes, offset + 8); offset += 12
+            guard count > 0, count <= 30, rawLength > 0, compressedLength > 0,
+                  offset + compressedLength <= bytes.count else { break }
             let compressed = Data(bytes[offset..<offset + compressedLength]); offset += compressedLength
-            var decoded = Data(count: length)
+            var decoded = Data(count: rawLength)
             let written = decoded.withUnsafeMutableBytes { dst in compressed.withUnsafeBytes { src in
-                compression_decode_buffer(dst.bindMemory(to: UInt8.self).baseAddress!, length,
+                compression_decode_buffer(dst.bindMemory(to: UInt8.self).baseAddress!, rawLength,
                     src.bindMemory(to: UInt8.self).baseAddress!, compressedLength, nil, COMPRESSION_ZLIB)
             }}
-            guard written == length else { continue }
-            let frame = [UInt8](decoded)
-            guard let ts = Whoop5RawImu.baseTs(frame), Int64(ts) == headerTs, ts >= from, ts <= to,
-                  let cols = Whoop5RawImu.rawColumns(frame) else { continue }
-            rows.append((ts, cols))
+            guard written == rawLength else { continue }
+            let raw = [UInt8](decoded); var rawOffset = 0
+            for _ in 0..<count {
+                guard rawOffset + 20 <= raw.count else { break }
+                let headerTs = Int64(bigEndianBytes: raw, at: rawOffset); rawOffset += 16
+                let length = int32(raw, rawOffset); rawOffset += 4
+                guard length > 0, rawOffset + length <= raw.count else { break }
+                let frame = Array(raw[rawOffset..<rawOffset + length]); rawOffset += length
+                guard let ts = Whoop5RawImu.baseTs(frame), Int64(ts) == headerTs, ts >= from, ts <= to,
+                      let cols = Whoop5RawImu.rawColumns(frame) else { continue }
+                rows.append((ts, cols))
+            }
         }
         return rows
+    }
+
+    private func int32(_ bytes: [UInt8], _ offset: Int) -> Int {
+        Int(bytes[offset]) << 24 | Int(bytes[offset + 1]) << 16
+            | Int(bytes[offset + 2]) << 8 | Int(bytes[offset + 3])
     }
 }
 
