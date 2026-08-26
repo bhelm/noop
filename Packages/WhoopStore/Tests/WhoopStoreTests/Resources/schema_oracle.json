@@ -1276,34 +1276,6 @@
         { "name": "index_imuChunk_deviceId_startTs_endTs", "columns": ["deviceId", "startTs", "endTs"], "unique": false }
       ]
     },
-    "rawImuSample": {
-      "platform": "both",
-      "columns": [
-        {
-          "name": "deviceId",
-          "affinity": "TEXT",
-          "notNull": true,
-          "default": null
-        },
-        {
-          "name": "ts",
-          "affinity": "INTEGER",
-          "notNull": true,
-          "default": null
-        },
-        {
-          "name": "samples",
-          "affinity": "BLOB",
-          "notNull": true,
-          "default": null
-        }
-      ],
-      "primaryKey": [
-        "deviceId",
-        "ts"
-      ],
-      "indices": []
-    },
     "respSample": {
       "platform": "both",
       "columns": [

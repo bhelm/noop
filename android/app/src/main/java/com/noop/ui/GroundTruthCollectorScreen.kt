@@ -274,6 +274,7 @@ fun GroundTruthCollectorScreen(vm: AppViewModel) {
                         scope.launch {
                             try {
                                 collector.share(collector.export(vm.repo, session.id))
+                                vm.ble.finishGroundTruthImuCapture(session.id)
                                 sessions = collector.sessions()
                             } catch (failure: Throwable) {
                                 if (failure is kotlinx.coroutines.CancellationException) throw failure
@@ -316,6 +317,7 @@ fun GroundTruthCollectorScreen(vm: AppViewModel) {
             },
             confirmButton = {
                 TextButton(onClick = {
+                    vm.ble.finishGroundTruthImuCapture(session.id)
                     collector.deleteSession(session.id)
                     sessions = collector.sessions()
                     state = collector.snapshot()
@@ -339,6 +341,7 @@ fun GroundTruthCollectorScreen(vm: AppViewModel) {
             },
             confirmButton = {
                 TextButton(onClick = {
+                    sessions.forEach { vm.ble.finishGroundTruthImuCapture(it.id) }
                     collector.deleteAllSessions()
                     sessions = collector.sessions()
                     state = collector.snapshot()

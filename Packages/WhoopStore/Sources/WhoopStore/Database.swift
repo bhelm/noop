@@ -895,6 +895,10 @@ extension WhoopStore {
             try db.create(index: "index_imuChunk_deviceId_startTs_endTs", on: "imuChunk",
                           columns: ["deviceId", "startTs", "endTs"])
         }
+        // IMU session payloads are append-only compressed files; SQLite stores only their catalog.
+        migrator.registerMigration("v41-drop-raw-imu-sample") { db in
+            try db.drop(table: "rawImuSample")
+        }
         return migrator
     }
 }

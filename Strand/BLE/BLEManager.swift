@@ -1786,10 +1786,10 @@ public final class BLEManager: NSObject, ObservableObject {
 
     /// Start a manually stopped 5/MG raw-data session. Returns false when another capture is active.
     @discardableResult
-    public func startGroundTruthRawCapture() -> Bool {
+    public func startGroundTruthRawCapture(sessionId: String) -> Bool {
         guard !rawCaptureInFlight else { return false }
         rawCaptureInFlight = true
-        collector?.beginRawCapture(seconds: RawCaptureWindow.maxSeconds)
+        collector?.beginGroundTruthRawCapture(sessionId: sessionId)
         send(.startRawData, payload: [0x01], writeType: .withResponse)
         send(.toggleIMUMode,
              payload: selectedModel.deviceFamily == .whoop5 ? [0x01, 0x01] : [0x01],
@@ -1811,6 +1811,10 @@ public final class BLEManager: NSObject, ObservableObject {
         log("Raw-data session: stopped + flushed")
     }
 
+    public func finishGroundTruthRawCapture(sessionId: String) {
+        collector?.finishGroundTruthRawCapture(sessionId: sessionId)
+    }
+
     public func groundTruthRawBatches(from: Int, to: Int) async -> [(RawBatchMeta, [[UInt8]])] {
         await collector?.rawBatches(from: from, to: to) ?? []
     }
@@ -1823,10 +1827,6 @@ public final class BLEManager: NSObject, ObservableObject {
     @discardableResult
     public func deleteGroundTruthRawBatches(from: Int, to: Int) async -> Int {
         await collector?.deleteRawBatches(from: from, to: to) ?? 0
-    }
-
-    public func groundTruthRawImuSamples(from: Int, to: Int) async -> [(ts: Int, cols: [Int16])] {
-        await collector?.rawImuSamples(from: from, to: to) ?? []
     }
 
     public func groundTruthImuChunks(from: Int, to: Int) async -> [ImuChunkMeta] {
@@ -6016,8 +6016,6 @@ extension BLEManager: @preconcurrency CBPeripheralDelegate {
                     // BEFORE the offload branch so it catches the burst; no-op unless capture is on.
                     puffinDeepBufferLog.appendIfDeepBuffer(frame: frame, char: characteristic.uuid, isOffload: isOffload)
                     // #423: the queryable twin of that diagnostics line — persist the decoded 100 Hz 6-axis
-                    // IMU samples into the rawImuSample table when raw capture is on (same gate, gated inside).
-                    collector?.storeRawImu(frame: frame)
                     if isOffload {
                         // Same policy as WHOOP4: historical offload frames are bulk sync traffic.
                         // Keep them out of the live UI parser during backfill and let Backfiller

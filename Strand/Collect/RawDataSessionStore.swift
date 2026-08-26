@@ -86,10 +86,12 @@ final class RawDataSessionStore: ObservableObject {
                               comment: "", exported: false, events: [started])
         sessions.insert(session, at: 0)
         persist(session)
+        ImuSessionFileStore.shared.start(id: session.id, deviceId: deviceId, fromMs: millis)
         return session
     }
 
     func stop(now: Date = Date()) {
+        let activeId = active?.id
         mutateActive { session in
             let millis = Int64(now.timeIntervalSince1970 * 1_000)
             session.endedAtMs = millis
@@ -97,6 +99,7 @@ final class RawDataSessionStore: ObservableObject {
             session.events.append(Event(atMs: millis, kind: .stop,
                                         stepsTotal: session.steps, stairsTotal: session.stairs))
         }
+        if let activeId { ImuSessionFileStore.shared.complete(id: activeId, toMs: Int64(now.timeIntervalSince1970 * 1_000)) }
     }
 
     @discardableResult
@@ -112,6 +115,7 @@ final class RawDataSessionStore: ObservableObject {
                               steps: 0, stairs: 0, excludedWindows: 0, comment: "",
                               exported: false, events: events)
         sessions.insert(session, at: 0); persist(session)
+        ImuSessionFileStore.shared.register(id: id, deviceId: deviceId, fromMs: fromMs, toMs: toMs)
         return session
     }
 
@@ -127,6 +131,9 @@ final class RawDataSessionStore: ObservableObject {
                               steps: session.steps, stairs: session.stairs,
                               excludedWindows: session.excludedWindows, comment: session.comment,
                               exported: false, events: session.events)
+        }
+        if let session = sessions.first(where: { $0.id == sessionId }) {
+            ImuSessionFileStore.shared.register(id: sessionId, deviceId: session.deviceId, fromMs: fromMs, toMs: toMs)
         }
     }
 
@@ -169,9 +176,16 @@ final class RawDataSessionStore: ObservableObject {
 
     func markExported(_ sessionId: String) { mutate(sessionId) { $0.exported = true } }
 
+    func finishImuRecovery(_ sessionId: String) {
+        ImuSessionFileStore.shared.remove(id: sessionId)
+        try? FileManager.default.removeItem(at: ImuSessionFileStore.shared.file(sessionId))
+    }
+
     func removeMetadata(_ sessionId: String) {
         guard sessions.first(where: { $0.id == sessionId })?.active != true else { return }
         try? FileManager.default.removeItem(at: file(sessionId))
+        try? FileManager.default.removeItem(at: ImuSessionFileStore.shared.file(sessionId))
+        ImuSessionFileStore.shared.remove(id: sessionId)
         sessions.removeAll { $0.id == sessionId }
     }
 
