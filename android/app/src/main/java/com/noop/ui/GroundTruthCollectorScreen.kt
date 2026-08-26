@@ -37,6 +37,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.noop.R
 import com.noop.testcentre.GroundTruthCollector
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 /** Foreground-only hardware-clicker capture. Production steps never depend on this research surface. */
@@ -49,12 +50,22 @@ fun GroundTruthCollectorScreen(vm: AppViewModel) {
     val scope = rememberCoroutineScope()
     val cycle by vm.activeDayCycle.collectAsStateWithLifecycle()
     val days by vm.recentDays.collectAsStateWithLifecycle()
+    val live by vm.live.collectAsStateWithLifecycle()
+    val imuStatus by vm.ble.groundTruthImuStatus.collectAsStateWithLifecycle()
     val noopSteps = cycle?.steps ?: days.lastOrNull()?.steps
     var state by remember { mutableStateOf(collector.snapshot()) }
     var haptics by remember { mutableStateOf(false) }
     var exportingSessionId by remember { mutableStateOf<String?>(null) }
     var excludeMinutes by remember { mutableStateOf("5") }
     var sessions by remember { mutableStateOf(collector.sessions()) }
+    var latestSensorTs by remember { mutableStateOf<Long?>(null) }
+
+    LaunchedEffect(vm.activeStrapId) {
+        while (true) {
+            latestSensorTs = vm.activeStrapId.takeIf(String::isNotBlank)?.let { vm.repo.latestHrSampleTs(it) }
+            delay(1_000)
+        }
+    }
 
     DisposableEffect(view) {
         val oldKeepScreenOn = view.keepScreenOn
@@ -64,6 +75,10 @@ fun GroundTruthCollectorScreen(vm: AppViewModel) {
         }
     }
     LaunchedEffect(state.active, state.steps, state.stairs) { focusRequester.requestFocus() }
+    // Re-arm after a BLE reconnect or Android process restart while the manual session is still active.
+    LaunchedEffect(state.active, state.sessionId, live.connected) {
+        if (state.active && live.connected) state.sessionId?.let(vm.ble::startGroundTruthImuCapture)
+    }
 
     ScreenScaffold(
         title = stringResource(R.string.ground_truth_title),
@@ -100,6 +115,39 @@ fun GroundTruthCollectorScreen(vm: AppViewModel) {
                     text = stringResource(R.string.ground_truth_delta, delta?.toString() ?: "-"),
                     style = NoopType.subhead,
                     color = Palette.textSecondary,
+                )
+            }
+        }
+
+        NoopCard {
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Text("Capture diagnostics", style = NoopType.headline, color = Palette.textPrimary)
+                Text(
+                    if (live.connected) "Band: connected${if (live.bonded) " + paired" else "; pairing"}"
+                    else "Band: disconnected${if (live.scanning) "; searching" else ""}",
+                    style = NoopType.body,
+                    color = if (live.connected) Palette.statusPositive else Palette.statusCritical,
+                )
+                Text(
+                    when {
+                        live.backfilling -> "History sync: running (${live.syncChunksThisSession} chunks)"
+                        live.lastSyncAt != null -> "History sync completed: ${diagnosticTime(live.lastSyncAt!! * 1000)}"
+                        else -> "History sync: no completed sync recorded"
+                    },
+                    style = NoopType.body,
+                    color = Palette.textSecondary,
+                )
+                Text(
+                    latestSensorTs?.let { "Sensor data through: ${diagnosticTime(it * 1000)} (${diagnosticAge(it * 1000)} behind)" }
+                        ?: "Sensor data through: none",
+                    style = NoopType.body,
+                    color = Palette.textSecondary,
+                )
+                Text(
+                    "Realtime IMU: ${imuStatus.note}; ${imuStatus.packets} packets / ${imuStatus.bytes} bytes" +
+                        (imuStatus.lastPacketAtMs?.let { "; last ${diagnosticAge(it)} ago" } ?: ""),
+                    style = NoopType.body,
+                    color = if (imuStatus.packets > 0) Palette.statusPositive else Palette.textSecondary,
                 )
             }
         }
@@ -143,7 +191,11 @@ fun GroundTruthCollectorScreen(vm: AppViewModel) {
                     text = stringResource(R.string.ground_truth_stop),
                     kind = NoopButtonKind.Destructive,
                     modifier = Modifier.weight(1f),
-                    onClick = { state = collector.stop(noopSteps); sessions = collector.sessions() },
+                    onClick = {
+                        vm.ble.stopGroundTruthImuCapture()
+                        state = collector.stop(noopSteps)
+                        sessions = collector.sessions()
+                    },
                 )
             }
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -173,6 +225,7 @@ fun GroundTruthCollectorScreen(vm: AppViewModel) {
                 enabled = noopSteps != null && vm.activeStrapId.isNotBlank(),
                 onClick = {
                     state = collector.start(requireNotNull(noopSteps), vm.activeStrapId)
+                    state.sessionId?.let(vm.ble::startGroundTruthImuCapture)
                     sessions = collector.sessions()
                 },
             )
@@ -184,6 +237,8 @@ fun GroundTruthCollectorScreen(vm: AppViewModel) {
             sessions.forEach { session ->
                 SessionCard(
                     session = session,
+                    latestSensorTs = latestSensorTs,
+                    realtimeImuBytes = collector.realtimeImuBytes(session.id),
                     exporting = exportingSessionId == session.id,
                     onComment = { comment ->
                         collector.setComment(session.id, comment)
@@ -213,6 +268,8 @@ fun GroundTruthCollectorScreen(vm: AppViewModel) {
 @Composable
 private fun SessionCard(
     session: GroundTruthCollector.SessionSummary,
+    latestSensorTs: Long?,
+    realtimeImuBytes: Long,
     exporting: Boolean,
     onComment: (String) -> Unit,
     onExport: () -> Unit,
@@ -223,6 +280,18 @@ private fun SessionCard(
     }
     NoopCard {
         Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            val sensorCovered = session.endedAtMs?.let { end -> latestSensorTs?.times(1000)?.let { it >= end } } == true
+            val captureReady = sensorCovered && realtimeImuBytes > 0
+            Text(
+                when {
+                    session.endedAtMs == null -> "Export status: recording"
+                    captureReady -> "Export status: ready (history covered, IMU ${realtimeImuBytes} bytes)"
+                    !sensorCovered -> "Export status: wait for history sync through ${diagnosticTime(requireNotNull(session.endedAtMs))}"
+                    else -> "Export status: no realtime IMU packets captured"
+                },
+                style = NoopType.caption,
+                color = if (captureReady) Palette.statusPositive else Palette.statusCritical,
+            )
             Text(time, style = NoopType.headline, color = Palette.textPrimary)
             Text(
                 stringResource(
@@ -274,4 +343,16 @@ private fun KeyEvent.toCollectorKey(): GroundTruthCollector.KeyInfo {
         deviceName = input?.name ?: "unknown",
         source = source,
     )
+}
+
+private fun diagnosticTime(epochMs: Long): String =
+    java.text.SimpleDateFormat("HH:mm:ss", java.util.Locale.getDefault()).format(java.util.Date(epochMs))
+
+private fun diagnosticAge(epochMs: Long): String {
+    val seconds = ((System.currentTimeMillis() - epochMs).coerceAtLeast(0L) / 1_000L)
+    return when {
+        seconds < 60 -> "${seconds}s"
+        seconds < 3_600 -> "${seconds / 60}m ${seconds % 60}s"
+        else -> "${seconds / 3_600}h ${(seconds % 3_600) / 60}m"
+    }
 }
