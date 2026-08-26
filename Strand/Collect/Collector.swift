@@ -122,12 +122,12 @@ final class Collector {
         async let gravity = try? store.gravitySamples(deviceId: deviceId, from: from, to: to, limit: limit)
         var lines = ["stream,unix_s,v1,v2,v3,v4"]
         lines += await (hr ?? []).map { "heart_rate,\($0.ts),\($0.bpm),,," }
-        lines += await (battery ?? []).map { "battery,\($0.ts),\($0.soc.map(String.init) ?? ""),\($0.mv.map(String.init) ?? ""),," }
+        lines += await (battery ?? []).map { "battery,\($0.ts),\($0.soc.map { String($0) } ?? ""),\($0.mv.map { String($0) } ?? ""),," }
         lines += await (spo2 ?? []).map { "spo2_raw,\($0.ts),\($0.red),\($0.ir),," }
-        lines += await (temp ?? []).map { "skin_temp_raw,\($0.ts),\($0.raw),\($0.aux1Raw.map(String.init) ?? ""),\($0.aux2Raw.map(String.init) ?? "")," }
-        lines += await (steps ?? []).map { "steps,\($0.ts),\($0.counter),\($0.activityClass.map(String.init) ?? ""),," }
+        lines += await (temp ?? []).map { "skin_temp_raw,\($0.ts),\($0.raw),\($0.aux1Raw.map { String($0) } ?? ""),\($0.aux2Raw.map { String($0) } ?? "")," }
+        lines += await (steps ?? []).map { "steps,\($0.ts),\($0.counter),\($0.activityClass.map { String($0) } ?? ""),," }
         lines += await (resp ?? []).map { "resp_raw,\($0.ts),\($0.raw),,," }
-        lines += await (gravity ?? []).map { "gravity,\($0.ts),\($0.x),\($0.y),\($0.z),\($0.dynAccel.map(String.init) ?? "")" }
+        lines += await (gravity ?? []).map { "gravity,\($0.ts),\($0.x),\($0.y),\($0.z),\($0.dynAccel.map { String($0) } ?? "")" }
         return Data((lines.joined(separator: "\n") + "\n").utf8)
     }
 
