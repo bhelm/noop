@@ -36,7 +36,6 @@ struct TestCentreView: View {
     // Retention (#650): how many scheduled-export generations to keep, and the manual clear confirm.
     @State private var debugExportKeep = ScheduledDebugExport.keepCount
     @State private var showClearExportsConfirm = false
-    @State private var rawMotionCaptureActive = false
 
     // WHOOP 5/MG developer controls. These use the same persisted keys as the former Settings card;
     // moving the UI does not reset an opt-in or lose the ability to undo a persistent strap write.
@@ -150,26 +149,16 @@ struct TestCentreView: View {
                 Text("5/MG RAW DATA COLLECTOR")
                     .font(StrandFont.overline).tracking(StrandFont.overlineTracking)
                     .foregroundStyle(StrandPalette.textSecondary)
-                Text("Records a bounded 60-second, 100 Hz motion window. The verified start/stop sequence is used only while this user-started session is active; normal sync is unchanged.")
+                Text("Start, label, review, export, and delete bounded 100 Hz motion sessions. Normal sync is unchanged.")
                     .font(StrandFont.caption).foregroundStyle(StrandPalette.textTertiary)
                     .fixedSize(horizontal: false, vertical: true)
-                NoopButton(
-                    rawMotionCaptureActive ? "Capturing 100 Hz motion…" : "Capture 60 seconds",
-                    systemImage: rawMotionCaptureActive ? "waveform.path.ecg" : "record.circle",
-                    kind: .primary
-                ) {
-                    guard !rawMotionCaptureActive else { return }
-                    rawMotionCaptureActive = true
-                    model.ble.captureRawAccel(seconds: 60)
-                    Task { @MainActor in
-                        try? await Task.sleep(nanoseconds: 60_000_000_000)
-                        rawMotionCaptureActive = false
-                    }
+                NavigationLink {
+                    RawDataCollectorView()
+                } label: {
+                    Label("Open raw-data collector", systemImage: "waveform.path.ecg")
                 }
-                .disabled(rawMotionCaptureActive || !live.connected)
-                Text(live.connected
-                     ? "The bounded raw window is persisted locally and can be included in Test Centre diagnostics."
-                     : "Connect your WHOOP 5/MG to start a capture.")
+                .buttonStyle(NoopButtonStyle(.primary, fullWidth: true))
+                Text(live.connected ? "WHOOP 5/MG connected." : "Connect your WHOOP 5/MG to start a capture.")
                     .font(StrandFont.caption)
                     .foregroundStyle(live.connected ? StrandPalette.textSecondary : StrandPalette.statusWarning)
             }

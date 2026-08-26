@@ -1784,6 +1784,42 @@ public final class BLEManager: NSObject, ObservableObject {
         }
     }
 
+    /// Start a manually stopped 5/MG raw-data session. Returns false when another capture is active.
+    @discardableResult
+    public func startGroundTruthRawCapture() -> Bool {
+        guard !rawCaptureInFlight else { return false }
+        rawCaptureInFlight = true
+        collector?.beginRawCapture(seconds: RawCaptureWindow.maxSeconds)
+        send(.startRawData, payload: [0x01], writeType: .withResponse)
+        send(.toggleIMUMode,
+             payload: selectedModel.deviceFamily == .whoop5 ? [0x01, 0x01] : [0x01],
+             writeType: .withResponse)
+        log("Raw-data session: started")
+        return true
+    }
+
+    /// Stop and flush the current manually controlled raw-data session.
+    public func stopGroundTruthRawCapture() async {
+        if rawCaptureInFlight && !UserDefaults.standard.bool(forKey: "enableRawCapture") {
+            send(.stopRawData, payload: [0x01], writeType: .withResponse)
+            if selectedModel.deviceFamily == .whoop5 {
+                send(.toggleIMUMode, payload: [0x01, 0x00], writeType: .withResponse)
+            }
+        }
+        await collector?.endRawCapture()
+        rawCaptureInFlight = false
+        log("Raw-data session: stopped + flushed")
+    }
+
+    public func groundTruthRawBatches(from: Int, to: Int) async -> [(RawBatchMeta, [[UInt8]])] {
+        await collector?.rawBatches(from: from, to: to) ?? []
+    }
+
+    @discardableResult
+    public func deleteGroundTruthRawBatches(from: Int, to: Int) async -> Int {
+        await collector?.deleteRawBatches(from: from, to: to) ?? 0
+    }
+
     /// Send a command to the WHOOP strap.
     /// - Parameters:
     ///   - command: The command to send.
@@ -5023,6 +5059,9 @@ extension BLEManager: @preconcurrency CBCentralManagerDelegate {
         didBond = false
         clientHelloWriteAt = nil   // #1635: no hello survives the link that carried it
         whoop5RealtimeArmed = false
+        // A user capture remains represented by RawDataSessionStore, but its transport must be re-armed
+        // on the next connection. Keeping this true would make that reconnect attempt a silent no-op.
+        rawCaptureInFlight = false
         // The strap forgets the realtime-HR toggle across a disconnect; the post-bond branch re-arms it
         // from `wantsRealtime`. Clear only the "what we last sent" flag — `screenWantsRealtime` /
         // `keepRealtimeForData` (and thus `wantsRealtime`) are intent and must survive a reconnect so the

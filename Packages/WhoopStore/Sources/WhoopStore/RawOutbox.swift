@@ -164,6 +164,33 @@ extension WhoopStore {
         }
     }
 
+    /// Raw batches overlapping a user-selected capture interval, oldest first.
+    public func rawBatches(deviceId: String, from: Int, to: Int) async throws -> [RawBatchMeta] {
+        guard from <= to else { return [] }
+        return try syncRead { db in
+            try Row.fetchAll(db, sql: """
+                SELECT batchId, deviceId, capturedAt, deviceClockRef, wallClockRef,
+                       startTs, endTs, frameCount, byteSize
+                FROM rawBatch
+                WHERE deviceId = ? AND capturedAt >= ? AND capturedAt <= ?
+                ORDER BY capturedAt ASC, rowid ASC
+                """, arguments: [deviceId, from, to]).map(WhoopStore.metaFromRow)
+        }
+    }
+
+    /// Remove raw batches belonging to a deleted user capture interval.
+    @discardableResult
+    public func deleteRawBatches(deviceId: String, from: Int, to: Int) async throws -> Int {
+        guard from <= to else { return 0 }
+        return try syncWrite { db in
+            try db.execute(sql: """
+                DELETE FROM rawBatch
+                WHERE deviceId = ? AND capturedAt >= ? AND capturedAt <= ?
+                """, arguments: [deviceId, from, to])
+            return db.changesCount
+        }
+    }
+
     /// Mark a batch synced (timestamp in unix seconds).
     ///
     /// #981 — NO production caller, and by design: see the dormancy note on `pruneRaw`'s Policy 1. Kept

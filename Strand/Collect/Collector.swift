@@ -97,6 +97,24 @@ final class Collector {
         return try? await s.storageStats()
     }
 
+    func rawBatches(from: Int, to: Int) async -> [(RawBatchMeta, [[UInt8]])] {
+        guard let store = concreteStore,
+              let metas = try? await store.rawBatches(deviceId: deviceId, from: from, to: to) else { return [] }
+        var result: [(RawBatchMeta, [[UInt8]])] = []
+        for meta in metas {
+            if let frames = try? await store.rawFrames(batchId: meta.batchId) {
+                result.append((meta, frames))
+            }
+        }
+        return result
+    }
+
+    @discardableResult
+    func deleteRawBatches(from: Int, to: Int) async -> Int {
+        guard let store = concreteStore else { return 0 }
+        return (try? await store.deleteRawBatches(deviceId: deviceId, from: from, to: to)) ?? 0
+    }
+
     /// Max persisted HR sample ts (the biometric "data frontier" for the stuck-strap watchdog).
     /// nil if there's no concrete store or nothing persisted yet. Mirrors storageStats().
     func latestHRSampleTs() async -> Int? {
