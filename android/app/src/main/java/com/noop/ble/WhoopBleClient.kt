@@ -9257,7 +9257,10 @@ class WhoopBleClient(
      *  1244-B 6-axis buffer decodes (rawColumns null otherwise). IO-dispatched so it never blocks the GATT
      *  thread; bounded by a rolling retention prune. Raw i16, no downstream consumer yet (instrument-first). */
     private fun storeWhoop5RawImuIfBuffer(frame: ByteArray) {
-        if (!PuffinExperiment.from(context).isCaptureEnabled) return
+        // The bounded collector owns its own capture gate. It must not require the unrelated passive
+        // protocol-trace preference: live and history copies then converge on the same keyed raw-IMU
+        // table, whose primary key deduplicates a Bluetooth-gap repair automatically.
+        if (!PuffinExperiment.from(context).isCaptureEnabled && groundTruthImuSessionId == null) return
         val cols = Whoop5RawImu.rawColumns(frame) ?: return
         val baseTs = PuffinDeepBufferLog.strapTs(frame)?.toLong() ?: return
         val dev = deviceId
