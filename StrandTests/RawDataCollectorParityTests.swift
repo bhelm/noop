@@ -43,7 +43,7 @@ final class RawDataCollectorParityTests: XCTestCase {
 
     func testAndroidAndAppleOracleCopiesAreByteIdentical() throws {
         let android = repoRoot.appendingPathComponent("android/app/src/test/resources/raw_data_collector_parity.json")
-        XCTAssertEqual(oracleData(), try Data(contentsOf: android),
+        XCTAssertEqual(try oracleData(), try Data(contentsOf: android),
                        "Raw-data collector parity oracle copies must change together")
     }
 }
