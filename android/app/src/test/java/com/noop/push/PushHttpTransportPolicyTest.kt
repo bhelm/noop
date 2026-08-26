@@ -30,11 +30,11 @@ class PushHttpTransportPolicyTest {
         assertFalse(rejected.reason.contains("receiver.example", ignoreCase = true))
     }
 
-    @Test fun explicitConnectionTestIsGatedByWifiBeforeAnyTransportIsCreated() {
-        assertFalse(canStartPushConnectionTest(wifiAvailable = false, endpointValid = true, tokenAvailable = true))
-        assertFalse(canStartPushConnectionTest(wifiAvailable = true, endpointValid = false, tokenAvailable = true))
-        assertFalse(canStartPushConnectionTest(wifiAvailable = true, endpointValid = true, tokenAvailable = false))
-        assertTrue(canStartPushConnectionTest(wifiAvailable = true, endpointValid = true, tokenAvailable = true))
+    @Test fun explicitConnectionTestIsGatedByNetworkPolicyBeforeAnyTransportIsCreated() {
+        assertFalse(canStartPushConnectionTest(networkAvailable = false, endpointValid = true, tokenAvailable = true))
+        assertFalse(canStartPushConnectionTest(networkAvailable = true, endpointValid = false, tokenAvailable = true))
+        assertFalse(canStartPushConnectionTest(networkAvailable = true, endpointValid = true, tokenAvailable = false))
+        assertTrue(canStartPushConnectionTest(networkAvailable = true, endpointValid = true, tokenAvailable = true))
     }
 
     @Test fun explicitConnectionTestOnlyReadsCapabilitiesAndNeverPostsHealthData() = runBlocking {

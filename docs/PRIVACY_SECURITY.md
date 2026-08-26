@@ -164,7 +164,8 @@ not a NOOP cloud, account, restore path, or two-way sync:
   schemas, settings, or conflict decisions. The local database remains authoritative.
 - **Connection test.** The explicit **Test connection** action performs only the authenticated
   capability `GET`; it does not open the health database or submit a batch, and uses the same
-  Wi-Fi-only network gate as export work.
+  network policy as export work: Wi-Fi only by default, with an explicit option to allow mobile
+  and other connected networks.
 - **Useful diagnostics without leaking secrets.** The screen distinguishes DNS lookup, TLS
   certificate/handshake, timeout, connection-refused, unreachable/reset connection, HTTP status,
   capability/acknowledgement, local encoding, and local database failures. It stores and displays

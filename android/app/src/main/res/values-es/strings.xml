@@ -2434,7 +2434,7 @@
     <string name="l10n_app_changelog_training_load_a_vo_max_without_f9205a67">Carga de entrenamiento, VO₂max sin cinta métrica y mucha menos batería recalculando</string>
     <string name="nav_self_hosted_push">Envío autoalojado</string>
     <string name="push_title">Envío autoalojado</string>
-    <string name="push_subtitle">Experimental · Android · solo Wi-Fi</string>
+    <string name="push_subtitle">Experimental · Android</string>
     <string name="push_destination_title">Tu endpoint</string>
     <string name="push_disclosure">Al activarlo, NOOP envía datos de salud sin procesar desde este teléfono al endpoint que controlas. Los datos salen expresamente del dispositivo.</string>
     <string name="push_one_way_warning">Solo exportación unidireccional. NOOP no puede restaurar datos desde este endpoint ni proporciona un receptor.</string>
@@ -2448,7 +2448,7 @@
     <string name="push_test_connection">Probar conexión</string>
     <string name="push_testing_connection">Probando conexión…</string>
     <string name="push_test_connection_detail">Comprueba la autenticación y los tipos de datos admitidos. No envía datos de salud.</string>
-    <string name="push_test_wifi_required">Conéctate a una red Wi-Fi antes de probar el receptor.</string>
+    <string name="push_test_network_required">Conéctate a una red permitida por el ajuste Solo Wi-Fi antes de probar el receptor.</string>
     <string name="push_capabilities_retryable_error">No se pudo contactar con el receptor. Prueba de nuevo más tarde.</string>
     <string name="push_capabilities_invalid_error">El receptor devolvió capacidades no válidas o no compatibles.</string>
     <string name="push_error_dns">Falló la resolución DNS. Comprueba el nombre del host y la configuración DNS del endpoint.</string>
@@ -2472,7 +2472,7 @@
     <string name="push_error_ack_invalid">La confirmación está dañada o no coincide con el lote. El cursor no avanzó.</string>
     <string name="push_error_local_data">Un registro local supera los límites o no puede codificarse exactamente. El cursor no avanzó.</string>
     <string name="push_error_local_database">No se pudo leer o guardar la base de datos local o el progreso.</string>
-    <string name="push_error_wifi">Esperando Wi-Fi.</string>
+    <string name="push_error_network">Esperando una red permitida por el ajuste Solo Wi-Fi.</string>
     <string name="push_error_retrying">%1$s Se ha programado un reintento automático.</string>
     <string name="push_error_paused">%1$s Los reintentos están pausados; corrige la causa y usa Exportar ahora o sincroniza de nuevo la pulsera.</string>
     <string name="push_error_missing_token">El token guardado no está disponible. Guárdalo de nuevo.</string>
@@ -2483,7 +2483,9 @@
     <string name="push_capabilities_none">Este receptor no acepta actualmente datos de salud del protocolo 1.0.</string>
     <string name="push_capabilities_streams">Datos aceptados: %1$s</string>
     <string name="push_enabled">Activar exportación automática</string>
-    <string name="push_enabled_detail">Exporta datos nuevos y modificados tras una sincronización completa de la pulsera y recupera pendientes al iniciar la app. Solo Wi-Fi.</string>
+    <string name="push_enabled_detail">Exporta datos nuevos y modificados tras una sincronización completa de la pulsera y recupera pendientes al iniciar la app.</string>
+    <string name="push_wifi_only">Solo Wi-Fi</string>
+    <string name="push_wifi_only_detail">Usa Wi-Fi sin medición para las pruebas de conexión y las exportaciones. Desactívalo para permitir redes móviles y otras redes conectadas.</string>
     <string name="push_export_now">Exportar ahora</string>
     <string name="push_export_now_detail">Inicia ahora una puesta al día. La exportación automática debe estar activada.</string>
     <string name="push_config_required">Guarda un endpoint válido y un token antes de activar.</string>

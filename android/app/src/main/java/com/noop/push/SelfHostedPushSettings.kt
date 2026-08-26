@@ -15,6 +15,7 @@ class SelfHostedPushSettings private constructor(
 
     data class Snapshot(
         val enabled: Boolean,
+        val wifiOnly: Boolean,
         val endpoint: PushEndpointPolicy.ValidEndpoint?,
         val hasToken: Boolean,
         val lastSuccessAt: Long?,
@@ -35,6 +36,7 @@ class SelfHostedPushSettings private constructor(
         val capabilities = capabilitiesFor(endpoint)
         return Snapshot(
             enabled = enabled,
+            wifiOnly = wifiOnly(),
             endpoint = endpoint,
             hasToken = !secrets.value.getString(KEY_TOKEN, null).isNullOrBlank(),
             lastSuccessAt = prefs.getLong(KEY_LAST_SUCCESS, 0L).takeIf { it > 0 },
@@ -52,6 +54,14 @@ class SelfHostedPushSettings private constructor(
     }
 
     fun endpointText(): String = prefs.getString(KEY_ENDPOINT, "").orEmpty()
+    fun wifiOnly(): Boolean = prefs.getBoolean(KEY_WIFI_ONLY, true)
+
+    fun setWifiOnly(wifiOnly: Boolean) {
+        check(prefs.edit().putBoolean(KEY_WIFI_ONLY, wifiOnly).commit()) {
+            "Could not persist push network policy"
+        }
+    }
+
     /** Plain-pref gate used by stale workers before opening Room or Android Keystore. */
     fun enabledEndpoint(): PushEndpointPolicy.ValidEndpoint? {
         if (!prefs.getBoolean(KEY_ENABLED, false)) return null
@@ -256,6 +266,7 @@ class SelfHostedPushSettings private constructor(
         private const val PREFS = "self_hosted_push"
         private const val SECRETS = "self_hosted_push_secrets"
         private const val KEY_ENABLED = "enabled"
+        private const val KEY_WIFI_ONLY = "wifi_only"
         private const val KEY_ENDPOINT = "endpoint"
         private const val KEY_TOKEN = "bearer_token"
         private const val KEY_SOURCE_ID = "source_id"

@@ -153,12 +153,15 @@ fun SelfHostedPushScreen() {
                         if (valid == null || testToken == null) {
                             validationMessage = context.getString(R.string.push_config_required)
                         } else if (!canStartPushConnectionTest(
-                                wifiAvailable = isPushWifiAvailable(context),
+                                networkAvailable = isPushNetworkAvailable(
+                                    context,
+                                    wifiOnly = snapshot.wifiOnly,
+                                ),
                                 endpointValid = true,
                                 tokenAvailable = true,
                             )
                         ) {
-                            validationMessage = context.getString(R.string.push_test_wifi_required)
+                            validationMessage = context.getString(R.string.push_test_network_required)
                         } else {
                             val generation = capabilityProbeGeneration + 1
                             capabilityProbeGeneration = generation
@@ -253,6 +256,18 @@ fun SelfHostedPushScreen() {
                         },
                     )
                 }
+                SettingsToggleRow(
+                    title = stringResource(R.string.push_wifi_only),
+                    detail = stringResource(R.string.push_wifi_only_detail),
+                    checked = snapshot.wifiOnly,
+                    onCheckedChange = { requested ->
+                        capabilityProbe = CapabilityProbeUi.Idle
+                        capabilityProbeGeneration++
+                        settings.setWifiOnly(requested)
+                        SelfHostedPushScheduler.networkPolicyChanged(context)
+                        snapshot = settings.snapshot()
+                    },
+                )
                 SettingsToggleRow(
                     title = stringResource(R.string.push_enabled),
                     detail = stringResource(R.string.push_enabled_detail),

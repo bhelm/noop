@@ -1,12 +1,18 @@
 package com.noop.push
 
 import androidx.work.ExistingWorkPolicy
+import androidx.work.NetworkType
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Assert.assertFalse
 import org.junit.Test
 
 class SelfHostedPushSchedulerTest {
+    @Test fun workConstraintHonorsWifiOnlyPreference() {
+        assertEquals(NetworkType.UNMETERED, requiredPushNetworkType(wifiOnly = true))
+        assertEquals(NetworkType.CONNECTED, requiredPushNetworkType(wifiOnly = false))
+    }
+
     @Test fun workIsSerializedAndBackoffMeetsWorkManagerMinimum() {
         assertEquals(ExistingWorkPolicy.REPLACE, SelfHostedPushScheduler.EXISTING_WORK_POLICY)
         assertEquals(ExistingWorkPolicy.APPEND_OR_REPLACE, SelfHostedPushScheduler.CONTINUATION_WORK_POLICY)

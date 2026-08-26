@@ -45,7 +45,7 @@
     <string name="nav_more">More</string>
 
     <string name="push_title">Self-hosted push</string>
-    <string name="push_subtitle">Experimental · Android · Wi-Fi only</string>
+    <string name="push_subtitle">Experimental · Android</string>
     <string name="push_destination_title">Your endpoint</string>
     <string name="push_disclosure">When enabled, NOOP sends raw health records from this phone to the endpoint you control. This is explicit data egress from the device.</string>
     <string name="push_one_way_warning">One-way export only. NOOP cannot restore data from this endpoint and does not provide a receiver.</string>
@@ -59,7 +59,7 @@
     <string name="push_test_connection">Test connection</string>
     <string name="push_testing_connection">Testing connection…</string>
     <string name="push_test_connection_detail">Checks authentication and supported data types. No health data is sent.</string>
-    <string name="push_test_wifi_required">Connect to Wi-Fi before testing the receiver.</string>
+    <string name="push_test_network_required">Connect to a network allowed by the Wi-Fi-only setting before testing the receiver.</string>
     <string name="push_capabilities_retryable_error">The receiver could not be reached. Try the connection test again later.</string>
     <string name="push_capabilities_invalid_error">The receiver returned invalid or unsupported capabilities.</string>
     <string name="push_error_dns">DNS lookup failed. Check the endpoint hostname and DNS configuration.</string>
@@ -83,7 +83,7 @@
     <string name="push_error_ack_invalid">The receiver acknowledgement is malformed or does not match the submitted batch. The cursor was not advanced.</string>
     <string name="push_error_local_data">A local record exceeds protocol limits or cannot be encoded exactly. No cursor was advanced.</string>
     <string name="push_error_local_database">The local database or push-progress state could not be read or saved.</string>
-    <string name="push_error_wifi">Waiting for Wi-Fi.</string>
+    <string name="push_error_network">Waiting for a network allowed by the Wi-Fi-only setting.</string>
     <string name="push_error_retrying">%1$s Automatic retry is scheduled.</string>
     <string name="push_error_paused">%1$s Automatic retries are paused; fix the cause, then use Export now or complete another strap sync.</string>
     <string name="push_error_missing_token">The saved bearer token is unavailable. Save it again.</string>
@@ -94,7 +94,9 @@
     <string name="push_capabilities_none">This receiver currently accepts no protocol 1.0 health data.</string>
     <string name="push_capabilities_streams">Accepted data: %1$s</string>
     <string name="push_enabled">Enable automatic export</string>
-    <string name="push_enabled_detail">Exports new and changed data after a complete strap sync and catches up at app launch. Wi-Fi only.</string>
+    <string name="push_enabled_detail">Exports new and changed data after a complete strap sync and catches up at app launch.</string>
+    <string name="push_wifi_only">Wi-Fi only</string>
+    <string name="push_wifi_only_detail">Use unmetered Wi-Fi for connection tests and exports. Turn off to allow mobile and other connected networks.</string>
     <string name="push_export_now">Export now</string>
     <string name="push_export_now_detail">Starts a catch-up now. Automatic export must be enabled.</string>
     <string name="push_config_required">Save a valid endpoint and token before enabling.</string>

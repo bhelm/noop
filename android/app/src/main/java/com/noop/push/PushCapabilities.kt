@@ -86,10 +86,10 @@ internal class PushConnectionTester(
 }
 
 internal fun canStartPushConnectionTest(
-    wifiAvailable: Boolean,
+    networkAvailable: Boolean,
     endpointValid: Boolean,
     tokenAvailable: Boolean,
-): Boolean = wifiAvailable && endpointValid && tokenAvailable
+): Boolean = networkAvailable && endpointValid && tokenAvailable
 
 sealed interface PushCapabilitiesResult {
     data class Available(val capabilities: PushCapabilities) : PushCapabilitiesResult

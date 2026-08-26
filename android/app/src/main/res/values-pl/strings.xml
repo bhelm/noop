@@ -2439,7 +2439,7 @@
     <string name="l10n_app_changelog_training_load_a_vo_max_without_f9205a67">Obciążenie treningowe, VO₂max bez centymetra i znacznie mniej baterii na przeliczanie</string>
     <string name="nav_self_hosted_push">Wysyłanie na własny serwer</string>
     <string name="push_title">Wysyłanie na własny serwer</string>
-    <string name="push_subtitle">Eksperymentalne · Android · tylko Wi-Fi</string>
+    <string name="push_subtitle">Eksperymentalne · Android</string>
     <string name="push_destination_title">Twój endpoint</string>
     <string name="push_disclosure">Po włączeniu NOOP wysyła surowe dane zdrowotne z tego telefonu do kontrolowanego przez Ciebie endpointu. Dane jawnie opuszczają urządzenie.</string>
     <string name="push_one_way_warning">Tylko eksport jednokierunkowy. NOOP nie może odtworzyć danych z tego endpointu i nie udostępnia odbiornika.</string>
@@ -2453,7 +2453,7 @@
     <string name="push_test_connection">Sprawdź połączenie</string>
     <string name="push_testing_connection">Sprawdzanie połączenia…</string>
     <string name="push_test_connection_detail">Sprawdza uwierzytelnianie i obsługiwane typy danych. Nie wysyła danych zdrowotnych.</string>
-    <string name="push_test_wifi_required">Połącz się z Wi-Fi przed sprawdzeniem odbiornika.</string>
+    <string name="push_test_network_required">Przed sprawdzeniem odbiornika połącz się z siecią dozwoloną przez ustawienie Tylko Wi-Fi.</string>
     <string name="push_capabilities_retryable_error">Nie można połączyć się z odbiornikiem. Spróbuj ponownie później.</string>
     <string name="push_capabilities_invalid_error">Odbiornik zwrócił nieprawidłowe lub nieobsługiwane możliwości.</string>
     <string name="push_error_dns">Nie udało się rozwiązać DNS. Sprawdź nazwę hosta i konfigurację DNS endpointu.</string>
@@ -2477,7 +2477,7 @@
     <string name="push_error_ack_invalid">Potwierdzenie jest uszkodzone lub nie pasuje do partii. Kursor nie został przesunięty.</string>
     <string name="push_error_local_data">Lokalny rekord przekracza limity lub nie może zostać dokładnie zakodowany. Kursor nie został przesunięty.</string>
     <string name="push_error_local_database">Nie można odczytać lub zapisać lokalnej bazy albo postępu.</string>
-    <string name="push_error_wifi">Oczekiwanie na Wi-Fi.</string>
+    <string name="push_error_network">Oczekiwanie na sieć dozwoloną przez ustawienie Tylko Wi-Fi.</string>
     <string name="push_error_retrying">%1$s Zaplanowano automatyczną ponowną próbę.</string>
     <string name="push_error_paused">%1$s Próby są wstrzymane; usuń przyczynę, potem użyj Eksportuj teraz lub zsynchronizuj opaskę ponownie.</string>
     <string name="push_error_missing_token">Zapisany token jest niedostępny. Zapisz go ponownie.</string>
@@ -2488,7 +2488,9 @@
     <string name="push_capabilities_none">Ten odbiornik obecnie nie przyjmuje danych zdrowotnych protokołu 1.0.</string>
     <string name="push_capabilities_streams">Akceptowane dane: %1$s</string>
     <string name="push_enabled">Włącz automatyczny eksport</string>
-    <string name="push_enabled_detail">Eksportuje nowe i zmienione dane po pełnej synchronizacji opaski oraz uzupełnia zaległości przy uruchomieniu aplikacji. Tylko Wi-Fi.</string>
+    <string name="push_enabled_detail">Eksportuje nowe i zmienione dane po pełnej synchronizacji opaski oraz uzupełnia zaległości przy uruchomieniu aplikacji.</string>
+    <string name="push_wifi_only">Tylko Wi-Fi</string>
+    <string name="push_wifi_only_detail">Używa nielimitowanego Wi-Fi do testów połączenia i eksportu. Wyłącz, aby zezwolić na sieci komórkowe i inne połączone sieci.</string>
     <string name="push_export_now">Eksportuj teraz</string>
     <string name="push_export_now_detail">Rozpoczyna uzupełnianie teraz. Automatyczny eksport musi być włączony.</string>
     <string name="push_config_required">Przed włączeniem zapisz prawidłowy endpoint i token.</string>

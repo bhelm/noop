@@ -22,11 +22,22 @@ internal fun successorOwnsEnqueueFailure(currentRequestCouldReserve: Boolean): B
     !currentRequestCouldReserve
 internal fun shouldScheduleLatePendingSuccessor(willRetry: Boolean, settlementPending: Boolean): Boolean =
     !willRetry && settlementPending
-internal fun isPushWifiAvailable(context: Context): Boolean {
+internal fun isPushNetworkAvailable(
+    wifiOnly: Boolean,
+    isConnected: Boolean,
+    isWifi: Boolean,
+    isUnmetered: Boolean,
+): Boolean = isConnected && (!wifiOnly || (isWifi && isUnmetered))
+internal fun isPushNetworkAvailable(context: Context, wifiOnly: Boolean): Boolean {
     val connectivity = context.getSystemService(ConnectivityManager::class.java) ?: return false
     val network = connectivity.activeNetwork ?: return false
     val capabilities = connectivity.getNetworkCapabilities(network) ?: return false
-    return capabilities.hasTransport(NetworkCapabilities.TRANSPORT_WIFI)
+    return isPushNetworkAvailable(
+        wifiOnly = wifiOnly,
+        isConnected = true,
+        isWifi = capabilities.hasTransport(NetworkCapabilities.TRANSPORT_WIFI),
+        isUnmetered = capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_NOT_METERED),
+    )
 }
 
 /** One bounded coordinator run. Unique WorkManager work and the trigger lease keep it serial. */
@@ -58,7 +69,7 @@ class SelfHostedPushWorker(
 
     override suspend fun doWork(): Result {
         val settings = SelfHostedPushSettings.from(applicationContext)
-        // A stale request after disable exits before lease writes, Wi-Fi, Keystore, Room, or network.
+        // A stale request after disable exits before lease writes, network checks, Keystore, Room, or HTTP.
         val requestId = id.toString()
         if (settings.enabledEndpoint() == null) {
             PushRunSignal.releaseReservation(applicationContext, requestId)
@@ -72,7 +83,9 @@ class SelfHostedPushWorker(
             var decision = try {
                 when (val outcome = PushWorkerGate.run(
                     enabledEndpoint = settings::enabledEndpoint,
-                    wifiAvailable = { isPushWifiAvailable(applicationContext) },
+                    networkAvailable = {
+                        isPushNetworkAvailable(applicationContext, wifiOnly = settings.wifiOnly())
+                    },
                     token = settings::token,
                     execute = { endpoint, token ->
                         execution = executeOnce(settings, endpoint, token)
@@ -84,8 +97,8 @@ class SelfHostedPushWorker(
                         Result.failure(), false, status = Status.FAILED,
                         message = applicationContext.getString(R.string.push_error_missing_token),
                     )
-                    PushWorkerGate.Outcome.NotOnWifi -> retryOrStop(
-                        applicationContext.getString(R.string.push_error_wifi),
+                    PushWorkerGate.Outcome.NetworkUnavailable -> retryOrStop(
+                        applicationContext.getString(R.string.push_error_network),
                     )
                     is PushWorkerGate.Outcome.Executed -> when {
                         outcome.retry -> retryOrStop(failureMessage(execution.failure))
@@ -198,7 +211,7 @@ class SelfHostedPushWorker(
             settings.saveCycleFailure(namespace, null)
             return ExecutionOutcome(Execution.COMPLETE)
         }
-        // Room is first opened here, after the stale-work, endpoint, Wi-Fi, token and identity gates.
+        // Room is first opened here, after the stale-work, endpoint, network-policy, token and identity gates.
         val dao = WhoopDatabase.get(applicationContext).pushDao()
         val progress = EndpointScopedProgressStore(
             SharedPrefsPushProgressStore.from(applicationContext),

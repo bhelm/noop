@@ -9,6 +9,16 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class SelfHostedPushSettingsTest {
+    @Test fun wifiOnlyDefaultsOnAndPersistsOptOut() {
+        val plain = FakePushPrefs()
+        val settings = SelfHostedPushSettings.forTest(plain, FakePushPrefs())
+
+        assertTrue(settings.snapshot().wifiOnly)
+        settings.setWifiOnly(false)
+
+        assertFalse(SelfHostedPushSettings.forTest(plain, FakePushPrefs()).snapshot().wifiOnly)
+    }
+
     @Test fun defaultsOffAndCannotEnableWithoutEndpointAndToken() {
         val settings = SelfHostedPushSettings.forTest(FakePushPrefs(), FakePushPrefs())
         assertFalse(settings.snapshot().enabled)

@@ -2448,7 +2448,7 @@
     <string name="l10n_app_changelog_training_load_a_vo_max_without_f9205a67">Trainingsbelastung, VO₂max ohne Maßband und deutlich weniger Akku fürs Neuberechnen</string>
     <string name="nav_self_hosted_push">Self-hosted Push</string>
     <string name="push_title">Self-hosted Push</string>
-    <string name="push_subtitle">Experimentell · Android · nur WLAN</string>
+    <string name="push_subtitle">Experimentell · Android</string>
     <string name="push_destination_title">Dein Endpunkt</string>
     <string name="push_disclosure">Wenn aktiviert, sendet NOOP rohe Gesundheitsdaten von diesem Telefon an den von dir kontrollierten Endpunkt. Dabei verlassen Daten ausdrücklich das Gerät.</string>
     <string name="push_one_way_warning">Nur Einweg-Export. NOOP kann Daten von diesem Endpunkt nicht wiederherstellen und stellt keinen Empfänger bereit.</string>
@@ -2462,7 +2462,7 @@
     <string name="push_test_connection">Verbindung testen</string>
     <string name="push_testing_connection">Verbindung wird getestet…</string>
     <string name="push_test_connection_detail">Prüft Anmeldung und unterstützte Datenarten. Es werden keine Gesundheitsdaten gesendet.</string>
-    <string name="push_test_wifi_required">Verbinde dich mit einem WLAN, bevor du den Server testest.</string>
+    <string name="push_test_network_required">Verbinde dich mit einem Netzwerk, das die Einstellung „Nur WLAN“ erlaubt, bevor du den Server testest.</string>
     <string name="push_capabilities_retryable_error">Der Server ist derzeit nicht erreichbar. Teste die Verbindung später erneut.</string>
     <string name="push_capabilities_invalid_error">Der Server hat ungültige oder nicht unterstützte Capabilities geliefert.</string>
     <string name="push_error_dns">DNS-Auflösung fehlgeschlagen. Prüfe Hostnamen und DNS-Konfiguration des Endpoints.</string>
@@ -2486,7 +2486,7 @@
     <string name="push_error_ack_invalid">Die Bestätigung des Receivers ist fehlerhaft oder passt nicht zum gesendeten Batch. Der Cursor wurde nicht vorgerückt.</string>
     <string name="push_error_local_data">Ein lokaler Datensatz überschreitet Protokollgrenzen oder lässt sich nicht exakt kodieren. Kein Cursor wurde vorgerückt.</string>
     <string name="push_error_local_database">Lokale Datenbank oder Push-Fortschritt konnten nicht gelesen oder gespeichert werden.</string>
-    <string name="push_error_wifi">Warte auf WLAN.</string>
+    <string name="push_error_network">Warte auf ein Netzwerk, das die Einstellung „Nur WLAN“ erlaubt.</string>
     <string name="push_error_retrying">%1$s Eine automatische Wiederholung ist eingeplant.</string>
     <string name="push_error_paused">%1$s Automatische Wiederholungen sind pausiert. Behebe die Ursache und nutze dann „Jetzt exportieren“ oder synchronisiere den Strap erneut.</string>
     <string name="push_error_missing_token">Der gespeicherte Bearer-Token ist nicht verfügbar. Speichere ihn erneut.</string>
@@ -2497,7 +2497,9 @@
     <string name="push_capabilities_none">Dieser Server akzeptiert derzeit keine Gesundheitsdaten aus Protokoll 1.0.</string>
     <string name="push_capabilities_streams">Akzeptierte Daten: %1$s</string>
     <string name="push_enabled">Automatischen Export aktivieren</string>
-    <string name="push_enabled_detail">Exportiert neue und geänderte Daten nach vollständiger Strap-Synchronisierung und holt Rückstände beim App-Start nach. Nur über WLAN.</string>
+    <string name="push_enabled_detail">Exportiert neue und geänderte Daten nach vollständiger Strap-Synchronisierung und holt Rückstände beim App-Start nach.</string>
+    <string name="push_wifi_only">Nur WLAN</string>
+    <string name="push_wifi_only_detail">Verwendet für Verbindungstests und Exporte nur ungetaktetes WLAN. Ausschalten, um Mobilfunk und andere verbundene Netzwerke zu erlauben.</string>
     <string name="push_export_now">Jetzt exportieren</string>
     <string name="push_export_now_detail">Startet jetzt einen Abgleich. Der automatische Export muss aktiviert sein.</string>
     <string name="push_config_required">Speichere vor dem Aktivieren einen gültigen Endpunkt und ein Token.</string>
