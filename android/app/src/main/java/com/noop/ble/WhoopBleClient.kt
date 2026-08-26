@@ -2217,6 +2217,9 @@ class WhoopBleClient(
         }
         groundTruthImuCommandAllowed = true
         try {
+            // The verified bounded raw-capture sequence is START_RAW_DATA followed by the
+            // realtime IMU selector. Opcode 106 alone ACKs but does not start the producer.
+            send(CommandNumber.START_RAW_DATA, byteArrayOf(1), withResponse = true)
             send(CommandNumber.TOGGLE_IMU_MODE, byteArrayOf(1, 1), withResponse = true)
         } finally {
             groundTruthImuCommandAllowed = false
@@ -2232,6 +2235,7 @@ class WhoopBleClient(
         if (connectedFamily == DeviceFamily.WHOOP5 && gatt != null && cmdCharacteristic != null) {
             groundTruthImuCommandAllowed = true
             try {
+                send(CommandNumber.STOP_RAW_DATA, byteArrayOf(1), withResponse = true)
                 send(CommandNumber.TOGGLE_IMU_MODE, byteArrayOf(1, 0), withResponse = true)
             } finally {
                 groundTruthImuCommandAllowed = false
@@ -2244,7 +2248,12 @@ class WhoopBleClient(
 
     @Synchronized
     private fun recordGroundTruthImuFrame(frame: ByteArray) {
-        if (frame.size <= 8 || (frame[8].toInt() and 0xFF) != 51) return
+        if (frame.size <= 8) return
+        val packetType = frame[8].toInt() and 0xFF
+        // 51 is the named realtime IMU stream. Firmware/protocol revisions also use the older raw
+        // stream (43) and historical IMU stream (52); retain all three losslessly during an explicit
+        // ground-truth session instead of silently discarding a valid 100 Hz producer.
+        if (packetType !in setOf(43, 51, 52)) return
         groundTruthImuOut?.let { out ->
             runCatching {
                 out.writeLong(System.currentTimeMillis())
@@ -2256,7 +2265,7 @@ class WhoopBleClient(
                         packets = it.packets + 1,
                         bytes = it.bytes + frame.size,
                         lastPacketAtMs = now,
-                        note = "Receiving realtime IMU",
+                        note = "Receiving IMU packet type $packetType",
                     )
                 }
             }.onFailure {
@@ -3559,7 +3568,11 @@ class WhoopBleClient(
             // offload commands ride the SAME proven puffin COMMAND frame as the Swift path
             // (whoop5HistoricalAckFrame = puffinCommandFrame(23, [0x01]+endData)). (#78)
             if (cmd != CommandNumber.TOGGLE_REALTIME_HR &&
-                !(cmd == CommandNumber.TOGGLE_IMU_MODE && groundTruthImuCommandAllowed) &&
+                !(cmd in setOf(
+                    CommandNumber.START_RAW_DATA,
+                    CommandNumber.STOP_RAW_DATA,
+                    CommandNumber.TOGGLE_IMU_MODE,
+                ) && groundTruthImuCommandAllowed) &&
                 cmd != CommandNumber.RUN_HAPTICS_PATTERN &&
                 cmd != CommandNumber.SEND_HISTORICAL_DATA && cmd != CommandNumber.HISTORICAL_DATA_RESULT &&
                 // ABORT_HISTORICAL_TRANSMITS (20) over puffin: stop an offload already in flight. Allowed
