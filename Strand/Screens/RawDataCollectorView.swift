@@ -34,11 +34,11 @@ struct RawDataCollectorView: View {
         .task {
             // Restore a session after navigation/process lifecycle changes. The BLE layer rejects a
             // duplicate arm, so this is safe when capture never stopped.
-            if store.active != nil, live.bonded { model.ble.startGroundTruthRawCapture() }
+            if let active = store.active, live.bonded { _ = model.ble.startGroundTruthRawCapture(sessionId: active.id) }
             await refreshRawCounts()
         }
         .onChangeCompat(of: live.bonded) { bonded in
-            if bonded, store.active != nil { model.ble.startGroundTruthRawCapture() }
+            if bonded, let active = store.active { _ = model.ble.startGroundTruthRawCapture(sessionId: active.id) }
         }
         .confirmationDialog("Delete this session?", isPresented: Binding(
             get: { deleteCandidate != nil }, set: { if !$0 { deleteCandidate = nil } }
@@ -221,9 +221,9 @@ struct RawDataCollectorView: View {
     }
 
     private func start() {
-        guard model.ble.startGroundTruthRawCapture() else { return }
-        if store.start(deviceId: model.ble.deviceId) == nil {
-            Task { await model.ble.stopGroundTruthRawCapture() }
+        guard let session = store.start(deviceId: model.ble.deviceId) else { return }
+        guard model.ble.startGroundTruthRawCapture(sessionId: session.id) else {
+            store.stop(); store.removeMetadata(session.id); return
         }
     }
 
@@ -237,13 +237,15 @@ struct RawDataCollectorView: View {
         guard let end = session.endedAtMs else { return }
         exportingId = session.id
         let from = Int(session.startedAtMs / 1_000), to = Int(end / 1_000)
-        let chunks = await archive.pin(deviceId: session.deviceId, from: from, to: to, ble: model.ble)
+        let chunks = await archive.pin(sessionId: session.id, deviceId: session.deviceId,
+                                       from: from, to: to, ble: model.ble)
         let history = await model.ble.groundTruthHistoryCSV(from: from, to: to)
         var entries = store.exportEntries(for: session, raw: [])
         entries.append(.init(name: "history-sensors.csv", data: history))
+        let imuComplete = Self.covers(chunks, from: from, to: to)
         let coverage: [String: Any] = [
             "requested_start_ts": from, "requested_end_ts": to,
-            "complete": Self.covers(chunks.map { ($0.startTs, $0.endTs) }, from: from, to: to),
+            "complete": imuComplete,
             "chunks": chunks.map { ["start_ts": $0.startTs, "end_ts": $0.endTs,
                                      "sample_count": $0.sampleCount, "sha256": $0.sha256] }
         ]
@@ -258,12 +260,17 @@ struct RawDataCollectorView: View {
         let result = await FileExport.exportBundle(entries: entries,
                                                     suggestedName: "noop-ground-truth-\(session.id).zip")
         if result == nil { exportError = "The export file could not be created or shared." }
-        else { store.markExported(session.id) }
+        else {
+            store.markExported(session.id)
+            if imuComplete { store.finishImuRecovery(session.id) }
+            model.ble.finishGroundTruthRawCapture(sessionId: session.id)
+        }
         exportingId = nil
     }
 
     private func delete(_ session: RawDataSessionStore.Session) async {
         guard session.endedAtMs != nil else { return }
+        model.ble.finishGroundTruthRawCapture(sessionId: session.id)
         // Raw chunks may overlap another session; retention cleanup owns physical deletion.
         store.removeMetadata(session.id)
         rawBatchCounts[session.id] = nil
@@ -292,9 +299,11 @@ struct RawDataCollectorView: View {
         return "\(date) · \(time(session.startedAtMs))–\(end)"
     }
 
-    private static func covers(_ intervals: [(Int, Int)], from: Int, to: Int) -> Bool {
+    private static func covers(_ chunks: [ImuChunkMeta], from: Int, to: Int) -> Bool {
         var cursor = from
-        for (start, end) in intervals.sorted(by: { $0.0 < $1.0 }) {
+        for chunk in chunks.sorted(by: { $0.startTs < $1.startTs }) {
+            let start = chunk.startTs, end = chunk.endTs
+            if chunk.sampleCount < (end - start + 1) * chunk.sampleRate { continue }
             if start > cursor { return false }
             if end >= cursor { cursor = end + 1 }
             if cursor > to { return true }

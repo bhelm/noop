@@ -28,9 +28,9 @@ import com.noop.NoopApplication
 import com.noop.data.HrRow
 import com.noop.data.RrRow
 import com.noop.data.StreamBatch
-import com.noop.data.RawImuSampleEntity
 import com.noop.data.StreamPersistence
 import com.noop.protocol.Whoop5RawImu
+import com.noop.testcentre.ImuSessionFileStore
 import com.noop.data.WhoopRepository
 import com.noop.protocol.AlarmPayload
 import com.noop.protocol.DYN_ACCEL_STILL_THRESHOLD_G
@@ -2184,7 +2184,6 @@ class WhoopBleClient(
 
     @Volatile private var groundTruthImuCommandAllowed = false
     private var groundTruthImuSessionId: String? = null
-    private var groundTruthImuOut: DataOutputStream? = null
 
     /** Start the hardware-confirmed WHOOP 5 realtime IMU mode for an explicit ground-truth session. */
     @Synchronized
@@ -2203,15 +2202,7 @@ class WhoopBleClient(
             )
             return false
         }
-        if (groundTruthImuSessionId != sessionId || groundTruthImuOut == null) {
-            closeGroundTruthImuFile()
-            val dir = File(context.filesDir, "ground-truth").apply { mkdirs() }
-            val file = File(dir, "realtime-imu-$sessionId.bin")
-            // Append lets a foreground collector resume the same session after an Android process restart.
-            groundTruthImuOut = DataOutputStream(BufferedOutputStream(FileOutputStream(file, true), 64 * 1024))
-            groundTruthImuSessionId = sessionId
-            _groundTruthImuStatus.value = GroundTruthImuStatus(sessionId = sessionId, note = "Capture file open")
-        }
+        groundTruthImuSessionId = sessionId
         groundTruthImuCommandAllowed = true
         try {
             // The verified bounded raw-capture sequence is START_RAW_DATA followed by the
@@ -2239,23 +2230,24 @@ class WhoopBleClient(
             }
         }
         log("Ground-truth realtime IMU requested OFF (session=${groundTruthImuSessionId ?: "none"})")
-        _groundTruthImuStatus.update { it.copy(requested = false, note = "Stopped") }
-        closeGroundTruthImuFile()
+        groundTruthImuSessionId = null
+        _groundTruthImuStatus.update { it.copy(requested = false, note = "Stopped; accepting history repair") }
+    }
+
+    @Synchronized
+    fun finishGroundTruthImuCapture(sessionId: String) {
+        if (groundTruthImuSessionId == sessionId) groundTruthImuSessionId = null
     }
 
     @Synchronized
     private fun recordGroundTruthImuFrame(frame: ByteArray) {
         if (frame.size <= 8) return
         val packetType = frame[8].toInt() and 0xFF
-        // 51 is the named realtime IMU stream. Firmware/protocol revisions also use the older raw
-        // stream (43) and historical IMU stream (52); retain all three losslessly during an explicit
-        // ground-truth session instead of silently discarding a valid 100 Hz producer.
-        if (packetType !in setOf(43, 51, 52)) return
-        groundTruthImuOut?.let { out ->
-            runCatching {
-                out.writeLong(System.currentTimeMillis())
-                out.writeInt(frame.size)
-                out.write(frame)
+        // Decode, not the transport packet type, is authoritative: history replay can wrap the same
+        // 100 Hz payload differently from realtime delivery.
+        runCatching {
+            val routed = ImuSessionFileStore(context).append(deviceId, frame)
+            if (routed > 0) {
                 val now = System.currentTimeMillis()
                 _groundTruthImuStatus.update {
                     it.copy(
@@ -2265,20 +2257,11 @@ class WhoopBleClient(
                         note = "Receiving IMU packet type $packetType",
                     )
                 }
-            }.onFailure {
-                log("Ground-truth realtime IMU write failed (${it.javaClass.simpleName}); capture stopped")
-                _groundTruthImuStatus.update { status -> status.copy(requested = false, note = "Write failed: ${it.javaClass.simpleName}") }
-                closeGroundTruthImuFile()
             }
+        }.onFailure {
+            log("Ground-truth IMU append failed (${it.javaClass.simpleName})")
+            _groundTruthImuStatus.update { status -> status.copy(note = "Write failed: ${it.javaClass.simpleName}") }
         }
-    }
-
-    @Synchronized
-    private fun closeGroundTruthImuFile() {
-        runCatching { groundTruthImuOut?.flush() }
-        runCatching { groundTruthImuOut?.close() }
-        groundTruthImuOut = null
-        groundTruthImuSessionId = null
     }
 
     /** Frame reassembler for the fragmented custom notify chars (port of Reassembler). Reassigned per
@@ -6245,7 +6228,6 @@ class WhoopBleClient(
                         // BEFORE the offload branch so it catches the burst; no-op unless capture is on.
                         writeWhoop5DeepBufferIfBig(uuid.toString(), frame, isOffloadFrame(frame, connectedFamily))
                         // #423: the queryable twin of that diagnostics line — persist the decoded IMU
-                        // samples (100 Hz 6-axis) into the rawImuSample table when raw capture is on.
                         storeWhoop5RawImuIfBuffer(frame)
                     }
                     // Opt-in raw capture: record EVERY frame of the session (offload AND live flood —
@@ -9252,10 +9234,7 @@ class WhoopBleClient(
      * one previous generation. Cheap for every other frame: a length + single-byte compare BEFORE the
      * pref read; no-op unless the capture toggle is on.
      */
-    /** #423: persist the WHOOP 5/MG raw-IMU offload buffer NOOP already decodes for the deep-buffer log —
-     *  the queryable twin of that (table-less) diagnostics line. Same `isCaptureEnabled` gate; only the
-     *  1244-B 6-axis buffer decodes (rawColumns null otherwise). IO-dispatched so it never blocks the GATT
-     *  thread; bounded by a rolling retention prune. Raw i16, no downstream consumer yet (instrument-first). */
+    /** Debug heartbeat for valid WHOOP 5/MG raw-IMU buffers. Session persistence is file-only. */
     private fun storeWhoop5RawImuIfBuffer(frame: ByteArray) {
         // The bounded collector owns its own capture gate. It must not require the unrelated passive
         // protocol-trace preference: live and history copies then converge on the same keyed raw-IMU
@@ -9263,19 +9242,13 @@ class WhoopBleClient(
         if (!PuffinExperiment.from(context).isCaptureEnabled && groundTruthImuSessionId == null) return
         val cols = Whoop5RawImu.rawColumns(frame) ?: return
         val baseTs = PuffinDeepBufferLog.strapTs(frame)?.toLong() ?: return
-        val dev = deviceId
         // #423 debug heartbeat: confirm the offload IMU is arriving + decoding on-device without pulling the
         // JSONL. Throttled (first buffer, then every 500) so a large offload can't flood the strap log; the
         // count is a per-connection running total. Off unless raw capture is enabled (gated above).
         rawImuDecodedCount++
         if (rawImuDecodedCount == 1 || rawImuDecodedCount % 500 == 0) {
             log("RAW IMU capture: $rawImuDecodedCount buffer(s) decoded, latest ts=$baseTs " +
-                "(${cols.size / 6} samples/axis) — storing (retain ${WhoopRepository.RAW_IMU_RETENTION_ROWS})")
-        }
-        val row = RawImuSampleEntity(dev, baseTs, StreamPersistence.packImuColumns(cols))
-        ioScope.launch {
-            runCatching { repository.insertRawImu(dev, listOf(row)) }
-                .onFailure { log("RAW IMU capture: store failed (${it.message})") }
+                "(${cols.size / 6} samples/axis) — routed to matching file sessions")
         }
     }
 

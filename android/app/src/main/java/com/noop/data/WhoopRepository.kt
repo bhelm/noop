@@ -795,7 +795,6 @@ class WhoopRepository(
         // The instrumentation streams, missing from this list since they landed (see the DAO note).
         deleted += dao.pruneSleepStateByTs(minTs, maxTs)
         deleted += dao.prunePpgWaveformByTs(minTs, maxTs)
-        deleted += dao.pruneRawImuByTs(minTs, maxTs)
         deleted += dao.pruneV18AuxByTs(minTs, maxTs)
         deleted += dao.pruneEventByTs(minTs, maxTs)
         deleted += dao.pruneBatteryByTs(minTs, maxTs)
@@ -1003,23 +1002,6 @@ class WhoopRepository(
         List<V18AuxRow> =
         dao.v18AuxSamples(deviceId, from, to, limit)
             .map { V18AuxCodec.unpack(it.fields, it.ts) }
-
-    /** #423: persist a batch of decoded 5/MG raw-IMU offload buffers (one row per strap-second, packed i16
-     *  BLOB), then bound the table to the newest [RAW_IMU_RETENTION_ROWS] for the device. Comes from the
-     *  deep-buffer capture seam, not the normal stream path, so it inserts directly (idempotent by ts). */
-    suspend fun insertRawImu(deviceId: String, rows: List<RawImuSampleEntity>) {
-        if (rows.isEmpty()) return
-        dao.insertRawImu(rows)
-        dao.pruneRawImu(deviceId, RAW_IMU_RETENTION_ROWS)
-    }
-
-    /** #423: raw 5/MG IMU buffers in [from, to] as the decoded i16 columns [ax…az,gx…gz] (100/axis).
-     *  Intentionally dormant — zero callers, retained for the eventual cross-check (see [RawImuSampleEntity]
-     *  CONSUMER STATUS, #978). Not dead code; do not delete. */
-    suspend fun rawImuSamples(deviceId: String, from: Long, to: Long, limit: Int = DEFAULT_LIMIT):
-        List<Pair<Long, ShortArray>> =
-        dao.rawImuSamples(deviceId, from, to, limit)
-            .map { it.ts to StreamPersistence.unpackImuColumns(it.samples) }
 
     suspend fun upsertImuChunk(row: ImuChunkEntity) = dao.upsertImuChunk(row)
     suspend fun imuChunks(deviceId: String, from: Long, to: Long): List<ImuChunkEntity> =
@@ -1576,9 +1558,9 @@ class WhoopRepository(
             "resp" to dao.countResp(), "gravity" to dao.countGravity(),
             // The rest of the accumulating decoded raw streams, so the Test-Centre footprint counts ALL of
             // them (keep in sync with Swift storageStats / TimestampHeal's raw-table list). ppgHr/ppgWaveform
-            // /rawImu can each be large.
+            // /v18Aux can each be large.
             "ppgHr" to dao.countPpgHr(), "sleepState" to dao.countSleepState(),
-            "ppgWaveform" to dao.countPpgWaveform(), "rawImu" to dao.countRawImu(),
+            "ppgWaveform" to dao.countPpgWaveform(),
             "v18Aux" to dao.countV18Aux(),
         )
     }.getOrDefault(emptyMap())
@@ -1966,12 +1948,6 @@ class WhoopRepository(
 
         /** Default row cap on range reads. Matches the Swift call sites' bounded scans. */
         const val DEFAULT_LIMIT = 100_000
-
-        /** #423: rolling retention for the raw-IMU capture table (1 row/strap-second, ~1.2 KB each). One
-         *  hour ≈ 3600 rows ≈ 4 MB caps the table hard, so an enabled capture can never balloon the DB
-         *  during a multi-day offload replay. Instrument-first bounded window; nothing consumes it yet. */
-        /** 36 h rolling cache: enough for retrospective activity/workout windows without permanent growth. */
-        const val RAW_IMU_RETENTION_ROWS = 36 * 60 * 60
 
         /**
          * v31: rolling retention for the v18 aux-slot table (Swift twin `WhoopStore.v18AuxRetentionRows`).

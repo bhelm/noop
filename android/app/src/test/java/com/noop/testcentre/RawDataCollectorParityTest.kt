@@ -26,6 +26,8 @@ class RawDataCollectorParityTest {
         val source = listOf(
             "android/app/src/main/java/com/noop/testcentre/GroundTruthCollector.kt",
             "android/app/src/main/java/com/noop/testcentre/ImuChunkStore.kt",
+            "android/app/src/main/java/com/noop/testcentre/ImuSessionFileStore.kt",
+            "android/app/src/main/java/com/noop/data/WhoopDatabase.kt",
             "android/app/src/main/java/com/noop/data/Entities.kt",
             "android/app/src/main/java/com/noop/data/WhoopRepository.kt",
             "android/app/src/main/java/com/noop/ui/GroundTruthCollectorScreen.kt",

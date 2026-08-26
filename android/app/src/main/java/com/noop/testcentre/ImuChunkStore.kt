@@ -4,28 +4,34 @@ import android.content.Context
 import com.noop.data.ImuChunkEntity
 import com.noop.data.StreamPersistence
 import com.noop.data.WhoopRepository
+import com.noop.protocol.Whoop5RawImu
 import java.io.BufferedOutputStream
+import java.io.DataInputStream
 import java.io.DataOutputStream
+import java.io.EOFException
 import java.io.File
 import java.io.FileOutputStream
 import java.security.MessageDigest
 import java.util.UUID
+import java.util.zip.Inflater
 import java.util.zip.ZipEntry
 import java.util.zip.ZipOutputStream
 import org.json.JSONObject
 
-/** Materializes immutable, portable IMU archives from the bounded SQLite rolling cache. */
+/** Materializes immutable archives from a session file; SQLite is only a short history staging cache. */
 class ImuChunkStore(private val context: Context, private val repository: WhoopRepository) {
     private val directory = File(context.filesDir, "imu-chunks").apply { mkdirs() }
 
-    suspend fun pin(deviceId: String, from: Long, to: Long): List<ImuChunkEntity> {
+    suspend fun pin(sessionId: String, deviceId: String, from: Long, to: Long): List<ImuChunkEntity> {
         require(from <= to)
         val existing = repository.imuChunks(deviceId, from, to)
             .filter { it.pinnedUntil == Long.MAX_VALUE && File(context.filesDir, it.relativePath).isFile }
-        if (existing.any { it.startTs <= from && it.endTs >= to }) return existing
-        val limit = (to - from + 1).coerceIn(1, MAX_EXPORT_SECONDS).toInt()
-        val rows = repository.rawImuSamples(deviceId, from, to, limit)
+        if (existing.any { it.startTs <= from && it.endTs >= to &&
+                it.sampleCount >= (it.endTs - it.startTs + 1) * it.sampleRate }) return existing
+        val rows = readSessionRows(sessionId, from, to)
         if (rows.isEmpty()) return existing
+        val startTs = rows.minOf { it.first }
+        val endTs = rows.maxOf { it.first }
 
         val id = UUID.randomUUID().toString()
         val final = File(directory, "$id.imuc")
@@ -38,9 +44,11 @@ class ImuChunkStore(private val context: Context, private val repository: WhoopR
                 put("sample_rate_hz", SAMPLE_RATE)
                 put("axes", listOf("ax", "ay", "az", "gx", "gy", "gz"))
                 put("layout", "column-major-int16-le")
+                put("ordering", "unspecified")
+                put("timestamp_source", "strap")
                 put("row_count", rows.size)
-                put("start_ts", rows.first().first)
-                put("end_ts", rows.last().first)
+                put("start_ts", startTs)
+                put("end_ts", endTs)
             }.toString(2).toByteArray())
             zip.closeEntry()
             zip.putNextEntry(ZipEntry("samples.bin"))
@@ -56,7 +64,7 @@ class ImuChunkStore(private val context: Context, private val repository: WhoopR
         }
         check(temp.renameTo(final)) { "Could not commit IMU chunk" }
         val entity = ImuChunkEntity(
-            id = id, deviceId = deviceId, startTs = rows.first().first, endTs = rows.last().first,
+            id = id, deviceId = deviceId, startTs = startTs, endTs = endTs,
             sampleCount = rows.size * SAMPLE_RATE, sampleRate = SAMPLE_RATE,
             formatVersion = FORMAT_VERSION, codec = "zip-deflate",
             relativePath = final.relativeTo(context.filesDir).path, byteSize = final.length(),
@@ -71,6 +79,30 @@ class ImuChunkStore(private val context: Context, private val repository: WhoopR
         repository.imuChunks(deviceId, from, to).filter { File(context.filesDir, it.relativePath).isFile }
 
     fun file(chunk: ImuChunkEntity) = File(context.filesDir, chunk.relativePath)
+
+    private fun readSessionRows(sessionId: String, from: Long, to: Long): List<Pair<Long, ShortArray>> {
+        val source = File(context.filesDir, "ground-truth/realtime-imu-$sessionId.imus")
+        if (!source.isFile) return emptyList()
+        val rows = ArrayList<Pair<Long, ShortArray>>()
+        DataInputStream(source.inputStream().buffered()).use { input ->
+            while (true) {
+                try {
+                    val ts = input.readLong(); input.readLong()
+                    val length = input.readInt(); val compressedLength = input.readInt()
+                    if (length <= 0 || length > MAX_FRAME_BYTES || compressedLength <= 0 || compressedLength > MAX_FRAME_BYTES) break
+                    val compressed = ByteArray(compressedLength); input.readFully(compressed)
+                    val inflater = Inflater(); inflater.setInput(compressed)
+                    val frame = ByteArray(length); val inflated = inflater.inflate(frame); inflater.end()
+                    if (inflated != length) continue
+                    val decoded = Whoop5RawImu.decode(frame) ?: continue
+                    if (ts == decoded.baseTs && ts in from..to) {
+                        Whoop5RawImu.rawColumns(frame)?.let { rows += ts to it }
+                    }
+                } catch (_: EOFException) { break }
+            }
+        }
+        return rows
+    }
 
     private fun sha256(file: File): String {
         val digest = MessageDigest.getInstance("SHA-256")
@@ -89,5 +121,6 @@ class ImuChunkStore(private val context: Context, private val repository: WhoopR
         const val FORMAT_VERSION = 1
         const val SAMPLE_RATE = 100
         const val MAX_EXPORT_SECONDS = 7 * 24 * 60 * 60L
+        const val MAX_FRAME_BYTES = 1024 * 1024
     }
 }

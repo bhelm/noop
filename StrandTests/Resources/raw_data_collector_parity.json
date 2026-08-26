@@ -41,9 +41,13 @@
       "swift": ["func setRange(sessionId:", "DatePicker(\"From\""],
       "kotlin": ["fun setSessionRange(", "ground_truth_edit_start"]
     },
-    "bounded_36h_imu_cache": {
-      "swift": ["rawImuRetentionRows = 36 * 60 * 60"],
-      "kotlin": ["RAW_IMU_RETENTION_ROWS = 36 * 60 * 60"]
+    "file_only_imu_storage": {
+      "swift": ["v41-drop-raw-imu-sample"],
+      "kotlin": ["MIGRATION_34_35", "DROP TABLE IF EXISTS `rawImuSample`"]
+    },
+    "session_bound_imu_file": {
+      "swift": ["ImuSessionFileStore", "realtime-imu-\\(id).imus"],
+      "kotlin": ["ImuSessionFileStore", "realtime-imu-$id.imus"]
     },
     "durable_imu_chunk_catalog": {
       "swift": ["ImuChunkArchiveStore", "ImuChunkMeta"],
@@ -67,7 +71,7 @@
     },
     "raw_data_removed_with_session": {
       "swift": ["deleteRawBatches(deviceId:", "capturedAt >= ? AND capturedAt <= ?"],
-      "kotlin": ["realtime-imu-$sessionId.bin", "noop-ground-truth-$sessionId.zip"]
+      "kotlin": ["realtime-imu-$sessionId.imus", "noop-ground-truth-$sessionId.zip"]
     }
   }
 }

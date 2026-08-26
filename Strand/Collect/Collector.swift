@@ -12,12 +12,6 @@ protocol StoreWriting: AnyObject {
         -> (hr: Int, rr: Int, events: Int, battery: Int,
             spo2: Int, skinTemp: Int, resp: Int, gravity: Int)
     func enqueueRawBatch(_ meta: RawBatchMeta, frames: [[UInt8]]) async throws
-    func insertRawImu(deviceId: String, rows: [(ts: Int, cols: [Int16])], retentionRows: Int) async throws
-}
-extension StoreWriting {
-    /// #423: default no-op so a test SpyStore needn't implement the raw-IMU capture path. WhoopStore's
-    /// real impl (StreamStore.swift) satisfies the requirement and is used in production.
-    func insertRawImu(deviceId: String, rows: [(ts: Int, cols: [Int16])], retentionRows: Int) async throws {}
 }
 extension WhoopStore: StoreWriting {}
 
@@ -69,6 +63,7 @@ final class Collector {
     /// activity sample" action can persist raw even when `enableRawCapture` is off. The window's
     /// monotonic deadline auto-expires so a missed stop callback can't leak raw forever.
     private var rawCapture = RawCaptureWindow()
+    private var groundTruthSessionId: String?
     /// #47: buffer the (raw frame, pre-parsed) pair. The raw bytes are still needed for the raw-capture
     /// outbox; the parse is the one the BLE seam already did, so `flush` doesn't re-decode the batch.
     private var buffer: [(frame: [UInt8], parsed: ParsedFrame)] = []
@@ -137,12 +132,6 @@ final class Collector {
         return (try? await store.deleteRawBatches(deviceId: deviceId, from: from, to: to)) ?? 0
     }
 
-    func rawImuSamples(from: Int, to: Int) async -> [(ts: Int, cols: [Int16])] {
-        guard let store = concreteStore else { return [] }
-        let limit = min(max(to - from + 1, 1), 7 * 24 * 60 * 60)
-        return (try? await store.rawImuSamples(deviceId: deviceId, from: from, to: to, limit: limit)) ?? []
-    }
-
     func imuChunks(from: Int, to: Int) async -> [ImuChunkMeta] {
         guard let store = concreteStore else { return [] }
         return (try? await store.imuChunks(deviceId: deviceId, from: from, to: to)) ?? []
@@ -188,16 +177,6 @@ final class Collector {
     /// 1244-B 6-axis buffer decodes (rawColumns nil otherwise). Fire-and-forget into the store, bounded by
     /// a rolling retention prune. Raw i16, no downstream consumer yet. Twin of Android
     /// `WhoopBleClient.storeWhoop5RawImuIfBuffer`.
-    func storeRawImu(frame: [UInt8]) {
-        guard UserDefaults.standard.bool(forKey: PuffinFrameRecorder.enabledKey) else { return }
-        guard let cols = Whoop5RawImu.rawColumns(frame), let baseTs = Whoop5RawImu.baseTs(frame) else { return }
-        let dev = deviceId
-        Task { [store] in
-            try? await store.insertRawImu(
-                deviceId: dev, rows: [(ts: baseTs, cols: cols)], retentionRows: WhoopStore.rawImuRetentionRows)
-        }
-    }
-
     /// Buffer one complete frame + its pre-parsed decode (synchronous: preserves delegate arrival order).
     /// Auto-flushes via a detached Task when the cadence threshold is hit (flush is async). (#47)
     func ingest(frame: [UInt8], parsed: ParsedFrame) {
@@ -205,6 +184,7 @@ final class Collector {
         assert(parsed == parseFrame(frame, family: family),
                "Collector.ingest: threaded ParsedFrame != fresh parse (#47 parse-once invariant)")
         #endif
+        recordGroundTruthImu(frame)
         buffer.append((frame, parsed))
         // Pre-clock only: bound memory if GET_CLOCK never lands while data keeps flowing.
         // Drop OLDEST beyond the cap (keep most recent). Post-clock this branch is skipped —
@@ -286,6 +266,21 @@ final class Collector {
     /// research toggle off. Auto-expires at the (clamped) monotonic deadline.
     func beginRawCapture(seconds: TimeInterval) {
         rawCapture.open(at: monotonic(), duration: seconds)
+    }
+
+    func beginGroundTruthRawCapture(sessionId: String) {
+        rawCapture.open(at: monotonic(), duration: RawCaptureWindow.maxSeconds)
+        groundTruthSessionId = sessionId
+    }
+
+    func finishGroundTruthRawCapture(sessionId: String) {
+        guard groundTruthSessionId == sessionId else { return }
+        groundTruthSessionId = nil
+    }
+
+    private func recordGroundTruthImu(_ frame: [UInt8]) {
+        _ = ImuSessionFileStore.shared.append(deviceId: deviceId, frame: frame,
+            receivedAtMs: Int64(Date().timeIntervalSince1970 * 1_000))
     }
 
     /// Flush WHILE the window is still active so the just-captured frames get persisted as raw,

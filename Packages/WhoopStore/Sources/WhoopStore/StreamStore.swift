@@ -58,10 +58,6 @@ extension WhoopStore {
         return out
     }
 
-    /// #423 rolling retention for the raw-IMU capture table (twin of Kotlin `RAW_IMU_RETENTION_ROWS`):
-    /// 36 h at 1 row/strap-second (~155 MB uncompressed): retrospective activity/workout window.
-    public static let rawImuRetentionRows = 36 * 60 * 60
-
     /// v31 rolling retention for the v18 aux-slot table (twin of Kotlin `V18_AUX_RETENTION_ROWS`).
     ///
     /// `rawImuSample` is the closest precedent — raw instrumentation banked as a blob, capped rather than
@@ -99,41 +95,6 @@ extension WhoopStore {
                     name = excluded.name,
                     lastSeen = excluded.lastSeen
                 """, arguments: [id, mac, name, now, now])
-        }
-    }
-
-    /// #423: persist decoded 5/MG raw-IMU offload buffers (one row per strap-second, packed i16 BLOB),
-    /// then bound the table to the newest `retentionRows` for the device (rolling retention). Written from
-    /// the deep-buffer capture seam, not the normal stream path, so it inserts directly (idempotent by ts).
-    /// Twin of Kotlin `WhoopRepository.insertRawImu`.
-    public func insertRawImu(deviceId: String, rows: [(ts: Int, cols: [Int16])], retentionRows: Int) async throws {
-        guard !rows.isEmpty else { return }
-        try syncWrite { db in
-            let ins = try db.cachedStatement(sql: """
-                INSERT INTO rawImuSample (deviceId, ts, samples) VALUES (?, ?, ?)
-                ON CONFLICT(deviceId, ts) DO NOTHING
-                """)
-            // Pack the raw i16 columns to the LE BLOB HERE (packImuColumns is module-internal), so the
-            // caller passes plain [Int16] and never needs the packer. Mirrors how `insert` packs ppgWaveform.
-            for r in rows { try ins.execute(arguments: [deviceId, r.ts, WhoopStore.packImuColumns(r.cols)]) }
-            try db.execute(sql: """
-                DELETE FROM rawImuSample WHERE deviceId = ? AND ts < (
-                    SELECT MIN(ts) FROM (SELECT ts FROM rawImuSample WHERE deviceId = ? ORDER BY ts DESC LIMIT ?))
-                """, arguments: [deviceId, deviceId, retentionRows])
-        }
-    }
-
-    public func rawImuSamples(deviceId: String, from: Int, to: Int, limit: Int) async throws
-        -> [(ts: Int, cols: [Int16])] {
-        try syncRead { db in
-            try Row.fetchAll(db, sql: """
-                SELECT ts, samples FROM rawImuSample
-                WHERE deviceId = ? AND ts >= ? AND ts <= ? ORDER BY ts LIMIT ?
-                """, arguments: [deviceId, from, to, limit]).map { row in
-                    let ts: Int = row["ts"]
-                    let data: Data = row["samples"]
-                    return (ts, WhoopStore.unpackImuColumns(data))
-                }
         }
     }
 
