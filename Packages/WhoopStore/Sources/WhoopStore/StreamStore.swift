@@ -59,8 +59,8 @@ extension WhoopStore {
     }
 
     /// #423 rolling retention for the raw-IMU capture table (twin of Kotlin `RAW_IMU_RETENTION_ROWS`):
-    /// ~1 h at 1 row/strap-second (~4 MB) hard-caps the table during a multi-day offload replay.
-    public static let rawImuRetentionRows = 3600
+    /// 36 h at 1 row/strap-second (~155 MB uncompressed): retrospective activity/workout window.
+    public static let rawImuRetentionRows = 36 * 60 * 60
 
     /// v31 rolling retention for the v18 aux-slot table (twin of Kotlin `V18_AUX_RETENTION_ROWS`).
     ///
@@ -120,6 +120,20 @@ extension WhoopStore {
                 DELETE FROM rawImuSample WHERE deviceId = ? AND ts < (
                     SELECT MIN(ts) FROM (SELECT ts FROM rawImuSample WHERE deviceId = ? ORDER BY ts DESC LIMIT ?))
                 """, arguments: [deviceId, deviceId, retentionRows])
+        }
+    }
+
+    public func rawImuSamples(deviceId: String, from: Int, to: Int, limit: Int) async throws
+        -> [(ts: Int, cols: [Int16])] {
+        try syncRead { db in
+            try Row.fetchAll(db, sql: """
+                SELECT ts, samples FROM rawImuSample
+                WHERE deviceId = ? AND ts >= ? AND ts <= ? ORDER BY ts LIMIT ?
+                """, arguments: [deviceId, from, to, limit]).map { row in
+                    let ts: Int = row["ts"]
+                    let data: Data = row["samples"]
+                    return (ts, WhoopStore.unpackImuColumns(data))
+                }
         }
     }
 

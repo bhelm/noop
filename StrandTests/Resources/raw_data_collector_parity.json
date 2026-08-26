@@ -1,0 +1,73 @@
+{
+  "schema_version": 1,
+  "capabilities": {
+    "start_stop": {
+      "swift": ["startGroundTruthRawCapture", "stopGroundTruthRawCapture"],
+      "kotlin": ["startGroundTruthImuCapture", "stopGroundTruthImuCapture"]
+    },
+    "persisted_sessions": {
+      "swift": ["RawDataSessionStore", "persist(session)"],
+      "kotlin": ["GroundTruthCollector", "sessionStartKey"]
+    },
+    "manual_step_and_stair_labels": {
+      "swift": ["store.record(.step)", "store.record(.stair)"],
+      "kotlin": ["KIND_STEP", "KIND_STAIR"]
+    },
+    "undo_last_label": {
+      "swift": ["func undo(", "Undo last click"],
+      "kotlin": ["fun undo(", "ground_truth_undo"]
+    },
+    "exclude_recent_period": {
+      "swift": ["excludeLast(minutes:", "Ignore recent period"],
+      "kotlin": ["excludeLastMinutes(", "ground_truth_exclude_recent"]
+    },
+    "session_comments": {
+      "swift": ["setComment(", "Session comment"],
+      "kotlin": ["setComment(", "ground_truth_comment"]
+    },
+    "from_to_time": {
+      "swift": ["func range(", "endedAtMs"],
+      "kotlin": ["sessionTimeRange(", "endedAtMs"]
+    },
+    "session_export": {
+      "swift": ["exportEntries(for:", "Export session"],
+      "kotlin": ["suspend fun export(", "ground_truth_export"]
+    },
+    "historical_time_windows": {
+      "swift": ["createHistorical(deviceId:", "Historical export window"],
+      "kotlin": ["createHistoricalSession(", "ground_truth_add_historical"]
+    },
+    "editable_analysis_range": {
+      "swift": ["func setRange(sessionId:", "DatePicker(\"From\""],
+      "kotlin": ["fun setSessionRange(", "ground_truth_edit_start"]
+    },
+    "bounded_36h_imu_cache": {
+      "swift": ["rawImuRetentionRows = 36 * 60 * 60"],
+      "kotlin": ["RAW_IMU_RETENTION_ROWS = 36 * 60 * 60"]
+    },
+    "durable_imu_chunk_catalog": {
+      "swift": ["ImuChunkArchiveStore", "ImuChunkMeta"],
+      "kotlin": ["ImuChunkStore", "ImuChunkEntity"]
+    },
+    "explicit_imu_coverage": {
+      "swift": ["imu-coverage.json", "private static func covers"],
+      "kotlin": ["imu_100hz_complete", "private fun covers"]
+    },
+    "delete_one_and_all_with_confirmation": {
+      "swift": ["Delete this session?", "Delete all sessions?", "deleteGroundTruthRawBatches"],
+      "kotlin": ["ground_truth_delete_session_title", "ground_truth_delete_all_title", "deleteAllSessions"]
+    },
+    "active_session_delete_guard": {
+      "swift": ["active != true", ".disabled(store.active != nil)"],
+      "kotlin": ["current.active && current.sessionId == sessionId", "sessions.none { it.active }"]
+    },
+    "bluetooth_reconnect_rearm": {
+      "swift": ["onChangeCompat(of: live.bonded)", "rawCaptureInFlight = false"],
+      "kotlin": ["LaunchedEffect(state.active, state.sessionId, live.connected)", "startGroundTruthImuCapture"]
+    },
+    "raw_data_removed_with_session": {
+      "swift": ["deleteRawBatches(deviceId:", "capturedAt >= ? AND capturedAt <= ?"],
+      "kotlin": ["realtime-imu-$sessionId.bin", "noop-ground-truth-$sessionId.zip"]
+    }
+  }
+}

@@ -1815,9 +1815,26 @@ public final class BLEManager: NSObject, ObservableObject {
         await collector?.rawBatches(from: from, to: to) ?? []
     }
 
+    public func groundTruthHistoryCSV(from: Int, to: Int) async -> Data {
+        await collector?.historySensorsCSV(from: from, to: to)
+            ?? Data("stream,unix_s,v1,v2,v3,v4\n".utf8)
+    }
+
     @discardableResult
     public func deleteGroundTruthRawBatches(from: Int, to: Int) async -> Int {
         await collector?.deleteRawBatches(from: from, to: to) ?? 0
+    }
+
+    public func groundTruthRawImuSamples(from: Int, to: Int) async -> [(ts: Int, cols: [Int16])] {
+        await collector?.rawImuSamples(from: from, to: to) ?? []
+    }
+
+    public func groundTruthImuChunks(from: Int, to: Int) async -> [ImuChunkMeta] {
+        await collector?.imuChunks(from: from, to: to) ?? []
+    }
+
+    public func registerGroundTruthImuChunk(_ chunk: ImuChunkMeta) async {
+        await collector?.upsertImuChunk(chunk)
     }
 
     /// Send a command to the WHOOP strap.

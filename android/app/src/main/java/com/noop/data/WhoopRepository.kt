@@ -1021,6 +1021,12 @@ class WhoopRepository(
         dao.rawImuSamples(deviceId, from, to, limit)
             .map { it.ts to StreamPersistence.unpackImuColumns(it.samples) }
 
+    suspend fun upsertImuChunk(row: ImuChunkEntity) = dao.upsertImuChunk(row)
+    suspend fun imuChunks(deviceId: String, from: Long, to: Long): List<ImuChunkEntity> =
+        dao.imuChunks(deviceId, from, to)
+    suspend fun expiredImuChunks(cutoff: Long): List<ImuChunkEntity> = dao.expiredImuChunks(cutoff)
+    suspend fun deleteImuChunk(id: String) = dao.deleteImuChunk(id)
+
     /** Downsampled HR (mean bpm per [bucketSeconds]) for the strap, for the Today 24h trend chart. */
     suspend fun hrBuckets(deviceId: String, from: Long, to: Long, bucketSeconds: Long = 300L) =
         dao.hrBuckets(deviceId, from, to, bucketSeconds)
@@ -1964,7 +1970,8 @@ class WhoopRepository(
         /** #423: rolling retention for the raw-IMU capture table (1 row/strap-second, ~1.2 KB each). One
          *  hour ≈ 3600 rows ≈ 4 MB caps the table hard, so an enabled capture can never balloon the DB
          *  during a multi-day offload replay. Instrument-first bounded window; nothing consumes it yet. */
-        const val RAW_IMU_RETENTION_ROWS = 3600
+        /** 36 h rolling cache: enough for retrospective activity/workout windows without permanent growth. */
+        const val RAW_IMU_RETENTION_ROWS = 36 * 60 * 60
 
         /**
          * v31: rolling retention for the v18 aux-slot table (Swift twin `WhoopStore.v18AuxRetentionRows`).

@@ -28,6 +28,9 @@ final class RawDataSessionStore: ObservableObject {
         let deviceId: String
         let startedAtMs: Int64
         var endedAtMs: Int64?
+        var capturedStartedAtMs: Int64?
+        var capturedEndedAtMs: Int64?
+        var keepRaw: Bool?
         var steps: Int
         var stairs: Int
         var excludedWindows: Int
@@ -41,6 +44,8 @@ final class RawDataSessionStore: ObservableObject {
             lhs.id == rhs.id && lhs.endedAtMs == rhs.endedAtMs && lhs.steps == rhs.steps
                 && lhs.stairs == rhs.stairs && lhs.excludedWindows == rhs.excludedWindows
                 && lhs.comment == rhs.comment && lhs.exported == rhs.exported
+                && lhs.capturedStartedAtMs == rhs.capturedStartedAtMs
+                && lhs.capturedEndedAtMs == rhs.capturedEndedAtMs
         }
     }
 
@@ -76,7 +81,8 @@ final class RawDataSessionStore: ObservableObject {
         let millis = Int64(now.timeIntervalSince1970 * 1_000)
         let started = Event(atMs: millis, kind: .start, stepsTotal: 0, stairsTotal: 0)
         let session = Session(id: String(millis), deviceId: deviceId, startedAtMs: millis,
-                              endedAtMs: nil, steps: 0, stairs: 0, excludedWindows: 0,
+                              endedAtMs: nil, capturedStartedAtMs: millis, capturedEndedAtMs: nil,
+                              keepRaw: true, steps: 0, stairs: 0, excludedWindows: 0,
                               comment: "", exported: false, events: [started])
         sessions.insert(session, at: 0)
         persist(session)
@@ -87,8 +93,40 @@ final class RawDataSessionStore: ObservableObject {
         mutateActive { session in
             let millis = Int64(now.timeIntervalSince1970 * 1_000)
             session.endedAtMs = millis
+            session.capturedEndedAtMs = millis
             session.events.append(Event(atMs: millis, kind: .stop,
                                         stepsTotal: session.steps, stairsTotal: session.stairs))
+        }
+    }
+
+    @discardableResult
+    func createHistorical(deviceId: String, from: Date, to: Date) -> Session? {
+        let fromMs = Int64(from.timeIntervalSince1970 * 1_000)
+        let toMs = Int64(to.timeIntervalSince1970 * 1_000)
+        guard validRange(fromMs, toMs) else { return nil }
+        let id = String(Int64(Date().timeIntervalSince1970 * 1_000))
+        let events = [Event(atMs: fromMs, kind: .start, stepsTotal: 0, stairsTotal: 0),
+                      Event(atMs: toMs, kind: .stop, stepsTotal: 0, stairsTotal: 0)]
+        let session = Session(id: id, deviceId: deviceId, startedAtMs: fromMs, endedAtMs: toMs,
+                              capturedStartedAtMs: nil, capturedEndedAtMs: nil, keepRaw: true,
+                              steps: 0, stairs: 0, excludedWindows: 0, comment: "",
+                              exported: false, events: events)
+        sessions.insert(session, at: 0); persist(session)
+        return session
+    }
+
+    func setRange(sessionId: String, from: Date, to: Date) {
+        let fromMs = Int64(from.timeIntervalSince1970 * 1_000)
+        let toMs = Int64(to.timeIntervalSince1970 * 1_000)
+        guard validRange(fromMs, toMs) else { return }
+        mutate(sessionId) { session in
+            guard !session.active else { return }
+            session = Session(id: session.id, deviceId: session.deviceId, startedAtMs: fromMs,
+                              endedAtMs: toMs, capturedStartedAtMs: session.capturedStartedAtMs,
+                              capturedEndedAtMs: session.capturedEndedAtMs, keepRaw: session.keepRaw,
+                              steps: session.steps, stairs: session.stairs,
+                              excludedWindows: session.excludedWindows, comment: session.comment,
+                              exported: false, events: session.events)
         }
     }
 
@@ -156,9 +194,13 @@ final class RawDataSessionStore: ObservableObject {
 
     private func file(_ id: String) -> URL { directory.appendingPathComponent("session-\(id).json") }
 
+    private func validRange(_ from: Int64, _ to: Int64) -> Bool {
+        from > 0 && from <= to && to - from <= 7 * 24 * 60 * 60 * 1_000
+    }
+
     func exportEntries(for session: Session,
                        raw: [(RawBatchMeta, [[UInt8]])]) -> [FileExport.BundleEntry] {
-        let meta: [String: Any] = [
+        var meta: [String: Any] = [
             "schema_version": 3, "capture_kind": "whoop_5mg_raw_data",
             "session_id": session.id, "device_id": session.deviceId,
             "started_at_ms": session.startedAtMs, "ended_at_ms": session.endedAtMs ?? session.startedAtMs,
@@ -169,6 +211,8 @@ final class RawDataSessionStore: ObservableObject {
             "app_version": Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "?",
             "manual_labels": "optional; on-screen step and stair controls",
         ]
+        if let value = session.capturedStartedAtMs { meta["captured_started_at_ms"] = value }
+        if let value = session.capturedEndedAtMs { meta["captured_ended_at_ms"] = value }
         let metaData = (try? JSONSerialization.data(withJSONObject: meta, options: [.prettyPrinted, .sortedKeys])) ?? Data()
         let eventData = session.events.compactMap { event -> Data? in
             var row: [String: Any] = ["at_ms": event.atMs, "kind": event.kind.rawValue,

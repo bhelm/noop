@@ -163,6 +163,18 @@ interface WhoopDao : DeviceRegistryDao {
     )
     suspend fun rawImuSamples(deviceId: String, from: Long, to: Long, limit: Int): List<RawImuSampleEntity>
 
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsertImuChunk(row: ImuChunkEntity)
+
+    @Query("SELECT * FROM imuChunk WHERE deviceId = :deviceId AND endTs >= :from AND startTs <= :to ORDER BY startTs")
+    suspend fun imuChunks(deviceId: String, from: Long, to: Long): List<ImuChunkEntity>
+
+    @Query("DELETE FROM imuChunk WHERE id = :id")
+    suspend fun deleteImuChunk(id: String)
+
+    @Query("SELECT * FROM imuChunk WHERE pinnedUntil IS NULL AND endTs < :cutoff ORDER BY endTs")
+    suspend fun expiredImuChunks(cutoff: Long): List<ImuChunkEntity>
+
     // MARK: - Server-derived caches (latest value wins)
 
     @Upsert

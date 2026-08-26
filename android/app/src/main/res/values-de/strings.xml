@@ -2481,6 +2481,7 @@
     <string name="ground_truth_haptics">Bei markiertem Klick vibrieren</string>
     <string name="ground_truth_haptics_desc">Optionale Bestätigung; standardmäßig aus, um bei langen Sessions Akku zu sparen.</string>
     <string name="ground_truth_start">Rohdaten-Session starten</string>
+    <string name="ground_truth_add_historical">Vergangenes Zeitfenster hinzufügen</string>
     <string name="ground_truth_undo">Letzten Klick rückgängig</string>
     <string name="ground_truth_stop">Session beenden</string>
     <string name="ground_truth_export">Session exportieren</string>
@@ -2500,5 +2501,7 @@
     <string name="ground_truth_delete_all_message">Alle %1$d aufgezeichneten Sessions und ihre Rohdaten werden dauerhaft gelöscht.</string>
     <string name="ground_truth_delete_confirm">Löschen</string>
     <string name="ground_truth_cancel">Abbrechen</string>
+    <string name="ground_truth_edit_start">Start ändern</string>
+    <string name="ground_truth_edit_end">Ende ändern</string>
     <string name="ground_truth_legacy_no_sensors">Ältere Session: Ereignisse können exportiert werden, der zugehörige Strap für Sensordaten ist aber nicht mehr eindeutig.</string>
 </resources>
