@@ -2487,11 +2487,9 @@
     <string name="ground_truth_export">Session exportieren</string>
     <string name="ground_truth_exporting">Export wird erstellt…</string>
     <string name="ground_truth_export_failed">Session konnte nicht exportiert werden: %1$s</string>
-    <string name="ground_truth_minutes">Minuten</string>
-    <string name="ground_truth_exclude_recent">Letzten Zeitraum ignorieren</string>
     <string name="ground_truth_sessions">Aufgezeichnete Sessions</string>
     <string name="ground_truth_no_sessions">Noch keine Sessions aufgezeichnet.</string>
-    <string name="ground_truth_session_summary">%1$d Schritte · %2$d Stufen · %3$d ausgeschlossene Zeiträume</string>
+    <string name="ground_truth_session_summary">%1$d Schritte · %2$d Stufen</string>
     <string name="ground_truth_comment">Kommentar zur Session</string>
     <string name="ground_truth_delete_session">Session löschen</string>
     <string name="ground_truth_delete_session_title">Diese Session löschen?</string>

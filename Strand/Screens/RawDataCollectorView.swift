@@ -9,7 +9,6 @@ struct RawDataCollectorView: View {
     @StateObject private var store = RawDataSessionStore()
     private let archive = ImuChunkArchiveStore()
 
-    @State private var excludeMinutes = "5"
     @State private var exportingId: String?
     @State private var deleteCandidate: RawDataSessionStore.Session?
     @State private var confirmDeleteAll = false
@@ -126,14 +125,6 @@ struct RawDataCollectorView: View {
                 NoopButton("Stop session", systemImage: "stop.fill", kind: .destructive,
                            fullWidth: true) { Task { await stop() } }
             }
-            HStack {
-                TextField("Minutes", text: $excludeMinutes)
-                    .textFieldStyle(.roundedBorder)
-                NoopButton("Ignore recent period", kind: .secondary, fullWidth: true) {
-                    if let minutes = Int(excludeMinutes) { store.excludeLast(minutes: minutes) }
-                }
-                .disabled(!(1...240).contains(Int(excludeMinutes) ?? 0))
-            }
         } else {
             NoopButton("Start raw-data session", systemImage: "record.circle", kind: .primary,
                        fullWidth: true) { start() }
@@ -190,7 +181,7 @@ struct RawDataCollectorView: View {
                                               from: Date(timeIntervalSince1970: Double(session.startedAtMs) / 1_000), to: $0) }
                     ))
                 }
-                Text("\(session.steps) steps · \(session.stairs) stairs · \(session.excludedWindows) excluded periods")
+                Text("\(session.steps) steps · \(session.stairs) stairs")
                     .font(StrandFont.caption).foregroundStyle(StrandPalette.textSecondary)
                 Text(session.active ? "Export status: recording"
                      : "Export status: \(rawBatchCounts[session.id, default: 0]) raw batches")

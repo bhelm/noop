@@ -36,8 +36,6 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.noop.R
@@ -62,7 +60,6 @@ fun GroundTruthCollectorScreen(vm: AppViewModel) {
     var state by remember { mutableStateOf(collector.snapshot()) }
     var haptics by remember { mutableStateOf(false) }
     var exportingSessionId by remember { mutableStateOf<String?>(null) }
-    var excludeMinutes by remember { mutableStateOf("5") }
     var sessions by remember { mutableStateOf(collector.sessions()) }
     var latestSensorTs by remember { mutableStateOf<Long?>(null) }
     var sessionPendingDelete by remember { mutableStateOf<GroundTruthCollector.SessionSummary?>(null) }
@@ -202,26 +199,6 @@ fun GroundTruthCollectorScreen(vm: AppViewModel) {
                     onClick = {
                         vm.ble.stopGroundTruthImuCapture()
                         state = collector.stop(noopSteps)
-                        sessions = collector.sessions()
-                    },
-                )
-            }
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
-                OutlinedTextField(
-                    value = excludeMinutes,
-                    onValueChange = { value -> excludeMinutes = value.filter(Char::isDigit).take(3) },
-                    label = { Text(stringResource(R.string.ground_truth_minutes)) },
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                    singleLine = true,
-                    modifier = Modifier.weight(1f),
-                )
-                NoopButton(
-                    text = stringResource(R.string.ground_truth_exclude_recent),
-                    kind = NoopButtonKind.Secondary,
-                    modifier = Modifier.weight(2f),
-                    enabled = excludeMinutes.toIntOrNull() in 1..240,
-                    onClick = {
-                        excludeMinutes.toIntOrNull()?.let { collector.excludeLastMinutes(it) }
                         sessions = collector.sessions()
                     },
                 )
@@ -403,7 +380,6 @@ private fun SessionCard(
                     R.string.ground_truth_session_summary,
                     session.steps,
                     session.stairs,
-                    session.excludedWindows,
                 ),
                 style = NoopType.caption,
                 color = Palette.textSecondary,
