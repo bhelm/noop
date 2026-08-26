@@ -2434,7 +2434,7 @@
     <string name="l10n_app_changelog_training_load_a_vo_max_without_f9205a67">Carga de entrenamiento, VO₂max sin cinta métrica y mucha menos batería recalculando</string>
     <string name="nav_self_hosted_push">Envío autoalojado</string>
     <string name="push_title">Envío autoalojado</string>
-    <string name="push_subtitle">Experimental · Android</string>
+    <string name="push_subtitle">En fase experimental · Android</string>
     <string name="push_destination_title">Tu endpoint</string>
     <string name="push_disclosure">Al activarlo, NOOP envía datos de salud sin procesar desde este teléfono al endpoint que controlas. Los datos salen expresamente del dispositivo.</string>
     <string name="push_one_way_warning">Solo exportación unidireccional. NOOP no puede restaurar datos desde este endpoint ni proporciona un receptor.</string>
