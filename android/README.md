@@ -152,6 +152,20 @@ flavors — `full` = the real app, `demo` = preloaded synthetic data; substitute
 > checked in. The properties pin the Gradle distribution checksum, while CI validates the wrapper
 > JAR. Do not regenerate only one part of the wrapper or substitute an unreviewed binary.
 
+### Local staging build and deployment
+
+On the mc.rw23.de test host, use the repository script instead of copying an APK by hand:
+
+```bash
+Tools/build-deploy-android-staging.sh
+```
+
+It raises `versionCode` above the currently deployed APK when necessary, builds only the
+`com.noop.whoop.staging` full release under the shared JVM build lock, verifies its package,
+version and signing certificate, atomically installs it as `/root/mc-landing/noop-sync.apk`, and
+checks that the `mc-landing` web container sees the identical SHA-256. The final output includes a
+cache-busted download URL. Set `DEPLOY_APK` and `WEB_CONTAINER` to override the host defaults.
+
 ---
 
 ## Project layout
