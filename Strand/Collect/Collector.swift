@@ -109,10 +109,47 @@ final class Collector {
         return result
     }
 
+    /// Decoded history rows in a stable long-form CSV for arbitrary user-selected export windows.
+    func historySensorsCSV(from: Int, to: Int) async -> Data {
+        guard let store = concreteStore, from <= to else { return Data("stream,unix_s,v1,v2,v3,v4\n".utf8) }
+        let limit = min(max(to - from + 1, 1) * 4, 1_000_000)
+        async let hr = try? store.hrSamples(deviceId: deviceId, from: from, to: to, limit: limit)
+        async let battery = try? store.batterySamples(deviceId: deviceId, from: from, to: to, limit: limit)
+        async let spo2 = try? store.spo2Samples(deviceId: deviceId, from: from, to: to, limit: limit)
+        async let temp = try? store.skinTempSamples(deviceId: deviceId, from: from, to: to, limit: limit)
+        async let steps = try? store.stepSamples(deviceId: deviceId, from: from, to: to, limit: limit)
+        async let resp = try? store.respSamples(deviceId: deviceId, from: from, to: to, limit: limit)
+        async let gravity = try? store.gravitySamples(deviceId: deviceId, from: from, to: to, limit: limit)
+        var lines = ["stream,unix_s,v1,v2,v3,v4"]
+        lines += await (hr ?? []).map { "heart_rate,\($0.ts),\($0.bpm),,," }
+        lines += await (battery ?? []).map { "battery,\($0.ts),\($0.soc.map(String.init) ?? ""),\($0.mv.map(String.init) ?? ""),," }
+        lines += await (spo2 ?? []).map { "spo2_raw,\($0.ts),\($0.red),\($0.ir),," }
+        lines += await (temp ?? []).map { "skin_temp_raw,\($0.ts),\($0.raw),\($0.aux1Raw.map(String.init) ?? ""),\($0.aux2Raw.map(String.init) ?? "")," }
+        lines += await (steps ?? []).map { "steps,\($0.ts),\($0.counter),\($0.activityClass.map(String.init) ?? ""),," }
+        lines += await (resp ?? []).map { "resp_raw,\($0.ts),\($0.raw),,," }
+        lines += await (gravity ?? []).map { "gravity,\($0.ts),\($0.x),\($0.y),\($0.z),\($0.dynAccel.map(String.init) ?? "")" }
+        return Data((lines.joined(separator: "\n") + "\n").utf8)
+    }
+
     @discardableResult
     func deleteRawBatches(from: Int, to: Int) async -> Int {
         guard let store = concreteStore else { return 0 }
         return (try? await store.deleteRawBatches(deviceId: deviceId, from: from, to: to)) ?? 0
+    }
+
+    func rawImuSamples(from: Int, to: Int) async -> [(ts: Int, cols: [Int16])] {
+        guard let store = concreteStore else { return [] }
+        let limit = min(max(to - from + 1, 1), 7 * 24 * 60 * 60)
+        return (try? await store.rawImuSamples(deviceId: deviceId, from: from, to: to, limit: limit)) ?? []
+    }
+
+    func imuChunks(from: Int, to: Int) async -> [ImuChunkMeta] {
+        guard let store = concreteStore else { return [] }
+        return (try? await store.imuChunks(deviceId: deviceId, from: from, to: to)) ?? []
+    }
+
+    func upsertImuChunk(_ chunk: ImuChunkMeta) async {
+        try? await concreteStore?.upsertImuChunk(chunk)
     }
 
     /// Max persisted HR sample ts (the biometric "data frontier" for the stuck-strap watchdog).

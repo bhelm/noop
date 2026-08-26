@@ -51,10 +51,11 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         LiveSessionRow::class,
         PpgWaveformSampleEntity::class,
         RawImuSampleEntity::class,
+        ImuChunkEntity::class,
         V18AuxSampleEntity::class,
         AppleStepHour::class,
     ],
-    version = 33,
+    version = 34,
     // #775: ON so Room's KSP processor writes the generated schema (every table's exact `CREATE TABLE`,
     // columns in declaration order with affinity/NOT NULL/default, PK and indices) as JSON. That export
     // is what lets a plain JVM test — no device, no Robolectric — read Android's REAL schema and compare
@@ -74,7 +75,7 @@ abstract class WhoopDatabase : RoomDatabase() {
         const val DB_NAME = "noop_whoop.db"
         /** Room schema version — MUST equal the `@Database(version = …)` above. Surfaced in the backup
          *  manifest (#1410) so an export states its schema. Bump both together on a migration. */
-        const val SCHEMA_VERSION = 33
+        const val SCHEMA_VERSION = 34
 
         @Volatile
         private var instance: WhoopDatabase? = null
@@ -903,6 +904,21 @@ abstract class WhoopDatabase : RoomDatabase() {
             }
         }
 
+        internal val IMU_CHUNK_MIGRATION_SQL: List<String> = listOf(
+            "CREATE TABLE IF NOT EXISTS `imuChunk` (`id` TEXT NOT NULL, `deviceId` TEXT NOT NULL, " +
+                "`startTs` INTEGER NOT NULL, `endTs` INTEGER NOT NULL, `sampleCount` INTEGER NOT NULL, " +
+                "`sampleRate` INTEGER NOT NULL, `formatVersion` INTEGER NOT NULL, `codec` TEXT NOT NULL, " +
+                "`relativePath` TEXT NOT NULL, `byteSize` INTEGER NOT NULL, `sha256` TEXT NOT NULL, " +
+                "`createdAt` INTEGER NOT NULL, `pinnedUntil` INTEGER, PRIMARY KEY(`id`))",
+            "CREATE INDEX IF NOT EXISTS `index_imuChunk_deviceId_startTs_endTs` ON `imuChunk` (`deviceId`, `startTs`, `endTs`)",
+        )
+
+        internal val MIGRATION_33_34 = object : Migration(33, 34) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                for (stmt in IMU_CHUNK_MIGRATION_SQL) db.execSQL(stmt)
+            }
+        }
+
         /**
          * Every migration the builder registers, as a VALUE rather than an argument list.
          *
@@ -928,7 +944,7 @@ abstract class WhoopDatabase : RoomDatabase() {
             MIGRATION_18_19, MIGRATION_19_20, MIGRATION_20_21, MIGRATION_21_22,
             MIGRATION_22_23, MIGRATION_23_24, MIGRATION_24_25, MIGRATION_25_26,
             MIGRATION_26_27, MIGRATION_27_28, MIGRATION_28_29, MIGRATION_29_30,
-            MIGRATION_30_31, MIGRATION_31_32, MIGRATION_32_33,
+            MIGRATION_30_31, MIGRATION_31_32, MIGRATION_32_33, MIGRATION_33_34,
         )
 
 

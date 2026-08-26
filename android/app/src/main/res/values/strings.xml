@@ -2565,6 +2565,7 @@
     <string name="ground_truth_haptics">Vibrate on a counted press</string>
     <string name="ground_truth_haptics_desc">Optional confirmation; disabled by default to save battery during long sessions.</string>
     <string name="ground_truth_start">Start raw-data session</string>
+    <string name="ground_truth_add_historical">Add past time window</string>
     <string name="ground_truth_undo">Undo last click</string>
     <string name="ground_truth_stop">Stop session</string>
     <string name="ground_truth_export">Export session</string>
@@ -2584,5 +2585,7 @@
     <string name="ground_truth_delete_all_message">All %1$d recorded sessions and their captured raw data will be deleted permanently.</string>
     <string name="ground_truth_delete_confirm">Delete</string>
     <string name="ground_truth_cancel">Cancel</string>
+    <string name="ground_truth_edit_start">Edit start</string>
+    <string name="ground_truth_edit_end">Edit end</string>
     <string name="ground_truth_legacy_no_sensors">Legacy session: event export is available, but its strap cannot be identified for sensor export.</string>
 </resources>

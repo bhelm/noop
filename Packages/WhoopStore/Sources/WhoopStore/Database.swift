@@ -875,6 +875,26 @@ extension WhoopStore {
                 t.add(column: "burstIndex", .integer)
             }
         }
+        // v40: index immutable 100 Hz archive chunks whose payload lives outside the operational DB.
+        migrator.registerMigration("v40-imu-chunk-catalog") { db in
+            try db.create(table: "imuChunk") { t in
+                t.column("id", .text).primaryKey()
+                t.column("deviceId", .text).notNull()
+                t.column("startTs", .integer).notNull()
+                t.column("endTs", .integer).notNull()
+                t.column("sampleCount", .integer).notNull()
+                t.column("sampleRate", .integer).notNull()
+                t.column("formatVersion", .integer).notNull()
+                t.column("codec", .text).notNull()
+                t.column("relativePath", .text).notNull()
+                t.column("byteSize", .integer).notNull()
+                t.column("sha256", .text).notNull()
+                t.column("createdAt", .integer).notNull()
+                t.column("pinnedUntil", .integer)
+            }
+            try db.create(index: "index_imuChunk_deviceId_startTs_endTs", on: "imuChunk",
+                          columns: ["deviceId", "startTs", "endTs"])
+        }
         return migrator
     }
 }

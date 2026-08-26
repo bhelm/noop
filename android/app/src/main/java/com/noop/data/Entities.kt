@@ -3,6 +3,7 @@ package com.noop.data
 import androidx.room.ColumnInfo
 import androidx.room.Entity
 import androidx.room.Index
+import androidx.room.PrimaryKey
 
 /*
  * Room entities mirroring the verified GRDB schema in
@@ -690,6 +691,27 @@ data class RawImuSampleEntity(
         return result
     }
 }
+
+/** Catalog row for one immutable, app-private IMU archive chunk. Payload bytes live outside SQLite. */
+@Entity(
+    tableName = "imuChunk",
+    indices = [Index(value = ["deviceId", "startTs", "endTs"])],
+)
+data class ImuChunkEntity(
+    @PrimaryKey val id: String,
+    val deviceId: String,
+    val startTs: Long,
+    val endTs: Long,
+    val sampleCount: Int,
+    val sampleRate: Int,
+    val formatVersion: Int,
+    val codec: String,
+    val relativePath: String,
+    val byteSize: Long,
+    val sha256: String,
+    val createdAt: Long,
+    val pinnedUntil: Long?,
+)
 
 /**
  * One Live Session (silent guardian) record (v22 / MIGRATION_15_16). Natural key (deviceId, startTs).

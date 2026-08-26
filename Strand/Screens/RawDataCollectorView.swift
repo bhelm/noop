@@ -6,6 +6,7 @@ struct RawDataCollectorView: View {
     @EnvironmentObject private var model: AppModel
     @EnvironmentObject private var live: LiveState
     @StateObject private var store = RawDataSessionStore()
+    private let archive = ImuChunkArchiveStore()
 
     @State private var excludeMinutes = "5"
     @State private var exportingId: String?
@@ -13,6 +14,8 @@ struct RawDataCollectorView: View {
     @State private var confirmDeleteAll = false
     @State private var exportError: String?
     @State private var rawBatchCounts: [String: Int] = [:]
+    @State private var historicalFrom = Date().addingTimeInterval(-3_600)
+    @State private var historicalTo = Date()
 
     var body: some View {
         ScreenScaffold(
@@ -24,6 +27,7 @@ struct RawDataCollectorView: View {
                 coverageCard
                 labelsCard
                 controls
+                historicalRangeCard
                 sessionsSection
             }
         }
@@ -136,6 +140,24 @@ struct RawDataCollectorView: View {
         }
     }
 
+    private var historicalRangeCard: some View {
+        StrandCard {
+            VStack(alignment: .leading, spacing: NoopMetrics.space3) {
+                Text("Historical export window").font(StrandFont.headline)
+                Text("Create a session from synchronized history without starting a live capture. 100 Hz coverage is included wherever it still exists in the rolling buffer.")
+                    .font(StrandFont.caption).foregroundStyle(StrandPalette.textTertiary)
+                DatePicker("From", selection: $historicalFrom)
+                DatePicker("To", selection: $historicalTo, in: historicalFrom...)
+                NoopButton("Add historical session", systemImage: "clock.arrow.circlepath",
+                           kind: .secondary, fullWidth: true) {
+                    _ = store.createHistorical(deviceId: model.ble.deviceId,
+                                               from: historicalFrom, to: historicalTo)
+                }
+                .disabled(historicalTo <= historicalFrom || historicalTo.timeIntervalSince(historicalFrom) > 7 * 86_400)
+            }
+        }
+    }
+
     private var sessionsSection: some View {
         VStack(alignment: .leading, spacing: NoopMetrics.space3) {
             Text("Recorded sessions").font(StrandFont.title2).foregroundStyle(StrandPalette.textPrimary)
@@ -155,6 +177,18 @@ struct RawDataCollectorView: View {
         StrandCard {
             VStack(alignment: .leading, spacing: NoopMetrics.space3) {
                 Text(Self.range(session)).font(StrandFont.headline).foregroundStyle(StrandPalette.textPrimary)
+                if !session.active, let endMs = session.endedAtMs {
+                    DatePicker("From", selection: Binding(
+                        get: { Date(timeIntervalSince1970: Double(session.startedAtMs) / 1_000) },
+                        set: { store.setRange(sessionId: session.id, from: $0,
+                                              to: Date(timeIntervalSince1970: Double(endMs) / 1_000)) }
+                    ))
+                    DatePicker("To", selection: Binding(
+                        get: { Date(timeIntervalSince1970: Double(endMs) / 1_000) },
+                        set: { store.setRange(sessionId: session.id,
+                                              from: Date(timeIntervalSince1970: Double(session.startedAtMs) / 1_000), to: $0) }
+                    ))
+                }
                 Text("\(session.steps) steps · \(session.stairs) stairs · \(session.excludedWindows) excluded periods")
                     .font(StrandFont.caption).foregroundStyle(StrandPalette.textSecondary)
                 Text(session.active ? "Export status: recording"
@@ -202,9 +236,25 @@ struct RawDataCollectorView: View {
     private func export(_ session: RawDataSessionStore.Session) async {
         guard let end = session.endedAtMs else { return }
         exportingId = session.id
-        let raw = await model.ble.groundTruthRawBatches(from: Int(session.startedAtMs / 1_000),
-                                                       to: Int(end / 1_000))
-        let entries = store.exportEntries(for: session, raw: raw)
+        let from = Int(session.startedAtMs / 1_000), to = Int(end / 1_000)
+        let chunks = await archive.pin(deviceId: session.deviceId, from: from, to: to, ble: model.ble)
+        let history = await model.ble.groundTruthHistoryCSV(from: from, to: to)
+        var entries = store.exportEntries(for: session, raw: [])
+        entries.append(.init(name: "history-sensors.csv", data: history))
+        let coverage: [String: Any] = [
+            "requested_start_ts": from, "requested_end_ts": to,
+            "complete": Self.covers(chunks.map { ($0.startTs, $0.endTs) }, from: from, to: to),
+            "chunks": chunks.map { ["start_ts": $0.startTs, "end_ts": $0.endTs,
+                                     "sample_count": $0.sampleCount, "sha256": $0.sha256] }
+        ]
+        if let data = try? JSONSerialization.data(withJSONObject: coverage, options: [.prettyPrinted, .sortedKeys]) {
+            entries.append(.init(name: "imu-coverage.json", data: data))
+        }
+        for chunk in chunks {
+            if let data = try? Data(contentsOf: archive.file(chunk)) {
+                entries.append(.init(name: "imu/\(chunk.id).imuc", data: data))
+            }
+        }
         let result = await FileExport.exportBundle(entries: entries,
                                                     suggestedName: "noop-ground-truth-\(session.id).zip")
         if result == nil { exportError = "The export file could not be created or shared." }
@@ -213,9 +263,8 @@ struct RawDataCollectorView: View {
     }
 
     private func delete(_ session: RawDataSessionStore.Session) async {
-        guard let end = session.endedAtMs else { return }
-        _ = await model.ble.deleteGroundTruthRawBatches(from: Int(session.startedAtMs / 1_000),
-                                                        to: Int(end / 1_000))
+        guard session.endedAtMs != nil else { return }
+        // Raw chunks may overlap another session; retention cleanup owns physical deletion.
         store.removeMetadata(session.id)
         rawBatchCounts[session.id] = nil
     }
@@ -241,5 +290,15 @@ struct RawDataCollectorView: View {
         let date = start.formatted(date: .numeric, time: .omitted)
         let end = session.endedAtMs.map(time) ?? "…"
         return "\(date) · \(time(session.startedAtMs))–\(end)"
+    }
+
+    private static func covers(_ intervals: [(Int, Int)], from: Int, to: Int) -> Bool {
+        var cursor = from
+        for (start, end) in intervals.sorted(by: { $0.0 < $1.0 }) {
+            if start > cursor { return false }
+            if end >= cursor { cursor = end + 1 }
+            if cursor > to { return true }
+        }
+        return cursor > to
     }
 }

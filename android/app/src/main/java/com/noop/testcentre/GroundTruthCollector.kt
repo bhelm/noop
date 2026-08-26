@@ -46,6 +46,8 @@ class GroundTruthCollector private constructor(private val context: Context) {
         val deviceId: String?,
         val startedAtMs: Long,
         val endedAtMs: Long?,
+        val capturedStartedAtMs: Long?,
+        val capturedEndedAtMs: Long?,
         val steps: Int,
         val stairs: Int,
         val excludedWindows: Int,
@@ -92,6 +94,7 @@ class GroundTruthCollector private constructor(private val context: Context) {
             .putString(sessionDeviceKey(id), deviceId)
             .putLong(sessionStartKey(id), nowMs)
             .putBoolean(sessionExportedKey(id), false)
+            .putBoolean(sessionCaptureKey(id), true)
             .apply()
         append(id, event(nowMs, "start", 0, 0, noopSteps, null).put("strap_device_id", deviceId))
         return snapshot()
@@ -132,13 +135,19 @@ class GroundTruthCollector private constructor(private val context: Context) {
                 val first = rows.firstOrNull() ?: return@mapNotNull null
                 val last = rows.last()
                 val isCurrent = current.sessionId == id
+                val physicalStart = prefs.getLong(sessionStartKey(id), first.optLong("at_ms"))
+                val capturedEnd = rows.lastOrNull { it.optString("kind") == "stop" }?.optLong("at_ms")
+                val hasCapture = prefs.getBoolean(sessionCaptureKey(id),
+                    File(directory, "realtime-imu-$id.bin").isFile)
                 SessionSummary(
                     id = id,
                     deviceId = prefs.getString(sessionDeviceKey(id), null)
                         ?: first.optString("strap_device_id").takeIf(String::isNotBlank)
                         ?: current.deviceId.takeIf { isCurrent },
-                    startedAtMs = prefs.getLong(sessionStartKey(id), first.optLong("at_ms")),
-                    endedAtMs = rows.lastOrNull { it.optString("kind") == "stop" }?.optLong("at_ms"),
+                    startedAtMs = prefs.getLong(sessionUsedStartKey(id), physicalStart),
+                    endedAtMs = capturedEnd?.let { prefs.getLong(sessionUsedEndKey(id), it) },
+                    capturedStartedAtMs = physicalStart.takeIf { hasCapture },
+                    capturedEndedAtMs = capturedEnd.takeIf { hasCapture },
                     steps = last.optInt("steps_total"),
                     stairs = last.optInt("stairs_total"),
                     excludedWindows = rows.count { it.optString("kind") == KIND_EXCLUDE },
@@ -172,11 +181,36 @@ class GroundTruthCollector private constructor(private val context: Context) {
             .remove(sessionEndKey(sessionId))
             .remove(sessionCommentKey(sessionId))
             .remove(sessionExportedKey(sessionId))
+            .remove(sessionUsedStartKey(sessionId))
+            .remove(sessionUsedEndKey(sessionId))
+            .remove(sessionCaptureKey(sessionId))
             .apply {
                 if (current.sessionId == sessionId) clearCurrentSession()
             }
             .apply()
         return filesDeleted
+    }
+
+    /** Trim the analysis/export interval without rewriting the physical capture provenance. */
+    @Synchronized
+    fun setSessionRange(sessionId: String, fromMs: Long, toMs: Long): Boolean {
+        val session = sessions().firstOrNull { it.id == sessionId } ?: return false
+        if (session.active || fromMs <= 0 || fromMs > toMs || toMs - fromMs > MAX_RANGE_MS) return false
+        prefs.edit().putLong(sessionUsedStartKey(sessionId), fromMs)
+            .putLong(sessionUsedEndKey(sessionId), toMs).apply()
+        return true
+    }
+
+    @Synchronized
+    fun createHistoricalSession(deviceId: String, fromMs: Long, toMs: Long): SessionSummary? {
+        if (fromMs <= 0 || fromMs > toMs || toMs - fromMs > MAX_RANGE_MS) return null
+        val id = System.currentTimeMillis().toString()
+        prefs.edit().putString(sessionDeviceKey(id), deviceId).putLong(sessionStartKey(id), fromMs)
+            .putLong(sessionEndKey(id), toMs).putLong(sessionUsedStartKey(id), fromMs)
+            .putLong(sessionUsedEndKey(id), toMs).putBoolean(sessionCaptureKey(id), false).apply()
+        append(id, event(fromMs, "start", 0, 0, null, null).put("strap_device_id", deviceId))
+        append(id, event(toMs, "stop", 0, 0, null, null))
+        return sessions().firstOrNull { it.id == id }
     }
 
     /** Delete every completed capture. Active captures are deliberately retained. */
@@ -261,6 +295,8 @@ class GroundTruthCollector private constructor(private val context: Context) {
         // interval; labels and exclusion windows are optional annotations, not a prerequisite for data.
         val sensorFrom = if (deviceId == null) 1L else summary.startedAtMs / 1_000L
         val sensorTo = if (deviceId == null) 0L else endMs / 1_000L
+        val pinnedChunks = if (deviceId == null) emptyList() else
+            ImuChunkStore(context, repo).pin(deviceId, sensorFrom, sensorTo)
         val outDir = File(context.cacheDir, "logs").apply { mkdirs() }
         val zip = File(outDir, "noop-ground-truth-$id.zip")
         ZipOutputStream(zip.outputStream().buffered()).use { out ->
@@ -271,6 +307,14 @@ class GroundTruthCollector private constructor(private val context: Context) {
                 put("session_id", id)
                 if (deviceId != null) put("device_id", deviceId)
                 put("sensor_export_available", deviceId != null)
+                put("imu_100hz_chunk_count", pinnedChunks.size)
+                put("imu_100hz_complete", covers(pinnedChunks.map { it.startTs to it.endTs }, sensorFrom, sensorTo))
+                put("imu_100hz_coverage", org.json.JSONArray().apply {
+                    pinnedChunks.forEach { chunk -> put(JSONObject().apply {
+                        put("start_ts", chunk.startTs); put("end_ts", chunk.endTs)
+                        put("sample_count", chunk.sampleCount); put("sha256", chunk.sha256)
+                    }) }
+                })
                 put("started_at_ms", summary.startedAtMs)
                 put("ended_at_ms", endMs)
                 put("manual_steps", summary.steps)
@@ -342,6 +386,13 @@ class GroundTruthCollector private constructor(private val context: Context) {
                 realtimeImu.inputStream().use { it.copyTo(out) }
                 out.closeEntry()
             }
+            for (chunk in pinnedChunks) {
+                val file = ImuChunkStore(context, repo).file(chunk)
+                if (!file.isFile) continue
+                out.putNextEntry(ZipEntry("imu/${chunk.id}.imuc"))
+                file.inputStream().use { it.copyTo(out) }
+                out.closeEntry()
+            }
         }
         prefs.edit().putBoolean(sessionExportedKey(id), true).apply()
         if (id == snap.sessionId) prefs.edit().putBoolean("exported", true).apply()
@@ -356,6 +407,16 @@ class GroundTruthCollector private constructor(private val context: Context) {
             putExtra(Intent.EXTRA_SUBJECT, "NOOP 5/MG raw-data session")
             addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
         }, "Export raw-data session").addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+    }
+
+    private fun covers(intervals: List<Pair<Long, Long>>, from: Long, to: Long): Boolean {
+        var cursor = from
+        for ((start, end) in intervals.sortedBy { it.first }) {
+            if (start > cursor) return false
+            if (end >= cursor) cursor = end + 1
+            if (cursor > to) return true
+        }
+        return cursor > to
     }
 
     private fun eventFile(id: String) = File(directory, "session-$id.jsonl")
@@ -541,6 +602,9 @@ class GroundTruthCollector private constructor(private val context: Context) {
     private fun sessionEndKey(id: String) = "session.$id.endedAtMs"
     private fun sessionCommentKey(id: String) = "session.$id.comment"
     private fun sessionExportedKey(id: String) = "session.$id.exported"
+    private fun sessionUsedStartKey(id: String) = "session.$id.usedStartedAtMs"
+    private fun sessionUsedEndKey(id: String) = "session.$id.usedEndedAtMs"
+    private fun sessionCaptureKey(id: String) = "session.$id.hasRealtimeCapture"
 
     private fun ZipOutputStream.writerEntry(text: String) {
         write(text.toByteArray(Charsets.UTF_8)); closeEntry()
@@ -559,6 +623,7 @@ class GroundTruthCollector private constructor(private val context: Context) {
         private const val KIND_UNDO_STAIR = "undo_stair"
         private const val KIND_EXCLUDE = "exclude_window"
         private const val PREFS = "noop_ground_truth_collector"
+        private const val MAX_RANGE_MS = 7L * 24 * 60 * 60 * 1_000
 
         fun from(context: Context) = GroundTruthCollector(context.applicationContext)
     }

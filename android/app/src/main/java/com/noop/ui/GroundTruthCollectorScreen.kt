@@ -1,6 +1,9 @@
 package com.noop.ui
 
 import android.os.Build
+import android.app.DatePickerDialog
+import android.app.TimePickerDialog
+import android.content.Context
 import android.view.HapticFeedbackConstants
 import android.view.InputDevice
 import android.view.KeyEvent
@@ -234,6 +237,17 @@ fun GroundTruthCollectorScreen(vm: AppViewModel) {
                 },
             )
         }
+        NoopButton(
+            text = stringResource(R.string.ground_truth_add_historical),
+            kind = NoopButtonKind.Secondary,
+            fullWidth = true,
+            enabled = !state.active && vm.activeStrapId.isNotBlank(),
+            onClick = {
+                val end = System.currentTimeMillis()
+                collector.createHistoricalSession(vm.activeStrapId, end - 60 * 60 * 1_000L, end)
+                sessions = collector.sessions()
+            },
+        )
         Text(stringResource(R.string.ground_truth_sessions), style = NoopType.title2, color = Palette.textPrimary)
         if (sessions.isEmpty()) {
             Text(stringResource(R.string.ground_truth_no_sessions), style = NoopType.body, color = Palette.textSecondary)
@@ -271,6 +285,20 @@ fun GroundTruthCollectorScreen(vm: AppViewModel) {
                         }
                     },
                     onDelete = { sessionPendingDelete = session },
+                    onEditStart = {
+                        pickDateTime(context, session.startedAtMs, EARLIEST_EXPORT_MS,
+                            session.endedAtMs ?: session.capturedEndedAtMs ?: session.startedAtMs) { value ->
+                            collector.setSessionRange(session.id, value, requireNotNull(session.endedAtMs))
+                            sessions = collector.sessions()
+                        }
+                    },
+                    onEditEnd = {
+                        pickDateTime(context, requireNotNull(session.endedAtMs), session.startedAtMs,
+                            System.currentTimeMillis()) { value ->
+                            collector.setSessionRange(session.id, session.startedAtMs, value)
+                            sessions = collector.sessions()
+                        }
+                    },
                 )
             }
         }
@@ -332,6 +360,8 @@ private fun SessionCard(
     onComment: (String) -> Unit,
     onExport: () -> Unit,
     onDelete: () -> Unit,
+    onEditStart: () -> Unit,
+    onEditEnd: () -> Unit,
 ) {
     val time = remember(session.startedAtMs, session.endedAtMs) { sessionTimeRange(session) }
     NoopCard {
@@ -349,6 +379,22 @@ private fun SessionCard(
                 color = if (captureReady) Palette.statusPositive else Palette.statusCritical,
             )
             Text(time, style = NoopType.headline, color = Palette.textPrimary)
+            if (!session.active) {
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    NoopButton(
+                        text = stringResource(R.string.ground_truth_edit_start),
+                        kind = NoopButtonKind.Secondary,
+                        modifier = Modifier.weight(1f),
+                        onClick = onEditStart,
+                    )
+                    NoopButton(
+                        text = stringResource(R.string.ground_truth_edit_end),
+                        kind = NoopButtonKind.Secondary,
+                        modifier = Modifier.weight(1f),
+                        onClick = onEditEnd,
+                    )
+                }
+            }
             Text(
                 stringResource(
                     R.string.ground_truth_session_summary,
@@ -400,6 +446,30 @@ private fun sessionTimeRange(session: GroundTruthCollector.SessionSummary): Stri
     }
 }
 
+private fun pickDateTime(
+    context: Context,
+    initialMs: Long,
+    minimumMs: Long,
+    maximumMs: Long,
+    onPicked: (Long) -> Unit,
+) {
+    val initial = java.util.Calendar.getInstance().apply { timeInMillis = initialMs }
+    val dateDialog = DatePickerDialog(context, { _, year, month, day ->
+        TimePickerDialog(context, { _, hour, minute ->
+            val picked = java.util.Calendar.getInstance().apply {
+                set(year, month, day, hour, minute, 0)
+                set(java.util.Calendar.MILLISECOND, 0)
+            }.timeInMillis.coerceIn(minimumMs, maximumMs)
+            onPicked(picked)
+        }, initial.get(java.util.Calendar.HOUR_OF_DAY), initial.get(java.util.Calendar.MINUTE),
+            android.text.format.DateFormat.is24HourFormat(context)).show()
+    }, initial.get(java.util.Calendar.YEAR), initial.get(java.util.Calendar.MONTH),
+        initial.get(java.util.Calendar.DAY_OF_MONTH))
+    dateDialog.datePicker.minDate = minimumMs
+    dateDialog.datePicker.maxDate = maximumMs
+    dateDialog.show()
+}
+
 @Composable
 private fun CounterColumn(label: String, value: String, modifier: Modifier = Modifier) {
     Column(modifier = modifier.padding(horizontal = 4.dp), horizontalAlignment = Alignment.CenterHorizontally) {
@@ -431,3 +501,5 @@ private fun diagnosticAge(epochMs: Long): String {
         else -> "${seconds / 3_600}h ${(seconds % 3_600) / 60}m"
     }
 }
+
+private const val EARLIEST_EXPORT_MS = 946_684_800_000L
