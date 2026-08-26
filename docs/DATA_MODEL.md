@@ -297,6 +297,31 @@ inserts, identical range-read shape).
 
 **Primary key:** `(deviceId, ts)`.
 
+This is the low-rate decoded vector used by normal analytics, not the 100 Hz six-axis capture. High-rate
+IMU payloads deliberately remain outside the per-sample SQLite schema: SQLite stores only searchable
+`imuChunk` metadata, while compressed `.imus`/`.imuc` files hold the original frames and materialised
+sample columns. See [5/MG raw data capture](RAW_DATA_CAPTURE.md#storage-design).
+
+#### `imuChunk` — file-backed high-rate IMU catalog
+
+| Column | Type | Notes |
+| --- | --- | --- |
+| `id` | TEXT NOT NULL | Primary key and `.imuc` filename stem. |
+| `deviceId` | TEXT NOT NULL | Owning strap. |
+| `startTs` / `endTs` | INTEGER NOT NULL | Inclusive strap Unix-second coverage. |
+| `sampleCount` | INTEGER NOT NULL | Decoded axis-sample count represented by the chunk. |
+| `sampleRate` | INTEGER NOT NULL | Currently 100 Hz. |
+| `formatVersion` | INTEGER NOT NULL | `NOOPIMU` container version. |
+| `codec` | TEXT NOT NULL | Currently `zip-deflate`. |
+| `relativePath` | TEXT NOT NULL | App-private path to the payload outside SQLite. |
+| `byteSize` | INTEGER NOT NULL | Stored file length. |
+| `sha256` | TEXT NOT NULL | Payload integrity/provenance hash. |
+| `createdAt` | INTEGER NOT NULL | Unix seconds. |
+| `pinnedUntil` | INTEGER | Retention marker; permanent session chunks use the platform maximum. |
+
+The index is `(deviceId, startTs, endTs)`. A catalog row without its file is not coverage; readers
+always verify that `relativePath` exists.
+
 ---
 
 ## Raw outbox (transient, prunable)
