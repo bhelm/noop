@@ -2576,5 +2576,13 @@
     <string name="ground_truth_no_sessions">No sessions recorded yet.</string>
     <string name="ground_truth_session_summary">%1$d steps · %2$d stairs · %3$d excluded periods</string>
     <string name="ground_truth_comment">Session comment</string>
+    <string name="ground_truth_delete_session">Delete session</string>
+    <string name="ground_truth_delete_session_title">Delete this session?</string>
+    <string name="ground_truth_delete_session_message">The session %1$s and its captured raw data will be deleted permanently.</string>
+    <string name="ground_truth_delete_all">Delete all sessions</string>
+    <string name="ground_truth_delete_all_title">Delete all sessions?</string>
+    <string name="ground_truth_delete_all_message">All %1$d recorded sessions and their captured raw data will be deleted permanently.</string>
+    <string name="ground_truth_delete_confirm">Delete</string>
+    <string name="ground_truth_cancel">Cancel</string>
     <string name="ground_truth_legacy_no_sensors">Legacy session: event export is available, but its strap cannot be identified for sensor export.</string>
 </resources>

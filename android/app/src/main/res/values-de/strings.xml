@@ -2492,6 +2492,14 @@
     <string name="ground_truth_no_sessions">Noch keine Sessions aufgezeichnet.</string>
     <string name="ground_truth_session_summary">%1$d Schritte · %2$d Stufen · %3$d ausgeschlossene Zeiträume</string>
     <string name="ground_truth_comment">Kommentar zur Session</string>
+    <string name="ground_truth_delete_session">Session löschen</string>
+    <string name="ground_truth_delete_session_title">Diese Session löschen?</string>
+    <string name="ground_truth_delete_session_message">Die Session %1$s und ihre aufgezeichneten Rohdaten werden dauerhaft gelöscht.</string>
+    <string name="ground_truth_delete_all">Alle Sessions löschen</string>
+    <string name="ground_truth_delete_all_title">Alle Sessions löschen?</string>
+    <string name="ground_truth_delete_all_message">Alle %1$d aufgezeichneten Sessions und ihre Rohdaten werden dauerhaft gelöscht.</string>
+    <string name="ground_truth_delete_confirm">Löschen</string>
+    <string name="ground_truth_cancel">Abbrechen</string>
     <string name="ground_truth_legacy_no_sensors">Ältere Session: Ereignisse können exportiert werden, der zugehörige Strap für Sensordaten ist aber nicht mehr eindeutig.</string>
     <string name="nav_self_hosted_push">Self-hosted Push</string>
     <string name="push_title">Self-hosted Push</string>
