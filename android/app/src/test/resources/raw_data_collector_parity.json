@@ -17,10 +17,6 @@
       "swift": ["func undo(", "Undo last click"],
       "kotlin": ["fun undo(", "ground_truth_undo"]
     },
-    "exclude_recent_period": {
-      "swift": ["excludeLast(minutes:", "Ignore recent period"],
-      "kotlin": ["excludeLastMinutes(", "ground_truth_exclude_recent"]
-    },
     "session_comments": {
       "swift": ["setComment(", "Session comment"],
       "kotlin": ["setComment(", "ground_truth_comment"]

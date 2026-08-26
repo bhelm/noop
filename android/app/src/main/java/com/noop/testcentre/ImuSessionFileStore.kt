@@ -11,6 +11,7 @@ import java.util.zip.Inflater
 
 /** Routes realtime and delayed history IMU frames into persisted session time windows. */
 class ImuSessionFileStore(private val context: Context) {
+    data class Stats(val bytes: Long, val coveredSeconds: Int)
     private val prefs = context.getSharedPreferences("imu-session-windows", Context.MODE_PRIVATE)
     private val directory = File(context.filesDir, "ground-truth").apply { mkdirs() }
 
@@ -36,6 +37,15 @@ class ImuSessionFileStore(private val context: Context) {
     }
 
     fun prepareForRead(id: String) = synchronized(lock) { flush(id) }
+
+    fun stats(id: String, from: Long, to: Long): Stats = synchronized(lock) {
+        val file = File(directory, "realtime-imu-$id.imus")
+        // Do not flush merely for UI telemetry: that would turn the intended 30-frame compression
+        // blocks into one-frame blocks. Pending raw bytes are a close live size estimate until flush.
+        val pendingBytes = pending[id].orEmpty().sumOf { it.frame.size.toLong() + 20L }
+        Stats((file.takeIf(File::isFile)?.length() ?: 0L) + pendingBytes,
+            timestamps(file).count { it in from..to })
+    }
 
     /**
      * Queue a wire frame for a 30-second compressed block. Delayed history may append older blocks later;

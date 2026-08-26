@@ -2184,6 +2184,8 @@ class WhoopBleClient(
 
     @Volatile private var groundTruthImuCommandAllowed = false
     private var groundTruthImuSessionId: String? = null
+    private var groundTruthImuStoppedAtMs = 0L
+    private var unexpectedImuStopAtMs = 0L
 
     /** Start the hardware-confirmed WHOOP 5 realtime IMU mode for an explicit ground-truth session. */
     @Synchronized
@@ -2203,6 +2205,7 @@ class WhoopBleClient(
             return false
         }
         groundTruthImuSessionId = sessionId
+        groundTruthImuStoppedAtMs = 0L
         groundTruthImuCommandAllowed = true
         try {
             // The verified bounded raw-capture sequence is START_RAW_DATA followed by the
@@ -2231,6 +2234,7 @@ class WhoopBleClient(
         }
         log("Ground-truth realtime IMU requested OFF (session=${groundTruthImuSessionId ?: "none"})")
         groundTruthImuSessionId = null
+        groundTruthImuStoppedAtMs = System.currentTimeMillis()
         _groundTruthImuStatus.update { it.copy(requested = false, note = "Stopped; accepting history repair") }
     }
 
@@ -2262,6 +2266,27 @@ class WhoopBleClient(
             log("Ground-truth IMU append failed (${it.javaClass.simpleName})")
             _groundTruthImuStatus.update { status -> status.copy(note = "Write failed: ${it.javaClass.simpleName}") }
         }
+    }
+
+    /** Fail-safe for a producer left armed by a crash, another client, or a lost stop write. */
+    @Synchronized
+    private fun stopUnexpectedRealtimeImu(frame: ByteArray, replayedOffload: Boolean) {
+        if (connectedFamily != DeviceFamily.WHOOP5 || replayedOffload || frame.size <= 8) return
+        val type = frame[8].toInt() and 0xFF
+        if (type != 43 && type != 51) return
+        if (groundTruthImuSessionId != null || PuffinExperiment.from(context).isCaptureEnabled) return
+        val now = System.currentTimeMillis()
+        if (now - groundTruthImuStoppedAtMs < 3_000L || now - unexpectedImuStopAtMs < 30_000L) return
+        if (gatt == null || cmdCharacteristic == null) return
+        unexpectedImuStopAtMs = now
+        groundTruthImuCommandAllowed = true
+        try {
+            send(CommandNumber.STOP_RAW_DATA, byteArrayOf(1), withResponse = true)
+            send(CommandNumber.TOGGLE_IMU_MODE, byteArrayOf(1, 0), withResponse = true)
+        } finally {
+            groundTruthImuCommandAllowed = false
+        }
+        log("Raw IMU fail-safe: unexpected realtime packet type $type while capture was off; stop requested")
     }
 
     /** Frame reassembler for the fragmented custom notify chars (port of Reassembler). Reassigned per
@@ -6045,6 +6070,7 @@ class WhoopBleClient(
                     // handleFrame's replayedOffload gate, so evaluating it twice bounds-checked + indexed
                     // every offloaded frame for nothing. (The Swift 5/MG inbound loop already hoists this.)
                     val offloadFrame = backfilling && isOffloadFrame(frame, connectedFamily)
+                    stopUnexpectedRealtimeImu(frame, offloadFrame)
                     noteWhoop5R22Telemetry(frame, offloadFrame)  // #174
                     // #47: decode this frame ONCE and thread it to both consumers (the router below and the
                     // live collector) instead of each re-parsing it — steady-state drops 2→1 parse per live
