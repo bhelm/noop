@@ -225,7 +225,6 @@ fun GroundTruthCollectorScreen(vm: AppViewModel) {
                 enabled = noopSteps != null && vm.activeStrapId.isNotBlank(),
                 onClick = {
                     state = collector.start(requireNotNull(noopSteps), vm.activeStrapId)
-                    state.sessionId?.let(vm.ble::startGroundTruthImuCapture)
                     sessions = collector.sessions()
                 },
             )
