@@ -24,6 +24,7 @@ class ImuChunkStore(private val context: Context, private val repository: WhoopR
 
     suspend fun pin(sessionId: String, deviceId: String, from: Long, to: Long): List<ImuChunkEntity> {
         require(from <= to)
+        ImuSessionFileStore(context).prepareForRead(sessionId)
         val existing = repository.imuChunks(deviceId, from, to)
             .filter { it.pinnedUntil == Long.MAX_VALUE && File(context.filesDir, it.relativePath).isFile }
         if (existing.any { it.startTs <= from && it.endTs >= to &&
@@ -87,17 +88,21 @@ class ImuChunkStore(private val context: Context, private val repository: WhoopR
         DataInputStream(source.inputStream().buffered()).use { input ->
             while (true) {
                 try {
-                    val ts = input.readLong(); input.readLong()
-                    val length = input.readInt(); val compressedLength = input.readInt()
-                    if (length <= 0 || length > MAX_FRAME_BYTES || compressedLength <= 0 || compressedLength > MAX_FRAME_BYTES) break
+                    val count = input.readInt(); val rawSize = input.readInt(); val compressedLength = input.readInt()
+                    if (count !in 1..BLOCK_FRAMES || rawSize !in 1..MAX_BLOCK_BYTES ||
+                        compressedLength !in 1..MAX_BLOCK_BYTES) break
                     val compressed = ByteArray(compressedLength); input.readFully(compressed)
                     val inflater = Inflater(); inflater.setInput(compressed)
-                    val frame = ByteArray(length); val inflated = inflater.inflate(frame); inflater.end()
-                    if (inflated != length) continue
-                    val decoded = Whoop5RawImu.decode(frame) ?: continue
-                    if (ts == decoded.baseTs && ts in from..to) {
-                        Whoop5RawImu.rawColumns(frame)?.let { rows += ts to it }
-                    }
+                    val raw = ByteArray(rawSize); val inflated = inflater.inflate(raw); inflater.end()
+                    if (inflated != rawSize) continue
+                    DataInputStream(raw.inputStream()).use { block -> for (index in 0 until count) {
+                        val ts = block.readLong(); block.readLong(); val length = block.readInt()
+                        if (length !in 1..MAX_FRAME_BYTES) break
+                        val frame = ByteArray(length); block.readFully(frame)
+                        val decoded = Whoop5RawImu.decode(frame) ?: continue
+                        if (ts == decoded.baseTs && ts in from..to)
+                            Whoop5RawImu.rawColumns(frame)?.let { rows += ts to it }
+                    }}
                 } catch (_: EOFException) { break }
             }
         }
@@ -122,5 +127,7 @@ class ImuChunkStore(private val context: Context, private val repository: WhoopR
         const val SAMPLE_RATE = 100
         const val MAX_EXPORT_SECONDS = 7 * 24 * 60 * 60L
         const val MAX_FRAME_BYTES = 1024 * 1024
+        const val BLOCK_FRAMES = 30
+        const val MAX_BLOCK_BYTES = BLOCK_FRAMES * (MAX_FRAME_BYTES + 20)
     }
 }

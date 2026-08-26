@@ -7,6 +7,7 @@ import java.io.DataOutputStream
 import java.io.File
 import java.io.FileOutputStream
 import java.util.zip.Deflater
+import java.util.zip.Inflater
 
 /** Routes realtime and delayed history IMU frames into persisted session time windows. */
 class ImuSessionFileStore(private val context: Context) {
@@ -19,6 +20,7 @@ class ImuSessionFileStore(private val context: Context) {
     }
 
     fun complete(id: String, toMs: Long) = synchronized(lock) {
+        flush(id)
         if (id in prefs.getStringSet("ids", emptySet()).orEmpty())
             prefs.edit().putLong("$id.to", toMs / 1_000L).apply()
     }
@@ -28,13 +30,16 @@ class ImuSessionFileStore(private val context: Context) {
     }
 
     fun remove(id: String) = synchronized(lock) {
+        pending.remove(id)
         prefs.edit().putStringSet("ids", prefs.getStringSet("ids", emptySet()).orEmpty() - id)
             .remove("$id.device").remove("$id.from").remove("$id.to").apply()
     }
 
+    fun prepareForRead(id: String) = synchronized(lock) { flush(id) }
+
     /**
-     * Append one independently-deflated wire frame. The timestamp header makes the stream scanable and
-     * idempotent without inflating older records; delayed history may therefore fill gaps in any order.
+     * Queue a wire frame for a 30-second compressed block. Delayed history may append older blocks later;
+     * strap timestamps, not file order, are authoritative.
      */
     fun append(deviceId: String, frame: ByteArray, receivedAtMs: Long = System.currentTimeMillis()): Int = synchronized(lock) {
         val ts = Whoop5RawImu.decode(frame)?.baseTs ?: return 0
@@ -47,15 +52,9 @@ class ImuSessionFileStore(private val context: Context) {
             val file = File(directory, "realtime-imu-$id.imus")
             val timestamps = timestamps(file)
             if (ts in timestamps) continue
-            val deflater = Deflater()
-            val compressed = ByteArray(frame.size + 64)
-            deflater.setInput(frame); deflater.finish()
-            val compressedSize = deflater.deflate(compressed); deflater.end()
-            DataOutputStream(BufferedOutputStream(FileOutputStream(file, true))).use {
-                it.writeLong(ts); it.writeLong(receivedAtMs); it.writeInt(frame.size); it.writeInt(compressedSize)
-                it.write(compressed, 0, compressedSize)
-            }
             timestamps += ts
+            pending.getOrPut(id) { mutableListOf() } += Record(ts, receivedAtMs, frame.copyOf())
+            if (pending[id]!!.size >= BLOCK_FRAMES) flush(id)
             writes++
         }
         return writes
@@ -65,19 +64,54 @@ class ImuSessionFileStore(private val context: Context) {
         val result = mutableSetOf<Long>()
         if (!file.exists()) return@getOrPut result
         java.io.DataInputStream(file.inputStream().buffered()).use { input ->
-            while (input.available() >= 24) {
-                val ts = input.readLong(); input.readLong(); input.readInt()
-                val compressed = input.readInt()
-                if (compressed < 0 || compressed > 1_048_576 || input.available() < compressed) break
-                result += ts
-                input.skipBytes(compressed)
+            while (input.available() >= 12) {
+                val count = input.readInt(); val rawSize = input.readInt(); val compressedSize = input.readInt()
+                if (count !in 1..BLOCK_FRAMES || rawSize !in 1..MAX_BLOCK_BYTES ||
+                    compressedSize !in 1..MAX_BLOCK_BYTES || input.available() < compressedSize) break
+                val compressed = ByteArray(compressedSize); input.readFully(compressed)
+                val raw = inflate(compressed, rawSize) ?: break
+                java.io.DataInputStream(raw.inputStream()).use { block ->
+                    for (index in 0 until count) {
+                        result += block.readLong(); block.readLong()
+                        val length = block.readInt(); if (length !in 1..MAX_FRAME_BYTES) break
+                        block.skipBytes(length)
+                    }
+                }
             }
         }
         result
     }
 
+    private fun flush(id: String) {
+        val records = pending.remove(id).orEmpty()
+        if (records.isEmpty()) return
+        val rawBytes = java.io.ByteArrayOutputStream()
+        DataOutputStream(rawBytes).use { out -> records.forEach { record ->
+            out.writeLong(record.ts); out.writeLong(record.receivedAtMs)
+            out.writeInt(record.frame.size); out.write(record.frame)
+        }}
+        val raw = rawBytes.toByteArray()
+        val deflater = Deflater(); deflater.setInput(raw); deflater.finish()
+        val compressed = ByteArray(raw.size + 128); val size = deflater.deflate(compressed); deflater.end()
+        DataOutputStream(BufferedOutputStream(FileOutputStream(File(directory, "realtime-imu-$id.imus"), true))).use {
+            it.writeInt(records.size); it.writeInt(raw.size); it.writeInt(size); it.write(compressed, 0, size)
+        }
+    }
+
+    private fun inflate(compressed: ByteArray, size: Int): ByteArray? {
+        val inflater = Inflater(); inflater.setInput(compressed)
+        val raw = ByteArray(size); val written = runCatching { inflater.inflate(raw) }.getOrDefault(0); inflater.end()
+        return raw.takeIf { written == size }
+    }
+
+    private data class Record(val ts: Long, val receivedAtMs: Long, val frame: ByteArray)
+
     companion object {
         private val lock = Any()
         private val seen = mutableMapOf<String, MutableSet<Long>>()
+        private val pending = mutableMapOf<String, MutableList<Record>>()
+        private const val BLOCK_FRAMES = 30
+        private const val MAX_FRAME_BYTES = 1_048_576
+        private const val MAX_BLOCK_BYTES = BLOCK_FRAMES * (MAX_FRAME_BYTES + 20)
     }
 }
