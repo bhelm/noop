@@ -2227,7 +2227,9 @@ fun SettingsScreen(
         ) {
         Column(verticalArrangement = Arrangement.spacedBy(Metrics.screenRowSpacing)) {
         // --- Experimental · WHOOP 5 / MG --- (hidden when the user is confidently on a 4.0, #22)
-        if (showFiveMGControls) {
+        // Developer-only 5/MG controls now live in Test Centre. Keep the implementation below during
+        // the compatibility transition, but never render a second copy in everyday Settings.
+        if (false && showFiveMGControls) {
         SettingsCard(
             icon = Icons.Filled.Science,
             title = uiString(R.string.l10n_settings_screen_experimental_whoop_5_mg_41ef7041),

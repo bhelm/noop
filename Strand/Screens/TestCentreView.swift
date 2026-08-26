@@ -4,6 +4,7 @@ import StrandAnalytics
 import StrandImport
 import PolarProtocol
 import WhoopStore
+import WhoopProtocol
 
 /// Settings -> Test Centre. The single home for every diagnostic, log and test control (spec section 7).
 ///
@@ -36,6 +37,14 @@ struct TestCentreView: View {
     @State private var debugExportKeep = ScheduledDebugExport.keepCount
     @State private var showClearExportsConfirm = false
     @State private var rawMotionCaptureActive = false
+
+    // WHOOP 5/MG developer controls. These use the same persisted keys as the former Settings card;
+    // moving the UI does not reset an opt-in or lose the ability to undo a persistent strap write.
+    @AppStorage(PuffinExperiment.defaultsKey) private var puffinExperiments = false
+    @AppStorage(PuffinFrameRecorder.enabledKey) private var puffinCapture = false
+    @AppStorage(PuffinExperiment.deepDataKey) private var deepDataEnabled = false
+    @AppStorage(PuffinExperiment.broadcastHrKey) private var broadcastHrEnabled = false
+    @AppStorage(PuffinExperiment.ecgRawDataKey) private var ecgRawDataEnabled = false
 
     /// The strap model the user last picked, the same key SettingsView's showFiveMGControls gate reads.
     @AppStorage("selectedWhoopModel") private var selectedWhoopModelRaw = WhoopModel.whoop4.rawValue
@@ -79,6 +88,7 @@ struct TestCentreView: View {
                 domainModesCard.staggeredAppear(index: 0)
                 diagnosticToolsCard.staggeredAppear(index: 1)
                 if is5MG { rawDataCollectorCard.staggeredAppear(index: 2) }
+                if is5MG { fiveMGProtocolDiagnosticsCard.staggeredAppear(index: 3) }
                 exportCard.staggeredAppear(index: 2)
                 experimentalAlgorithmsCard.staggeredAppear(index: 3)
             }
@@ -162,6 +172,78 @@ struct TestCentreView: View {
                      : "Connect your WHOOP 5/MG to start a capture.")
                     .font(StrandFont.caption)
                     .foregroundStyle(live.connected ? StrandPalette.textSecondary : StrandPalette.statusWarning)
+            }
+        }
+    }
+
+    @ViewBuilder private var fiveMGProtocolDiagnosticsCard: some View {
+        NoopCard {
+            VStack(alignment: .leading, spacing: NoopMetrics.space3) {
+                Text("5/MG PROTOCOL DIAGNOSTICS")
+                    .font(StrandFont.overline).tracking(StrandFont.overlineTracking)
+                    .foregroundStyle(StrandPalette.textSecondary)
+                Text("Developer tools for unmapped protocol features. None of these are required for normal WHOOP 5/MG recording, history sync, or the bounded Raw Data Collector.")
+                    .font(StrandFont.caption).foregroundStyle(StrandPalette.textTertiary)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                Toggle("Protocol probes", isOn: $puffinExperiments)
+                    .toggleStyle(.switch).tint(StrandPalette.accent)
+                Text("Sends experimental protocol queries and records the replies in the strap log.")
+                    .font(StrandFont.caption).foregroundStyle(StrandPalette.textTertiary)
+
+                Divider().overlay(StrandPalette.hairline)
+                Toggle("Broadcast heart rate from the strap", isOn: $broadcastHrEnabled)
+                    .toggleStyle(.switch).tint(StrandPalette.accent)
+                    .onChangeCompat(of: broadcastHrEnabled) { model.ble.setBroadcastHr($0) }
+                Text("Writes the reversible 5/MG advertising flag for Garmin, Zwift, and compatible gym equipment.")
+                    .font(StrandFont.caption).foregroundStyle(StrandPalette.textTertiary)
+
+                Divider().overlay(StrandPalette.hairline)
+                Toggle("Legacy R22 feature-flag experiment", isOn: $deepDataEnabled)
+                    .toggleStyle(.switch).tint(StrandPalette.accent)
+                Text("The strap accepts these writes, but NOOP has not observed them enabling a separate live stream. This is not the Raw Data Collector.")
+                    .font(StrandFont.caption).foregroundStyle(StrandPalette.textTertiary)
+                if deepDataEnabled {
+                    NoopButton("Send legacy R22 enable sequence", systemImage: "bolt.badge.automatic", kind: .secondary) {
+                        model.ble.enableWhoop5DeepData()
+                    }
+                    .disabled(!live.encryptedBond || !live.worn)
+                }
+                NoopButton("Clear legacy R22 flags on strap", systemImage: "bolt.slash", kind: .secondary) {
+                    model.ble.disableWhoop5DeepData()
+                }
+                .disabled(!live.encryptedBond || live.r22DisableReport == BLEManager.deviceConfigProbeWaiting)
+                if let result = live.r22DisableReport {
+                    Text(result).font(StrandFont.caption).foregroundStyle(StrandPalette.textSecondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+
+                Divider().overlay(StrandPalette.hairline)
+                Toggle("WHOOP MG ECG raw-data gate", isOn: $ecgRawDataEnabled)
+                    .toggleStyle(.switch).tint(StrandPalette.accent)
+                Text("MG-only protocol instrumentation, not a medical ECG feature.")
+                    .font(StrandFont.caption).foregroundStyle(StrandPalette.textTertiary)
+                if ecgRawDataEnabled {
+                    HStack(spacing: NoopMetrics.space3) {
+                        NoopButton("Gate on", systemImage: "waveform.path.ecg", kind: .secondary) {
+                            model.ble.setEcgRawDataGate(true)
+                        }
+                        NoopButton("Gate off", systemImage: "arrow.uturn.backward", kind: .secondary) {
+                            model.ble.setEcgRawDataGate(false)
+                        }
+                    }
+                    .disabled(!live.encryptedBond || live.whoop5Variant != Whoop5Variant.mg.label)
+                    if let result = live.ecgRawDataGate {
+                        Text(result.summary).font(StrandFont.caption).foregroundStyle(StrandPalette.textSecondary)
+                    }
+                }
+
+                Divider().overlay(StrandPalette.hairline)
+                Toggle("Passive history/protocol trace", isOn: $puffinCapture)
+                    .toggleStyle(.switch).tint(StrandPalette.accent)
+                Text("Records frames that already arrive. It does not start sensors and can create large files. Use the export section below to save the trace with its strap log.")
+                    .font(StrandFont.caption).foregroundStyle(StrandPalette.textTertiary)
+                    .fixedSize(horizontal: false, vertical: true)
             }
         }
     }

@@ -101,6 +101,13 @@ fun TestCentreScreen(vm: AppViewModel, onOpenGroundTruthCollector: () -> Unit = 
     val puffinExperiment = remember { PuffinExperiment.from(context) }
     var protocolProbes by remember { mutableStateOf(puffinExperiment.isEnabled) }
     var passiveRawCapture by remember { mutableStateOf(puffinExperiment.isCaptureEnabled) }
+    var deepData by remember { mutableStateOf(puffinExperiment.isDeepDataEnabled) }
+    var broadcastHr by remember { mutableStateOf(puffinExperiment.broadcastHr) }
+    var explicitBond by remember { mutableStateOf(puffinExperiment.explicitBond) }
+    var ecgRawData by remember { mutableStateOf(puffinExperiment.ecgRawData) }
+    val r22DisableReport by vm.ble.r22DisableReport.collectAsStateWithLifecycle()
+    val ecgGateReport by vm.ble.ecgRawDataGate.collectAsStateWithLifecycle()
+    val ecgVariant by vm.ble.whoop5VariantFlow.collectAsStateWithLifecycle()
     var rawCaptureBusy by remember { mutableStateOf(false) }
     var rawAndLogBusy by remember { mutableStateOf(false) }
 
@@ -217,6 +224,81 @@ fun TestCentreScreen(vm: AppViewModel, onOpenGroundTruthCollector: () -> Unit = 
                             puffinExperiment.isEnabled = it
                         },
                     )
+                    DeveloperToggleRow(
+                        title = "Broadcast heart rate from the strap",
+                        detail = "Writes the reversible WHOOP 5/MG advertising flag for Garmin, Zwift, and gym equipment.",
+                        checked = broadcastHr,
+                        onCheckedChange = {
+                            broadcastHr = it
+                            puffinExperiment.broadcastHr = it
+                            vm.ble.setBroadcastHr(it)
+                        },
+                    )
+                    DeveloperToggleRow(
+                        title = "Ask Android to pair",
+                        detail = "Experimental explicit Android bonding. Normal 5/MG support does not require this switch.",
+                        checked = explicitBond,
+                        onCheckedChange = {
+                            explicitBond = it
+                            puffinExperiment.explicitBond = it
+                        },
+                    )
+                    DeveloperToggleRow(
+                        title = "Legacy R22 feature-flag experiment",
+                        detail = "Accepted writes have not been shown to enable a separate live stream. Not required for normal sync or raw capture.",
+                        checked = deepData,
+                        onCheckedChange = {
+                            deepData = it
+                            puffinExperiment.isDeepDataEnabled = it
+                        },
+                    )
+                    if (deepData) {
+                        NoopButton(
+                            text = "Send legacy R22 enable sequence",
+                            kind = NoopButtonKind.Secondary,
+                            fullWidth = true,
+                            enabled = live.encryptedBond && live.worn,
+                            onClick = { vm.ble.enableWhoop5DeepData() },
+                        )
+                    }
+                    NoopButton(
+                        text = "Clear legacy R22 flags on strap",
+                        kind = NoopButtonKind.Secondary,
+                        fullWidth = true,
+                        enabled = live.encryptedBond && r22DisableReport != WhoopBleClient.WAITING_DEVICE_CONFIG_PROBE,
+                        onClick = { vm.ble.disableWhoop5DeepData() },
+                    )
+                    r22DisableReport?.let {
+                        Text(it, style = NoopType.caption, color = Palette.textSecondary)
+                    }
+                    DeveloperToggleRow(
+                        title = "WHOOP MG ECG raw-data gate",
+                        detail = "MG-only protocol research. This is instrumentation, not a medical ECG feature.",
+                        checked = ecgRawData,
+                        onCheckedChange = {
+                            ecgRawData = it
+                            puffinExperiment.ecgRawData = it
+                        },
+                    )
+                    if (ecgRawData) {
+                        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                            NoopButton(
+                                text = "Turn ECG gate on",
+                                kind = NoopButtonKind.Secondary,
+                                enabled = live.bonded && ecgVariant.isMG,
+                                onClick = { vm.ble.setEcgRawDataGate(true) },
+                            )
+                            NoopButton(
+                                text = "Turn ECG gate off",
+                                kind = NoopButtonKind.Secondary,
+                                enabled = live.bonded && ecgVariant.isMG,
+                                onClick = { vm.ble.setEcgRawDataGate(false) },
+                            )
+                        }
+                        ecgGateReport?.let {
+                            Text(it.summary, style = NoopType.caption, color = Palette.textSecondary)
+                        }
+                    }
                     DeveloperToggleRow(
                         title = "Passive history/protocol trace",
                         detail = "Records frames that already arrive during history sync. It does not start IMU or any other sensor and may create large files.",
