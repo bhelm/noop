@@ -291,7 +291,7 @@ struct RawDataCollectorView: View {
         exportingId = session.id
         let bounds = Self.fullSecondBounds(fromMs: session.startedAtMs, toMs: end)
         let from = bounds?.from ?? 1, to = bounds?.to ?? 0
-        let chunks = if let bounds {
+        let chunks: [ImuChunkMeta] = if let bounds {
             await archive.pin(sessionId: session.id, deviceId: session.deviceId,
                               from: bounds.from, to: bounds.to, ble: model.ble)
         } else { [] }
