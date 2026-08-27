@@ -54,7 +54,7 @@
       "kotlin": ["ground_truth_delete_session_title", "ground_truth_delete_all_title", "deleteAllSessions"]
     },
     "active_session_delete_guard": {
-      "swift": ["active != true", ".disabled(store.active != nil)"],
+      "swift": ["guard session.endedAtMs != nil else { return }", ".disabled(store.active != nil)"],
       "kotlin": ["current.active && current.sessionId == sessionId", "sessions.none { it.active }"]
     },
     "bluetooth_reconnect_rearm": {
