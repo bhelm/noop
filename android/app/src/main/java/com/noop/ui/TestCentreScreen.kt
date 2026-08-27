@@ -211,12 +211,12 @@ fun TestCentreScreen(vm: AppViewModel, onOpenGroundTruthCollector: () -> Unit = 
         if (is5MG) {
             SettingsSectionTC(
                 icon = Icons.Filled.Science,
-                title = "5/MG protocol diagnostics",
+                title = stringResource(R.string.raw_diag_title),
                 blurb = "Developer tools for protocol research. These are separate from the bounded Raw Data Collector above.",
             ) {
                 Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     DeveloperToggleRow(
-                        title = "Protocol probes",
+                        title = stringResource(R.string.raw_diag_protocol_probes),
                         detail = "Sends experimental protocol queries. It is not needed for normal WHOOP 5/MG sync, sleep, recovery, or steps.",
                         checked = protocolProbes,
                         onCheckedChange = {
@@ -225,7 +225,7 @@ fun TestCentreScreen(vm: AppViewModel, onOpenGroundTruthCollector: () -> Unit = 
                         },
                     )
                     DeveloperToggleRow(
-                        title = "Broadcast heart rate from the strap",
+                        title = stringResource(R.string.raw_diag_broadcast_hr),
                         detail = "Writes the reversible WHOOP 5/MG advertising flag for Garmin, Zwift, and gym equipment.",
                         checked = broadcastHr,
                         onCheckedChange = {
@@ -235,7 +235,7 @@ fun TestCentreScreen(vm: AppViewModel, onOpenGroundTruthCollector: () -> Unit = 
                         },
                     )
                     DeveloperToggleRow(
-                        title = "Ask Android to pair",
+                        title = stringResource(R.string.raw_diag_pair),
                         detail = "Experimental explicit Android bonding. Normal 5/MG support does not require this switch.",
                         checked = explicitBond,
                         onCheckedChange = {
@@ -244,7 +244,7 @@ fun TestCentreScreen(vm: AppViewModel, onOpenGroundTruthCollector: () -> Unit = 
                         },
                     )
                     DeveloperToggleRow(
-                        title = "Legacy R22 feature-flag experiment",
+                        title = stringResource(R.string.raw_diag_r22),
                         detail = "Accepted writes have not been shown to enable a separate live stream. Not required for normal sync or raw capture.",
                         checked = deepData,
                         onCheckedChange = {
@@ -254,7 +254,7 @@ fun TestCentreScreen(vm: AppViewModel, onOpenGroundTruthCollector: () -> Unit = 
                     )
                     if (deepData) {
                         NoopButton(
-                            text = "Send legacy R22 enable sequence",
+                            text = stringResource(R.string.raw_diag_r22_enable),
                             kind = NoopButtonKind.Secondary,
                             fullWidth = true,
                             enabled = live.encryptedBond && live.worn,
@@ -262,7 +262,7 @@ fun TestCentreScreen(vm: AppViewModel, onOpenGroundTruthCollector: () -> Unit = 
                         )
                     }
                     NoopButton(
-                        text = "Clear legacy R22 flags on strap",
+                        text = stringResource(R.string.raw_diag_r22_clear),
                         kind = NoopButtonKind.Secondary,
                         fullWidth = true,
                         enabled = live.encryptedBond && r22DisableReport != WhoopBleClient.WAITING_DEVICE_CONFIG_PROBE,
@@ -272,7 +272,7 @@ fun TestCentreScreen(vm: AppViewModel, onOpenGroundTruthCollector: () -> Unit = 
                         Text(it, style = NoopType.caption, color = Palette.textSecondary)
                     }
                     DeveloperToggleRow(
-                        title = "WHOOP MG ECG raw-data gate",
+                        title = stringResource(R.string.raw_diag_ecg),
                         detail = "MG-only protocol research. This is instrumentation, not a medical ECG feature.",
                         checked = ecgRawData,
                         onCheckedChange = {
@@ -283,13 +283,13 @@ fun TestCentreScreen(vm: AppViewModel, onOpenGroundTruthCollector: () -> Unit = 
                     if (ecgRawData) {
                         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                             NoopButton(
-                                text = "Turn ECG gate on",
+                                text = stringResource(R.string.raw_diag_ecg_on),
                                 kind = NoopButtonKind.Secondary,
                                 enabled = live.bonded && ecgVariant.isMG,
                                 onClick = { vm.ble.setEcgRawDataGate(true) },
                             )
                             NoopButton(
-                                text = "Turn ECG gate off",
+                                text = stringResource(R.string.raw_diag_ecg_off),
                                 kind = NoopButtonKind.Secondary,
                                 enabled = live.bonded && ecgVariant.isMG,
                                 onClick = { vm.ble.setEcgRawDataGate(false) },
@@ -300,7 +300,7 @@ fun TestCentreScreen(vm: AppViewModel, onOpenGroundTruthCollector: () -> Unit = 
                         }
                     }
                     DeveloperToggleRow(
-                        title = "Passive history/protocol trace",
+                        title = stringResource(R.string.raw_diag_passive),
                         detail = "Records frames that already arrive during history sync. It does not start IMU or any other sensor and may create large files.",
                         checked = passiveRawCapture,
                         onCheckedChange = {
@@ -309,7 +309,7 @@ fun TestCentreScreen(vm: AppViewModel, onOpenGroundTruthCollector: () -> Unit = 
                         },
                     )
                     NoopButton(
-                        text = "Share passive raw trace",
+                        text = stringResource(R.string.raw_diag_share),
                         leadingIcon = Icons.Filled.Upload,
                         kind = NoopButtonKind.Secondary,
                         fullWidth = true,
@@ -326,7 +326,7 @@ fun TestCentreScreen(vm: AppViewModel, onOpenGroundTruthCollector: () -> Unit = 
                         },
                     )
                     NoopButton(
-                        text = "Export passive trace + strap log",
+                        text = stringResource(R.string.raw_diag_export_log),
                         leadingIcon = Icons.Filled.Upload,
                         kind = NoopButtonKind.Secondary,
                         fullWidth = true,

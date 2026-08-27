@@ -149,7 +149,7 @@ struct TestCentreView: View {
                 Text("5/MG RAW DATA COLLECTOR")
                     .font(StrandFont.overline).tracking(StrandFont.overlineTracking)
                     .foregroundStyle(StrandPalette.textSecondary)
-                Text("Start, label, review, export, and delete bounded 100 Hz motion sessions. Normal sync is unchanged.")
+                Text("Record, review, export, and delete bounded 100 Hz motion sessions. Normal sync is unchanged.")
                     .font(StrandFont.caption).foregroundStyle(StrandPalette.textTertiary)
                     .fixedSize(horizontal: false, vertical: true)
                 NavigationLink {
@@ -158,7 +158,7 @@ struct TestCentreView: View {
                     Label("Open raw-data collector", systemImage: "waveform.path.ecg")
                 }
                 .buttonStyle(NoopButtonStyle(.primary, fullWidth: true))
-                Text(live.connected ? "WHOOP 5/MG connected." : "Connect your WHOOP 5/MG to start a capture.")
+                Text(live.connected ? "WHOOP 5/MG connected." : "Connect your WHOOP 5/MG to start a raw-data session.")
                     .font(StrandFont.caption)
                     .foregroundStyle(live.connected ? StrandPalette.textSecondary : StrandPalette.statusWarning)
             }

@@ -2535,4 +2535,20 @@
     <string name="ground_truth_coverage_startup"> · %1$d s startup</string>
     <string name="ground_truth_marker_row">%1$s · %2$s%3$s</string>
     <string name="ground_truth_marker_note_suffix"> · %1$s</string>
+    <string name="ground_truth_marker_times">Marker %1$s · Now %2$s</string>
+    <string name="ground_truth_marker_now_button" translatable="false">0</string>
+    <string name="raw_diag_title">5/MG protocol diagnostics</string>
+    <string name="raw_diag_protocol_probes">Protocol probes</string>
+    <string name="raw_diag_broadcast_hr">Broadcast heart rate from the strap</string>
+    <string name="raw_diag_pair">Ask Android to pair</string>
+    <string name="raw_diag_r22">Legacy R22 feature-flag experiment</string>
+    <string name="raw_diag_r22_enable">Send legacy R22 enable sequence</string>
+    <string name="raw_diag_r22_clear">Clear legacy R22 flags on strap</string>
+    <string name="raw_diag_ecg">WHOOP MG ECG raw-data gate</string>
+    <string name="raw_diag_ecg_on">Turn ECG gate on</string>
+    <string name="raw_diag_ecg_off">Turn ECG gate off</string>
+    <string name="raw_diag_passive">Passive history/protocol trace</string>
+    <string name="raw_diag_share">Share passive raw trace</string>
+    <string name="raw_diag_export_log">Export passive trace + strap log</string>
+    <string name="raw_diag_moved">Raw capture and its protocol-trace exports now live in Test Centre → 5/MG protocol diagnostics.</string>
 </resources>

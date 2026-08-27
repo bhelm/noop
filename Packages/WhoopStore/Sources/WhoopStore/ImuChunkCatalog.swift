@@ -59,4 +59,24 @@ extension WhoopStore {
                 }
         }
     }
+
+    public func imuChunks(idPrefix: String) async throws -> [ImuChunkMeta] {
+        try syncRead { db in
+            try Row.fetchAll(db, sql: "SELECT * FROM imuChunk WHERE id LIKE ? ORDER BY startTs",
+                             arguments: [idPrefix + "%"]).map { row in
+                ImuChunkMeta(id: row["id"], deviceId: row["deviceId"], startTs: row["startTs"],
+                             endTs: row["endTs"], sampleCount: row["sampleCount"],
+                             sampleRate: row["sampleRate"], formatVersion: row["formatVersion"],
+                             codec: row["codec"], relativePath: row["relativePath"],
+                             byteSize: row["byteSize"], sha256: row["sha256"],
+                             createdAt: row["createdAt"], pinnedUntil: row["pinnedUntil"])
+            }
+        }
+    }
+
+    public func deleteImuChunk(id: String) async throws {
+        try syncWrite { db in
+            try db.execute(sql: "DELETE FROM imuChunk WHERE id = ?", arguments: [id])
+        }
+    }
 }

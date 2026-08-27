@@ -1,7 +1,7 @@
 # 5/MG raw data capture
 
 **Status:** experimental, user-initiated, hardware-verified on WHOOP 5/MG. The capture path is a
-research/export facility; it does not feed recovery, sleep, steps, or another production score.
+research/export facility; it does not feed production health or activity scores.
 
 ## What it is for
 
@@ -13,8 +13,8 @@ repaired by a later history sync.
 It lives in **Test Centre → 5/MG Raw Data Collector** on Android and Apple platforms. A session may be
 started and stopped live, or created afterwards for an existing time range. Start/end times of a
 completed session can be edited, individual sessions can be deleted, and all completed sessions can
-be deleted after confirmation. The generic collector does not assume a particular labelling task;
-manual step/stair controls are optional fork extensions rather than a prerequisite for capture.
+be deleted after confirmation. Timestamped markers can identify a moment, start, end, or issue; each
+marker may also carry a short note and remains editable after the session stops.
 
 ## What was verified on hardware
 
@@ -72,10 +72,10 @@ Instead, storage is split by responsibility:
 
 | Data | Storage | Lifetime |
 |---|---|---|
-| Session window, comments, optional labels | Small app-private JSON/JSONL metadata | Until the user deletes the session |
-| Incoming raw IMU frames | Append-only `.imus` session file | Until materialised/exported or the session is deleted |
+| Session window, comments, and markers | Small app-private JSON/JSONL metadata | Until the user deletes the session |
+| Incoming raw IMU frames | Append-only `.imus` session file | Until the user explicitly deletes the session |
 | Searchable chunk metadata | SQLite (`imuChunk`) | Index/provenance only; no individual samples |
-| Immutable analysis/export payload | Compressed `.imuc` file | Pinned to the retained session/export |
+| Immutable analysis/export payload | Compressed `.imuc` file | Owned by the retained session |
 
 The `.imus` writer batches up to 30 one-second frames into an independently zlib-compressed block.
 Blocks are appended; a crash can at worst leave a truncated final block, while earlier blocks remain
@@ -92,11 +92,14 @@ An `.imuc` file is a ZIP/deflate container with:
 
 The format and archive semantics are mirrored on Android and Apple. SHA-256, byte size, codec,
 coverage, and sample count are stored in `imuChunk`; the payload itself remains outside SQLite.
+Chunks are session-owned and materialised for the selected interval. Keeping the `.imus` source until
+explicit deletion makes repeated exports safe when that interval is edited; deleting a session also
+removes its source and owned chunks.
 
 ## Session export
 
 The shareable ZIP contains session provenance and all available sensor material for its selected
-interval. Android currently includes `meta.json`, label/event JSONL and CSV files, decoded one-second
+interval. Android currently includes `meta.json`, event JSONL and CSV files, decoded one-second
 signals, raw sensor CSV, and `imu/*.imuc`. Apple exports equivalent session metadata/events,
 `history-sensors.csv`, `imu-coverage.json`, and IMU chunks through its platform export path. Inspect
 `meta.json` plus the platform's IMU coverage object first:
@@ -106,10 +109,10 @@ signals, raw sensor CSV, and `imu/*.imuc`. Apple exports equivalent session meta
   interval even after the selected interval is edited;
 - Android's `imu_100hz_coverage` identifies the chunks actually present and `imu_100hz_complete` is
   the conservative coverage result; Apple carries the same facts in `imu-coverage.json`;
-- manual labels, when present, are annotations and never proof of sensor completeness.
 
 Exports stay local until the user invokes the operating system's share sheet. Raw captures are not
-part of routine cloud sync or telemetry, consistent with NOOP's offline-first privacy model.
+part of routine cloud sync or telemetry, consistent with NOOP's offline-first privacy model. The
+suggested archive name is `noop-5mg-raw-<session-id>.zip`.
 
 ## Scope and operational limits
 
@@ -120,8 +123,8 @@ part of routine cloud sync or telemetry, consistent with NOOP's offline-first pr
 - The older passive “Record 5/MG raw capture” protocol trace and the session collector have different
   jobs. The former preserves broad offload/debug frames; the latter owns a time-bounded, exportable IMU
   dataset. They may observe the same wire frame, but the session store deduplicates it by strap time.
-- The former `rawImuSample` per-sample SQLite design was intentionally removed: no production path had
-  written it, and high-rate payloads now use file-backed chunks.
+- The retired opt-in `rawImuSample` path existed in earlier builds but did not produce usable stored IMU
+  data in deployment. Session capture therefore has one source of truth: its file-backed chunks.
 - Do not use arrival order as time, do not fill gaps silently, and do not claim 100 Hz coverage from
   packet count alone.
 

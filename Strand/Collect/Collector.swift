@@ -141,6 +141,17 @@ final class Collector {
         try? await concreteStore?.upsertImuChunk(chunk)
     }
 
+    func imuChunks(idPrefix: String) async -> [ImuChunkMeta]? {
+        guard let concreteStore else { return nil }
+        return try? await concreteStore.imuChunks(idPrefix: idPrefix)
+    }
+
+    func deleteImuChunk(id: String) async -> Bool {
+        guard let concreteStore else { return false }
+        do { try await concreteStore.deleteImuChunk(id: id); return true }
+        catch { return false }
+    }
+
     /// Max persisted HR sample ts (the biometric "data frontier" for the stuck-strap watchdog).
     /// nil if there's no concrete store or nothing persisted yet. Mirrors storageStats().
     func latestHRSampleTs() async -> Int? {
@@ -197,6 +208,7 @@ final class Collector {
             Task { @MainActor in await self.flush() }
         }
     }
+
 
     /// Persist + queue everything buffered. No-op when empty or before a clock ref exists.
     /// Buffer is snapshotted and cleared SYNCHRONOUSLY before the first await so that any

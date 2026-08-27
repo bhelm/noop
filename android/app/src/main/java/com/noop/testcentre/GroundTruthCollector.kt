@@ -12,6 +12,7 @@ import java.io.File
 import java.util.zip.ZipEntry
 import java.util.zip.ZipOutputStream
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
 import java.util.UUID
@@ -148,17 +149,24 @@ class GroundTruthCollector private constructor(private val context: Context) {
     fun deleteSession(sessionId: String): Boolean {
         val current = snapshot()
         if (current.active && current.sessionId == sessionId) return false
+        if (sessions().none { it.id == sessionId }) return false
 
-        val files = listOf(
-            eventFile(sessionId),
+        val payloadFiles = listOf(
             File(directory, "realtime-imu-$sessionId.imus"),
-            File(context.cacheDir, "logs/noop-ground-truth-$sessionId.zip"),
+            File(context.cacheDir, "logs/noop-5mg-raw-$sessionId.zip"),
         )
         // Evaluate every deletion even if one fails, so a stale export ZIP never survives merely
         // because an earlier file could not be removed.
-        val filesDeleted = files.map { file -> !file.exists() || file.delete() }.all { it }
+        val chunksDeleted = runBlocking {
+            ImuChunkStore(context, WhoopRepository.from(context)).deleteOwned(sessionId)
+        }
+        // Keep the session discoverable and retryable until its durable archive catalog is clean.
+        if (!chunksDeleted) return false
+        if (!payloadFiles.all { file -> !file.exists() || file.delete() }) return false
         ImuSessionFileStore(context).remove(sessionId)
-        if (eventFile(sessionId).exists()) return false
+        // The event file is also the durable session index. Delete it last so any earlier failure
+        // leaves the session visible and the explicit delete action retryable.
+        if (eventFile(sessionId).exists() && !eventFile(sessionId).delete()) return false
 
         prefs.edit()
             .remove(sessionDeviceKey(sessionId))
@@ -174,7 +182,7 @@ class GroundTruthCollector private constructor(private val context: Context) {
                 if (current.sessionId == sessionId) clearCurrentSession()
             }
             .apply()
-        return filesDeleted
+        return true
     }
 
     /** Trim the analysis/export interval without rewriting the physical capture provenance. */
@@ -278,25 +286,41 @@ class GroundTruthCollector private constructor(private val context: Context) {
         }
         val endMs = summary.endedAtMs ?: events.lastOrNull()?.optLong("at_ms") ?: summary.startedAtMs
         // Export the complete bounded interval; markers are optional annotations.
-        val sensorFrom = if (deviceId == null) 1L else summary.startedAtMs / 1_000L
-        val sensorTo = if (deviceId == null) 0L else endMs / 1_000L
-        val pinnedChunks = if (deviceId == null) emptyList() else
+        val sensorFrom = ceilSecond(summary.startedAtMs)
+        val sensorTo = endMs / 1_000L - 1L
+        val pinnedChunks = if (deviceId == null || sensorFrom > sensorTo) emptyList() else
             ImuChunkStore(context, repo).pin(id, deviceId, sensorFrom, sensorTo)
-        val fullFrom = ceilSecond(summary.startedAtMs)
+        val fullFrom = sensorFrom
         val fullTo = endMs / 1_000L - 1L
-        val coverageFrom = if (summary.capturedStartedAtMs != null)
-            maxOf(fullFrom, pinnedChunks.minOfOrNull { it.startTs } ?: fullFrom) else fullFrom
+        val coverageFrom = sensorFrom
         val imuComplete = covers(pinnedChunks, coverageFrom, fullTo)
         val outDir = File(context.cacheDir, "logs").apply { mkdirs() }
-        val zip = File(outDir, "noop-ground-truth-$id.zip")
+        val zip = File(outDir, "noop-5mg-raw-$id.zip")
         ZipOutputStream(zip.outputStream().buffered()).use { out ->
+            var v18Count = 0
+            out.putNextEntry(ZipEntry("v18-aux.csv"))
+            out.bufferedWriterNoClose().use { writer ->
+                v18Count = writeV18AuxCsv(writer, repo, deviceId.orEmpty(), sensorFrom, sensorTo)
+                writer.flush()
+            }
+            out.closeEntry()
+
+            var rawCounts: Map<String, Int> = emptyMap()
+            out.putNextEntry(ZipEntry("raw-sensors.csv"))
+            out.bufferedWriterNoClose().use { writer ->
+                rawCounts = RawSensorExport.writeCsv(writer, repo, deviceId.orEmpty(), sensorFrom, sensorTo)
+                writer.flush()
+            }
+            out.closeEntry()
+
+            val sensorAvailable = pinnedChunks.isNotEmpty() || v18Count > 0 || rawCounts.values.any { it > 0 }
             out.putNextEntry(ZipEntry("meta.json"))
             out.writerEntry(JSONObject().apply {
                 put("schema_version", 3)
                 put("capture_kind", "whoop_5mg_raw_data")
                 put("session_id", id)
                 if (deviceId != null) put("device_id", deviceId)
-                put("sensor_export_available", deviceId != null)
+                put("sensor_export_available", sensorAvailable)
                 put("imu_100hz_chunk_count", pinnedChunks.size)
                 put("imu_100hz_complete", imuComplete)
                 put("imu_100hz_required_start_ts", coverageFrom)
@@ -310,8 +334,11 @@ class GroundTruthCollector private constructor(private val context: Context) {
                 })
                 put("started_at_ms", summary.startedAtMs)
                 put("ended_at_ms", endMs)
+                summary.capturedStartedAtMs?.let { put("captured_started_at_ms", it) }
+                summary.capturedEndedAtMs?.let { put("captured_ended_at_ms", it) }
                 put("comment", summary.comment)
-                put("markers", org.json.JSONArray().apply { summary.markers.forEach { marker -> put(JSONObject().apply {
+                put("markers", org.json.JSONArray().apply {
+                    summary.markers.filter { it.atMs in summary.startedAtMs..endMs }.forEach { marker -> put(JSONObject().apply {
                     put("id", marker.id); put("at_ms", marker.atMs); put("type", marker.type); put("text", marker.text)
                 }) } })
                 put("device_family", "Android")
@@ -319,41 +346,10 @@ class GroundTruthCollector private constructor(private val context: Context) {
             }.toString(2))
 
             out.putNextEntry(ZipEntry("events.jsonl"))
-            out.writerEntry(eventsJsonl(events))
+            out.writerEntry(eventsJsonl(publicEvents(events, summary.startedAtMs, endMs, deviceId)))
 
             out.putNextEntry(ZipEntry("events.csv"))
-            out.writerEntry(eventsCsv(events))
-
-            out.putNextEntry(ZipEntry("algorithm-signals.csv"))
-            out.bufferedWriterNoClose().use { writer ->
-                writeAlgorithmSignalsCsv(
-                    writer,
-                    repo,
-                    deviceId.orEmpty(),
-                    sensorFrom,
-                    sensorTo,
-                )
-                writer.flush()
-            }
-            out.closeEntry()
-
-            out.putNextEntry(ZipEntry("v18-aux.csv"))
-            out.bufferedWriterNoClose().use { writer ->
-                writeV18AuxCsv(writer, repo, deviceId.orEmpty(), sensorFrom, sensorTo)
-                writer.flush()
-            }
-            out.closeEntry()
-
-            out.putNextEntry(ZipEntry("raw-sensors.csv"))
-            out.bufferedWriterNoClose().use { writer ->
-                RawSensorExport.writeCsv(
-                    writer, repo, deviceId.orEmpty(),
-                    sensorFrom,
-                    sensorTo,
-                )
-                writer.flush()
-            }
-            out.closeEntry()
+            out.writerEntry(eventsCsv(publicEvents(events, summary.startedAtMs, endMs, deviceId)))
 
             for (chunk in pinnedChunks) {
                 val file = ImuChunkStore(context, repo).file(chunk)
@@ -365,10 +361,6 @@ class GroundTruthCollector private constructor(private val context: Context) {
         }
         val exportedAt = System.currentTimeMillis()
         prefs.edit().putBoolean(sessionExportedKey(id), true).putLong(sessionLastExportKey(id), exportedAt).apply()
-        if (imuComplete) {
-            ImuSessionFileStore(context).remove(id)
-            File(directory, "realtime-imu-$id.imus").delete()
-        }
         if (id == snap.sessionId) prefs.edit().putBoolean("exported", true).apply()
         zip
     }
@@ -403,24 +395,23 @@ class GroundTruthCollector private constructor(private val context: Context) {
 
     private fun event(atMs: Long, kind: String) = JSONObject().apply { put("at_ms", atMs); put("kind", kind) }
 
-    private fun publicEvents(events: List<JSONObject>) = events.mapNotNull { source ->
-        val kind = source.optString("kind")
-        if (kind !in setOf("start", "stop", KIND_MARKER)) return@mapNotNull null
-        JSONObject().apply {
-            put("at_ms", source.optLong("at_ms")); put("kind", kind)
-            if (kind == KIND_MARKER) {
-                put("marker_id", source.optString("marker_id")); put("marker_type", source.optString("marker_type"))
-                put("text", source.optString("text"))
-            }
-            if (kind == "start" && source.has("strap_device_id")) put("strap_device_id", source.optString("strap_device_id"))
-        }
-    }
+    private fun publicEvents(events: List<JSONObject>, fromMs: Long, toMs: Long, deviceId: String?): List<JSONObject> =
+        buildList {
+            add(event(fromMs, "start").apply { deviceId?.let { put("strap_device_id", it) } })
+            events.filter { it.optString("kind") == KIND_MARKER && it.optLong("at_ms") in fromMs..toMs }
+                .forEach { source -> add(JSONObject().apply {
+                    put("at_ms", source.optLong("at_ms")); put("kind", KIND_MARKER)
+                    put("marker_id", source.optString("marker_id")); put("marker_type", source.optString("marker_type"))
+                    put("text", source.optString("text"))
+                }) }
+            add(event(toMs, "stop"))
+        }.sortedBy { it.optLong("at_ms") }
 
-    private fun eventsJsonl(events: List<JSONObject>) = publicEvents(events).joinToString("\n", postfix = "\n")
+    private fun eventsJsonl(events: List<JSONObject>) = events.joinToString("\n", postfix = "\n")
 
     private fun eventsCsv(events: List<JSONObject>): String = buildString {
         append("at_ms,unix_s,kind,marker_id,marker_type,text\n")
-        for (e in publicEvents(events)) append(listOf(
+        for (e in events) append(listOf(
             e.optLong("at_ms"), e.optLong("at_ms") / 1_000L, e.optString("kind"),
             e.optString("marker_id"), e.optString("marker_type"), e.optString("text"),
         ).joinToString(",") { csv(it.toString()) }).append('\n')
@@ -429,62 +420,27 @@ class GroundTruthCollector private constructor(private val context: Context) {
     private fun csv(value: String): String = if (value.any { it == ',' || it == '"' || it == '\n' })
         "\"${value.replace("\"", "\"\"")}\"" else value
 
-    private suspend fun writeAlgorithmSignalsCsv(
-        out: java.io.Writer,
-        repo: WhoopRepository,
-        deviceId: String,
-        from: Long,
-        to: Long,
-    ) {
-        out.write("unix_s,counter,activity_class,gravity_x,gravity_y,gravity_z,dynamic_accel,cadence,heart_rate,band_sleep_state\n")
-        if (from > to || deviceId.isBlank()) return
-        val seconds = (to - from + 1L).coerceIn(1L, 86_400L).toInt()
-        val steps = repo.stepSamples(deviceId, from, to, seconds).associateBy { it.ts }
-        val gravity = repo.gravitySamples(deviceId, from, to, seconds).associateBy { it.ts }
-        val cadence = repo.v18AuxSamples(deviceId, from, to, seconds).associate { it.ts to it.stepCadence }
-        val heartRate = repo.rawHrSamples(deviceId, from, to, seconds).associate { it.ts to it.bpm }
-        val sleepState = repo.sleepStateSamples(deviceId, from, to, seconds).associate { it.ts to it.state }
-        val timestamps = (steps.keys + gravity.keys + cadence.keys + heartRate.keys + sleepState.keys).sorted()
-        for (ts in timestamps) {
-            val step = steps[ts]
-            val grav = gravity[ts]
-            out.write(listOf(
-                ts,
-                step?.counter ?: "",
-                step?.activityClass ?: "",
-                grav?.x?.let(::decimal) ?: "",
-                grav?.y?.let(::decimal) ?: "",
-                grav?.z?.let(::decimal) ?: "",
-                grav?.dynAccel?.let(::decimal) ?: "",
-                cadence[ts] ?: "",
-                heartRate[ts] ?: "",
-                sleepState[ts] ?: "",
-            ).joinToString(","))
-            out.write("\n")
-        }
-    }
-
     private suspend fun writeV18AuxCsv(
         out: java.io.Writer,
         repo: WhoopRepository,
         deviceId: String,
         from: Long,
         to: Long,
-    ) {
+    ): Int {
         out.write(
             "unix_s,record_index,rr_count,cardiac_flags,hr_quality_flags,heart_rate_alt,rr_packed," +
                 "cardiac_status,step_cadence,status_word,status_word_1,status_word_2,aux_byte_82," +
                 "optical_baseline_a,optical_baseline_b,optical_amp_a,optical_amp_b,unknown_f32_bits\n",
         )
-        if (from > to || deviceId.isBlank()) return
+        if (from > to || deviceId.isBlank()) return 0
         val seconds = (to - from + 1L).coerceIn(1L, 86_400L).toInt()
-        for (row in repo.v18AuxSamples(deviceId, from, to, seconds)) {
+        val rows = repo.v18AuxSamples(deviceId, from, to, seconds)
+        for (row in rows) {
             out.write((listOf(row.ts) + row.slotValues.map { it ?: "" }).joinToString(","))
             out.write("\n")
         }
+        return rows.size
     }
-
-    private fun decimal(value: Double): String = String.format(java.util.Locale.US, "%.9f", value)
 
     private fun android.content.SharedPreferences.Editor.clearCurrentSession() = apply {
         remove("active")

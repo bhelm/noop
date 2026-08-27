@@ -2523,4 +2523,20 @@
     <string name="ground_truth_coverage_startup"> · %1$d s Anlauf</string>
     <string name="ground_truth_marker_row">%1$s · %2$s%3$s</string>
     <string name="ground_truth_marker_note_suffix"> · %1$s</string>
+    <string name="ground_truth_marker_times">Marker %1$s · Jetzt %2$s</string>
+    <string name="ground_truth_marker_now_button">0</string>
+    <string name="raw_diag_title">5/MG-Protokolldiagnose</string>
+    <string name="raw_diag_protocol_probes">Protokolltests</string>
+    <string name="raw_diag_broadcast_hr">Herzfrequenz vom Band übertragen</string>
+    <string name="raw_diag_pair">Android um Kopplung bitten</string>
+    <string name="raw_diag_r22">Altes R22-Feature-Flag-Experiment</string>
+    <string name="raw_diag_r22_enable">Alte R22-Aktivierungssequenz senden</string>
+    <string name="raw_diag_r22_clear">R22-Flags auf dem Band löschen</string>
+    <string name="raw_diag_ecg">WHOOP-MG-Schalter für ECG-Rohdaten</string>
+    <string name="raw_diag_ecg_on">ECG-Schalter einschalten</string>
+    <string name="raw_diag_ecg_off">ECG-Schalter ausschalten</string>
+    <string name="raw_diag_passive">Passive Verlaufs-/Protokollaufzeichnung</string>
+    <string name="raw_diag_share">Passive Rohaufzeichnung teilen</string>
+    <string name="raw_diag_export_log">Passive Aufzeichnung und Bandprotokoll exportieren</string>
+    <string name="raw_diag_moved">Rohdatenaufnahme und Protokollexporte befinden sich jetzt im Testcenter unter 5/MG-Protokolldiagnose.</string>
 </resources>

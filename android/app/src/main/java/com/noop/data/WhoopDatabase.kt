@@ -567,9 +567,7 @@ abstract class WhoopDatabase : RoomDatabase() {
             }
         }
 
-        /** #423: the WHOOP 5/MG raw-IMU offload-capture table. Additive; GRDB twin is `v28-raw-imu`
-         *  (Swift's next slot after v27-ppg-waveform), so the migration COUNTS stay aligned. Column order ==
-         *  [RawImuSampleEntity] field order, matching the GRDB schema's t.column(deviceId/ts/samples). */
+        /** Historical #423 schema. Known-empty deployments are cleaned up after file-backed capture lands. */
         internal val RAW_IMU_MIGRATION_SQL: List<String> = listOf(
             "CREATE TABLE IF NOT EXISTS `rawImuSample` (`deviceId` TEXT NOT NULL, " +
                 "`ts` INTEGER NOT NULL, `samples` BLOB NOT NULL, PRIMARY KEY(`deviceId`, `ts`))",

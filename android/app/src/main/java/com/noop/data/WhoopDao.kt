@@ -149,8 +149,17 @@ interface WhoopDao : DeviceRegistryDao {
     @Query("SELECT * FROM imuChunk WHERE deviceId = :deviceId AND endTs >= :from AND startTs <= :to ORDER BY startTs")
     suspend fun imuChunks(deviceId: String, from: Long, to: Long): List<ImuChunkEntity>
 
+    @Query("SELECT * FROM imuChunk WHERE deviceId = :deviceId ORDER BY startTs")
+    suspend fun imuChunksForDevice(deviceId: String): List<ImuChunkEntity>
+
+    @Query("SELECT * FROM imuChunk WHERE id LIKE :idPrefix || '%' ORDER BY startTs")
+    suspend fun imuChunksByIdPrefix(idPrefix: String): List<ImuChunkEntity>
+
     @Query("DELETE FROM imuChunk WHERE id = :id")
     suspend fun deleteImuChunk(id: String)
+
+    @Query("DELETE FROM imuChunk WHERE deviceId = :deviceId")
+    suspend fun deleteImuChunksFor(deviceId: String)
 
     @Query("SELECT * FROM imuChunk WHERE pinnedUntil IS NULL AND endTs < :cutoff ORDER BY endTs")
     suspend fun expiredImuChunks(cutoff: Long): List<ImuChunkEntity>

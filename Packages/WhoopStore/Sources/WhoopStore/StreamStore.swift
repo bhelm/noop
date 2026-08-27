@@ -60,8 +60,7 @@ extension WhoopStore {
 
     /// v31 rolling retention for the v18 aux-slot table (twin of Kotlin `V18_AUX_RETENTION_ROWS`).
     ///
-    /// `rawImuSample` is the closest precedent — raw instrumentation banked as a blob, capped rather than
-    /// unbounded — and the same reasoning applies here: nothing reads these rows yet, so a cap is far
+    /// Raw instrumentation must be capped rather than unbounded. Nothing reads these rows yet, so a cap is far
     /// cheaper to RELAX later than to impose once users have a year of history. Unbounded, this table is
     /// the one genuinely new source of row growth in v31 (the four named channels only WIDEN rows that
     /// were already being written: ~14 bytes on a `gravitySample`/`skinTempSample`/`sleepStateSample` row
@@ -325,9 +324,8 @@ extension WhoopStore {
             return (hr, rr, ev, bat, spo2, skin, resp, grav)
         }
 
-        // Rolling retention (the `insertRawImu` shape, #423) but AMORTISED. The delete finds the
-        // Nth-newest row by rank, so it walks up to `v18AuxRetentionRows` index entries; `insertRawImu`
-        // keeps 3,600 so that is free, this keeps 604,800 and an offload inserts once per chunk. Swept
+        // Rolling retention is amortised. The delete finds the Nth-newest row by rank, so it walks up to
+        // `v18AuxRetentionRows` index entries. The 604,800-row cap is swept
         // once per `v18AuxPruneEveryRows` rows instead, which keeps newest-N-rows exactly (a time window
         // would not — a sporadically-worn strap's rows span far more than a week, and the census wants
         // that). Counter is per device because the delete is.

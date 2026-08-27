@@ -252,15 +252,27 @@ fun GroundTruthCollectorScreen(vm: AppViewModel) {
     }
 
     markerEditor?.let { editor ->
+        val markerSession = sessions.firstOrNull { it.id == editor.sessionId }
+        val markerNowMs = if (markerSession?.active == true) nowMs else markerSession?.endedAtMs ?: nowMs
         AlertDialog(
             onDismissRequest = { markerEditor = null },
             title = { Text(stringResource(if (editor.markerId == null) R.string.ground_truth_add_marker else R.string.ground_truth_edit_marker)) },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Text(diagnosticTime(editor.atMs), style = NoopType.headline)
+                    Text(
+                        stringResource(
+                            R.string.ground_truth_marker_times,
+                            diagnosticTime(editor.atMs),
+                            diagnosticTime(markerNowMs),
+                        ),
+                        style = NoopType.headline,
+                    )
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         NoopButton("−10 s", kind = NoopButtonKind.Secondary, modifier = Modifier.weight(1f),
                             onClick = { markerEditor = editor.copy(atMs = editor.atMs - 10_000) })
+                        NoopButton(stringResource(R.string.ground_truth_marker_now_button),
+                            kind = NoopButtonKind.Secondary, modifier = Modifier.weight(1f),
+                            onClick = { markerEditor = editor.copy(atMs = markerNowMs) })
                         NoopButton("+10 s", kind = NoopButtonKind.Secondary, modifier = Modifier.weight(1f),
                             onClick = { markerEditor = editor.copy(atMs = editor.atMs + 10_000) })
                     }

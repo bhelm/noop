@@ -82,6 +82,7 @@ class SourceCoordinatorAdoptionTest {
         override suspend fun deletePpgHrFor(deviceId: String) {}
         override suspend fun deletePpgWaveformFor(deviceId: String) {}
         override suspend fun deleteV18AuxFor(deviceId: String) {}
+        override suspend fun deleteImuChunkCatalogFor(deviceId: String) {}
         override suspend fun deleteEventsFor(deviceId: String) {}
         override suspend fun deleteBatteryFor(deviceId: String) {}
         override suspend fun deleteDailyMetricsFor(deviceId: String) {}
@@ -114,6 +115,7 @@ class SourceCoordinatorAdoptionTest {
         override suspend fun reKeyPpgHr(from: String, to: String) {}
         override suspend fun reKeyPpgWaveform(from: String, to: String) {}
         override suspend fun reKeyV18Aux(from: String, to: String) {}
+        override suspend fun reKeyImuChunks(from: String, to: String) {}
         override suspend fun reKeyEvents(from: String, to: String) {}
         override suspend fun reKeyBattery(from: String, to: String) {}
         override suspend fun reKeyDailyMetrics(from: String, to: String) {}

@@ -2547,7 +2547,7 @@ fun SettingsScreen(
                 }
 
                 Text(
-                    "Raw capture and its protocol-trace exports now live in Test Centre → 5/MG protocol diagnostics.",
+                    uiString(R.string.raw_diag_moved),
                     style = NoopType.caption,
                     color = Palette.textTertiary,
                 )

@@ -801,6 +801,8 @@ public final class BLEManager: NSObject, ObservableObject {
     /// Re-entrancy guard for captureRawAccel: true while a bounded on-demand window is running.
     /// A second tap is a no-op until the active capture's asyncAfter block fires and clears this.
     private var rawCaptureInFlight = false
+    private var rawCaptureStoppedAt = Date.distantPast
+    private var unexpectedImuStopAt = Date.distantPast
     /// Ordered queue of frames awaiting drain through the serial Backfiller task.
     private var backfillFrameQueue: [[UInt8]] = []
     /// True while the drain task is running (prevents a second drain task from launching).
@@ -1808,7 +1810,21 @@ public final class BLEManager: NSObject, ObservableObject {
         }
         await collector?.endRawCapture()
         rawCaptureInFlight = false
+        rawCaptureStoppedAt = Date()
         log("Raw-data session: stopped + flushed")
+    }
+
+    /// Stop a realtime IMU producer left armed after a crash, lost stop write, or another client.
+    private func stopUnexpectedRealtimeImu(_ frame: [UInt8], isOffload: Bool, now: Date = Date()) {
+        guard selectedModel.deviceFamily == .whoop5, !isOffload, frame.count > 8,
+              frame[8] == 43 || frame[8] == 51,
+              !rawCaptureInFlight, !UserDefaults.standard.bool(forKey: "enableRawCapture"),
+              now.timeIntervalSince(rawCaptureStoppedAt) >= 3,
+              now.timeIntervalSince(unexpectedImuStopAt) >= 30 else { return }
+        unexpectedImuStopAt = now
+        send(.stopRawData, payload: [0x01], writeType: .withResponse)
+        send(.toggleIMUMode, payload: [0x01, 0x00], writeType: .withResponse)
+        log("Raw IMU fail-safe: unexpected realtime packet type \(frame[8]) while capture was off; stop requested")
     }
 
     public func finishGroundTruthRawCapture(sessionId: String) {
@@ -1835,6 +1851,14 @@ public final class BLEManager: NSObject, ObservableObject {
 
     public func registerGroundTruthImuChunk(_ chunk: ImuChunkMeta) async {
         await collector?.upsertImuChunk(chunk)
+    }
+
+    public func groundTruthImuChunks(idPrefix: String) async -> [ImuChunkMeta]? {
+        await collector?.imuChunks(idPrefix: idPrefix)
+    }
+
+    public func deleteGroundTruthImuChunk(id: String) async -> Bool {
+        await collector?.deleteImuChunk(id: id) ?? false
     }
 
     /// Send a command to the WHOOP strap.
@@ -6015,6 +6039,7 @@ extension BLEManager: @preconcurrency CBPeripheralDelegate {
                     // reverse-engineering — its own file the bulk-capture eviction never churns.
                     // BEFORE the offload branch so it catches the burst; no-op unless capture is on.
                     puffinDeepBufferLog.appendIfDeepBuffer(frame: frame, char: characteristic.uuid, isOffload: isOffload)
+                    stopUnexpectedRealtimeImu(frame, isOffload: isOffload)
                     // #423: the queryable twin of that diagnostics line — persist the decoded 100 Hz 6-axis
                     if isOffload {
                         // Same policy as WHOOP4: historical offload frames are bulk sync traffic.

@@ -13,6 +13,10 @@
       "swift": ["setComment(", "Session comment"],
       "kotlin": ["setComment(", "ground_truth_comment"]
     },
+    "session_markers": {
+      "swift": ["addMarker(sessionId:", "updateMarker(sessionId:", "deleteMarker(sessionId:", "Add marker"],
+      "kotlin": ["fun addMarker(", "fun updateMarker(", "fun deleteMarker(", "ground_truth_add_marker"]
+    },
     "from_to_time": {
       "swift": ["func range(", "endedAtMs"],
       "kotlin": ["sessionTimeRange(", "endedAtMs"]
@@ -59,7 +63,7 @@
     },
     "raw_data_removed_with_session": {
       "swift": ["deleteRawBatches(deviceId:", "capturedAt >= ? AND capturedAt <= ?"],
-      "kotlin": ["realtime-imu-$sessionId.imus", "noop-ground-truth-$sessionId.zip"]
+      "kotlin": ["realtime-imu-$sessionId.imus", "noop-5mg-raw-$sessionId.zip"]
     }
   }
 }

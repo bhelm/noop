@@ -561,9 +561,8 @@ class WhoopRepository(
             }
             if (rows.isNotEmpty()) {
                 dao.insertV18Aux(rows)
-                // Rolling retention (the insertRawImu shape, #423) but AMORTISED. The delete finds the
-                // Nth-newest row by rank, so it walks up to [V18_AUX_RETENTION_ROWS] index entries;
-                // insertRawImu keeps 3,600 so that is free, this keeps 604,800 and an offload inserts once
+                // Rolling retention is amortised. The delete finds the Nth-newest row by rank, so it walks up
+                // to [V18_AUX_RETENTION_ROWS] index entries; this keeps 604,800 and an offload inserts once
                 // per chunk. Swept once per [V18_AUX_PRUNE_EVERY_ROWS] rows instead, which keeps
                 // newest-N-rows exactly (a time window would not — a sporadically-worn strap's rows span
                 // far more than a week, and the census wants that). Counter is per device because the
@@ -1003,11 +1002,16 @@ class WhoopRepository(
         dao.v18AuxSamples(deviceId, from, to, limit)
             .map { V18AuxCodec.unpack(it.fields, it.ts) }
 
+
     suspend fun upsertImuChunk(row: ImuChunkEntity) = dao.upsertImuChunk(row)
     suspend fun imuChunks(deviceId: String, from: Long, to: Long): List<ImuChunkEntity> =
         dao.imuChunks(deviceId, from, to)
+    suspend fun imuChunksForDevice(deviceId: String): List<ImuChunkEntity> = dao.imuChunksForDevice(deviceId)
+    suspend fun imuChunksByIdPrefix(idPrefix: String): List<ImuChunkEntity> =
+        dao.imuChunksByIdPrefix(idPrefix)
     suspend fun expiredImuChunks(cutoff: Long): List<ImuChunkEntity> = dao.expiredImuChunks(cutoff)
     suspend fun deleteImuChunk(id: String) = dao.deleteImuChunk(id)
+    suspend fun deleteImuChunksFor(deviceId: String) = dao.deleteImuChunksFor(deviceId)
 
     /** Downsampled HR (mean bpm per [bucketSeconds]) for the strap, for the Today 24h trend chart. */
     suspend fun hrBuckets(deviceId: String, from: Long, to: Long, bucketSeconds: Long = 300L) =
@@ -1952,8 +1956,7 @@ class WhoopRepository(
         /**
          * v31: rolling retention for the v18 aux-slot table (Swift twin `WhoopStore.v18AuxRetentionRows`).
          *
-         * [RAW_IMU_RETENTION_ROWS] is the closest precedent — raw instrumentation banked as a blob, capped
-         * rather than unbounded — and the same reasoning applies: nothing reads these rows yet, so a cap
+         * Raw instrumentation is capped rather than unbounded. Nothing reads these rows yet, so a cap
          * is far cheaper to RELAX later than to impose once users have a year of history. Unbounded, this
          * table is the one genuinely new source of row growth in v31; the four named columns only WIDEN
          * rows that were already being written (~14 B on a gravity/skinTemp/sleepState row that exists

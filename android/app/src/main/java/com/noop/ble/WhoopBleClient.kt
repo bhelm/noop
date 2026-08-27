@@ -9262,10 +9262,8 @@ class WhoopBleClient(
      */
     /** Debug heartbeat for valid WHOOP 5/MG raw-IMU buffers. Session persistence is file-only. */
     private fun storeWhoop5RawImuIfBuffer(frame: ByteArray) {
-        // The bounded collector owns its own capture gate. It must not require the unrelated passive
-        // protocol-trace preference: live and history copies then converge on the same keyed raw-IMU
-        // table, whose primary key deduplicates a Bluetooth-gap repair automatically.
-        if (!PuffinExperiment.from(context).isCaptureEnabled && groundTruthImuSessionId == null) return
+        // This compatibility cache keeps its original opt-in gate. Bounded sessions are file-backed.
+        if (!PuffinExperiment.from(context).isCaptureEnabled) return
         val cols = Whoop5RawImu.rawColumns(frame) ?: return
         val baseTs = PuffinDeepBufferLog.strapTs(frame)?.toLong() ?: return
         // #423 debug heartbeat: confirm the offload IMU is arriving + decoding on-device without pulling the

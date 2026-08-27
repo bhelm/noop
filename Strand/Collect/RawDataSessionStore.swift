@@ -3,24 +3,16 @@ import Foundation
 import WhoopStore
 
 /// Persistent, user-controlled 5/MG capture sessions. This is the iOS/macOS twin of Android's
-/// GroundTruthCollector: raw capture is useful on its own, while step/stair labels are optional.
+/// GroundTruthCollector: it records bounded raw-data windows with optional comments.
 @MainActor
 final class RawDataSessionStore: ObservableObject {
-    enum LabelKind: String, Codable {
-        case start, stop, step, stair
-        case undoStep = "undo_step"
-        case undoStair = "undo_stair"
-        case excludeWindow = "exclude_window"
-    }
-
     struct Event: Codable, Identifiable, Equatable {
         var id = UUID()
-        let atMs: Int64
-        let kind: LabelKind
-        let stepsTotal: Int
-        let stairsTotal: Int
-        var fromMs: Int64?
-        var toMs: Int64?
+        var atMs: Int64
+        let kind: String
+        var markerId: String?
+        var markerType: String?
+        var text: String?
     }
 
     struct Session: Codable, Identifiable, Equatable {
@@ -30,23 +22,11 @@ final class RawDataSessionStore: ObservableObject {
         var endedAtMs: Int64?
         var capturedStartedAtMs: Int64?
         var capturedEndedAtMs: Int64?
-        var keepRaw: Bool?
-        var steps: Int
-        var stairs: Int
-        var excludedWindows: Int
         var comment: String
         var exported: Bool
         var events: [Event]
 
         var active: Bool { endedAtMs == nil }
-
-        static func == (lhs: Session, rhs: Session) -> Bool {
-            lhs.id == rhs.id && lhs.endedAtMs == rhs.endedAtMs && lhs.steps == rhs.steps
-                && lhs.stairs == rhs.stairs && lhs.excludedWindows == rhs.excludedWindows
-                && lhs.comment == rhs.comment && lhs.exported == rhs.exported
-                && lhs.capturedStartedAtMs == rhs.capturedStartedAtMs
-                && lhs.capturedEndedAtMs == rhs.capturedEndedAtMs
-        }
     }
 
     @Published private(set) var sessions: [Session] = []
@@ -79,10 +59,9 @@ final class RawDataSessionStore: ObservableObject {
     func start(deviceId: String, now: Date = Date()) -> Session? {
         guard active == nil else { return nil }
         let millis = Int64(now.timeIntervalSince1970 * 1_000)
-        let started = Event(atMs: millis, kind: .start, stepsTotal: 0, stairsTotal: 0)
+        let started = Event(atMs: millis, kind: "start")
         let session = Session(id: String(millis), deviceId: deviceId, startedAtMs: millis,
                               endedAtMs: nil, capturedStartedAtMs: millis, capturedEndedAtMs: nil,
-                              keepRaw: true, steps: 0, stairs: 0, excludedWindows: 0,
                               comment: "", exported: false, events: [started])
         sessions.insert(session, at: 0)
         persist(session)
@@ -96,8 +75,7 @@ final class RawDataSessionStore: ObservableObject {
             let millis = Int64(now.timeIntervalSince1970 * 1_000)
             session.endedAtMs = millis
             session.capturedEndedAtMs = millis
-            session.events.append(Event(atMs: millis, kind: .stop,
-                                        stepsTotal: session.steps, stairsTotal: session.stairs))
+            session.events.append(Event(atMs: millis, kind: "stop"))
         }
         if let activeId { ImuSessionFileStore.shared.complete(id: activeId, toMs: Int64(now.timeIntervalSince1970 * 1_000)) }
     }
@@ -108,11 +86,9 @@ final class RawDataSessionStore: ObservableObject {
         let toMs = Int64(to.timeIntervalSince1970 * 1_000)
         guard validRange(fromMs, toMs) else { return nil }
         let id = String(Int64(Date().timeIntervalSince1970 * 1_000))
-        let events = [Event(atMs: fromMs, kind: .start, stepsTotal: 0, stairsTotal: 0),
-                      Event(atMs: toMs, kind: .stop, stepsTotal: 0, stairsTotal: 0)]
+        let events = [Event(atMs: fromMs, kind: "start"), Event(atMs: toMs, kind: "stop")]
         let session = Session(id: id, deviceId: deviceId, startedAtMs: fromMs, endedAtMs: toMs,
-                              capturedStartedAtMs: nil, capturedEndedAtMs: nil, keepRaw: true,
-                              steps: 0, stairs: 0, excludedWindows: 0, comment: "",
+                              capturedStartedAtMs: nil, capturedEndedAtMs: nil, comment: "",
                               exported: false, events: events)
         sessions.insert(session, at: 0); persist(session)
         ImuSessionFileStore.shared.register(id: id, deviceId: deviceId, fromMs: fromMs, toMs: toMs)
@@ -127,9 +103,7 @@ final class RawDataSessionStore: ObservableObject {
             guard !session.active else { return }
             session = Session(id: session.id, deviceId: session.deviceId, startedAtMs: fromMs,
                               endedAtMs: toMs, capturedStartedAtMs: session.capturedStartedAtMs,
-                              capturedEndedAtMs: session.capturedEndedAtMs, keepRaw: session.keepRaw,
-                              steps: session.steps, stairs: session.stairs,
-                              excludedWindows: session.excludedWindows, comment: session.comment,
+                              capturedEndedAtMs: session.capturedEndedAtMs, comment: session.comment,
                               exported: false, events: session.events)
         }
         if let session = sessions.first(where: { $0.id == sessionId }) {
@@ -137,56 +111,55 @@ final class RawDataSessionStore: ObservableObject {
         }
     }
 
-    func record(_ kind: LabelKind, now: Date = Date()) {
-        guard kind == .step || kind == .stair else { return }
-        mutateActive { session in
-            session.steps += 1
-            if kind == .stair { session.stairs += 1 }
-            session.events.append(Event(atMs: Int64(now.timeIntervalSince1970 * 1_000), kind: kind,
-                                        stepsTotal: session.steps, stairsTotal: session.stairs))
-        }
-    }
-
-    func undo(now: Date = Date()) {
-        mutateActive { session in
-            guard let prior = session.events.last,
-                  prior.kind == .step || prior.kind == .stair else { return }
-            let undo: LabelKind = prior.kind == .stair ? .undoStair : .undoStep
-            session.steps = max(0, session.steps - 1)
-            if prior.kind == .stair { session.stairs = max(0, session.stairs - 1) }
-            session.events.append(Event(atMs: Int64(now.timeIntervalSince1970 * 1_000), kind: undo,
-                                        stepsTotal: session.steps, stairsTotal: session.stairs))
-        }
-    }
-
-    func excludeLast(minutes: Int, now: Date = Date()) {
-        guard (1...240).contains(minutes) else { return }
-        mutateActive { session in
-            let to = Int64(now.timeIntervalSince1970 * 1_000)
-            let from = max(session.startedAtMs, to - Int64(minutes) * 60_000)
-            session.excludedWindows += 1
-            session.events.append(Event(atMs: to, kind: .excludeWindow, stepsTotal: session.steps,
-                                        stairsTotal: session.stairs, fromMs: from, toMs: to))
-        }
-    }
-
     func setComment(_ comment: String, sessionId: String) {
         mutate(sessionId) { $0.comment = String(comment.prefix(4_000)) }
     }
 
-    func markExported(_ sessionId: String) { mutate(sessionId) { $0.exported = true } }
-
-    func finishImuRecovery(_ sessionId: String) {
-        ImuSessionFileStore.shared.remove(id: sessionId)
-        try? FileManager.default.removeItem(at: ImuSessionFileStore.shared.file(sessionId))
+    @discardableResult
+    func addMarker(sessionId: String, at: Date, type: String, text: String) -> Event? {
+        guard Self.markerTypes.contains(type) else { return nil }
+        var added: Event?
+        mutate(sessionId) { session in
+            let atMs = Self.clamp(Int64(at.timeIntervalSince1970 * 1_000), to: session)
+            let marker = Event(atMs: atMs, kind: "marker", markerId: UUID().uuidString,
+                               markerType: type, text: String(text.prefix(500)))
+            session.events.append(marker)
+            added = marker
+        }
+        return added
     }
 
-    func removeMetadata(_ sessionId: String) {
-        guard sessions.first(where: { $0.id == sessionId })?.active != true else { return }
-        try? FileManager.default.removeItem(at: file(sessionId))
-        try? FileManager.default.removeItem(at: ImuSessionFileStore.shared.file(sessionId))
+    func updateMarker(sessionId: String, markerId: String, at: Date, type: String, text: String) {
+        guard Self.markerTypes.contains(type) else { return }
+        mutate(sessionId) { session in
+            guard let index = session.events.firstIndex(where: { $0.markerId == markerId }) else { return }
+            session.events[index].atMs = Self.clamp(Int64(at.timeIntervalSince1970 * 1_000), to: session)
+            session.events[index].markerType = type
+            session.events[index].text = String(text.prefix(500))
+        }
+    }
+
+    func deleteMarker(sessionId: String, markerId: String) {
+        mutate(sessionId) { $0.events.removeAll { $0.kind == "marker" && $0.markerId == markerId } }
+    }
+
+    func markExported(_ sessionId: String) { mutate(sessionId) { $0.exported = true } }
+
+    @discardableResult
+    func removeMetadata(_ sessionId: String,
+                        removeItem: (URL) throws -> Void = { try FileManager.default.removeItem(at: $0) }) -> Bool {
+        guard sessions.first(where: { $0.id == sessionId })?.active == false else { return false }
+        let source = ImuSessionFileStore.shared.file(sessionId)
+        do {
+            if FileManager.default.fileExists(atPath: source.path) { try removeItem(source) }
+        } catch { return false }
         ImuSessionFileStore.shared.remove(id: sessionId)
+        do {
+            let metadata = file(sessionId)
+            if FileManager.default.fileExists(atPath: metadata.path) { try removeItem(metadata) }
+        } catch { return false }
         sessions.removeAll { $0.id == sessionId }
+        return true
     }
 
     private func mutateActive(_ body: (inout Session) -> Void) {
@@ -212,27 +185,46 @@ final class RawDataSessionStore: ObservableObject {
         from > 0 && from <= to && to - from <= 7 * 24 * 60 * 60 * 1_000
     }
 
+    static let markerTypes = ["moment", "start", "end", "issue"]
+
+    private static func clamp(_ atMs: Int64, to session: Session) -> Int64 {
+        min(max(atMs, session.startedAtMs), session.endedAtMs ?? Int64(Date().timeIntervalSince1970 * 1_000))
+    }
+
     func exportEntries(for session: Session,
-                       raw: [(RawBatchMeta, [[UInt8]])]) -> [FileExport.BundleEntry] {
+                       raw: [(RawBatchMeta, [[UInt8]])], sensorAvailable: Bool? = nil) -> [FileExport.BundleEntry] {
         var meta: [String: Any] = [
             "schema_version": 3, "capture_kind": "whoop_5mg_raw_data",
             "session_id": session.id, "device_id": session.deviceId,
             "started_at_ms": session.startedAtMs, "ended_at_ms": session.endedAtMs ?? session.startedAtMs,
-            "manual_steps": session.steps, "manual_stairs": session.stairs,
-            "comment": session.comment, "excluded_windows": session.excludedWindows,
-            "sensor_export_available": !raw.isEmpty,
+            "comment": session.comment,
+            "sensor_export_available": sensorAvailable ?? !raw.isEmpty,
             "device_family": "iOS",
             "app_version": Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "?",
-            "manual_labels": "optional; on-screen step and stair controls",
+            "markers": session.events.filter {
+                $0.kind == "marker" && $0.atMs >= session.startedAtMs
+                    && $0.atMs <= (session.endedAtMs ?? session.startedAtMs)
+            }.map { marker in
+                ["id": marker.markerId ?? "", "at_ms": marker.atMs,
+                 "type": marker.markerType ?? "moment", "text": marker.text ?? ""] as [String: Any]
+            },
         ]
         if let value = session.capturedStartedAtMs { meta["captured_started_at_ms"] = value }
         if let value = session.capturedEndedAtMs { meta["captured_ended_at_ms"] = value }
         let metaData = (try? JSONSerialization.data(withJSONObject: meta, options: [.prettyPrinted, .sortedKeys])) ?? Data()
-        let eventData = session.events.compactMap { event -> Data? in
-            var row: [String: Any] = ["at_ms": event.atMs, "kind": event.kind.rawValue,
-                                      "steps_total": event.stepsTotal, "stairs_total": event.stairsTotal]
-            if let from = event.fromMs { row["from_ms"] = from }
-            if let to = event.toMs { row["to_ms"] = to }
+        let endMs = session.endedAtMs ?? session.startedAtMs
+        let publicEvents = [Event(atMs: session.startedAtMs, kind: "start")]
+            + session.events.filter {
+                $0.kind == "marker" && $0.atMs >= session.startedAtMs && $0.atMs <= endMs
+            }.sorted { $0.atMs < $1.atMs }
+            + [Event(atMs: endMs, kind: "stop")]
+        let eventData = publicEvents.compactMap { event -> Data? in
+            var row: [String: Any] = ["at_ms": event.atMs, "kind": event.kind]
+            if event.kind == "marker" {
+                if let value = event.markerId { row["marker_id"] = value }
+                if let value = event.markerType { row["marker_type"] = value }
+                if let value = event.text { row["text"] = value }
+            }
             return try? JSONSerialization.data(withJSONObject: row, options: [.sortedKeys])
         }.reduce(into: Data()) { $0.append($1); $0.append(0x0A) }
         var rawData = Data()

@@ -13,9 +13,20 @@ struct RawDataCollectorView: View {
     @State private var deleteCandidate: RawDataSessionStore.Session?
     @State private var confirmDeleteAll = false
     @State private var exportError: String?
+    @State private var deleteError: String?
     @State private var rawBatchCounts: [String: Int] = [:]
     @State private var historicalFrom = Date().addingTimeInterval(-3_600)
     @State private var historicalTo = Date()
+    @State private var markerDraft: MarkerDraft?
+
+    private struct MarkerDraft: Identifiable {
+        let id = UUID()
+        let sessionId: String
+        let markerId: String?
+        var at: Date
+        var type: String
+        var text: String
+    }
 
     var body: some View {
         ScreenScaffold(
@@ -23,9 +34,7 @@ struct RawDataCollectorView: View {
             subtitle: "Record a bounded 100 Hz motion session and export its complete timeline."
         ) {
             VStack(alignment: .leading, spacing: NoopMetrics.sectionSpacing) {
-                countersCard
                 coverageCard
-                labelsCard
                 controls
                 historicalRangeCard
                 sessionsSection
@@ -66,16 +75,12 @@ struct RawDataCollectorView: View {
         )) {
             Button("OK", role: .cancel) { exportError = nil }
         } message: { Text(exportError ?? "Unknown error") }
-    }
-
-    private var countersCard: some View {
-        StrandCard {
-            HStack {
-                counter("NOOP steps", model.repo.days.last?.steps.map(String.init) ?? "–")
-                counter("Manual steps", String(store.active?.steps ?? 0))
-                counter("Stairs", String(store.active?.stairs ?? 0))
-            }
-        }
+        .alert("Couldn't delete session", isPresented: Binding(
+            get: { deleteError != nil }, set: { if !$0 { deleteError = nil } }
+        )) {
+            Button("OK", role: .cancel) { deleteError = nil }
+        } message: { Text(deleteError ?? "Unknown error") }
+        .sheet(item: $markerDraft) { draft in markerSheet(draft) }
     }
 
     private var coverageCard: some View {
@@ -98,33 +103,10 @@ struct RawDataCollectorView: View {
         }
     }
 
-    private var labelsCard: some View {
-        StrandCard {
-            VStack(alignment: .leading, spacing: NoopMetrics.space3) {
-                Text("Optional manual labels").font(StrandFont.headline)
-                    .foregroundStyle(StrandPalette.textPrimary)
-                Text("For step-algorithm research, label one step or one stair plus one step. Raw capture works without labels.")
-                    .font(StrandFont.caption).foregroundStyle(StrandPalette.textTertiary)
-                HStack {
-                    NoopButton("Step", systemImage: "figure.walk", kind: .secondary, fullWidth: true) {
-                        store.record(.step)
-                    }.disabled(store.active == nil)
-                    NoopButton("Stair", systemImage: "stairs", kind: .secondary, fullWidth: true) {
-                        store.record(.stair)
-                    }.disabled(store.active == nil)
-                }
-            }
-        }
-    }
-
     @ViewBuilder private var controls: some View {
         if store.active != nil {
-            HStack {
-                NoopButton("Undo last click", systemImage: "arrow.uturn.backward", kind: .secondary,
-                           fullWidth: true) { store.undo() }
-                NoopButton("Stop session", systemImage: "stop.fill", kind: .destructive,
-                           fullWidth: true) { Task { await stop() } }
-            }
+            NoopButton("Stop session", systemImage: "stop.fill", kind: .destructive,
+                       fullWidth: true) { Task { await stop() } }
         } else {
             NoopButton("Start raw-data session", systemImage: "record.circle", kind: .primary,
                        fullWidth: true) { start() }
@@ -181,8 +163,6 @@ struct RawDataCollectorView: View {
                                               from: Date(timeIntervalSince1970: Double(session.startedAtMs) / 1_000), to: $0) }
                     ))
                 }
-                Text("\(session.steps) steps · \(session.stairs) stairs")
-                    .font(StrandFont.caption).foregroundStyle(StrandPalette.textSecondary)
                 Text(session.active ? "Export status: recording"
                      : "Export status: \(rawBatchCounts[session.id, default: 0]) raw batches")
                     .font(StrandFont.caption)
@@ -192,6 +172,26 @@ struct RawDataCollectorView: View {
                     set: { store.setComment($0, sessionId: session.id) }
                 ), axis: .vertical)
                     .textFieldStyle(.roundedBorder).lineLimit(2...4)
+                NoopButton("Add marker", systemImage: "mappin.and.ellipse", kind: .secondary,
+                           fullWidth: true) { editMarker(nil, in: session) }
+                let markers = session.events.filter { $0.kind == "marker" }.sorted { $0.atMs < $1.atMs }
+                ForEach(markers) { marker in
+                    Button { editMarker(marker, in: session) } label: {
+                        HStack {
+                            VStack(alignment: .leading, spacing: NoopMetrics.space1) {
+                                (Text(Self.markerLabel(marker.markerType))
+                                    + Text(verbatim: " · \(Self.time(marker.atMs))"))
+                                    .font(StrandFont.subhead).foregroundStyle(StrandPalette.textPrimary)
+                                if let text = marker.text, !text.isEmpty {
+                                    Text(text).font(StrandFont.caption).foregroundStyle(StrandPalette.textSecondary)
+                                }
+                            }
+                            Spacer()
+                            Image(systemName: "chevron.right").foregroundStyle(StrandPalette.textTertiary)
+                        }
+                    }
+                    .buttonStyle(.plain)
+                }
                 NoopButton(exportingId == session.id ? "Building export…" : "Export session",
                            systemImage: "square.and.arrow.up", kind: .secondary, fullWidth: true) {
                     Task { await export(session) }
@@ -204,12 +204,73 @@ struct RawDataCollectorView: View {
         }
     }
 
-    private func counter(_ label: LocalizedStringKey, _ value: String) -> some View {
-        VStack(spacing: NoopMetrics.space1) {
-            Text(value).font(StrandFont.number(28)).foregroundStyle(StrandPalette.textPrimary)
-            Text(label).font(StrandFont.caption).foregroundStyle(StrandPalette.textSecondary)
-                .multilineTextAlignment(.center)
-        }.frame(maxWidth: .infinity)
+    private func markerSheet(_ initial: MarkerDraft) -> some View {
+        NavigationStack {
+            if let binding = Binding($markerDraft) {
+                let session = store.sessions.first(where: { $0.id == binding.wrappedValue.sessionId })
+                Form {
+                    Section {
+                        TimelineView(.periodic(from: .now, by: 1)) { timeline in
+                            let current = Self.markerCurrentTime(session: session, now: timeline.date)
+                            Text("Marker: \(binding.wrappedValue.at.formatted(date: .omitted, time: .standard))")
+                            Text("Current time: \(current.formatted(date: .omitted, time: .standard))")
+                                .foregroundStyle(.secondary)
+                            HStack {
+                                Button { binding.wrappedValue.at.addTimeInterval(-10) } label: { Text(verbatim: "−10 s") }
+                                Spacer()
+                                Button("0") {
+                                    binding.wrappedValue.at = Self.markerCurrentTime(session: session, now: Date())
+                                }
+                                Spacer()
+                                Button { binding.wrappedValue.at.addTimeInterval(10) } label: { Text(verbatim: "+10 s") }
+                            }
+                        }
+                    }
+                    Section("Marker type") {
+                        Picker("Marker type", selection: binding.type) {
+                            ForEach(RawDataSessionStore.markerTypes, id: \.self) { type in
+                                Text(Self.markerLabel(type)).tag(type)
+                            }
+                        }.pickerStyle(.segmented)
+                    }
+                    Section("Marker note") {
+                        TextField("Marker note", text: binding.text, axis: .vertical).lineLimit(2...4)
+                    }
+                    if let markerId = binding.wrappedValue.markerId {
+                        Section {
+                            Button("Delete marker", role: .destructive) {
+                                store.deleteMarker(sessionId: binding.wrappedValue.sessionId, markerId: markerId)
+                                markerDraft = nil
+                            }
+                        }
+                    }
+                }
+                .navigationTitle(initial.markerId == nil ? "Add marker" : "Edit marker")
+                .toolbar {
+                    ToolbarItem(placement: .cancellationAction) { Button("Cancel") { markerDraft = nil } }
+                    ToolbarItem(placement: .confirmationAction) {
+                        Button("Save") { saveMarker(binding.wrappedValue) }
+                    }
+                }
+            }
+        }
+    }
+
+    private func editMarker(_ marker: RawDataSessionStore.Event?, in session: RawDataSessionStore.Session) {
+        let currentMs = session.endedAtMs ?? Int64(Date().timeIntervalSince1970 * 1_000)
+        markerDraft = MarkerDraft(sessionId: session.id, markerId: marker?.markerId,
+                                  at: Date(timeIntervalSince1970: Double(marker?.atMs ?? currentMs) / 1_000),
+                                  type: marker?.markerType ?? "moment", text: marker?.text ?? "")
+    }
+
+    private func saveMarker(_ draft: MarkerDraft) {
+        if let markerId = draft.markerId {
+            store.updateMarker(sessionId: draft.sessionId, markerId: markerId,
+                               at: draft.at, type: draft.type, text: draft.text)
+        } else {
+            store.addMarker(sessionId: draft.sessionId, at: draft.at, type: draft.type, text: draft.text)
+        }
+        markerDraft = nil
     }
 
     private func start() {
@@ -228,11 +289,16 @@ struct RawDataCollectorView: View {
     private func export(_ session: RawDataSessionStore.Session) async {
         guard let end = session.endedAtMs else { return }
         exportingId = session.id
-        let from = Int(session.startedAtMs / 1_000), to = Int(end / 1_000)
-        let chunks = await archive.pin(sessionId: session.id, deviceId: session.deviceId,
-                                       from: from, to: to, ble: model.ble)
-        let history = await model.ble.groundTruthHistoryCSV(from: from, to: to)
-        var entries = store.exportEntries(for: session, raw: [])
+        let bounds = Self.fullSecondBounds(fromMs: session.startedAtMs, toMs: end)
+        let from = bounds?.from ?? 1, to = bounds?.to ?? 0
+        let chunks = if let bounds {
+            await archive.pin(sessionId: session.id, deviceId: session.deviceId,
+                              from: bounds.from, to: bounds.to, ble: model.ble)
+        } else { [] }
+        let history = bounds == nil ? Data("stream,unix_s,v1,v2,v3,v4\n".utf8)
+            : await model.ble.groundTruthHistoryCSV(from: from, to: to)
+        let sensorAvailable = !chunks.isEmpty || history.split(separator: 0x0A).count > 1
+        var entries = store.exportEntries(for: session, raw: [], sensorAvailable: sensorAvailable)
         entries.append(.init(name: "history-sensors.csv", data: history))
         let imuComplete = Self.covers(chunks, from: from, to: to)
         let coverage: [String: Any] = [
@@ -250,11 +316,10 @@ struct RawDataCollectorView: View {
             }
         }
         let result = await FileExport.exportBundle(entries: entries,
-                                                    suggestedName: "noop-ground-truth-\(session.id).zip")
+                                                    suggestedName: "noop-5mg-raw-\(session.id).zip")
         if result == nil { exportError = "The export file could not be created or shared." }
         else {
             store.markExported(session.id)
-            if imuComplete { store.finishImuRecovery(session.id) }
             model.ble.finishGroundTruthRawCapture(sessionId: session.id)
         }
         exportingId = nil
@@ -263,8 +328,14 @@ struct RawDataCollectorView: View {
     private func delete(_ session: RawDataSessionStore.Session) async {
         guard session.endedAtMs != nil else { return }
         model.ble.finishGroundTruthRawCapture(sessionId: session.id)
-        // Raw chunks may overlap another session; retention cleanup owns physical deletion.
-        store.removeMetadata(session.id)
+        guard await archive.deleteOwned(sessionId: session.id, ble: model.ble) else {
+            deleteError = "The captured data could not be deleted. The session was kept so you can retry."
+            return
+        }
+        guard store.removeMetadata(session.id) else {
+            deleteError = "The captured data could not be deleted. The session was kept so you can retry."
+            return
+        }
         rawBatchCounts[session.id] = nil
     }
 
@@ -284,11 +355,29 @@ struct RawDataCollectorView: View {
         Date(timeIntervalSince1970: Double(ms) / 1_000).formatted(date: .omitted, time: .shortened)
     }
 
+    static func fullSecondBounds(fromMs: Int64, toMs: Int64) -> (from: Int, to: Int)? {
+        let from = Int((fromMs + 999) / 1_000), to = Int(toMs / 1_000) - 1
+        return from <= to ? (from, to) : nil
+    }
+
+    static func markerCurrentTime(session: RawDataSessionStore.Session?, now: Date) -> Date {
+        session?.endedAtMs.map { Date(timeIntervalSince1970: Double($0) / 1_000) } ?? now
+    }
+
     private static func range(_ session: RawDataSessionStore.Session) -> String {
         let start = Date(timeIntervalSince1970: Double(session.startedAtMs) / 1_000)
         let date = start.formatted(date: .numeric, time: .omitted)
         let end = session.endedAtMs.map(time) ?? "…"
         return "\(date) · \(time(session.startedAtMs))–\(end)"
+    }
+
+    private static func markerLabel(_ type: String?) -> LocalizedStringKey {
+        switch type {
+        case "start": "Start"
+        case "end": "End"
+        case "issue": "Issue"
+        default: "Moment"
+        }
     }
 
     private static func covers(_ chunks: [ImuChunkMeta], from: Int, to: Int) -> Bool {
