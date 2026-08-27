@@ -9,14 +9,6 @@
       "swift": ["RawDataSessionStore", "persist(session)"],
       "kotlin": ["GroundTruthCollector", "sessionStartKey"]
     },
-    "manual_step_and_stair_labels": {
-      "swift": ["store.record(.step)", "store.record(.stair)"],
-      "kotlin": ["KIND_STEP", "KIND_STAIR"]
-    },
-    "undo_last_label": {
-      "swift": ["func undo(", "Undo last click"],
-      "kotlin": ["fun undo(", "ground_truth_undo"]
-    },
     "session_comments": {
       "swift": ["setComment(", "Session comment"],
       "kotlin": ["setComment(", "ground_truth_comment"]

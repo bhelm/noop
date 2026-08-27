@@ -1,41 +1,27 @@
 package com.noop.ui
 
-import android.os.Build
 import android.app.DatePickerDialog
 import android.app.TimePickerDialog
 import android.content.Context
-import android.view.HapticFeedbackConstants
-import android.view.InputDevice
-import android.view.KeyEvent
 import android.widget.Toast
-import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.focus.focusRequester
-import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.noop.R
@@ -43,22 +29,15 @@ import com.noop.testcentre.GroundTruthCollector
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
-/** Bounded 5/MG raw-data capture. Manual clicker labels are an optional fork extension. */
+/** Bounded 5/MG raw-data capture. */
 @Composable
 fun GroundTruthCollectorScreen(vm: AppViewModel) {
     val context = LocalContext.current
     val collector = remember { GroundTruthCollector.from(context) }
-    val focusRequester = remember { FocusRequester() }
-    val view = LocalView.current
     val scope = rememberCoroutineScope()
-    val days by vm.recentDays.collectAsStateWithLifecycle()
     val live by vm.live.collectAsStateWithLifecycle()
     val imuStatus by vm.ble.groundTruthImuStatus.collectAsStateWithLifecycle()
-    // Optional fork overlay only. The raw collector itself must not depend on the still-separate
-    // physiological day-cycle work; use the latest published total when the step counter is present.
-    val noopSteps = days.lastOrNull()?.steps
     var state by remember { mutableStateOf(collector.snapshot()) }
-    var haptics by remember { mutableStateOf(false) }
     var exportingSessionId by remember { mutableStateOf<String?>(null) }
     var sessions by remember { mutableStateOf(collector.sessions()) }
     var latestSensorTs by remember { mutableStateOf<Long?>(null) }
@@ -77,14 +56,6 @@ fun GroundTruthCollectorScreen(vm: AppViewModel) {
         }
     }
 
-    DisposableEffect(view) {
-        val oldKeepScreenOn = view.keepScreenOn
-        view.keepScreenOn = true
-        onDispose {
-            view.keepScreenOn = oldKeepScreenOn
-        }
-    }
-    LaunchedEffect(state.active, state.steps, state.stairs) { focusRequester.requestFocus() }
     // Re-arm after a BLE reconnect or Android process restart while the manual session is still active.
     LaunchedEffect(state.active, state.sessionId, live.connected) {
         if (state.active && live.connected) state.sessionId?.let(vm.ble::startGroundTruthImuCapture)
@@ -93,142 +64,71 @@ fun GroundTruthCollectorScreen(vm: AppViewModel) {
     ScreenScaffold(
         title = stringResource(R.string.ground_truth_title),
         subtitle = stringResource(R.string.ground_truth_subtitle),
-        modifier = Modifier
-            .focusRequester(focusRequester)
-            .focusable()
-            .onPreviewKeyEvent { composeEvent ->
-                val event = composeEvent.nativeKeyEvent
-                if (event.action != KeyEvent.ACTION_DOWN || event.repeatCount != 0) return@onPreviewKeyEvent false
-                val key = event.toCollectorKey()
-                state = when (event.keyCode) {
-                    KeyEvent.KEYCODE_ZOOM_OUT -> collector.record(GroundTruthCollector.KIND_STEP, key, noopSteps)
-                    KeyEvent.KEYCODE_ZOOM_IN -> collector.record(GroundTruthCollector.KIND_STAIR, key, noopSteps)
-                    else -> collector.observeKey(key, noopSteps)
-                }
-                val mapped = event.keyCode == KeyEvent.KEYCODE_ZOOM_OUT || event.keyCode == KeyEvent.KEYCODE_ZOOM_IN
-                if (mapped && haptics) {
-                    view.performHapticFeedback(if (Build.VERSION.SDK_INT >= 30) HapticFeedbackConstants.CONFIRM else HapticFeedbackConstants.KEYBOARD_TAP)
-                }
-                mapped
-            },
     ) {
-        NoopCard(tint = Palette.accent) {
-            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                Row(Modifier.fillMaxWidth()) {
-                    CounterColumn(stringResource(R.string.ground_truth_noop_steps), noopSteps?.toString() ?: "-", Modifier.weight(1f))
-                    CounterColumn(stringResource(R.string.ground_truth_manual_steps), state.steps.toString(), Modifier.weight(1f))
-                    CounterColumn(stringResource(R.string.ground_truth_stairs), state.stairs.toString(), Modifier.weight(1f))
-                }
-                val noopSessionSteps = state.noopStepsAtStart?.let { start -> noopSteps?.minus(start) }
-                val delta = noopSessionSteps?.minus(state.steps)
-                Text(
-                    text = stringResource(R.string.ground_truth_delta, delta?.toString() ?: "-"),
-                    style = NoopType.subhead,
-                    color = Palette.textSecondary,
-                )
-            }
-        }
-
         NoopCard {
             Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 val activeSession = sessions.firstOrNull { it.active }
                 val activeStats = activeSession?.let { captureStats[it.id] }
-                Text(if (activeSession == null) "Capture status" else "Recording · ${formatDuration(nowMs - activeSession.startedAtMs)}",
+                Text(if (activeSession == null) stringResource(R.string.ground_truth_capture_status)
+                    else stringResource(R.string.ground_truth_recording, formatDuration(nowMs - activeSession.startedAtMs)),
                     style = NoopType.headline, color = Palette.textPrimary)
                 if (activeStats != null) Text(
-                    "IMU ${formatBytes(activeStats.bytes)} · ${coverageText(activeStats)}",
+                    stringResource(R.string.ground_truth_imu_coverage, formatBytes(activeStats.bytes), coverageText(activeStats)),
                     style = NoopType.body,
                     color = if (activeStats.coveredSeconds > 0) Palette.statusPositive else Palette.textSecondary,
                 )
                 Text(
-                    if (live.connected) "Band: connected${if (live.bonded) " + paired" else "; pairing"}"
-                    else "Band: disconnected${if (live.scanning) "; searching" else ""}",
+                    stringResource(when {
+                        live.connected && live.bonded -> R.string.ground_truth_band_connected_paired
+                        live.connected -> R.string.ground_truth_band_connected_pairing
+                        live.scanning -> R.string.ground_truth_band_searching
+                        else -> R.string.ground_truth_band_disconnected
+                    }),
                     style = NoopType.body,
                     color = if (live.connected) Palette.statusPositive else Palette.statusCritical,
                 )
                 Text(
                     when {
-                        live.backfilling -> "History sync: running (${live.syncChunksThisSession} chunks)"
-                        live.lastSyncAt != null -> "History sync completed: ${diagnosticTime(live.lastSyncAt!! * 1000)}"
-                        else -> "History sync: no completed sync recorded"
+                        live.backfilling -> stringResource(R.string.ground_truth_history_running, live.syncChunksThisSession)
+                        live.lastSyncAt != null -> stringResource(R.string.ground_truth_history_completed, diagnosticTime(live.lastSyncAt!! * 1000))
+                        else -> stringResource(R.string.ground_truth_history_none)
                     },
                     style = NoopType.body,
                     color = Palette.textSecondary,
                 )
                 Text(
-                    latestSensorTs?.let { "Decoded 1 Hz sensors: ${diagnosticAge(it * 1000)} behind" }
-                        ?: "Decoded 1 Hz sensors: none",
+                    latestSensorTs?.let { stringResource(R.string.ground_truth_sensors_behind, diagnosticAge(it * 1000)) }
+                        ?: stringResource(R.string.ground_truth_sensors_none),
                     style = NoopType.caption,
                     color = Palette.textSecondary,
                 )
                 Text(
-                    "Realtime IMU: ${imuStatus.note}; ${imuStatus.packets} packets / ${imuStatus.bytes} bytes" +
-                        (imuStatus.lastPacketAtMs?.let { "; last ${diagnosticAge(it)} ago" } ?: ""),
+                    stringResource(R.string.ground_truth_realtime_imu, imuStatus.note, imuStatus.packets, imuStatus.bytes,
+                        imuStatus.lastPacketAtMs?.let { stringResource(R.string.ground_truth_realtime_last, diagnosticAge(it)) }.orEmpty()),
                     style = NoopType.body,
                     color = if (imuStatus.packets > 0) Palette.statusPositive else Palette.textSecondary,
                 )
             }
         }
 
-        NoopCard {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text(stringResource(R.string.ground_truth_mapping_title), style = NoopType.headline, color = Palette.textPrimary)
-                Text(stringResource(R.string.ground_truth_mapping_body), style = NoopType.body, color = Palette.textSecondary)
-                val key = state.lastKey
-                Text(
-                    text = if (key == null) stringResource(R.string.ground_truth_no_key)
-                    else stringResource(
-                        R.string.ground_truth_key_detail,
-                        key.keyName, key.keyCode, key.scanCode, key.deviceName, key.deviceId, key.source,
-                    ),
-                    style = NoopType.caption,
-                    color = Palette.textSecondary,
-                )
-            }
-        }
-
-        NoopCard {
-            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                Column(Modifier.weight(1f)) {
-                    Text(stringResource(R.string.ground_truth_haptics), style = NoopType.body, color = Palette.textPrimary)
-                    Text(stringResource(R.string.ground_truth_haptics_desc), style = NoopType.caption, color = Palette.textSecondary)
-                }
-                Switch(checked = haptics, onCheckedChange = { haptics = it })
-            }
-        }
-
         if (state.active) {
             NoopButton(
-                text = "Add marker",
+                text = stringResource(R.string.ground_truth_add_marker),
                 kind = NoopButtonKind.Secondary,
                 fullWidth = true,
-                onClick = { state.sessionId?.let { markerEditor = MarkerEditor(it, null, nowMs, "Moment", "") } },
+                onClick = { state.sessionId?.let { markerEditor = MarkerEditor(it, null, nowMs, MARKER_MOMENT, "") } },
             )
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                NoopButton(
-                    text = stringResource(R.string.ground_truth_undo),
-                    kind = NoopButtonKind.Secondary,
-                    modifier = Modifier.weight(1f),
-                    onClick = { state = collector.undo(noopSteps) },
-                )
-                NoopButton(
-                    text = stringResource(R.string.ground_truth_stop),
-                    kind = NoopButtonKind.Destructive,
-                    modifier = Modifier.weight(1f),
-                    onClick = {
-                        vm.ble.stopGroundTruthImuCapture()
-                        state = collector.stop(noopSteps)
-                        sessions = collector.sessions()
-                    },
-                )
-            }
+            NoopButton(text = stringResource(R.string.ground_truth_stop), kind = NoopButtonKind.Destructive,
+                fullWidth = true, onClick = {
+                    vm.ble.stopGroundTruthImuCapture(); state = collector.stop(); sessions = collector.sessions()
+                })
         } else {
             NoopButton(
                 text = stringResource(R.string.ground_truth_start),
                 fullWidth = true,
                 enabled = vm.activeStrapId.isNotBlank(),
                 onClick = {
-                    state = collector.start(noopSteps, vm.activeStrapId)
+                    state = collector.start(vm.activeStrapId)
                     sessions = collector.sessions()
                 },
             )
@@ -282,7 +182,7 @@ fun GroundTruthCollectorScreen(vm: AppViewModel) {
                         }
                     },
                     onDelete = { sessionPendingDelete = session },
-                    onAddMarker = { markerEditor = MarkerEditor(session.id, null, session.endedAtMs ?: nowMs, "Moment", "") },
+                    onAddMarker = { markerEditor = MarkerEditor(session.id, null, session.endedAtMs ?: nowMs, MARKER_MOMENT, "") },
                     onEditMarker = { marker -> markerEditor = MarkerEditor(session.id, marker.id, marker.atMs, marker.type, marker.text) },
                     onEditStart = {
                         pickDateTime(context, session.startedAtMs, EARLIEST_EXPORT_MS,
@@ -354,7 +254,7 @@ fun GroundTruthCollectorScreen(vm: AppViewModel) {
     markerEditor?.let { editor ->
         AlertDialog(
             onDismissRequest = { markerEditor = null },
-            title = { Text(if (editor.markerId == null) "Add marker" else "Edit marker") },
+            title = { Text(stringResource(if (editor.markerId == null) R.string.ground_truth_add_marker else R.string.ground_truth_edit_marker)) },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     Text(diagnosticTime(editor.atMs), style = NoopType.headline)
@@ -364,21 +264,27 @@ fun GroundTruthCollectorScreen(vm: AppViewModel) {
                         NoopButton("+10 s", kind = NoopButtonKind.Secondary, modifier = Modifier.weight(1f),
                             onClick = { markerEditor = editor.copy(atMs = editor.atMs + 10_000) })
                     }
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        listOf("Moment", "Start", "End", "Issue").forEach { type ->
-                            NoopButton(type, kind = if (editor.type == type) NoopButtonKind.Primary else NoopButtonKind.Secondary,
-                                modifier = Modifier.weight(1f), onClick = { markerEditor = editor.copy(type = type) })
+                    listOf(
+                        listOf(MARKER_MOMENT to R.string.ground_truth_marker_moment, MARKER_START to R.string.ground_truth_marker_start),
+                        listOf(MARKER_END to R.string.ground_truth_marker_end, MARKER_ISSUE to R.string.ground_truth_marker_issue),
+                    ).forEach { row ->
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            row.forEach { (type, label) ->
+                                NoopButton(stringResource(label),
+                                    kind = if (editor.type == type) NoopButtonKind.Primary else NoopButtonKind.Secondary,
+                                    modifier = Modifier.weight(1f), onClick = { markerEditor = editor.copy(type = type) })
+                            }
                         }
                     }
                     OutlinedTextField(editor.text, { markerEditor = editor.copy(text = it.take(500)) },
-                        label = { Text("Marker note") }, modifier = Modifier.fillMaxWidth(), minLines = 2)
+                        label = { Text(stringResource(R.string.ground_truth_marker_note)) }, modifier = Modifier.fillMaxWidth(), minLines = 2)
                 }
             },
             dismissButton = {
                 Row {
                     if (editor.markerId != null) TextButton(onClick = {
                         collector.deleteMarker(editor.sessionId, editor.markerId); sessions = collector.sessions(); markerEditor = null
-                    }) { Text("Delete", color = Palette.statusCritical) }
+                    }) { Text(stringResource(R.string.ground_truth_delete_confirm), color = Palette.statusCritical) }
                     TextButton(onClick = { markerEditor = null }) { Text(stringResource(R.string.ground_truth_cancel)) }
                 }
             },
@@ -386,7 +292,7 @@ fun GroundTruthCollectorScreen(vm: AppViewModel) {
                 if (editor.markerId == null) collector.addMarker(editor.sessionId, editor.atMs, editor.type, editor.text)
                 else collector.updateMarker(editor.sessionId, GroundTruthCollector.Marker(editor.markerId, editor.atMs, editor.type, editor.text))
                 sessions = collector.sessions(); markerEditor = null
-            }) { Text("Save") } },
+            }) { Text(stringResource(R.string.ground_truth_save)) } },
         )
     }
 }
@@ -412,19 +318,21 @@ private fun SessionCard(
             val captureReady = stats?.complete == true
             Text(
                 when {
-                    session.endedAtMs == null -> "Recording · ${stats?.let(::coverageText) ?: "waiting for IMU"}"
-                    captureReady -> "Ready to export · complete"
-                    stats != null && stats.coveredSeconds > 0 -> "Ready with ${stats.missingSeconds}s missing · history may repair it"
-                    !sensorCovered -> "Waiting for history through ${diagnosticTime(requireNotNull(session.endedAtMs))}"
-                    else -> "Ready without IMU data"
+                    session.endedAtMs == null -> stringResource(R.string.ground_truth_recording,
+                        stats?.let { coverageText(it) } ?: stringResource(R.string.ground_truth_waiting_imu))
+                    captureReady -> stringResource(R.string.ground_truth_ready_complete)
+                    stats != null && stats.coveredSeconds > 0 -> stringResource(R.string.ground_truth_ready_missing, stats.missingSeconds)
+                    !sensorCovered -> stringResource(R.string.ground_truth_waiting_history, diagnosticTime(requireNotNull(session.endedAtMs)))
+                    else -> stringResource(R.string.ground_truth_ready_no_imu)
                 },
                 style = NoopType.caption,
                 color = if (captureReady) Palette.statusPositive else Palette.statusCritical,
             )
             Text(time, style = NoopType.headline, color = Palette.textPrimary)
-            Text("${formatDuration((session.endedAtMs ?: System.currentTimeMillis()) - session.startedAtMs)} · IMU ${formatBytes(stats?.bytes ?: 0)}",
+            Text(stringResource(R.string.ground_truth_duration_size,
+                formatDuration((session.endedAtMs ?: System.currentTimeMillis()) - session.startedAtMs), formatBytes(stats?.bytes ?: 0)),
                 style = NoopType.caption, color = Palette.textSecondary)
-            session.lastExportedAtMs?.let { Text("Last exported ${diagnosticTime(it)} · export remains available",
+            session.lastExportedAtMs?.let { Text(stringResource(R.string.ground_truth_last_exported, diagnosticTime(it)),
                 style = NoopType.caption, color = Palette.statusPositive) }
             if (!session.active) {
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -442,19 +350,12 @@ private fun SessionCard(
                     )
                 }
             }
-            Text(
-                stringResource(
-                    R.string.ground_truth_session_summary,
-                    session.steps,
-                    session.stairs,
-                ),
-                style = NoopType.caption,
-                color = Palette.textSecondary,
-            )
-            NoopButton("Add marker", kind = NoopButtonKind.Secondary, fullWidth = true, onClick = onAddMarker)
+            NoopButton(stringResource(R.string.ground_truth_add_marker), kind = NoopButtonKind.Secondary, fullWidth = true, onClick = onAddMarker)
             session.markers.forEach { marker ->
                 TextButton(onClick = { onEditMarker(marker) }, modifier = Modifier.fillMaxWidth()) {
-                    Text("${diagnosticTime(marker.atMs)} · ${marker.type}${marker.text.takeIf(String::isNotBlank)?.let { " · $it" } ?: ""}")
+                    Text(stringResource(R.string.ground_truth_marker_row, diagnosticTime(marker.atMs),
+                        markerTypeLabel(marker.type), marker.text.takeIf(String::isNotBlank)
+                            ?.let { stringResource(R.string.ground_truth_marker_note_suffix, it) }.orEmpty()))
                 }
             }
             OutlinedTextField(
@@ -522,26 +423,6 @@ private fun pickDateTime(
     dateDialog.show()
 }
 
-@Composable
-private fun CounterColumn(label: String, value: String, modifier: Modifier = Modifier) {
-    Column(modifier = modifier.padding(horizontal = 4.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-        Text(value, style = NoopType.number(32f), color = Palette.textPrimary)
-        Text(label, style = NoopType.footnote, color = Palette.textSecondary, textAlign = TextAlign.Center, maxLines = 2)
-    }
-}
-
-private fun KeyEvent.toCollectorKey(): GroundTruthCollector.KeyInfo {
-    val input = InputDevice.getDevice(deviceId)
-    return GroundTruthCollector.KeyInfo(
-        keyCode = keyCode,
-        keyName = KeyEvent.keyCodeToString(keyCode),
-        scanCode = scanCode,
-        deviceId = deviceId,
-        deviceName = input?.name ?: "unknown",
-        source = source,
-    )
-}
-
 private fun diagnosticTime(epochMs: Long): String =
     java.text.SimpleDateFormat("HH:mm:ss", java.util.Locale.getDefault()).format(java.util.Date(epochMs))
 
@@ -576,10 +457,25 @@ private fun formatBytes(bytes: Long): String = when {
     else -> "$bytes B"
 }
 
+@Composable
 private fun coverageText(stats: GroundTruthCollector.CaptureStats): String {
     val percent = if (stats.expectedSeconds == 0) 0.0 else 100.0 * stats.coveredSeconds / stats.expectedSeconds
-    val startup = if (stats.startupSeconds > 0) " · ${stats.startupSeconds}s startup" else ""
-    return "${stats.coveredSeconds}/${stats.expectedSeconds}s · %.1f%% · ${stats.missingSeconds}s missing$startup".format(percent)
+    val startup = if (stats.startupSeconds > 0) stringResource(R.string.ground_truth_coverage_startup, stats.startupSeconds) else ""
+    return stringResource(R.string.ground_truth_coverage, stats.coveredSeconds, stats.expectedSeconds,
+        percent, stats.missingSeconds, startup)
 }
+
+@Composable
+private fun markerTypeLabel(type: String): String = stringResource(when (type.lowercase()) {
+    MARKER_START -> R.string.ground_truth_marker_start
+    MARKER_END -> R.string.ground_truth_marker_end
+    MARKER_ISSUE -> R.string.ground_truth_marker_issue
+    else -> R.string.ground_truth_marker_moment
+})
+
+private const val MARKER_MOMENT = "moment"
+private const val MARKER_START = "start"
+private const val MARKER_END = "end"
+private const val MARKER_ISSUE = "issue"
 
 private const val EARLIEST_EXPORT_MS = 946_684_800_000L
