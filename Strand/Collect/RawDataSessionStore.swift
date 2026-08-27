@@ -149,10 +149,7 @@ final class RawDataSessionStore: ObservableObject {
     func removeMetadata(_ sessionId: String,
                         removeItem: (URL) throws -> Void = { try FileManager.default.removeItem(at: $0) }) -> Bool {
         guard sessions.first(where: { $0.id == sessionId })?.active == false else { return false }
-        let source = ImuSessionFileStore.shared.file(sessionId)
-        do {
-            if FileManager.default.fileExists(atPath: source.path) { try removeItem(source) }
-        } catch { return false }
+        guard ImuSessionFileStore.shared.deleteFiles(sessionId, removeItem: removeItem) else { return false }
         ImuSessionFileStore.shared.remove(id: sessionId)
         do {
             let metadata = file(sessionId)

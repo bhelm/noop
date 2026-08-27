@@ -73,41 +73,33 @@ Instead, storage is split by responsibility:
 | Data | Storage | Lifetime |
 |---|---|---|
 | Session window, comments, and markers | Small app-private JSON/JSONL metadata | Until the user deletes the session |
-| Incoming raw IMU frames | Append-only `.imus` session file | Until the user explicitly deletes the session |
-| Searchable chunk metadata | SQLite (`imuChunk`) | Index/provenance only; no individual samples |
-| Immutable analysis/export payload | Compressed `.imuc` file | Owned by the retained session |
+| Decoded 100 Hz IMU | App-private `.imus` segment files | Until the user explicitly deletes the session |
 
-The `.imus` writer batches up to 30 one-second frames into an independently zlib-compressed block.
-Blocks are appended; a crash can at worst leave a truncated final block, while earlier blocks remain
-readable. Pending blocks are flushed when a session stops or before it is read. Each record keeps the
-strap timestamp, phone receive time, and original frame bytes. This preserves evidence for a future
-decoder instead of committing early to today's interpretation.
+Each session owns fixed 30-minute UTC `.imus` segments. Late history data is routed by its strap
+timestamp, so reconnecting after a workout does not put old samples into the current file. A segment
+contains decoded, column-major, little-endian signed 16-bit accelerometer and gyroscope samples plus
+the strap timestamp and phone receive time. Up to 30 one-second frames form an independently
+zlib-compressed append block. A truncated final block after a crash does not make earlier blocks
+unreadable.
 
-An `.imuc` file is a ZIP/deflate container with:
-
-- `manifest.json`: `NOOPIMU`, format version, 100 Hz sample rate, axes, timestamp source, coverage,
-  ordering contract, and row count;
-- `samples.bin`: repeated big-endian timestamp and byte-length headers followed by column-major,
-  little-endian signed 16-bit axis samples.
-
-The format and archive semantics are mirrored on Android and Apple. SHA-256, byte size, codec,
-coverage, and sample count are stored in `imuChunk`; the payload itself remains outside SQLite.
-Chunks are session-owned and materialised for the selected interval. Keeping the `.imus` source until
-explicit deletion makes repeated exports safe when that interval is edited; deleting a session also
-removes its source and owned chunks.
+There is no high-rate SQLite table or separate derived archive format. The time-addressable `.imus`
+segments are both the retained source and the canonical analysis format. Readers must still sort and
+deduplicate by strap timestamp because history frames can arrive late. Exports clip the first and last
+segment to the selected interval without changing the retained source, so the same session can be
+exported repeatedly after its window is edited.
 
 ## Session export
 
 The shareable ZIP contains session provenance and all available sensor material for its selected
 interval. Android currently includes `meta.json`, event JSONL and CSV files, decoded one-second
-signals, raw sensor CSV, and `imu/*.imuc`. Apple exports equivalent session metadata/events,
-`history-sensors.csv`, `imu-coverage.json`, and IMU chunks through its platform export path. Inspect
+signals, raw sensor CSV, and `imu/*.imus`. Apple exports equivalent session metadata/events,
+`history-sensors.csv`, `imu-coverage.json`, and IMU segments through its platform export path. Inspect
 `meta.json` plus the platform's IMU coverage object first:
 
 - `started_at_ms` / `ended_at_ms` are the selected analysis interval;
 - `captured_started_at_ms` / `captured_ended_at_ms`, when present, preserve the physical recording
   interval even after the selected interval is edited;
-- Android's `imu_100hz_coverage` identifies the chunks actually present and `imu_100hz_complete` is
+- Android's `imu_100hz_coverage` identifies the segments actually present and `imu_100hz_complete` is
   the conservative coverage result; Apple carries the same facts in `imu-coverage.json`;
 
 Exports stay local until the user invokes the operating system's share sheet. Raw captures are not
@@ -124,7 +116,7 @@ suggested archive name is `noop-5mg-raw-<session-id>.zip`.
   jobs. The former preserves broad offload/debug frames; the latter owns a time-bounded, exportable IMU
   dataset. They may observe the same wire frame, but the session store deduplicates it by strap time.
 - The retired opt-in `rawImuSample` path existed in earlier builds but did not produce usable stored IMU
-  data in deployment. Session capture therefore has one source of truth: its file-backed chunks.
+  data in deployment. Session capture therefore has one source of truth: its file-backed segments.
 - Do not use arrival order as time, do not fill gaps silently, and do not claim 100 Hz coverage from
   packet count alone.
 
@@ -136,5 +128,5 @@ suggested archive name is `noop-5mg-raw-<session-id>.zip`.
 | Session metadata | `RawDataSessionStore` | `GroundTruthCollector` |
 | Live command path | `BLEManager.startGroundTruthRawCapture` | `WhoopBleClient.startGroundTruthImuCapture` |
 | Append/recovery window | `ImuSessionFileStore` | `ImuSessionFileStore` |
-| Immutable chunk export | `ImuChunkArchiveStore` | `ImuChunkStore` |
+| Canonical segmented storage/export | `ImuSessionFileStore` | `ImuSessionFileStore` |
 | Raw decoder | `Whoop5RawImu` in `WhoopProtocol` | `Whoop5RawImu` in `com.noop.protocol` |

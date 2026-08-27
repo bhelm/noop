@@ -1845,22 +1845,6 @@ public final class BLEManager: NSObject, ObservableObject {
         await collector?.deleteRawBatches(from: from, to: to) ?? 0
     }
 
-    public func groundTruthImuChunks(from: Int, to: Int) async -> [ImuChunkMeta] {
-        await collector?.imuChunks(from: from, to: to) ?? []
-    }
-
-    public func registerGroundTruthImuChunk(_ chunk: ImuChunkMeta) async {
-        await collector?.upsertImuChunk(chunk)
-    }
-
-    public func groundTruthImuChunks(idPrefix: String) async -> [ImuChunkMeta]? {
-        await collector?.imuChunks(idPrefix: idPrefix)
-    }
-
-    public func deleteGroundTruthImuChunk(id: String) async -> Bool {
-        await collector?.deleteImuChunk(id: id) ?? false
-    }
-
     /// Send a command to the WHOOP strap.
     /// - Parameters:
     ///   - command: The command to send.

@@ -1253,29 +1253,6 @@
       ],
       "indices": []
     },
-    "imuChunk": {
-      "platform": "both",
-      "columns": [
-        { "name": "id", "affinity": "TEXT", "notNull": false, "default": null,
-          "android": { "notNull": true, "divergence": "sqlite-text-pk-nullable" } },
-        { "name": "deviceId", "affinity": "TEXT", "notNull": true, "default": null },
-        { "name": "startTs", "affinity": "INTEGER", "notNull": true, "default": null },
-        { "name": "endTs", "affinity": "INTEGER", "notNull": true, "default": null },
-        { "name": "sampleCount", "affinity": "INTEGER", "notNull": true, "default": null },
-        { "name": "sampleRate", "affinity": "INTEGER", "notNull": true, "default": null },
-        { "name": "formatVersion", "affinity": "INTEGER", "notNull": true, "default": null },
-        { "name": "codec", "affinity": "TEXT", "notNull": true, "default": null },
-        { "name": "relativePath", "affinity": "TEXT", "notNull": true, "default": null },
-        { "name": "byteSize", "affinity": "INTEGER", "notNull": true, "default": null },
-        { "name": "sha256", "affinity": "TEXT", "notNull": true, "default": null },
-        { "name": "createdAt", "affinity": "INTEGER", "notNull": true, "default": null },
-        { "name": "pinnedUntil", "affinity": "INTEGER", "notNull": false, "default": null }
-      ],
-      "primaryKey": ["id"],
-      "indices": [
-        { "name": "index_imuChunk_deviceId_startTs_endTs", "columns": ["deviceId", "startTs", "endTs"], "unique": false }
-      ]
-    },
     "respSample": {
       "platform": "both",
       "columns": [

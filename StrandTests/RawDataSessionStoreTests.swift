@@ -100,33 +100,6 @@ final class RawDataSessionStoreTests: XCTestCase {
         XCTAssertNil(RawDataCollectorView.fullSecondBounds(fromMs: 100_001, toMs: 100_999))
     }
 
-    func testChunksAreSessionOwnedAndStrictlyBounded() {
-        let owned = ImuChunkMeta(id: "one--chunk", deviceId: "strap", startTs: 101, endTs: 103,
-            sampleCount: 300, sampleRate: 100, formatVersion: 1, codec: "zip-deflate",
-            relativePath: "owned", byteSize: 1, sha256: "a", createdAt: 0, pinnedUntil: Int.max)
-        let other = ImuChunkMeta(id: "two--chunk", deviceId: "strap", startTs: 101, endTs: 103,
-            sampleCount: 300, sampleRate: 100, formatVersion: 1, codec: "zip-deflate",
-            relativePath: "other", byteSize: 1, sha256: "b", createdAt: 0, pinnedUntil: Int.max)
-        let broad = ImuChunkMeta(id: "one--broad", deviceId: "strap", startTs: 100, endTs: 104,
-            sampleCount: 500, sampleRate: 100, formatVersion: 1, codec: "zip-deflate",
-            relativePath: "broad", byteSize: 1, sha256: "c", createdAt: 0, pinnedUntil: Int.max)
-
-        XCTAssertTrue(ImuChunkArchiveStore.isOwned(owned.id, by: "one"))
-        XCTAssertFalse(ImuChunkArchiveStore.isOwned(other.id, by: "one"))
-        XCTAssertEqual(ImuChunkArchiveStore.bounded([owned, broad], from: 101, to: 103), [owned])
-    }
-
-    func testArchiveDeleteFailureKeepsCatalogForRetry() async {
-        var operations: [String] = []
-        let deleted = await ImuChunkArchiveStore.deleteRetrySafe(fileExists: true, deleteFile: {
-            operations.append("file"); return false
-        }, deleteCatalog: {
-            operations.append("catalog"); return true
-        })
-        XCTAssertFalse(deleted)
-        XCTAssertEqual(operations, ["file"])
-    }
-
     func testMarkerCurrentTimeTicksOnlyForActiveSession() throws {
         let store = RawDataSessionStore(directory: try temporaryDirectory())
         _ = store.start(deviceId: "strap", now: Date(timeIntervalSince1970: 100))
@@ -161,14 +134,9 @@ final class RawDataSessionStoreTests: XCTestCase {
         let store = RawDataSessionStore(directory: directory)
         let session = try XCTUnwrap(store.start(deviceId: "strap"))
         store.stop()
-        let source = ImuSessionFileStore.shared.file(session.id)
-        XCTAssertTrue(FileManager.default.createFile(atPath: source.path, contents: Data("raw".utf8)))
 
-        XCTAssertFalse(store.removeMetadata(session.id) { url in
-            if url == source {
-                throw CocoaError(.fileWriteNoPermission)
-            }
-            try FileManager.default.removeItem(at: url)
+        XCTAssertFalse(store.removeMetadata(session.id) { _ in
+            throw CocoaError(.fileWriteNoPermission)
         })
         XCTAssertEqual(store.sessions.map(\.id), [session.id])
         XCTAssertEqual(RawDataSessionStore(directory: directory).sessions.map(\.id), [session.id])

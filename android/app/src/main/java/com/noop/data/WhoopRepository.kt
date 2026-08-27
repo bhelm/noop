@@ -1003,16 +1003,6 @@ class WhoopRepository(
             .map { V18AuxCodec.unpack(it.fields, it.ts) }
 
 
-    suspend fun upsertImuChunk(row: ImuChunkEntity) = dao.upsertImuChunk(row)
-    suspend fun imuChunks(deviceId: String, from: Long, to: Long): List<ImuChunkEntity> =
-        dao.imuChunks(deviceId, from, to)
-    suspend fun imuChunksForDevice(deviceId: String): List<ImuChunkEntity> = dao.imuChunksForDevice(deviceId)
-    suspend fun imuChunksByIdPrefix(idPrefix: String): List<ImuChunkEntity> =
-        dao.imuChunksByIdPrefix(idPrefix)
-    suspend fun expiredImuChunks(cutoff: Long): List<ImuChunkEntity> = dao.expiredImuChunks(cutoff)
-    suspend fun deleteImuChunk(id: String) = dao.deleteImuChunk(id)
-    suspend fun deleteImuChunksFor(deviceId: String) = dao.deleteImuChunksFor(deviceId)
-
     /** Downsampled HR (mean bpm per [bucketSeconds]) for the strap, for the Today 24h trend chart. */
     suspend fun hrBuckets(deviceId: String, from: Long, to: Long, bucketSeconds: Long = 300L) =
         dao.hrBuckets(deviceId, from, to, bucketSeconds)

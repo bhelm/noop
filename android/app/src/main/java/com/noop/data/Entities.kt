@@ -656,27 +656,6 @@ data class PpgWaveformSampleEntity(
     }
 }
 
-/** Catalog row for one immutable, app-private IMU archive chunk. Payload bytes live outside SQLite. */
-@Entity(
-    tableName = "imuChunk",
-    indices = [Index(value = ["deviceId", "startTs", "endTs"])],
-)
-data class ImuChunkEntity(
-    @PrimaryKey val id: String,
-    val deviceId: String,
-    val startTs: Long,
-    val endTs: Long,
-    val sampleCount: Int,
-    val sampleRate: Int,
-    val formatVersion: Int,
-    val codec: String,
-    val relativePath: String,
-    val byteSize: Long,
-    val sha256: String,
-    val createdAt: Long,
-    val pinnedUntil: Long?,
-)
-
 /**
  * One Live Session (silent guardian) record (v22 / MIGRATION_15_16). Natural key (deviceId, startTs).
  * `endTs` is null while the session is still in progress. Fields are declared in the SAME order as the

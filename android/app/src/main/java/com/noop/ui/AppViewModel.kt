@@ -255,7 +255,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     /** Permanently delete all of a device's recorded data (its registry row is kept). */
     suspend fun deletePairedDeviceData(id: String) {
-        if (com.noop.testcentre.ImuChunkStore(getApplication(), noopApp.repository).deleteDevice(id))
+        if (com.noop.testcentre.ImuSessionFileStore(getApplication()).deleteDevice(id))
             noopApp.deviceRegistry.deleteDeviceData(id)
     }
 
@@ -263,7 +263,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
      *  duplicate/stale strap disappears from the list entirely (an archived row could otherwise only be
      *  re-activated or data-wiped, never purged — #1193). Twin of Swift `DeviceRegistry.forget`. */
     suspend fun forgetPairedDevice(id: String) {
-        if (com.noop.testcentre.ImuChunkStore(getApplication(), noopApp.repository).deleteDevice(id))
+        if (com.noop.testcentre.ImuSessionFileStore(getApplication()).deleteDevice(id))
             noopApp.deviceRegistry.forget(id)
     }
 

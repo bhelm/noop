@@ -12,7 +12,6 @@ import java.io.File
 import java.util.zip.ZipEntry
 import java.util.zip.ZipOutputStream
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
 import java.util.UUID
@@ -120,8 +119,7 @@ class GroundTruthCollector private constructor(private val context: Context) {
                 val isCurrent = current.sessionId == id
                 val physicalStart = prefs.getLong(sessionStartKey(id), first.optLong("at_ms"))
                 val capturedEnd = rows.lastOrNull { it.optString("kind") == "stop" }?.optLong("at_ms")
-                val hasCapture = prefs.getBoolean(sessionCaptureKey(id),
-                    File(directory, "realtime-imu-$id.imus").isFile)
+                val hasCapture = prefs.getBoolean(sessionCaptureKey(id), false)
                 SessionSummary(
                     id = id,
                     deviceId = prefs.getString(sessionDeviceKey(id), null)
@@ -151,19 +149,13 @@ class GroundTruthCollector private constructor(private val context: Context) {
         if (current.active && current.sessionId == sessionId) return false
         if (sessions().none { it.id == sessionId }) return false
 
-        val payloadFiles = listOf(
-            File(directory, "realtime-imu-$sessionId.imus"),
-            File(context.cacheDir, "logs/noop-5mg-raw-$sessionId.zip"),
-        )
+        val payloadFiles = listOf(File(context.cacheDir, "logs/noop-5mg-raw-$sessionId.zip"))
         // Evaluate every deletion even if one fails, so a stale export ZIP never survives merely
         // because an earlier file could not be removed.
-        val chunksDeleted = runBlocking {
-            ImuChunkStore(context, WhoopRepository.from(context)).deleteOwned(sessionId)
-        }
-        // Keep the session discoverable and retryable until its durable archive catalog is clean.
-        if (!chunksDeleted) return false
+        val imuStore = ImuSessionFileStore(context)
+        if (!imuStore.deleteFiles(sessionId)) return false
         if (!payloadFiles.all { file -> !file.exists() || file.delete() }) return false
-        ImuSessionFileStore(context).remove(sessionId)
+        imuStore.remove(sessionId)
         // The event file is also the durable session index. Delete it last so any earlier failure
         // leaves the session visible and the explicit delete action retryable.
         if (eventFile(sessionId).exists() && !eventFile(sessionId).delete()) return false
@@ -288,12 +280,12 @@ class GroundTruthCollector private constructor(private val context: Context) {
         // Export the complete bounded interval; markers are optional annotations.
         val sensorFrom = ceilSecond(summary.startedAtMs)
         val sensorTo = endMs / 1_000L - 1L
-        val pinnedChunks = if (deviceId == null || sensorFrom > sensorTo) emptyList() else
-            ImuChunkStore(context, repo).pin(id, deviceId, sensorFrom, sensorTo)
+        val imuSegments = if (deviceId == null || sensorFrom > sensorTo) emptyList() else
+            ImuSessionFileStore(context).exportSegments(id, sensorFrom, sensorTo)
         val fullFrom = sensorFrom
         val fullTo = endMs / 1_000L - 1L
         val coverageFrom = sensorFrom
-        val imuComplete = covers(pinnedChunks, coverageFrom, fullTo)
+        val imuComplete = covers(imuSegments, coverageFrom, fullTo)
         val outDir = File(context.cacheDir, "logs").apply { mkdirs() }
         val zip = File(outDir, "noop-5mg-raw-$id.zip")
         ZipOutputStream(zip.outputStream().buffered()).use { out ->
@@ -313,7 +305,7 @@ class GroundTruthCollector private constructor(private val context: Context) {
             }
             out.closeEntry()
 
-            val sensorAvailable = pinnedChunks.isNotEmpty() || v18Count > 0 || rawCounts.values.any { it > 0 }
+            val sensorAvailable = imuSegments.isNotEmpty() || v18Count > 0 || rawCounts.values.any { it > 0 }
             out.putNextEntry(ZipEntry("meta.json"))
             out.writerEntry(JSONObject().apply {
                 put("schema_version", 3)
@@ -321,15 +313,15 @@ class GroundTruthCollector private constructor(private val context: Context) {
                 put("session_id", id)
                 if (deviceId != null) put("device_id", deviceId)
                 put("sensor_export_available", sensorAvailable)
-                put("imu_100hz_chunk_count", pinnedChunks.size)
+                put("imu_100hz_segment_count", imuSegments.size)
                 put("imu_100hz_complete", imuComplete)
                 put("imu_100hz_required_start_ts", coverageFrom)
                 put("imu_100hz_required_end_ts", fullTo)
                 put("imu_100hz_startup_seconds", (coverageFrom - fullFrom).coerceAtLeast(0))
                 put("imu_100hz_coverage", org.json.JSONArray().apply {
-                    pinnedChunks.forEach { chunk -> put(JSONObject().apply {
-                        put("start_ts", chunk.startTs); put("end_ts", chunk.endTs)
-                        put("sample_count", chunk.sampleCount); put("sha256", chunk.sha256)
+                    imuSegments.forEach { segment -> put(JSONObject().apply {
+                        put("file", segment.name); put("start_ts", segment.startTs); put("end_ts", segment.endTs)
+                        put("sample_count", segment.sampleCount)
                     }) }
                 })
                 put("started_at_ms", summary.startedAtMs)
@@ -351,11 +343,9 @@ class GroundTruthCollector private constructor(private val context: Context) {
             out.putNextEntry(ZipEntry("events.csv"))
             out.writerEntry(eventsCsv(publicEvents(events, summary.startedAtMs, endMs, deviceId)))
 
-            for (chunk in pinnedChunks) {
-                val file = ImuChunkStore(context, repo).file(chunk)
-                if (!file.isFile) continue
-                out.putNextEntry(ZipEntry("imu/${chunk.id}.imuc"))
-                file.inputStream().use { it.copyTo(out) }
+            for (segment in imuSegments) {
+                out.putNextEntry(ZipEntry("imu/${segment.name}"))
+                out.write(segment.data)
                 out.closeEntry()
             }
         }
@@ -375,12 +365,12 @@ class GroundTruthCollector private constructor(private val context: Context) {
         }, "Export raw-data session").addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
     }
 
-    private fun covers(chunks: List<com.noop.data.ImuChunkEntity>, from: Long, to: Long): Boolean {
+    private fun covers(chunks: List<ImuSessionFileStore.ExportSegment>, from: Long, to: Long): Boolean {
         if (from > to) return false
         var cursor = from
         for (chunk in chunks.sortedBy { it.startTs }) {
             val start = chunk.startTs; val end = chunk.endTs
-            if (chunk.sampleCount < (end - start + 1) * chunk.sampleRate) continue
+            if (chunk.sampleCount < (end - start + 1) * ImuSessionFileStore.SAMPLE_RATE) continue
             if (start > cursor) return false
             if (end >= cursor) cursor = end + 1
             if (cursor > to) return true

@@ -34,16 +34,16 @@
       "kotlin": ["fun setSessionRange(", "ground_truth_edit_start"]
     },
     "file_only_imu_storage": {
-      "swift": ["v41-drop-raw-imu-sample"],
-      "kotlin": ["MIGRATION_34_35", "DROP TABLE IF EXISTS `rawImuSample`"]
+      "swift": ["v40-drop-raw-imu-sample"],
+      "kotlin": ["MIGRATION_33_34", "DROP TABLE IF EXISTS `rawImuSample`"]
     },
     "session_bound_imu_file": {
-      "swift": ["ImuSessionFileStore", "realtime-imu-\\(id).imus"],
-      "kotlin": ["ImuSessionFileStore", "realtime-imu-$id.imus"]
+      "swift": ["ImuSessionFileStore", "segmentSeconds: Int64 = 30 * 60", "NOOPIMU2"],
+      "kotlin": ["ImuSessionFileStore", "SEGMENT_SECONDS = 30 * 60L", "NOOPIMU2"]
     },
-    "durable_imu_chunk_catalog": {
-      "swift": ["ImuChunkArchiveStore", "ImuChunkMeta"],
-      "kotlin": ["ImuChunkStore", "ImuChunkEntity"]
+    "decoded_segment_export": {
+      "swift": ["exportSegments", "imu/\\(segment.name)"],
+      "kotlin": ["exportSegments", "imu/${segment.name}"]
     },
     "explicit_imu_coverage": {
       "swift": ["imu-coverage.json", "private static func covers"],
@@ -62,8 +62,8 @@
       "kotlin": ["LaunchedEffect(state.active, state.sessionId, live.connected)", "startGroundTruthImuCapture"]
     },
     "raw_data_removed_with_session": {
-      "swift": ["deleteRawBatches(deviceId:", "capturedAt >= ? AND capturedAt <= ?"],
-      "kotlin": ["realtime-imu-$sessionId.imus", "noop-5mg-raw-$sessionId.zip"]
+      "swift": ["deleteFiles(sessionId", "capturedAt >= ? AND capturedAt <= ?"],
+      "kotlin": ["deleteFiles(sessionId)", "noop-5mg-raw-$sessionId.zip"]
     }
   }
 }

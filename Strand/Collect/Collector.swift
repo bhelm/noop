@@ -132,26 +132,6 @@ final class Collector {
         return (try? await store.deleteRawBatches(deviceId: deviceId, from: from, to: to)) ?? 0
     }
 
-    func imuChunks(from: Int, to: Int) async -> [ImuChunkMeta] {
-        guard let store = concreteStore else { return [] }
-        return (try? await store.imuChunks(deviceId: deviceId, from: from, to: to)) ?? []
-    }
-
-    func upsertImuChunk(_ chunk: ImuChunkMeta) async {
-        try? await concreteStore?.upsertImuChunk(chunk)
-    }
-
-    func imuChunks(idPrefix: String) async -> [ImuChunkMeta]? {
-        guard let concreteStore else { return nil }
-        return try? await concreteStore.imuChunks(idPrefix: idPrefix)
-    }
-
-    func deleteImuChunk(id: String) async -> Bool {
-        guard let concreteStore else { return false }
-        do { try await concreteStore.deleteImuChunk(id: id); return true }
-        catch { return false }
-    }
-
     /// Max persisted HR sample ts (the biometric "data frontier" for the stuck-strap watchdog).
     /// nil if there's no concrete store or nothing persisted yet. Mirrors storageStats().
     func latestHRSampleTs() async -> Int? {

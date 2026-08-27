@@ -7,7 +7,6 @@ struct RawDataCollectorView: View {
     @EnvironmentObject private var model: AppModel
     @EnvironmentObject private var live: LiveState
     @StateObject private var store = RawDataSessionStore()
-    private let archive = ImuChunkArchiveStore()
 
     @State private var exportingId: String?
     @State private var deleteCandidate: RawDataSessionStore.Session?
@@ -291,30 +290,25 @@ struct RawDataCollectorView: View {
         exportingId = session.id
         let bounds = Self.fullSecondBounds(fromMs: session.startedAtMs, toMs: end)
         let from = bounds?.from ?? 1, to = bounds?.to ?? 0
-        let chunks: [ImuChunkMeta] = if let bounds {
-            await archive.pin(sessionId: session.id, deviceId: session.deviceId,
-                              from: bounds.from, to: bounds.to, ble: model.ble)
-        } else { [] }
+        let segments = bounds.map {
+            ImuSessionFileStore.shared.exportSegments(session.id, from: $0.from, to: $0.to)
+        } ?? []
         let history = bounds == nil ? Data("stream,unix_s,v1,v2,v3,v4\n".utf8)
             : await model.ble.groundTruthHistoryCSV(from: from, to: to)
-        let sensorAvailable = !chunks.isEmpty || history.split(separator: 0x0A).count > 1
+        let sensorAvailable = !segments.isEmpty || history.split(separator: 0x0A).count > 1
         var entries = store.exportEntries(for: session, raw: [], sensorAvailable: sensorAvailable)
         entries.append(.init(name: "history-sensors.csv", data: history))
-        let imuComplete = Self.covers(chunks, from: from, to: to)
+        let imuComplete = Self.covers(segments, from: from, to: to)
         let coverage: [String: Any] = [
             "requested_start_ts": from, "requested_end_ts": to,
             "complete": imuComplete,
-            "chunks": chunks.map { ["start_ts": $0.startTs, "end_ts": $0.endTs,
-                                     "sample_count": $0.sampleCount, "sha256": $0.sha256] }
+            "segments": segments.map { ["file": $0.name, "start_ts": $0.startTs, "end_ts": $0.endTs,
+                                         "sample_count": $0.sampleCount] }
         ]
         if let data = try? JSONSerialization.data(withJSONObject: coverage, options: [.prettyPrinted, .sortedKeys]) {
             entries.append(.init(name: "imu-coverage.json", data: data))
         }
-        for chunk in chunks {
-            if let data = try? Data(contentsOf: archive.file(chunk)) {
-                entries.append(.init(name: "imu/\(chunk.id).imuc", data: data))
-            }
-        }
+        for segment in segments { entries.append(.init(name: "imu/\(segment.name)", data: segment.data)) }
         let result = await FileExport.exportBundle(entries: entries,
                                                     suggestedName: "noop-5mg-raw-\(session.id).zip")
         if result == nil { exportError = "The export file could not be created or shared." }
@@ -328,10 +322,6 @@ struct RawDataCollectorView: View {
     private func delete(_ session: RawDataSessionStore.Session) async {
         guard session.endedAtMs != nil else { return }
         model.ble.finishGroundTruthRawCapture(sessionId: session.id)
-        guard await archive.deleteOwned(sessionId: session.id, ble: model.ble) else {
-            deleteError = "The captured data could not be deleted. The session was kept so you can retry."
-            return
-        }
         guard store.removeMetadata(session.id) else {
             deleteError = "The captured data could not be deleted. The session was kept so you can retry."
             return
@@ -380,11 +370,11 @@ struct RawDataCollectorView: View {
         }
     }
 
-    private static func covers(_ chunks: [ImuChunkMeta], from: Int, to: Int) -> Bool {
+    private static func covers(_ chunks: [ImuSessionFileStore.ExportSegment], from: Int, to: Int) -> Bool {
         var cursor = from
         for chunk in chunks.sorted(by: { $0.startTs < $1.startTs }) {
             let start = chunk.startTs, end = chunk.endTs
-            if chunk.sampleCount < (end - start + 1) * chunk.sampleRate { continue }
+            if chunk.sampleCount < (end - start + 1) * ImuSessionFileStore.sampleRate { continue }
             if start > cursor { return false }
             if end >= cursor { cursor = end + 1 }
             if cursor > to { return true }
