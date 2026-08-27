@@ -578,7 +578,8 @@ private fun formatBytes(bytes: Long): String = when {
 
 private fun coverageText(stats: GroundTruthCollector.CaptureStats): String {
     val percent = if (stats.expectedSeconds == 0) 0.0 else 100.0 * stats.coveredSeconds / stats.expectedSeconds
-    return "${stats.coveredSeconds}/${stats.expectedSeconds}s · %.1f%% · ${stats.missingSeconds}s missing".format(percent)
+    val startup = if (stats.startupSeconds > 0) " · ${stats.startupSeconds}s startup" else ""
+    return "${stats.coveredSeconds}/${stats.expectedSeconds}s · %.1f%% · ${stats.missingSeconds}s missing$startup".format(percent)
 }
 
 private const val EARLIEST_EXPORT_MS = 946_684_800_000L

@@ -59,7 +59,12 @@ class GroundTruthCollector private constructor(private val context: Context) {
     )
 
     data class Marker(val id: String, val atMs: Long, val type: String, val text: String)
-    data class CaptureStats(val bytes: Long, val coveredSeconds: Int, val expectedSeconds: Int) {
+    data class CaptureStats(
+        val bytes: Long,
+        val coveredSeconds: Int,
+        val expectedSeconds: Int,
+        val startupSeconds: Int,
+    ) {
         val missingSeconds get() = (expectedSeconds - coveredSeconds).coerceAtLeast(0)
         val complete get() = expectedSeconds > 0 && missingSeconds == 0
     }
@@ -69,10 +74,14 @@ class GroundTruthCollector private constructor(private val context: Context) {
 
     fun captureStats(session: SessionSummary, nowMs: Long = System.currentTimeMillis()): CaptureStats {
         val end = session.endedAtMs ?: nowMs
-        val from = session.startedAtMs / 1_000L
-        val to = end / 1_000L
-        val raw = ImuSessionFileStore(context).stats(session.id, from, to)
-        return CaptureStats(raw.bytes, raw.coveredSeconds, (to - from + 1).coerceAtLeast(0).toInt())
+        val baseFrom = ceilSecond(session.startedAtMs)
+        val to = end / 1_000L - 1L
+        val raw = ImuSessionFileStore(context).stats(session.id, baseFrom, to)
+        val from = if (session.capturedStartedAtMs != null) maxOf(baseFrom, raw.firstTs ?: baseFrom) else baseFrom
+        val adjusted = if (from == baseFrom) raw.coveredSeconds else
+            ImuSessionFileStore(context).stats(session.id, from, to).coveredSeconds
+        return CaptureStats(raw.bytes, adjusted, (to - from + 1).coerceAtLeast(0).toInt(),
+            (from - baseFrom).coerceAtLeast(0).toInt())
     }
 
     @Synchronized
@@ -350,7 +359,11 @@ class GroundTruthCollector private constructor(private val context: Context) {
         val sensorTo = if (deviceId == null) 0L else endMs / 1_000L
         val pinnedChunks = if (deviceId == null) emptyList() else
             ImuChunkStore(context, repo).pin(id, deviceId, sensorFrom, sensorTo)
-        val imuComplete = covers(pinnedChunks, sensorFrom, sensorTo)
+        val fullFrom = ceilSecond(summary.startedAtMs)
+        val fullTo = endMs / 1_000L - 1L
+        val coverageFrom = if (summary.capturedStartedAtMs != null)
+            maxOf(fullFrom, pinnedChunks.minOfOrNull { it.startTs } ?: fullFrom) else fullFrom
+        val imuComplete = covers(pinnedChunks, coverageFrom, fullTo)
         val outDir = File(context.cacheDir, "logs").apply { mkdirs() }
         val zip = File(outDir, "noop-ground-truth-$id.zip")
         ZipOutputStream(zip.outputStream().buffered()).use { out ->
@@ -363,6 +376,9 @@ class GroundTruthCollector private constructor(private val context: Context) {
                 put("sensor_export_available", deviceId != null)
                 put("imu_100hz_chunk_count", pinnedChunks.size)
                 put("imu_100hz_complete", imuComplete)
+                put("imu_100hz_required_start_ts", coverageFrom)
+                put("imu_100hz_required_end_ts", fullTo)
+                put("imu_100hz_startup_seconds", (coverageFrom - fullFrom).coerceAtLeast(0))
                 put("imu_100hz_coverage", org.json.JSONArray().apply {
                     pinnedChunks.forEach { chunk -> put(JSONObject().apply {
                         put("start_ts", chunk.startTs); put("end_ts", chunk.endTs)
@@ -454,6 +470,7 @@ class GroundTruthCollector private constructor(private val context: Context) {
     }
 
     private fun covers(chunks: List<com.noop.data.ImuChunkEntity>, from: Long, to: Long): Boolean {
+        if (from > to) return false
         var cursor = from
         for (chunk in chunks.sortedBy { it.startTs }) {
             val start = chunk.startTs; val end = chunk.endTs
@@ -464,6 +481,8 @@ class GroundTruthCollector private constructor(private val context: Context) {
         }
         return cursor > to
     }
+
+    private fun ceilSecond(epochMs: Long): Long = (epochMs + 999L) / 1_000L
 
     private fun eventFile(id: String) = File(directory, "session-$id.jsonl")
     private fun append(id: String, value: JSONObject) = eventFile(id).appendText(value.toString() + "\n")
