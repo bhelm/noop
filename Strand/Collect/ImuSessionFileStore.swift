@@ -150,7 +150,7 @@ final class ImuSessionFileStore {
     private func flushKey(_ key: String) {
         guard let records = pending.removeValue(forKey: key), !records.isEmpty,
               let tail = key.split(separator: "/").last,
-              let bucket = tail.flatMap({ Int64(String($0)) }) else { return }
+              let bucket = Int64(String(tail)) else { return }
         let id = String(key.split(separator: "/")[0]), url = segmentFile(id, bucket)
         try? FileManager.default.createDirectory(at: sessionDirectory(id), withIntermediateDirectories: true)
         if !FileManager.default.fileExists(atPath: url.path) { FileManager.default.createFile(atPath: url.path, contents: header(bucket)) }
