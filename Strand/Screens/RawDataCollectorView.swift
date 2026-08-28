@@ -163,8 +163,8 @@ struct RawDataCollectorView: View {
                                               from: Date(timeIntervalSince1970: Double(session.startedAtMs) / 1_000), to: $0) }
                     ))
                 }
-                Text(session.active ? "Export status: recording"
-                     : "IMU: \(coverageText)")
+                Text(session.active ? String(localized: "Export status: recording")
+                     : String(localized: "IMU: \(coverageText)"))
                     .font(StrandFont.caption)
                     .foregroundStyle(session.active ? StrandPalette.statusWarning : StrandPalette.statusPositive)
                 TextField("Session comment", text: Binding(
