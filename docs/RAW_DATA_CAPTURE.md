@@ -109,8 +109,16 @@ suggested archive name is `noop-5mg-raw-<session-id>.zip`.
 
 ## Scope and operational limits
 
-- Capture is deliberately bounded and explicit. The current evidence does **not** establish battery,
-  flash-retention, thermal, or BLE-airtime costs for continuous 24/7 100 Hz operation.
+- Capture is deliberately bounded and explicit. One uncontrolled WHOOP 5/MG discharge trace provides
+  a useful order of magnitude, not a benchmark: a 5 h 47 min overnight capture consumed about
+  `0.71 percentage points/hour`, and two later 42–45 minute captures each consumed about
+  `0.57 percentage points/hour`. Nearby non-capture periods in the same discharge averaged about
+  `0.31 percentage points/hour`; a separate 5.6-day pre-capture baseline averaged about
+  `0.46 percentage points/hour`. These single-band observations suggest roughly 1.5–2.3× the normal
+  drain while 100 Hz is active, depending on the chosen baseline. They do **not** establish a general
+  runtime guarantee or isolate producer, BLE, and history-repair costs.
+- The current evidence does **not** establish flash-retention, thermal, or BLE-airtime costs for
+  continuous 24/7 100 Hz operation.
 - A one-hour workout/research capture succeeding does not establish that a 36-hour rolling recorder is
   safe. Any future rolling buffer needs hardware measurements and an explicit retention policy.
 - The separately enabled protocol trace remains a general diagnostics tool. Starting a Raw Data
