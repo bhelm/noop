@@ -4,6 +4,7 @@ import android.content.Context
 import java.io.File
 import java.io.PrintWriter
 import java.io.StringWriter
+import java.security.MessageDigest
 
 /**
  * Captures the last uncaught exception to a file so a crash that only reproduces on a user's own
@@ -14,6 +15,8 @@ import java.io.StringWriter
  */
 object CrashCapture {
     private const val FILE = "last_crash.txt"
+    private const val PREFS = "noop_crash_capture"
+    private const val ACKNOWLEDGED = "acknowledged_fingerprint"
 
     fun install(context: Context) {
         val appContext = context.applicationContext
@@ -40,4 +43,25 @@ object CrashCapture {
         if (!f.exists()) return null
         return runCatching { f.readText() }.getOrNull()?.ifBlank { null }
     }
+
+    /** A crash not yet dismissed by the user, shown before launch touches the database or BLE stack. */
+    fun pendingCrash(context: Context): String? {
+        val crash = lastCrash(context) ?: return null
+        val acknowledged = context.applicationContext
+            .getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+            .getString(ACKNOWLEDGED, null)
+        return crash.takeIf { isPending(fingerprint(it), acknowledged) }
+    }
+
+    /** Keep the crash for diagnostics, but allow the next launch attempt to continue. */
+    fun acknowledge(context: Context, crash: String) {
+        context.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+            .edit().putString(ACKNOWLEDGED, fingerprint(crash)).apply()
+    }
+
+    internal fun isPending(fingerprint: String, acknowledged: String?) = fingerprint != acknowledged
+
+    internal fun fingerprint(text: String): String = MessageDigest.getInstance("SHA-256")
+        .digest(text.toByteArray(Charsets.UTF_8))
+        .joinToString("") { "%02x".format(it) }
 }
