@@ -298,9 +298,15 @@ struct RawDataCollectorView: View {
         let sensorAvailable = !segments.isEmpty || history.split(separator: 0x0A).count > 1
         var entries = store.exportEntries(for: session, raw: [], sensorAvailable: sensorAvailable)
         entries.append(.init(name: "history-sensors.csv", data: history))
-        let imuComplete = Self.covers(segments, from: from, to: to)
+        // A live capture can only produce its first complete one-second frame after startup.
+        // Historical windows must still cover the exact requested start.
+        let firstImuTs = segments.map(\.startTs).min().flatMap { $0 <= from + 1 ? $0 : nil }
+        let coverageFrom = session.capturedStartedAtMs == nil ? from : max(from, firstImuTs ?? from)
+        let imuComplete = Self.covers(segments, from: coverageFrom, to: to)
         let coverage: [String: Any] = [
             "requested_start_ts": from, "requested_end_ts": to,
+            "required_start_ts": coverageFrom,
+            "startup_seconds": max(0, coverageFrom - from),
             "complete": imuComplete,
             "segments": segments.map { ["file": $0.name, "start_ts": $0.startTs, "end_ts": $0.endTs,
                                          "sample_count": $0.sampleCount] }

@@ -60,7 +60,8 @@ class GroundTruthCollector private constructor(private val context: Context) {
         val baseFrom = ceilSecond(session.startedAtMs)
         val to = end / 1_000L - 1L
         val raw = ImuSessionFileStore(context).stats(session.id, baseFrom, to)
-        val from = if (session.capturedStartedAtMs != null) maxOf(baseFrom, raw.firstTs ?: baseFrom) else baseFrom
+        val first = raw.firstTs?.takeIf { it <= baseFrom + 1 }
+        val from = if (session.capturedStartedAtMs != null) maxOf(baseFrom, first ?: baseFrom) else baseFrom
         val adjusted = if (from == baseFrom) raw.coveredSeconds else
             ImuSessionFileStore(context).stats(session.id, from, to).coveredSeconds
         return CaptureStats(raw.bytes, adjusted, (to - from + 1).coerceAtLeast(0).toInt(),
@@ -284,7 +285,11 @@ class GroundTruthCollector private constructor(private val context: Context) {
             ImuSessionFileStore(context).exportSegments(id, sensorFrom, sensorTo)
         val fullFrom = sensorFrom
         val fullTo = endMs / 1_000L - 1L
-        val coverageFrom = sensorFrom
+        // A live capture can only produce its first complete one-second frame after startup.
+        // Historical windows must still cover the exact requested start.
+        val firstImuTs = imuSegments.minOfOrNull { it.startTs }?.takeIf { it <= fullFrom + 1 }
+        val coverageFrom = if (summary.capturedStartedAtMs != null) maxOf(fullFrom, firstImuTs ?: fullFrom)
+            else fullFrom
         val imuComplete = covers(imuSegments, coverageFrom, fullTo)
         val outDir = File(context.cacheDir, "logs").apply { mkdirs() }
         val zip = File(outDir, "noop-5mg-raw-$id.zip")

@@ -41,6 +41,8 @@ class RawCaptureExportContractTest {
         assertTrue(collector.contains("summary.markers.filter { it.atMs in summary.startedAtMs..endMs }"))
         assertTrue(collector.contains("val sensorFrom = ceilSecond(summary.startedAtMs)"))
         assertTrue(collector.contains("val sensorTo = endMs / 1_000L - 1L"))
+        assertTrue(collector.contains("summary.capturedStartedAtMs != null"))
+        assertTrue(collector.contains("imuSegments.minOfOrNull { it.startTs }"))
         assertTrue(collector.contains("val sensorAvailable = imuSegments.isNotEmpty() ||"))
     }
 
