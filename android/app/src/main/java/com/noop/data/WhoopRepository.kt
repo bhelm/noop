@@ -886,19 +886,29 @@ class WhoopRepository(
     suspend fun sessionMotion(deviceId: String, sessionStart: Long): List<Double>? =
         dao.sessionMotionJson(deviceId, sessionStart)?.let { decodeDoubleArray(it) }
 
-    /** Per-epoch MOTION series for each of [starts] (detected session start keys), keyed by start (#407).
-     *  Motion is written ONLY under the computed ("-noop") source by the engine, so we read there; an
-     *  imported-only night (no computed twin) has no motion (absent stays absent , an honest empty state,
-     *  never a fabricated zero array). Does NOT resolve the night: the caller has already chosen the
-     *  main-night GROUP and passes those blocks' starts. A start with no stored series is omitted. Mirrors
-     *  iOS Repository.sessionMotions. */
-    suspend fun sessionMotions(strapDeviceId: String, starts: List<Long>): Map<Long, List<Double>> {
-        if (starts.isEmpty()) return emptyMap()
-        val computedId = computedDeviceId(strapDeviceId)
+    /** Per-epoch motion for the already-resolved [sessions], keyed by detected start (#407).
+     *
+     * The engine writes motion under a computed ("-noop") namespace. A selected session can belong to
+     * an older strap, however, while [activeStrapId] names the strap worn now. Resolve each start from its
+     * owning computed namespace first, then the active + canonical computed union. This keeps old nights
+     * attached to their source across strap switches and still finds a computed twin for an imported
+     * canonical session. A missing series remains honestly absent.
+     */
+    suspend fun sessionMotions(
+        activeStrapId: String,
+        sessions: List<SleepSession>,
+    ): Map<Long, List<Double>> {
+        if (sessions.isEmpty()) return emptyMap()
         val out = HashMap<Long, List<Double>>()
-        for (start in starts) {
-            val m = dao.sessionMotionJson(computedId, start)?.let { decodeDoubleArray(it) }
-            if (!m.isNullOrEmpty()) out[start] = m
+        for (session in sessions) {
+            if (out.containsKey(session.startTs)) continue
+            for (sourceId in motionSourceIdsFor(activeStrapId, session.deviceId)) {
+                val motion = dao.sessionMotionJson(sourceId, session.startTs)?.let { decodeDoubleArray(it) }
+                if (!motion.isNullOrEmpty()) {
+                    out[session.startTs] = motion
+                    break
+                }
+            }
         }
         return out
     }
@@ -1149,6 +1159,17 @@ class WhoopRepository(
 
     suspend fun rrIntervals(deviceId: String, from: Long, to: Long, limit: Int = DEFAULT_LIMIT) =
         dao.rrIntervals(deviceId, from, to, limit)
+
+    /** R-R beats over active strap + canonical history. Exact duplicate beats are removed with the
+     * active source winning; distinct beats sharing a timestamp remain intact. */
+    suspend fun rrIntervalsUnion(
+        activeDeviceId: String,
+        from: Long,
+        to: Long,
+        limit: Int = DEFAULT_LIMIT,
+    ): List<RrInterval> = mergeRrByIdentity(
+        importedSourceIds(activeDeviceId).map { dao.rrIntervals(it, from, to, limit) },
+    )
 
     suspend fun events(deviceId: String, from: Long, to: Long, limit: Int = DEFAULT_LIMIT) =
         dao.events(deviceId, from, to, limit)
@@ -2052,6 +2073,13 @@ class WhoopRepository(
         fun computedSourceIdsFor(activeDeviceId: String): List<String> =
             importedSourceIdsFor(activeDeviceId).map { "$it-noop" }
 
+        /** Computed namespaces to probe for a session's motion, owner first and then the current
+         * active + canonical union. [sessionOwnerId] may already be a computed id. */
+        fun motionSourceIdsFor(activeDeviceId: String, sessionOwnerId: String): List<String> {
+            val ownerComputed = if (sessionOwnerId.endsWith("-noop")) sessionOwnerId else "$sessionOwnerId-noop"
+            return (listOf(ownerComputed) + computedSourceIdsFor(activeDeviceId)).distinct()
+        }
+
         /** Pick the winner among per-source LATEST rows ([computedSourceIdsFor] order, active-strap
          *  first): the strictly newest day wins; a shared newest day keeps the FIRST seen (the active
          *  strap) — byte-identical to what `mergeComputedSeriesUnion(...).lastOrNull()` yields on the
@@ -2370,6 +2398,24 @@ class WhoopRepository(
             val byTs = LinkedHashMap<Long, HrSample>()
             for (list in lists) for (s in list) byTs.putIfAbsent(s.ts, s)
             return byTs.values.sortedBy { it.ts }
+        }
+
+        /** Merge R-R lists with source priority matching [mergeHrByTs]. R-R has multiple legitimate
+         * beats at one timestamp, so its identity is the storage key excluding deviceId, not timestamp
+         * alone. The first (active) list wins only an exact duplicate. */
+        internal fun mergeRrByIdentity(lists: List<List<RrInterval>>): List<RrInterval> {
+            if (lists.size == 1) return lists[0]
+            data class BeatKey(val ts: Long, val rrMs: Int, val seq: Int)
+            val byBeat = LinkedHashMap<BeatKey, RrInterval>()
+            for (list in lists) for (beat in list) {
+                byBeat.putIfAbsent(BeatKey(beat.ts, beat.rrMs, beat.seq), beat)
+            }
+            return byBeat.values.sortedWith(
+                compareBy<RrInterval> { it.ts }
+                    .thenBy { it.ord }
+                    .thenBy { it.rrMs }
+                    .thenBy { it.seq },
+            )
         }
 
         /**
