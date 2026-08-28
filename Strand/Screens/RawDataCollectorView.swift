@@ -148,7 +148,7 @@ struct RawDataCollectorView: View {
 
     private func sessionCard(_ session: RawDataSessionStore.Session) -> some View {
         let coverageText = imuCoverage[session.id, default: "no complete seconds"]
-        StrandCard {
+        return StrandCard {
             VStack(alignment: .leading, spacing: NoopMetrics.space3) {
                 Text(Self.range(session)).font(StrandFont.headline).foregroundStyle(StrandPalette.textPrimary)
                 if !session.active, let endMs = session.endedAtMs {
