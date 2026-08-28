@@ -2618,4 +2618,8 @@
     <string name="ground_truth_stair_count">Degrau · %1$d</string>
     <string name="ground_truth_undo_manual">Anular último</string>
     <string name="ground_truth_manual_summary">Manual: %1$d passos · %2$d degraus</string>
+    <string name="crash_recovery_title">O NOOP terminou inesperadamente</string>
+    <string name="crash_recovery_body">A última falha aparece abaixo. Podes copiá-la para um relatório e voltar a tentar abrir a aplicação.</string>
+    <string name="crash_recovery_copy">Copiar erro</string>
+    <string name="crash_recovery_continue">Tentar abrir o NOOP</string>
 </resources>

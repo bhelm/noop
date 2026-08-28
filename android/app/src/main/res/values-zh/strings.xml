@@ -2539,4 +2539,8 @@
     <string name="ground_truth_stair_count">台阶 · %1$d</string>
     <string name="ground_truth_undo_manual">撤销上一个</string>
     <string name="ground_truth_manual_summary">手动：%1$d 步 · %2$d 台阶</string>
+    <string name="crash_recovery_title">NOOP 意外停止</string>
+    <string name="crash_recovery_body">上次崩溃信息显示在下方。你可以复制它用于错误报告，然后再次尝试打开应用。</string>
+    <string name="crash_recovery_copy">复制错误</string>
+    <string name="crash_recovery_continue">再次打开 NOOP</string>
 </resources>

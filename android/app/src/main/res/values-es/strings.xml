@@ -2625,4 +2625,8 @@
     <string name="ground_truth_stair_count">Escalón · %1$d</string>
     <string name="ground_truth_undo_manual">Deshacer último</string>
     <string name="ground_truth_manual_summary">Manual: %1$d pasos · %2$d escalones</string>
+    <string name="crash_recovery_title">NOOP se cerró inesperadamente</string>
+    <string name="crash_recovery_body">El último fallo aparece abajo. Puedes copiarlo para informar del error y volver a intentar abrir la aplicación.</string>
+    <string name="crash_recovery_copy">Copiar error</string>
+    <string name="crash_recovery_continue">Intentar abrir NOOP</string>
 </resources>

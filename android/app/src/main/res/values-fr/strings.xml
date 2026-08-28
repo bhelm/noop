@@ -2624,4 +2624,8 @@
     <string name="ground_truth_stair_count">Marche · %1$d</string>
     <string name="ground_truth_undo_manual">Annuler le dernier</string>
     <string name="ground_truth_manual_summary">Manuel : %1$d pas · %2$d marches</string>
+    <string name="crash_recovery_title">NOOP s’est arrêté inopinément</string>
+    <string name="crash_recovery_body">Le dernier plantage est affiché ci-dessous. Vous pouvez le copier pour un rapport, puis réessayer d’ouvrir l’application.</string>
+    <string name="crash_recovery_copy">Copier l’erreur</string>
+    <string name="crash_recovery_continue">Réessayer d’ouvrir NOOP</string>
 </resources>
