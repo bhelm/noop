@@ -2610,4 +2610,12 @@
     <string name="l10n_settings_screen_once_a_day_noop_asks_github_5683aad3">Uma vez por dia, o NOOP pergunta ao GitHub o número da versão mais recente e deixa uma nota em Atualizações se existir uma mais recente. Não é enviado nada sobre si e nunca instala nada.</string>
     <string name="l10n_updates_noop_1s_is_available_05d8ef55">O NOOP %1$s está disponível</string>
     <string name="l10n_updates_youre_on_1s_open_settings_and_35b9e135">Tem a versão %1$s. Abra as Definições e use Procurar atualizações para ver as novidades e transferir a %2$s.</string>
+    <string name="ground_truth_manual_labels">Referência manual</string>
+    <string name="ground_truth_clicker_mapping">Comando: afastar = passo · aproximar = degrau</string>
+    <string name="ground_truth_step">Passo</string>
+    <string name="ground_truth_stair">Degrau</string>
+    <string name="ground_truth_step_count">Passo · %1$d</string>
+    <string name="ground_truth_stair_count">Degrau · %1$d</string>
+    <string name="ground_truth_undo_manual">Anular último</string>
+    <string name="ground_truth_manual_summary">Manual: %1$d passos · %2$d degraus</string>
 </resources>

@@ -2644,4 +2644,12 @@
     <string name="l10n_settings_screen_once_a_day_noop_asks_github_5683aad3">Once a day, NOOP asks GitHub for the latest version number and puts a note in Updates if there’s a newer one. Nothing about you is sent, and it never installs anything.</string>
     <string name="l10n_updates_noop_1s_is_available_05d8ef55">NOOP %1$s is available</string>
     <string name="l10n_updates_youre_on_1s_open_settings_and_35b9e135">You\'re on %1$s. Open Settings and use Check for updates to see what\'s new and download %2$s.</string>
+    <string name="ground_truth_manual_labels">Manual ground truth</string>
+    <string name="ground_truth_clicker_mapping">Clicker: zoom out = step · zoom in = stair</string>
+    <string name="ground_truth_step">Step</string>
+    <string name="ground_truth_stair">Stair</string>
+    <string name="ground_truth_step_count">Step · %1$d</string>
+    <string name="ground_truth_stair_count">Stair · %1$d</string>
+    <string name="ground_truth_undo_manual">Undo last</string>
+    <string name="ground_truth_manual_summary">Manual: %1$d steps · %2$d stairs</string>
 </resources>

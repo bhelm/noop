@@ -2616,4 +2616,12 @@
     <string name="l10n_settings_screen_once_a_day_noop_asks_github_5683aad3">Une fois par jour, NOOP demande à GitHub le numéro de la dernière version et dépose une note dans Mises à jour s’il en existe une plus récente. Aucune donnée vous concernant n’est envoyée, et rien n’est jamais installé.</string>
     <string name="l10n_updates_noop_1s_is_available_05d8ef55">NOOP %1$s est disponible</string>
     <string name="l10n_updates_youre_on_1s_open_settings_and_35b9e135">Vous utilisez la version %1$s. Ouvrez les Réglages et utilisez Rechercher des mises à jour pour voir les nouveautés et télécharger la %2$s.</string>
+    <string name="ground_truth_manual_labels">Référence manuelle</string>
+    <string name="ground_truth_clicker_mapping">Télécommande : zoom arrière = pas · zoom avant = marche</string>
+    <string name="ground_truth_step">Pas</string>
+    <string name="ground_truth_stair">Marche</string>
+    <string name="ground_truth_step_count">Pas · %1$d</string>
+    <string name="ground_truth_stair_count">Marche · %1$d</string>
+    <string name="ground_truth_undo_manual">Annuler le dernier</string>
+    <string name="ground_truth_manual_summary">Manuel : %1$d pas · %2$d marches</string>
 </resources>

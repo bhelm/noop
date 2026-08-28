@@ -2617,4 +2617,12 @@
     <string name="l10n_settings_screen_once_a_day_noop_asks_github_5683aad3">Una vez al día, NOOP consulta a GitHub el número de la última versión y deja un aviso en Novedades si hay una más reciente. No se envía nada sobre ti y nunca instala nada.</string>
     <string name="l10n_updates_noop_1s_is_available_05d8ef55">NOOP %1$s ya está disponible</string>
     <string name="l10n_updates_youre_on_1s_open_settings_and_35b9e135">Tienes la %1$s. Abre Ajustes y usa Buscar actualizaciones para ver las novedades y descargar la %2$s.</string>
+    <string name="ground_truth_manual_labels">Referencia manual</string>
+    <string name="ground_truth_clicker_mapping">Pulsador: alejar = paso · acercar = escalón</string>
+    <string name="ground_truth_step">Paso</string>
+    <string name="ground_truth_stair">Escalón</string>
+    <string name="ground_truth_step_count">Paso · %1$d</string>
+    <string name="ground_truth_stair_count">Escalón · %1$d</string>
+    <string name="ground_truth_undo_manual">Deshacer último</string>
+    <string name="ground_truth_manual_summary">Manual: %1$d pasos · %2$d escalones</string>
 </resources>

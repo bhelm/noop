@@ -57,4 +57,11 @@ class RawCaptureExportContractTest {
         assertFalse(collector.contains("algorithm-signals.csv"))
         assertFalse(collector.contains("stepSamples("))
     }
+
+    @Test fun manualGroundTruthUsesOnlyExplicitStepAndStairMarkers() {
+        assertTrue(GroundTruthCollector.isManualMarker(GroundTruthCollector.MARKER_STEP))
+        assertTrue(GroundTruthCollector.isManualMarker(GroundTruthCollector.MARKER_STAIR))
+        assertFalse(GroundTruthCollector.isManualMarker("moment"))
+        assertFalse(GroundTruthCollector.isManualMarker("steps"))
+    }
 }

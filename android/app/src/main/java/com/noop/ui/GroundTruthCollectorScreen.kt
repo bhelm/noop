@@ -3,7 +3,9 @@ package com.noop.ui
 import android.app.DatePickerDialog
 import android.app.TimePickerDialog
 import android.content.Context
+import android.view.KeyEvent
 import android.widget.Toast
+import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -13,6 +15,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -20,7 +23,11 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -34,6 +41,8 @@ import kotlinx.coroutines.launch
 fun GroundTruthCollectorScreen(vm: AppViewModel) {
     val context = LocalContext.current
     val collector = remember { GroundTruthCollector.from(context) }
+    val focusRequester = remember { FocusRequester() }
+    val view = LocalView.current
     val scope = rememberCoroutineScope()
     val live by vm.live.collectAsStateWithLifecycle()
     val imuStatus by vm.ble.groundTruthImuStatus.collectAsStateWithLifecycle()
@@ -46,6 +55,13 @@ fun GroundTruthCollectorScreen(vm: AppViewModel) {
     var markerEditor by remember { mutableStateOf<MarkerEditor?>(null) }
     var sessionPendingDelete by remember { mutableStateOf<GroundTruthCollector.SessionSummary?>(null) }
     var confirmDeleteAll by remember { mutableStateOf(false) }
+
+    fun recordManual(type: String) {
+        val marker = collector.recordManual(type) ?: return
+        sessions = sessions.map { session ->
+            if (session.active) session.copy(markers = session.markers + marker) else session
+        }
+    }
 
     LaunchedEffect(vm.activeStrapId) {
         while (true) {
@@ -61,9 +77,33 @@ fun GroundTruthCollectorScreen(vm: AppViewModel) {
         if (state.active && live.connected) state.sessionId?.let(vm.ble::startGroundTruthImuCapture)
     }
 
+    DisposableEffect(view, state.active) {
+        val previous = view.keepScreenOn
+        view.keepScreenOn = state.active
+        onDispose { view.keepScreenOn = previous }
+    }
+    LaunchedEffect(state.active, sessions) {
+        if (state.active) focusRequester.requestFocus()
+    }
+
     ScreenScaffold(
         title = stringResource(R.string.ground_truth_title),
         subtitle = stringResource(R.string.ground_truth_subtitle),
+        modifier = Modifier
+            .focusRequester(focusRequester)
+            .focusable()
+            .onPreviewKeyEvent { composeEvent ->
+                val event = composeEvent.nativeKeyEvent
+                if (event.action != KeyEvent.ACTION_DOWN || event.repeatCount != 0 || !state.active) {
+                    return@onPreviewKeyEvent false
+                }
+                when (event.keyCode) {
+                    KeyEvent.KEYCODE_ZOOM_OUT -> recordManual(GroundTruthCollector.MARKER_STEP)
+                    KeyEvent.KEYCODE_ZOOM_IN -> recordManual(GroundTruthCollector.MARKER_STAIR)
+                    else -> return@onPreviewKeyEvent false
+                }
+                true
+            },
     ) {
         NoopCard {
             Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -112,6 +152,42 @@ fun GroundTruthCollectorScreen(vm: AppViewModel) {
         }
 
         if (state.active) {
+            val activeSession = sessions.firstOrNull { it.active }
+            val steps = activeSession?.markers?.count { it.type == GroundTruthCollector.MARKER_STEP } ?: 0
+            val stairs = activeSession?.markers?.count { it.type == GroundTruthCollector.MARKER_STAIR } ?: 0
+            NoopCard(tint = Palette.accent) {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Text(stringResource(R.string.ground_truth_manual_labels), style = NoopType.headline,
+                        color = Palette.textPrimary)
+                    Text(stringResource(R.string.ground_truth_clicker_mapping), style = NoopType.caption,
+                        color = Palette.textSecondary)
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        NoopButton(
+                            text = stringResource(R.string.ground_truth_step_count, steps),
+                            modifier = Modifier.weight(1f),
+                            onClick = { recordManual(GroundTruthCollector.MARKER_STEP) },
+                        )
+                        NoopButton(
+                            text = stringResource(R.string.ground_truth_stair_count, stairs),
+                            modifier = Modifier.weight(1f),
+                            onClick = { recordManual(GroundTruthCollector.MARKER_STAIR) },
+                        )
+                    }
+                    NoopButton(
+                        text = stringResource(R.string.ground_truth_undo_manual),
+                        kind = NoopButtonKind.Secondary,
+                        fullWidth = true,
+                        enabled = steps + stairs > 0,
+                        onClick = {
+                            val removed = collector.undoManual() ?: return@NoopButton
+                            sessions = sessions.map { session ->
+                                if (session.active) session.copy(markers = session.markers.filterNot { it.id == removed.id })
+                                else session
+                            }
+                        },
+                    )
+                }
+            }
             NoopButton(
                 text = stringResource(R.string.ground_truth_add_marker),
                 kind = NoopButtonKind.Secondary,
@@ -279,6 +355,8 @@ fun GroundTruthCollectorScreen(vm: AppViewModel) {
                     listOf(
                         listOf(MARKER_MOMENT to R.string.ground_truth_marker_moment, MARKER_START to R.string.ground_truth_marker_start),
                         listOf(MARKER_END to R.string.ground_truth_marker_end, MARKER_ISSUE to R.string.ground_truth_marker_issue),
+                        listOf(GroundTruthCollector.MARKER_STEP to R.string.ground_truth_step,
+                            GroundTruthCollector.MARKER_STAIR to R.string.ground_truth_stair),
                     ).forEach { row ->
                         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             row.forEach { (type, label) ->
@@ -344,6 +422,10 @@ private fun SessionCard(
             Text(stringResource(R.string.ground_truth_duration_size,
                 formatDuration((session.endedAtMs ?: System.currentTimeMillis()) - session.startedAtMs), formatBytes(stats?.bytes ?: 0)),
                 style = NoopType.caption, color = Palette.textSecondary)
+            val steps = session.markers.count { it.type == GroundTruthCollector.MARKER_STEP }
+            val stairs = session.markers.count { it.type == GroundTruthCollector.MARKER_STAIR }
+            if (steps + stairs > 0) Text(stringResource(R.string.ground_truth_manual_summary, steps, stairs),
+                style = NoopType.caption, color = Palette.textSecondary)
             session.lastExportedAtMs?.let { Text(stringResource(R.string.ground_truth_last_exported, diagnosticTime(it)),
                 style = NoopType.caption, color = Palette.statusPositive) }
             if (!session.active) {
@@ -363,7 +445,7 @@ private fun SessionCard(
                 }
             }
             NoopButton(stringResource(R.string.ground_truth_add_marker), kind = NoopButtonKind.Secondary, fullWidth = true, onClick = onAddMarker)
-            session.markers.forEach { marker ->
+            session.markers.filterNot { GroundTruthCollector.isManualMarker(it.type) }.forEach { marker ->
                 TextButton(onClick = { onEditMarker(marker) }, modifier = Modifier.fillMaxWidth()) {
                     Text(stringResource(R.string.ground_truth_marker_row, diagnosticTime(marker.atMs),
                         markerTypeLabel(marker.type), marker.text.takeIf(String::isNotBlank)
@@ -479,6 +561,8 @@ private fun coverageText(stats: GroundTruthCollector.CaptureStats): String {
 
 @Composable
 private fun markerTypeLabel(type: String): String = stringResource(when (type.lowercase()) {
+    GroundTruthCollector.MARKER_STEP -> R.string.ground_truth_step
+    GroundTruthCollector.MARKER_STAIR -> R.string.ground_truth_stair
     MARKER_START -> R.string.ground_truth_marker_start
     MARKER_END -> R.string.ground_truth_marker_end
     MARKER_ISSUE -> R.string.ground_truth_marker_issue

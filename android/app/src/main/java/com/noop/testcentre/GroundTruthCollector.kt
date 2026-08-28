@@ -216,6 +216,33 @@ class GroundTruthCollector private constructor(private val context: Context) {
         return marker
     }
 
+    /** Record one foreground manual label without creating a separate step-data pipeline. */
+    @Synchronized
+    fun recordManual(type: String, nowMs: Long = System.currentTimeMillis()): Marker? {
+        require(isManualMarker(type)) { "Unsupported manual label: $type" }
+        val current = snapshot()
+        val sessionId = current.sessionId ?: return null
+        if (!current.active) return null
+        val marker = Marker(UUID.randomUUID().toString(), nowMs.coerceAtLeast(current.startedAtMs), type, "")
+        append(sessionId, JSONObject().apply {
+            put("at_ms", marker.atMs); put("kind", KIND_MARKER); put("marker_id", marker.id)
+            put("marker_type", marker.type); put("text", marker.text)
+        })
+        return marker
+    }
+
+    /** Remove the most recent manual step/stair label from the active session. */
+    @Synchronized
+    fun undoManual(): Marker? {
+        val current = snapshot()
+        if (!current.active) return null
+        val sessionId = current.sessionId ?: return null
+        val marker = sessions().firstOrNull { it.id == sessionId }?.markers
+            ?.lastOrNull { isManualMarker(it.type) }
+            ?: return null
+        return marker.takeIf { deleteMarker(sessionId, marker.id) }
+    }
+
     @Synchronized
     fun updateMarker(sessionId: String, marker: Marker): Boolean {
         val session = sessions().firstOrNull { it.id == sessionId } ?: return false
@@ -467,6 +494,9 @@ class GroundTruthCollector private constructor(private val context: Context) {
 
     companion object {
         private const val KIND_MARKER = "marker"
+        const val MARKER_STEP = "step"
+        const val MARKER_STAIR = "stair"
+        fun isManualMarker(type: String) = type == MARKER_STEP || type == MARKER_STAIR
         private const val PREFS = "noop_ground_truth_collector"
         private const val MAX_RANGE_MS = 7L * 24 * 60 * 60 * 1_000
 
