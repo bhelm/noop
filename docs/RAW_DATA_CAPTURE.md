@@ -43,6 +43,13 @@ and incoming IMU buffers are routed by **strap timestamp**, not by arrival time.
 the phone is disconnected during part of a recording, matching delayed buffers from a later historical
 offload can still be appended to the session. Duplicate timestamps are discarded.
 
+On Android, an active 100 Hz capture temporarily requests the high-throughput GATT connection
+priority. A later historical offload does the same while it repairs an incomplete capture, then returns
+the link to the balanced priority. This bounded lease is independent of the global experimental
+history-speed preference. Apple's CoreBluetooth chooses connection parameters itself and exposes no
+equivalent app-side priority request, so iOS keeps the same capture and repair lifecycle without a
+non-functional transport toggle.
+
 Consequences for consumers:
 
 - file order is not chronological: repaired older history may be appended after newer live data;
