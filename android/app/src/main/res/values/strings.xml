@@ -2774,4 +2774,12 @@
     <string name="units_follow_body">Follow body</string>
     <string name="l10n_today_screen_see_the_charge_trend_9dcbcff7">See the Charge trend</string>
     <string name="l10n_today_screen_every_day_s_score_over_time_a00ea7c7">Every day\'s score, over time.</string>
+    <string name="ground_truth_manual_labels">Manual ground truth</string>
+    <string name="ground_truth_clicker_mapping">Clicker: zoom out = step · zoom in = stair</string>
+    <string name="ground_truth_step">Step</string>
+    <string name="ground_truth_stair">Stair</string>
+    <string name="ground_truth_step_count">Step · %1$d</string>
+    <string name="ground_truth_stair_count">Stair · %1$d</string>
+    <string name="ground_truth_undo_manual">Undo last</string>
+    <string name="ground_truth_manual_summary">Manual: %1$d steps · %2$d stairs</string>
 </resources>

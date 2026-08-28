@@ -2737,4 +2737,12 @@
     <string name="widget_hr_description">Frequência cardíaca em direto com as últimas três horas em gráfico.</string>
     <string name="l10n_today_screen_see_the_charge_trend_9dcbcff7">Ver a tendência da Carga</string>
     <string name="l10n_today_screen_every_day_s_score_over_time_a00ea7c7">A pontuação de cada dia, ao longo do tempo.</string>
+    <string name="ground_truth_manual_labels">Referência manual</string>
+    <string name="ground_truth_clicker_mapping">Comando: afastar = passo · aproximar = degrau</string>
+    <string name="ground_truth_step">Passo</string>
+    <string name="ground_truth_stair">Degrau</string>
+    <string name="ground_truth_step_count">Passo · %1$d</string>
+    <string name="ground_truth_stair_count">Degrau · %1$d</string>
+    <string name="ground_truth_undo_manual">Anular último</string>
+    <string name="ground_truth_manual_summary">Manual: %1$d passos · %2$d degraus</string>
 </resources>
