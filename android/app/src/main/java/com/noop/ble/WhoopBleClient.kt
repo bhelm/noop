@@ -444,10 +444,14 @@ class WhoopBleClient(
      * call site unchanged.
      */
     private val gattOpsFactory: (BluetoothGatt) -> GattOps = ::RealGattOps,
+    /** Fire-and-forget notification after a true HISTORY_COMPLETE only. The sink must only enqueue. */
+    private val successfulOffloadSink: () -> Unit = {},
 ) {
 
     companion object {
         private const val TAG = "WhoopBleClient"
+        internal fun shouldNotifySuccessfulOffload(reason: String, bankedRows: Boolean): Boolean =
+            reason == "HISTORY_COMPLETE" || (reason == "timeout" && bankedRows)
         /**
          * Cap on the in-app strap-log ring buffer (for the "Share strap log" diagnostics export).
          * Raised from the old ~1h (2,000 lines) to retain a rolling ~24h of activity (#510 —
@@ -3405,6 +3409,8 @@ class WhoopBleClient(
         // changed in between, and that is exactly when a new characteristic would appear.
         gattTreeDumpedFor = null
         handler.post {
+            // Captured before the clearing below nulls `lastDevice`, which `lastDeviceAddress` reads through.
+            val releasedAddress = lastDeviceAddress
             intentionalDisconnect = true     // defuse the disconnect→3s-reconnect loop's guard
             handler.removeCallbacks(scanTimeoutRunnable)
             handler.removeCallbacks(scanFallbackRunnable)
@@ -3417,6 +3423,11 @@ class WhoopBleClient(
             // so a paused state can never outlive the strap it belonged to and wedge a later re-add.
             bondRefusalStreak = 0
             bondGiveUp.reset()
+            // #1635: the hello-suppression latch is exactly that kind of state and, unlike the give-up, it
+            // is PERSISTED — so without this it outlives the strap it belonged to, silently suppressing the
+            // handshake on a re-add and leaving a stale pref behind for a strap the user removed.
+            // Re-latching costs the same five refusals it always did. Twin of the Swift `forgetDevice`.
+            runCatching { com.noop.ui.NoopPrefs.setHelloSuppressed(context, releasedAddress, false) }
             autoReconnectPausedForBondLoop = false
             bondLoopPausedAtMs = null
             // Drop the persisted last-device pin so a relaunch / radio-on doesn't auto-reconnect to it (#67).
@@ -4693,6 +4704,9 @@ class WhoopBleClient(
         runCatching {
             val editor = NoopPrefs.of(context).edit()
                 .putLong("alarm.lastArmSentEpoch", sentEpoch)
+                // #1706: WHICH strap this arm went to. Without it the export compares this epoch against
+                // a readback that, on a multi-strap install, may have come from a different device.
+                .putString("alarm.lastArmDeviceId", deviceId)
                 .putLong("alarm.lastArmAt", System.currentTimeMillis())
                 .putBoolean("alarm.lastArmConnected", _state.value.connected)
             // #34: live HR at the moment of the arm, purely to test a hypothesis raised on a reporter's
@@ -5860,6 +5874,8 @@ class WhoopBleClient(
                     // these as REALTIME_DATA — the strap rejected them on the unauthenticated link), then arm
                     // realtime HR with puffin framing. Mirrors the macOS post-bond flow.
                     didBond = true
+                    helloOverrideAttempts = 0     // #1635: the strap answered — the override's budget resets
+                    helloOverrideExhaustedLogged = false
                     cancelBondWatchdog()          // genuine bond reached — the handshake watchdog stands down (#50)
                     noteGenuineBond(g.device.address)   // #52: this strap bonds fine; clears any pin-refusal streak
                     clearPairingHint()            // #78: a genuine bond means the pairing guidance no longer applies
@@ -6077,9 +6093,16 @@ class WhoopBleClient(
                     // frame. Family-aware, so it's correct for WHOOP4 and 5/MG alike.
                     val parsed = Framing.parseFrame(frame, connectedFamily)
                     // A frame replayed as part of the historical offload (type 47/48/… during a backfill)
-                    // must not drive LIVE-only state (the charging pill). Mirrors iOS, where the offload
-                    // path skips the live router entirely. (PR #568 reimpl)
                     recordGroundTruthImuFrame(frame)
+                    // must not drive LIVE-only state (the charging pill). (PR #568 reimpl)
+                    //
+                    // NOT the same shape as iOS, despite what this said before. THIS side calls the handler
+                    // for EVERY frame and gates only the live-only effects; iOS skips the router outright
+                    // for offload frames and carves out the few things that must still fire (a live
+                    // gesture, and now the strap's console narration). Same outcome for the charging pill,
+                    // opposite structure — so a reader porting behaviour either way has to check which
+                    // frames reach the handler at all, not assume it matches. That assumption is exactly
+                    // how the console mirror shipped dead on iOS: decoded, keyed correctly, never called.
                     handleFrame(frame, parsed, replayedOffload = offloadFrame)
 
                     // Capture the strap's newest stored record from a GET_DATA_RANGE reply, feeding
@@ -6571,6 +6594,13 @@ class WhoopBleClient(
                         runCatching {
                             NoopPrefs.of(context).edit()
                                 .putLong("alarm.lastReportedEpoch", epoch)
+                                // #1706: the strap this readback came from, and the bytes it came in.
+                                // The raw frame is what separates a genuinely-stored stale alarm from a
+                                // misdecode of a fixed response field, and the live log rolls long before
+                                // a debug export is taken — a 2045 readback went unexplained for exactly
+                                // that reason.
+                                .putString("alarm.lastReportedDeviceId", deviceId)
+                                .putString("alarm.lastReportedRaw", raw)
                                 .putLong("alarm.lastReportedAt", System.currentTimeMillis())
                                 .apply()
                         }
@@ -6609,7 +6639,7 @@ class WhoopBleClient(
                 // The 5/MG strap narrates its own sync engine here ("BLE: PullStats: Data: N…",
                 // "RTC timestamp … is invalid") — gold for protocol research, so mirror it into the
                 // strap log (capped; the ring buffer holds 2k lines). (#78 fork)
-                (parsed.parsed["console"] as? String)?.let { txt ->
+                (parsed.parsed["log"] as? String)?.let { txt ->
                     log("strap: ${txt.take(300)}")
                 }
             }
@@ -7767,7 +7797,27 @@ class WhoopBleClient(
                         onFailure = { log(explicitBondThrewLine(it.javaClass.simpleName, where)) },
                     )
                 }
-                if (explicitBondDefersHello(explicitBondRequestedThisLink)) {
+                // #1635: read once, before the deferral gate — the override has to reach BOTH, or a
+                // deferred hello returns early and the switch below is never evaluated at all.
+                val overrideOptedIn = runCatching {
+                    PuffinExperiment.from(context).helloDespiteBondRefusal
+                }.getOrDefault(false)
+                // Flipping the switch off and back on is the user asking for another try. The counter
+                // outlives the toggle, so without this a re-enabled override does nothing at all — and
+                // says nothing, the give-up line having already latched.
+                if (helloOverrideBudgetRearms(overrideOptedIn, helloOverrideOptInSeen)) {
+                    helloOverrideAttempts = 0
+                    helloOverrideExhaustedLogged = false
+                }
+                helloOverrideOptInSeen = overrideOptedIn
+                // Spent budget makes the override inert rather than merely quiet: it must stop reaching the
+                // deferral bypass too, or the link keeps being taken down by a hello nobody will answer.
+                val helloOverride = helloOverrideActive(overrideOptedIn, helloOverrideAttempts)
+                if (overrideOptedIn && !helloOverride && !helloOverrideExhaustedLogged) {
+                    helloOverrideExhaustedLogged = true
+                    log(helloOverrideExhaustedLine(helloOverrideAttempts))
+                }
+                if (explicitBondDefersHello(explicitBondRequestedThisLink, helloOverride = helloOverride)) {
                     // Same trap as the suppression path below, and worse here. The watchdog was armed at
                     // discovery and bounces the link whenever didBond is false — which deferring the hello
                     // guarantees. Tearing the link down while an OS pairing is in flight is the single
@@ -7792,7 +7842,21 @@ class WhoopBleClient(
                 val suppressed = runCatching {
                     com.noop.ui.NoopPrefs.helloSuppressed(context, g.device.address)
                 }.getOrDefault(false)
-                if (shouldSendClientHello(suppressed, userInitiated = userAsked)) {
+                if (shouldSendClientHello(suppressed, userInitiated = userAsked, overrideSuppression = helloOverride)) {
+                    // Charge the budget only when the override is what put this hello on the wire: a
+                    // strap that is neither suppressed nor deferring would have sent it anyway, and
+                    // counting those would retire the experiment without ever having run it.
+                    if (helloOverride && !userAsked && (suppressed || explicitBondRequestedThisLink)) {
+                        helloOverrideAttempts++
+                    }
+                    if (suppressed && helloOverride && !userAsked) {
+                        // Say WHY a suppressed strap is getting a hello anyway, or the next reader sees the
+                        // latch set and a hello on the wire and has to guess which of them is broken.
+                        log("WHOOP 5/MG: CLIENT_HELLO sent DESPITE the suppression latch — \"send hello" +
+                            " despite bond refusal\" is on. The strap refuses SMP pairing (Pairing Not" +
+                            " Supported), so this is the only handshake left to try; expect the ~4.8s drop" +
+                            " loop to return if it still goes unanswered (#1635, experimental).")
+                    }
                     writeClientHello(g, cmd)
                 } else {
                     // The watchdog was armed at discovery, before this decision could be made, and it
@@ -7950,6 +8014,17 @@ class WhoopBleClient(
             .maxOrNull() ?: now
         val streams: Streams = extractStreams(parsed, deviceClockRef = newestRealtimeTs, wallClockRef = now)
         val batch = StreamPersistence.toBatch(streams)
+        // #1118: the SECOND live transport. The standard 0x2A37 path above stamps a beat at the second
+        // it arrived; this one stamps it from the strap's own record clock. The same beat reaching both
+        // lands on two different seconds, which no same-second de-dup can collapse — the signature every
+        // affected night prints as `crossSecondOverCount`.
+        if (batch.rr.isNotEmpty()) {
+            if (com.noop.analytics.RrEmissionStats.shouldEmitLiveCensus(lastRealtimeRrCensusSec, now)) {
+                lastRealtimeRrCensusSec = now
+                val census = com.noop.analytics.RrEmissionStats.compute(batch.rr.map { it.ts.toInt() to it.rrMs })
+                log(com.noop.analytics.RrEmissionStats.logLine("live-realtime", batch.rr.size, null, census))
+            }
+        }
         if (!batch.isEmpty) {
             try {
                 repository.insert(batch, deviceId)
@@ -7959,6 +8034,26 @@ class WhoopBleClient(
             }
         }
     }
+
+    /** #1118: last emit of each LIVE R-R census line, unix seconds; 0 = never. See
+     *  [com.noop.analytics.RrEmissionStats.shouldEmitLiveCensus] for why these are rate-limited.
+     *
+     *  Deliberately UNSYNCHRONIZED, unlike the buffers they sit beside. The two flushes can run
+     *  concurrently on the io scope, but a 32-bit write is atomic on the JVM so the worst outcome of a
+     *  stale read is one duplicate diagnostic line — cheaper than taking `collectorLock` on a path whose
+     *  only job is to describe itself. (The Swift twin is @MainActor-isolated and gets the guarantee for
+     *  free; the asymmetry is intentional, not an oversight.)
+     *
+     *  Lifetime, which DIVERGES from the Swift twin and is worth knowing before reading a log:
+     *  `WhoopBleClient` is the process-wide lazy singleton on `NoopApplication`, and a device switch
+     *  mutates `deviceId` via [setActiveDeviceId] rather than rebuilding the client — so these never
+     *  reset for the life of the process, and the 15-minute cadence holds across reconnects. The Swift
+     *  side keeps them on `Collector`, which `BLEManager.bootstrapStore()` REBUILDS (a store rebuild
+     *  after unlock, among other paths), so an iOS log can carry an extra line after one of those.
+     *  Harmless either way — it is a rate-limit on a diagnostic, not a measurement — but a reader
+     *  comparing two logs should not have to work out why one has more lines than the other. */
+    private var lastStdRrCensusSec: Int = 0
+    private var lastRealtimeRrCensusSec: Int = 0
 
     /**
      * Buffer one standard 0x2A37 reading (carries a wall-clock ts directly, no clock ref needed).
@@ -7980,6 +8075,20 @@ class WhoopBleClient(
             val h = ArrayList(stdHr); val r = ArrayList(stdRr)
             stdHr.clear(); stdRr.clear()
             h to r
+        }
+        // #1118: census this batch BEFORE it is stored, exactly as the historical path does, so a
+        // strap log carries one `ratioRep` per transport. If each transport reports ~1.0 while the
+        // stored night reads 2.77, the over-count is the UNION of the transports and no single
+        // decoder is at fault — which is the question this instrumentation exists to settle.
+        if (rr.isNotEmpty()) {
+            val nowSec = (System.currentTimeMillis() / 1000L).toInt()
+            if (com.noop.analytics.RrEmissionStats.shouldEmitLiveCensus(lastStdRrCensusSec, nowSec)) {
+                lastStdRrCensusSec = nowSec
+                val census = com.noop.analytics.RrEmissionStats.compute(rr.map { it.ts.toInt() to it.rrMs })
+                // `inserted` is NULL, not echoed from `offered`: the store's conflict key decides that
+                // and this census runs before the insert. The line renders `inserted=n/a`.
+                log(com.noop.analytics.RrEmissionStats.logLine("live-standard", rr.size, null, census))
+            }
         }
         try {
             repository.insert(StreamBatch(hr = hr, rr = rr), deviceId)
@@ -8111,10 +8220,21 @@ class WhoopBleClient(
                 clockUntrusted = clockUntrusted,
             )
         ) {
+            // #1683: the empty streak only stretches the floor for the AUTOMATIC triggers (PERIODIC and
+            // STRAP). Naming it on a CONNECT/FOREGROUND skip - which uses the flat event floor and is not
+            // backed off at all - reads as though the streak caused the skip. It misled a reader of a real
+            // capture, so the line now names the streak only where the streak is actually doing something.
+            val streakGatesThisTrigger =
+                trigger == BackfillTrigger.PERIODIC || trigger == BackfillTrigger.STRAP
             log(
-                "Backfill: skipped ($trigger) - policy floor not met " +
-                    "(empty streak ${emptySyncTracker.consecutiveEmptySyncs}" +
-                    "${if (clockUntrusted) ", clock future-dated" else ""})",
+                "Backfill: skipped ($trigger) - policy floor not met" +
+                    // BOTH the streak and the future-dated clock gate PERIODIC/STRAP only; CONNECT and
+                    // FOREGROUND use the flat event floor. Naming either on those triggers reads as a
+                    // cause, which is how this line misled a reader of a real capture.
+                    (if (streakGatesThisTrigger)
+                        " (empty streak ${emptySyncTracker.consecutiveEmptySyncs}" +
+                            "${if (clockUntrusted) ", clock future-dated" else ""})"
+                    else ""),
             )
             return
         }
@@ -8327,6 +8447,18 @@ class WhoopBleClient(
                 bankedSensorRecords = bankedSensorRecords,
                 consoleOnly = bankedNothingRaw,
             ) else false
+        // #1683: the strap's newest stored record, ONLY when it is stale enough to be worth naming.
+        // Declared out here because both the log line inside the block below and the user-facing banner
+        // further down consume it, and they must not disagree about whether the strap is stale.
+        // WHOOP4 only, explicitly, on BOTH platforms. The underlying field is not populated alike: Swift
+        // gates it on `feedsSync` (#695 - WHOOP4 today, the 5/MG path deliberately leaves it unset), while
+        // this side sets it for any family that answers GET_DATA_RANGE. Reading it without a gate would
+        // let a 5/MG show the dated wording here and not on iOS. Gating the READ on both keeps the two in
+        // step whichever way that pre-existing difference is settled later, and a 5/MG that cannot offload
+        // has no business being told it stopped saving to flash.
+        val staleNewestSeen: Long? = strapNewestTs
+            ?.takeIf { connectedFamily == DeviceFamily.WHOOP4 }
+            ?.takeIf { Backfiller.isStaleNewestRecord(it, nowSec) }
         if (bankedNothing) {
             val detail = if (consoleChunksThisSession >= 3)
                 "console-only across $consoleChunksThisSession chunks"
@@ -8335,6 +8467,11 @@ class WhoopBleClient(
                 "Backfill: completed but the strap banked no sensor history ($detail); " +
                     "consecutive empty syncs = ${emptySyncTracker.consecutiveEmptySyncs}.",
             )
+            // #1683: say HOW OLD the strap's newest stored record is. Without this the line above reads
+            // identically for a strap that is caught up and one that stopped banking three weeks ago -
+            // NOOP knows the difference (GET_DATA_RANGE gave it) and simply never said so, which is why
+            // #1541 stayed open and unactionable. Rare-event evidence, so always-on.
+            staleNewestSeen?.let { log(Backfiller.staleRecordLine(it, nowSec)) }
         }
         // #battery: maintain the empty-offload backoff counter (see [consecutiveEmptyOffloads]). A 0-row
         // session — clean HISTORY_COMPLETE-empty OR an idle-timeout STALL — means there was nothing new to
@@ -8400,7 +8537,11 @@ class WhoopBleClient(
                 // the two platforms never disagree on which banner a given sync shows.
                 lastSyncError = when {
                     bankedNothing && sustainedEmpty ->
-                        "Synced, but your strap had no stored history to hand over - only its diagnostic output. This usually means its clock has lost sync, so it isn't saving data to flash. Fully charge it to 100%, then reconnect, and it should start banking again."
+                        // #1683: when the strap's own newest record dates the silence, SAY it. The
+                        // generic copy omits that and promises a recovery the charge advice has already
+                        // been retried for every session.
+                        staleNewestSeen?.let { Backfiller.staleRecordBanner(it, nowSec) }
+                            ?: "Synced, but your strap had no stored history to hand over - only its diagnostic output. This usually means its clock has lost sync, so it isn't saving data to flash. Fully charge it to 100%, then reconnect, and it should start banking again."
                     bankedNothing -> null   // banked nothing but not yet sustained — stay silent (matches Swift)
                     // #324/#928: the strap banked records but its newest is dated implausibly in the future
                     // (RTC relatched ahead). #773 drops the samples so nothing is misfiled, but this path
@@ -8450,8 +8591,12 @@ class WhoopBleClient(
         backfillDrain.clear()
         closeWhoop5BackfillCapture(flushSummary = true)
         log("Backfill: session ended — reason=$reason")
-        // Inactivity reminder (#419): read-only hook on the natural offload completion (no cadence
-        // change). Only on a true HISTORY_COMPLETE — a timeout/disconnect didn't bring a fresh window.
+        // Downstream export also treats a WHOOP 4 idle timeout with persisted rows as successful: that
+        // firmware routinely finishes productive offloads without emitting HISTORY_COMPLETE.
+        if (shouldNotifySuccessfulOffload(reason, persistedSensorRows)) {
+            runCatching { successfulOffloadSink() }
+        }
+        // Existing inactivity/stress/nap hooks retain their stricter HISTORY_COMPLETE semantics.
         if (reason == "HISTORY_COMPLETE") {
             maybeBuzzInactivity()
             // L3 stress check-in (v5): same read-only hook — fire the StressOnsetDetector over the live
@@ -8819,8 +8964,21 @@ class WhoopBleClient(
                 staleDirectBond = staleDirectBond,
                 status = status,
                 alreadyPausedForBondLoop = autoReconnectPausedForBondLoop,
+                // The question is whether the hello was ACTUALLY withheld on this link, not whether the
+                // latch is set. With the #1635 override in force the latch stays set while we send the
+                // hello anyway, and treating that as withheld would disable the give-up for exactly the
+                // case that needs it, leaving an unbounded hello-drop-reconnect loop with nothing to stop
+                // it. But a SPENT override withholds the hello for real, so this must ask
+                // [helloOverrideActive] rather than the raw pref — mirroring the `helloOverride` that
+                // decided whether to send. Reading the pref alone kept the detector counting after the
+                // hellos had stopped, and would have paused auto-reconnect and raised the stale-pairing
+                // guide over a cause that never happened.
                 helloSuppressed = runCatching {
-                    com.noop.ui.NoopPrefs.helloSuppressed(context, lastDeviceAddress)
+                    com.noop.ui.NoopPrefs.helloSuppressed(context, lastDeviceAddress) &&
+                        !helloOverrideActive(
+                            PuffinExperiment.from(context).helloDespiteBondRefusal,
+                            helloOverrideAttempts,
+                        )
                 }.getOrDefault(false),
             ) && bondWatchdogBackoff.recordBounce()
         ) {
@@ -9136,6 +9294,18 @@ class WhoopBleClient(
     // puffin biometric decode needs. Gated on PuffinExperiment.isCaptureEnabled (default OFF); APPENDS
     // across sessions with per-session ids (his fork truncated per session, losing overnight data);
     // rotates at the cap; fail-soft — capture can never break the sync it observes.
+
+    /** #1635: unanswered hellos the override CAUSED this process. Bounds the experiment on its own,
+     *  because the shared give-up cannot — see HELLO_OVERRIDE_MAX_ATTEMPTS. Reset on a genuine bond. */
+    @Volatile private var helloOverrideAttempts = 0
+
+    /** Last opt-in state the connect path saw, so an off->on flip can re-arm a spent budget (#1635). */
+    @Volatile private var helloOverrideOptInSeen = false
+
+    /** One-shot guard for the give-up line. Separate from the counter because `++` on a @Volatile Int is
+     *  not atomic: two overlapping connects could step past the cap together, and an `== cap` test would
+     *  then never fire, leaving the override inert with nothing in the log to say why. */
+    @Volatile private var helloOverrideExhaustedLogged = false
 
     @Volatile private var captureWriter: java.io.BufferedWriter? = null
     @Volatile private var captureDisabled = false

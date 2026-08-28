@@ -199,7 +199,14 @@ enum DebugDataDiagnostics {
             // back empty, so a healthy install pays nothing.
             let elsewhere = ((try? await store.rawSampleCountsByDevice(from: cs.startTs, to: cs.endTs)) ?? [])
                 .filter { $0.0 != did }
-            lines.append(orphanedSamplesLine(activeId: did, othersWithSamples: elsewhere))
+            // The registry, so a SECOND strap's night is not reported as a read failure. Only read when
+            // the active id came back empty, so a healthy install still pays nothing.
+            let otherStraps = Set(
+                ((try? DeviceRegistryStore(dbQueue: store.registryWriter).all()) ?? [])
+                    .filter { $0.status != .archived && $0.id != did }
+                    .map(\.id))
+            lines.append(orphanedSamplesLine(activeId: did, othersWithSamples: elsewhere,
+                                             otherLiveStrapIds: otherStraps))
             return lines
         }
         if let rem = SleepStager.remFunnelDiagnostic(start: cs.startTs, end: cs.endTs, grav: grav, hr: hr, rr: rr, resp: resp) {
@@ -384,7 +391,9 @@ enum DebugDataDiagnostics {
             } else if behind < -3 * 86400 {
                 lines.append("Strap clock: \(-behind / 86400)d AHEAD of wall (future-dated — alarm unreliable; recent sleep may be misdated, #67)")
             } else {
-                lines.append("Strap clock: OK")
+                // #1706: say what this measures. It reads RECORD timestamps, and sat two lines above an
+                // alarm readback claiming 2045, which reads as the two contradicting.
+                lines.append("Strap clock: OK (from record timestamps, not the alarm readback)")
             }
         }
         if let sent = d.object(forKey: "alarm.lastArmSentEpoch") as? Int {
@@ -406,14 +415,23 @@ enum DebugDataDiagnostics {
             }
             lines.append(line)
             if let reported = d.object(forKey: "alarm.lastReportedEpoch") as? Int {
-                let mismatch = abs(reported - sent) > 120
-                var rline = "Strap reports: \(alarmStamp(reported))"
-                    + (mismatch ? "  ⚠️ MISMATCH — strap didn't accept the time" : "  ✓ matches")
+                // #1706: only judge when both halves are known to be the SAME strap, otherwise this
+                // blames a device that was never asked.
+                let verdict = AlarmReadback.verdict(
+                    sentEpoch: sent,
+                    reportedEpoch: reported,
+                    sentDeviceId: d.string(forKey: "alarm.lastArmDeviceId"),
+                    reportedDeviceId: d.string(forKey: "alarm.lastReportedDeviceId"))
+                var rline = "Strap reports: \(alarmStamp(reported))" + AlarmReadback.suffix(verdict)
                 // #34: consecutive rejections — a persistent refusal (vs a one-off) points at a strap whose
                 // alarm register needs a reset, and is what SmartAlarmView warns the user about at ≥2.
                 let streak = d.integer(forKey: "alarm.rejectStreak")
                 if streak >= 2 { rline += " · \(streak) in a row (register likely needs a reset, #34)" }
                 lines.append(rline)
+                // The bytes the epoch was decoded from: what tells a stored stale alarm from a misdecode.
+                if let raw = d.string(forKey: "alarm.lastReportedRaw"), !raw.isEmpty {
+                    lines.append("Readback frame: \(raw)")
+                }
             } else {
                 lines.append("Strap reports: (no readback)")
             }
@@ -476,10 +494,26 @@ enum DebugDataDiagnostics {
     ///
     /// Pure so the wording is unit-tested without a database, a strap, or a registry. Kotlin twin:
     /// `com.noop.testcentre.orphanedSamplesLine`.
-    static func orphanedSamplesLine(activeId: String, othersWithSamples: [(String, Int)]) -> String {
+    /// `otherLiveStrapIds` is the registered, non-archived device ids OTHER than the active one. It exists
+    /// because the "not being read" wording was itself an over-assertion — the mirror image of the one it
+    /// replaced. A wearer with TWO straps has nights owned by the other one, and `DayOwnerResolver` hands
+    /// each day to whichever device actually holds its data. Samples under another id are then completely
+    /// normal, and calling that a read failure sends the reader hunting a bug that is not there. Only when
+    /// the id holding the samples is NOT a live registered strap is the #1193 split the explanation left.
+    static func orphanedSamplesLine(activeId: String, othersWithSamples: [(String, Int)],
+                                    otherLiveStrapIds: Set<String> = []) -> String {
         if othersWithSamples.isEmpty {
             return "(no raw biometric samples under '\(activeId)' for this night — expected on a freshly "
                 + "re-added strap; reconnect + let a history sync run, then re-export)"
+        }
+        let ownedByAnotherStrap = othersWithSamples.filter { otherLiveStrapIds.contains($0.0) }
+        if !ownedByAnotherStrap.isEmpty {
+            let who = ownedByAnotherStrap.sorted { $0.1 != $1.1 ? $0.1 > $1.1 : $0.0 < $1.0 }
+                .map { "'\($0.0)' (\($0.1) rows)" }
+                .joined(separator: ", ")
+            return "(no raw biometric samples under the ACTIVE id '\(activeId)' for this night — they are "
+                + "under \(who), another registered strap. A night worn on a different strap is OWNED by that "
+                + "strap, so this is expected; the dayOwner line for this date names the owner.)"
         }
         // Tie-break on id: Kotlin's sortedByDescending is stable but Swift's `sorted` is NOT, so equal
         // counts could otherwise order differently on the two platforms and the twin lines would diverge.

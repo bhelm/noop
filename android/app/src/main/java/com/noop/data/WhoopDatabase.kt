@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.room.Database
 import androidx.room.Room
 import androidx.room.RoomDatabase
+import com.noop.push.PushDao
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 
@@ -65,11 +66,14 @@ import androidx.sqlite.db.SupportSQLiteDatabase
 abstract class WhoopDatabase : RoomDatabase() {
     abstract fun whoopDao(): WhoopDao
 
+    /** Read-only, schema-neutral snapshots for the opt-in self-hosted push worker. */
+    fun pushDao(): PushDao = PushDao(this)
+
     companion object {
         const val DB_NAME = "noop_whoop.db"
         /** Room schema version — MUST equal the `@Database(version = …)` above. Surfaced in the backup
          *  manifest (#1410) so an export states its schema. Bump both together on a migration. */
-        const val SCHEMA_VERSION = 34
+        const val SCHEMA_VERSION = 35
 
         @Volatile
         private var instance: WhoopDatabase? = null
@@ -896,7 +900,29 @@ abstract class WhoopDatabase : RoomDatabase() {
             }
         }
 
+        /**
+         * #1636: keep the nightly ABSOLUTE skin temperature beside the deviation derived from it.
+         *
+         * The engine computed this mean on every scoring pass and discarded it the moment `skinTempDevC`
+         * was taken, so the app could show "+0.5 Δ°C" with no way to learn what it moved from — and a
+         * febrile night reads as a small delta where the absolute reads as a fever. Nullable and additive:
+         * existing rows stay null and refill on the next scoring pass, because the value is re-derived
+         * from raw `skinTempSample` rows still on disk. No backfill statement, and therefore no second
+         * derivation that could disagree with the live one.
+         *
+         * Twin of the Swift `v40-daily-skin-temp-absolute` GRDB migration.
+         */
+        internal val DAILY_SKIN_TEMP_ABSOLUTE_MIGRATION_SQL: List<String> = listOf(
+            "ALTER TABLE `dailyMetric` ADD COLUMN `skinTempC` REAL",
+        )
+
         internal val MIGRATION_33_34 = object : Migration(33, 34) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                for (stmt in DAILY_SKIN_TEMP_ABSOLUTE_MIGRATION_SQL) db.execSQL(stmt)
+            }
+        }
+
+        internal val MIGRATION_34_35 = object : Migration(34, 35) {
             override fun migrate(db: SupportSQLiteDatabase) { db.execSQL("DROP TABLE IF EXISTS `rawImuSample`") }
         }
 
@@ -925,7 +951,7 @@ abstract class WhoopDatabase : RoomDatabase() {
             MIGRATION_18_19, MIGRATION_19_20, MIGRATION_20_21, MIGRATION_21_22,
             MIGRATION_22_23, MIGRATION_23_24, MIGRATION_24_25, MIGRATION_25_26,
             MIGRATION_26_27, MIGRATION_27_28, MIGRATION_28_29, MIGRATION_29_30,
-            MIGRATION_30_31, MIGRATION_31_32, MIGRATION_32_33, MIGRATION_33_34,
+            MIGRATION_30_31, MIGRATION_31_32, MIGRATION_32_33, MIGRATION_33_34, MIGRATION_34_35,
         )
 
 

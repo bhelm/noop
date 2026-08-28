@@ -485,6 +485,7 @@ fun SettingsScreen(
     vm: AppViewModel,
     onOpenTestCentre: () -> Unit = {},
     onOpenBackupSync: () -> Unit = {},
+    onOpenSelfHostedPush: () -> Unit = {},
     onOpenStepsCalibration: () -> Unit = {},
 ) {
     val context = LocalContext.current
@@ -584,6 +585,7 @@ fun SettingsScreen(
     val r22FlagCount = Whoop5Config.enableR22Sequence.size
     var broadcastHr by remember(rev) { mutableStateOf(puffinExperiment.broadcastHr) }
     var explicitBond by remember(rev) { mutableStateOf(puffinExperiment.explicitBond) }
+    var helloDespiteRefusal by remember(rev) { mutableStateOf(puffinExperiment.helloDespiteBondRefusal) }
     // ECG raw-data gate (#891): the opt-in, the write result, and the attested-MG gate the buttons need.
     var ecgRawData by remember(rev) { mutableStateOf(puffinExperiment.ecgRawData) }
     val ecgGateReport by vm.ble.ecgRawDataGate.collectAsStateWithLifecycle()
@@ -2226,6 +2228,19 @@ fun SettingsScreen(
             onToggle = { advancedOpen = !advancedOpen; SettingsDisclosurePrefs.write(NoopPrefs.of(context), advancedOpen) },
         ) {
         Column(verticalArrangement = Arrangement.spacedBy(Metrics.screenRowSpacing)) {
+        SettingsCard(
+            icon = Icons.Filled.CloudSync,
+            title = uiString(R.string.nav_self_hosted_push),
+            blurb = uiString(R.string.push_settings_row_detail),
+        ) {
+            NoopButton(
+                text = uiString(R.string.nav_self_hosted_push),
+                leadingIcon = Icons.Filled.CloudSync,
+                kind = NoopButtonKind.Secondary,
+                fullWidth = true,
+                onClick = onOpenSelfHostedPush,
+            )
+        }
         // --- Experimental · WHOOP 5 / MG --- (hidden when the user is confidently on a 4.0, #22)
         // Developer-only 5/MG controls now live in Test Centre. Keep the implementation below during
         // the compatibility transition, but never render a second copy in everyday Settings.
@@ -2335,6 +2350,40 @@ fun SettingsScreen(
                         ),
                         modifier = Modifier.semantics {
                             contentDescription = uiString(R.string.l10n_settings_screen_ask_android_to_pair_323fccbe)
+                        },
+                    )
+                }
+
+                // --- Send the hello even when the suppression latch is set. (#1635) ---
+                // An HCI capture shows the strap answers createBond with SMP "Pairing Not Supported", so
+                // the bond the hello waits behind can never arrive — and with the hello suppressed the app
+                // attempts neither handshake. This asks the only question left.
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(16.dp),
+                ) {
+                    Text(
+                        uiString(R.string.l10n_settings_screen_send_hello_despite_bond_refusal_experimental_2f8de795),
+                        style = NoopType.subhead,
+                        color = Palette.textPrimary,
+                        modifier = Modifier.weight(1f),
+                    )
+                    Switch(
+                        checked = helloDespiteRefusal,
+                        onCheckedChange = {
+                            helloDespiteRefusal = it
+                            puffinExperiment.helloDespiteBondRefusal = it
+                        },
+                        colors = SwitchDefaults.colors(
+                            checkedThumbColor = Palette.surfaceBase,
+                            checkedTrackColor = Palette.accent,
+                            uncheckedThumbColor = Palette.textSecondary,
+                            uncheckedTrackColor = Palette.surfaceInset,
+                            uncheckedBorderColor = Palette.hairline,
+                        ),
+                        modifier = Modifier.semantics {
+                            contentDescription = uiString(R.string.l10n_settings_screen_send_hello_despite_bond_refusal_65c9d9fd)
                         },
                     )
                 }
@@ -3229,6 +3278,13 @@ fun SettingsScreen(
                 // is sent. Android already holds INTERNET (for the opt-in Coach), so this adds nothing.
                 var updChecking by remember { mutableStateOf(false) }
                 var updResult by remember { mutableStateOf<UpdateCheck.Result?>(null) }
+                // #1659: the automatic half. A sideloaded build has no store to update it, so noticing a
+                // release and saying so in the Updates inbox is the whole of what is possible. ON by
+                // default, because a setting nobody finds is the feature not existing; switching it off
+                // here stops the request entirely. See UpdateAvailability.DEFAULT_ENABLED.
+                var autoCheck by remember {
+                    mutableStateOf(com.noop.update.UpdateWatch.isEnabled(context))
+                }
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
@@ -3272,6 +3328,41 @@ fun SettingsScreen(
                                 )
                             else -> {}
                         }
+                    }
+
+                    // #1659: the automatic half, directly under the manual button so the two read as one
+                    // feature — the same placement as the Swift twin.
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                uiString(R.string.l10n_settings_screen_check_automatically_7cd229d2),
+                                style = NoopType.subhead,
+                                color = Palette.textPrimary,
+                            )
+                            Text(
+                                uiString(R.string.l10n_settings_screen_once_a_day_noop_asks_github_5683aad3),
+                                style = NoopType.footnote,
+                                color = Palette.textTertiary,
+                            )
+                        }
+                        Switch(
+                            checked = autoCheck,
+                            onCheckedChange = {
+                                autoCheck = it
+                                com.noop.update.UpdateWatch.setEnabled(context, it)
+                            },
+                            colors = SwitchDefaults.colors(
+                                checkedThumbColor = Palette.surfaceBase,
+                                checkedTrackColor = Palette.accent,
+                                uncheckedThumbColor = Palette.textSecondary,
+                                uncheckedTrackColor = Palette.surfaceInset,
+                                uncheckedBorderColor = Palette.hairline,
+                            ),
+                        )
                     }
 
                     // Update available: show what's new, with a download straight to the release.

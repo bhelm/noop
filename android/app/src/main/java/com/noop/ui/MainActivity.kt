@@ -29,6 +29,7 @@ import com.noop.NoopApplication
 import com.noop.ble.WhoopModel
 import com.noop.data.DemoSeeder
 import com.noop.data.WhoopRepository
+import com.noop.push.SelfHostedPushScheduler
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.channels.awaitClose
@@ -93,6 +94,12 @@ class MainActivity : ComponentActivity() {
         runCatching { BackupSync.reschedule(applicationContext) }
         lifecycleScope.launch(Dispatchers.IO) {
             runCatching { BackupSync.catchUpIfDue(applicationContext) }
+        }
+
+        // Experimental self-hosted push: launch only queues a catch-up when fully configured and
+        // enabled. The Activity never reads health rows, credentials, or performs network I/O.
+        lifecycleScope.launch(Dispatchers.IO) {
+            runCatching { SelfHostedPushScheduler.enqueueLaunchCatchUp(applicationContext) }
         }
 
         // Load the Light/Dark/System + chart-colour preferences before first composition so the theme
@@ -1329,6 +1336,25 @@ fun NoopRoot() {
     // bell in the Today header surfaces it; the inbox row deep-links to the full changelog read.
     LaunchedEffect(onboarded) {
         if (onboarded) UpdateStore.from(context).seedWhatsNewIfNeeded()
+        // #1659: a sideloaded build has no store to update it, so the most NOOP can do is NOTICE a
+        // release and say so in the same inbox. On by default and switchable off in Settings — see
+        // UpdateAvailability.DEFAULT_ENABLED.
+        //
+        // Gated on onboarding AND terms, matching both Swift hooks: a default-on check must not reach the
+        // network during first run, nor while a returning user is looking at a re-prompted clickwrap —
+        // the Terms gate below sits AFTER this effect, so `onboarded` alone would not have held it back.
+        // Read from prefs rather than the `acceptedTerms` state, which is not declared until after this
+        // block.
+        //
+        // No re-entrancy guard here, unlike the Swift twin's `inFlight`: LaunchedEffect does not re-run on
+        // recomposition, only when its key changes, so this cannot fire twice for one launch. `.onAppear`
+        // gives no such promise, which is why the Swift side needs the flag. Moving this call anywhere
+        // that re-runs (a plain composable body, a keyless effect) would need the guard back.
+        val termsCurrent =
+            prefs.getString(NoopPrefs.KEY_ACCEPTED_TERMS_VERSION, "") == Terms.CURRENT_VERSION
+        if (onboarded && termsCurrent) {
+            com.noop.update.UpdateWatch.runIfDue(context, BuildConfig.VERSION_NAME)
+        }
     }
 
     // Terms acknowledgment gate, over EVERYTHING (before onboarding/pairing/Bluetooth) until the

@@ -10,6 +10,13 @@ public final class FrameRouter {
     /// Called when the strap pushes an EVENT packet (WHOOP's strap-as-clock catch-up signal). The
     /// BLEManager wires this to a rate-limited requestSync(.strap). nil in pure/unit contexts.
     var onSyncTrigger: (() -> Void)?
+    /// #1706: which strap this connection is talking to, so an alarm readback can be attributed to a
+    /// device. Set per connection by BLEManager immediately AFTER `family`, whose didSet clears this —
+    /// a path that sets the family and forgets the id then attributes nothing rather than carrying the
+    /// previous connection's strap forward, which is the very mistake this attribution exists to stop.
+    /// nil in pure/unit contexts, which the verdict treats as unattributed rather than guessing.
+    var deviceId: String?
+
     /// Which family's framing to decode with. Set per connection by BLEManager. WHOOP 5.0/MG frames
     /// use the CRC16/offset-8 envelope; the biometric field decode for puffin is still a stub, so
     /// WHOOP 5 custom frames currently surface only their envelope (live HR/battery come from the
@@ -18,7 +25,7 @@ public final class FrameRouter {
         // #900: a fresh connection is a fresh capture session — re-arm the per-command raw-frame dump so
         // each connect can re-capture the disputed COMMAND_RESPONSE prefix once. `family` is set fresh per
         // connection by BLEManager (connectCore), so this is the per-session reset hook.
-        didSet { rawDumpedRespCmds.removeAll(); loggedFirmwareGate = nil }
+        didSet { rawDumpedRespCmds.removeAll(); loggedFirmwareGate = nil; deviceId = nil }
     }
 
     /// #900: resp command names (e.g. "GET_BATTERY_LEVEL(26)") whose raw COMMAND_RESPONSE frame has already
@@ -175,15 +182,41 @@ public final class FrameRouter {
                         // #34: persist what the strap reports so the debug export can show sent-vs-reported.
                         let d = UserDefaults.standard
                         d.set(Int(epoch), forKey: "alarm.lastReportedEpoch")
+                        // #1706: the strap this readback came from, and the bytes it came in. The raw
+                        // frame is what separates a genuinely-stored stale alarm from a misdecode of a
+                        // fixed response field, and the live log rolls long before a debug export is
+                        // taken — a 2045 readback went unexplained for exactly that reason.
+                        d.set(deviceId, forKey: "alarm.lastReportedDeviceId")
+                        d.set(raw, forKey: "alarm.lastReportedRaw")
                         d.set(Date().timeIntervalSince1970, forKey: "alarm.lastReportedAt")
                         // #34: count CONSECUTIVE rejections (reported ≠ what we last sent) — the signature of
                         // a corrupted strap alarm register. A matching readback resets it, so a transient
                         // (first read stale, then correct) never trips the warning; only a persistent refusal
                         // climbs. SmartAlarmView surfaces the warning at ≥2; the debug export shows the count.
                         // Observability only — never gates the BLE arm.
+                        // #1706: the streak raises a UI warning at two, so it must only COUNT a
+                        // disagreement PROVEN to be the same strap. A cross-strap reading is evidence of
+                        // nothing and leaves the streak alone — advancing would warn about a strap that
+                        // was never asked, clearing would hide a real refusal. An unattributed one is a
+                        // different case, handled below.
                         if let sent = d.object(forKey: "alarm.lastArmSentEpoch") as? Int {
-                            d.set(abs(Int(epoch) - sent) > 120 ? d.integer(forKey: "alarm.rejectStreak") + 1 : 0,
-                                  forKey: "alarm.rejectStreak")
+                            let verdict = AlarmReadback.verdict(
+                                sentEpoch: sent,
+                                reportedEpoch: Int(epoch),
+                                sentDeviceId: d.string(forKey: "alarm.lastArmDeviceId"),
+                                reportedDeviceId: deviceId)   // the local, not a re-read of what we just wrote
+                            if AlarmReadback.countsAsRejection(verdict) {
+                                d.set(d.integer(forKey: "alarm.rejectStreak") + 1, forKey: "alarm.rejectStreak")
+                            } else if AlarmReadback.clearsRejectionStreak(verdict) {
+                                d.set(0, forKey: "alarm.rejectStreak")
+                            } else if verdict == .unattributed {
+                                // Any streak standing here was built by the cross-strap comparison this
+                                // replaces, so it cannot be trusted — and since only a proven match clears
+                                // the streak now, leaving it would hold SmartAlarmView's warning up forever
+                                // on an install that upgraded mid-streak. Discard once; the next attributed
+                                // readback rebuilds it honestly.
+                                d.set(0, forKey: "alarm.rejectStreak")
+                            }
                         }
                     } else if Self.readbackReportsNoAlarm(in: frame) {
                         // #34 (issue comment 2026-07-12): the strap's "nothing armed" sentinel — the epoch
@@ -288,6 +321,20 @@ public final class FrameRouter {
                     state.append(log: "  raw frame (#900 — [seq][result] provenance): \(Self.fullFrameHex(frame))")
                 }
             }
+
+        case "CONSOLE_LOGS":
+            // The 5/MG strap narrates its own sync engine here — "BLE: PullStats: Data: N, Events: N…",
+            // "History burst success. Trim: 0x…", "Historical Dump Complete". Android has mirrored this
+            // into the strap log since #78 and calls it gold for protocol research; this side decoded the
+            // text and then dropped it on the floor, so an Apple strap log has never carried a word of it.
+            //
+            // It is worth more than curiosity. `PullStats: Data: 0` is the STRAP stating it sent no
+            // records, which is a far stronger answer to a "synced but no data" report (#1683) than NOOP
+            // inferring emptiness from its own decode — the difference between the strap saying nothing
+            // was there and us saying we found nothing.
+            //
+            // Capped at 300 characters to match the Kotlin twin exactly; the ring buffer holds 2k lines.
+            appendStrapConsole(parsed)
 
         case "EVENT":
             if let ev = parsed.parsed["event"]?.stringValue {
@@ -509,6 +556,32 @@ public final class FrameRouter {
     /// RTC (fix #72) — a live gesture is ~now in the strap's clock, a historical replay is old in it.
     /// Deliberately does NOT touch lastEvent / sync trigger / bonded / battery — those stay on the normal
     /// handle(frame:) path, so backfill UI behaviour is otherwise unchanged.
+    /// Mirror a CONSOLE_LOGS frame's text even during a backfill.
+    ///
+    /// The strap narrates its sync engine EXACTLY while offloading — "BLE: PullStats: Data: N",
+    /// "History burst success. Trim: 0x…", "Historical Dump Complete" — and offload frames are routed
+    /// straight to the Backfiller, bypassing `handle` entirely. So the `case "CONSOLE_LOGS"` there only
+    /// ever sees the rare console frame that arrives outside a sync, which is not the one worth having.
+    /// This is the same carve-out `dispatchLiveGestureIfFresh` makes for a live gesture mid-offload.
+    ///
+    /// Same cheap pre-check as that method: a single type-byte compare skips the CRC + FieldBuilder
+    /// decode for the thousands of type-47 records a sync produces, so the cost on the offload path is a
+    /// byte compare per frame. Family-aware (WHOOP4 type @[4], 5/MG @[8]).
+    func mirrorStrapConsoleIfPresent(frame: [UInt8]) {
+        guard frameTypeName(frame, family: family) == "CONSOLE_LOGS" else { return }
+        let parsed = parseFrame(frame, family: family)
+        guard parsed.ok, parsed.crcOK != false else { return }
+        appendStrapConsole(parsed)
+    }
+
+    /// The one place the strap's own narration reaches the log, so the live and offload paths cannot
+    /// drift in what they emit. Capped at 300 characters to match the Kotlin twin exactly.
+    private func appendStrapConsole(_ parsed: ParsedFrame) {
+        guard parsed.typeName == "CONSOLE_LOGS",
+              let txt = parsed.parsed["log"]?.stringValue, !txt.isEmpty else { return }
+        state.append(log: "strap: \(String(txt.prefix(300)))")
+    }
+
     func dispatchLiveGestureIfFresh(frame: [UInt8], now: Int = Int(Date().timeIntervalSince1970)) {
         // #47: this fires for EVERY frame on the OFFLOAD path (thousands of type-47 records over a
         // multi-minute sync) purely to catch a rare EVENT gesture. Cheap type-only pre-check skips the full

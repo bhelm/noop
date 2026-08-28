@@ -7,14 +7,18 @@ and [`docs/IOS.md`](docs/IOS.md) covers the iOS target. Read this first; follow 
 
 ## What NOOP is (and the hard scope limits)
 
-NOOP is a **fully offline, on-device** companion app for WHOOP 4.0 and 5.0/MG straps (with
+NOOP is an **offline-by-default, on-device** companion app for WHOOP 4.0 and 5.0/MG straps (with
 **experimental** Oura support in the tree — gated behind `ExperimentalBrand`, not a shipped supported
 strap). It pairs over Bluetooth, stores everything in on-device SQLite, and computes recovery / strain
-/ HRV / sleep locally. There is **no server, no account, no cloud sync, no telemetry**, and the project stays
-**anonymous** (iOS/Android ship build-from-source / sideload, not via the App Store).
+/ HRV / sleep locally. There is **no NOOP-operated server, no account, no cloud dependency, no
+telemetry**, and the project stays **anonymous** (iOS/Android ship build-from-source / sideload, not
+via the App Store). Issue #1314 permits one narrow exception: a default-off Experimental client may
+export data one way to an HTTP(S) endpoint the user owns and configures. It must remain outside strap
+sync, never read data back, and ship no receiver or hosted service in this repository.
 
 These are hard constraints, not preferences. A PR is out of scope if it:
-- adds a server, account, cloud sync, or sends any data off-device;
+- adds a server, account, cloud dependency, or sends data off-device without the explicit user export
+  boundary in [`docs/SCOPE.md`](docs/SCOPE.md) (including #1314's one-way self-hosted push);
 - adds analytics/telemetry/crash-reporting that phones home;
 - adds WHOOP firmware, decompiled app code, logos/assets, or any DRM circumvention. NOOP is
   **clean-room interoperability** with hardware the user owns — keep it that way. (That bars
@@ -115,7 +119,7 @@ xcodegen generate && xcodebuild -project Strand.xcodeproj -scheme Strand \
 ### What each CI job covers — and the gaps
 | Workflow | Covers | Runner | Default state |
 |---|---|---|---|
-| `swift-packages.yml` | `swift test` for **`Packages/**` only** (WhoopProtocol, WhoopStore, StrandAnalytics, StrandImport, StrandDesign, NoopLocalAccess) | macos-15 | **active** |
+| `swift-packages.yml` | TWO jobs. `test`: `swift test` over **`Packages/**`** (WhoopProtocol, WhoopStore, StrandAnalytics, StrandImport, StrandDesign, NoopLocalAccess). `tools`: `swift build` + `swift test` over **`Tools/SleepBench`, `Tools/SleepPSG`, `Tools/Backfill`** — Backfill has no test target, so it is build-only. Path-filtered to those directories. | macos-15 | **active** |
 | `app-build.yml` | Builds the **app targets** (`Strand` macOS + `NOOPiOS` iOS) **and runs `StrandTests`** on the macOS/`Strand` leg only — the iOS leg is compile-only. iOS leg needs **macos-26** (iOS 26 SDK / `glassEffect`). | macos-15 / macos-26 | **disabled** (on-demand) |
 | `android.yml` | `assembleFullDebug` + `testFullDebugUnitTest` | ubuntu | **active**, path-filtered to `android/**` |
 | `source-hygiene.yml` | Doc comments that bind to nothing (`Tools/doc_comment_lint.py`) | ubuntu | **active** |

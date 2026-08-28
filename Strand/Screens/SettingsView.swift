@@ -294,6 +294,9 @@ struct SettingsView: View {
 
     /// User-initiated GitHub release check behind the About "Check for updates" button.
     @StateObject private var updateChecker = UpdateChecker()
+    /// #1659. Default comes from `UpdateAvailability.defaultEnabled` so the toggle and the launch check
+    /// cannot disagree about what "unset" means.
+    @AppStorage(UpdateWatch.Keys.enabled) private var autoCheckUpdates = UpdateAvailability.defaultEnabled
     @Environment(\.openURL) private var openURL
 
     /// Whether the "Advanced" disclosure (Recovery, Test Centre, experimental probes, Backup &
@@ -1477,14 +1480,21 @@ struct SettingsView: View {
         //
         // A live-HR link falls through to the pairing hint when one is set, and otherwise to "Finishing
         // the secure pairing handshake…", which is accurate HERE because this platform still retries the
-        // CLIENT_HELLO on every connect. Android has an explicit "streaming but not fully paired" arm
-        // instead, because #1635 suppression stops it retrying and nothing is finishing any more. If that
-        // suppression is ported here, this branch must gain the same arm or it starts describing a
-        // handshake that is no longer being attempted.
+        // CLIENT_HELLO on every connect. The #1635 suppression is now ported here too, so once it latches
+        // nothing is finishing any more and the old fall-through would describe a handshake that is no
+        // longer being attempted. The `bonded && connected` arm below is that fix, matching the Android
+        // twin (`SettingsLogic.strapStatusLine`).
         if live.encryptedBond && live.connected {
             return String(localized: "Your strap is paired and sending data. Open Live for a real-time heart rate.")
         }
+        // An actionable hint outranks the generic arm: the suppression hint names the one action that
+        // restores the handshake, which "not fully paired" alone does not.
         if live.connected, let hint = live.pairingHint { return hint }
+        // Live HR over the UNBONDED standard profile (#69). True whenever the handshake is suppressed or
+        // simply has not landed, and the honest description either way.
+        if live.bonded && live.connected {
+            return String(localized: "Live heart rate is streaming, but your strap is not fully paired. Buzz, alarms and history sync need the encrypted pairing.")
+        }
         if live.connected { return String(localized: "Connected. Finishing the secure pairing handshake…") }
         if live.bonded { return String(localized: "Previously paired but not currently connected. Re-scan to reconnect.") }
         return String(localized: "No strap connected. Put your WHOOP nearby and tap Re-scan to pair.")
@@ -2621,9 +2631,7 @@ struct SettingsView: View {
     /// project.yml MARKETING_VERSION), so the About pill can never go stale the way a hand-edited
     /// Swift constant can. Mirrors how Android's pill reads BuildConfig.VERSION_NAME. Falls back to
     /// the hand-maintained changelog version only if the Info.plist key is somehow missing.
-    private var bundleVersionString: String {
-        (Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String) ?? AppChangelog.currentVersion
-    }
+    private var bundleVersionString: String { UpdateWatch.installedVersion }
 
     private var aboutCard: some View {
         SettingsSection(
@@ -2805,6 +2813,23 @@ struct SettingsView: View {
                         }
                         Spacer()
                     }
+
+                    // #1659: the automatic half. iOS cannot auto-update a sideloaded build at all — no API
+                    // lets an app install or re-sign an .ipa — so noticing and saying so is the whole of
+                    // what is possible. ON by default, because a sideloaded app has no store to tell the
+                    // user anything and a setting nobody finds is the feature not existing; switching it
+                    // off here stops the request entirely. See UpdateAvailability.defaultEnabled.
+                    Toggle(isOn: $autoCheckUpdates) {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Check automatically")
+                                .font(StrandFont.subhead)
+                                .foregroundStyle(StrandPalette.textPrimary)
+                            Text("Once a day, NOOP asks GitHub for the latest version number and puts a note in Updates if there's a newer one. Nothing about you is sent, and it never installs anything.")
+                                .font(StrandFont.footnote)
+                                .foregroundStyle(StrandPalette.textSecondary)
+                        }
+                    }
+                    .tint(StrandPalette.accent)
 
                     // Update available: show what's new, with a download straight to the release.
                     if case .available(let v, let url, let notes) = updateChecker.state {
@@ -3614,7 +3639,7 @@ struct StepsCalibrationSheet: View {
             .sorted { $0.day > $1.day }
 
         // Reconstruct the estimate for the most recent phone-covered days, motion-by-motion.
-        guard coeff > 0, let store = await repo.storeHandle() else { return }
+        guard coeff > 0 else { return }
         let cal = StepsEstimateEngine.Calibration(coefficient: coeff,
                                                   sampleDays: profile.stepsCalibrationSampleDays,
                                                   confidence: profile.stepsCalibrationConfidence,
@@ -3626,8 +3651,10 @@ struct StepsCalibrationSheet: View {
         for entry in phoneDays.prefix(10) {           // scan a few extra to fill 7 after motion gaps
             guard let dayDate = dayParser.date(from: entry.day) else { continue }
             let mid = Int(calendar.startOfDay(for: dayDate).timeIntervalSince1970)
-            let grav = (try? await store.gravitySamples(deviceId: repo.deviceId, from: mid,
-                                                        to: mid + 86_400 - 1, limit: 200_000)) ?? []
+            // #1643: the UNION, not `repo.deviceId` alone — a re-added strap leaves motion under both the
+            // active id and the canonical one, and reading either by itself makes this screen disagree
+            // with the estimator it is supposed to be reconstructing.
+            let grav = await repo.gravitySamplesUnion(from: mid, to: mid + 86_400 - 1)
             let motion = StepsEstimateEngine.dayMotionIntensity(grav)
             guard motion > 0, let est = StepsEstimateEngine.estimate(motion: motion, calibration: cal) else { continue }
             motions.append(motion)
