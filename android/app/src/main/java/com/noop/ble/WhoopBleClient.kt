@@ -646,6 +646,11 @@ class WhoopBleClient(
             else -> BluetoothGatt.CONNECTION_PRIORITY_BALANCED
         }
 
+        /** Bounded 100 Hz work gets HIGH independently of the global experiment. A completed capture
+         * only holds it while an offload is actively repairing missing seconds. */
+        fun rawCaptureHighPriority(captureActive: Boolean, backfilling: Boolean, needsRepair: Boolean): Boolean =
+            captureActive || (backfilling && needsRepair)
+
         /**
          * The throughput summary for one offload burst (#1007), pure so it is testable without a BLE stack.
          *
@@ -1958,6 +1963,9 @@ class WhoopBleClient(
      *  the drop-risk is confined to when the user actually wants power saving. Set on the main looper via
      *  [setConnectionPriorityManagement]. */
     @Volatile private var connectionPriorityEnabled: Boolean = false
+    /** Android-only transport lease for bounded 100 Hz capture and delayed history repair. CoreBluetooth
+     * chooses connection parameters itself and exposes no equivalent app-side request. */
+    @Volatile private var rawCapturePriorityApplied: Boolean = false
     /** Battery-% at/below which the LOW_POWER idle throttle engages while the STRAP is discharging;
      *  0 = never (safe half only).
      *
@@ -2155,7 +2163,13 @@ class WhoopBleClient(
     /** (Re)apply the GATT connection priority for the current link state (#477). Idempotent + cheap: OFF
      *  or disconnected -> no BLE op. Called on connect-established and whenever offload / live-HR toggles. */
     private fun refreshConnectionPriority() {
-        if (!connectionPriorityEnabled) return
+        val rawCaptureHigh = connectedFamily == DeviceFamily.WHOOP5 && rawCaptureHighPriority(
+            captureActive = groundTruthImuSessionId != null,
+            backfilling = backfilling,
+            needsRepair = ImuSessionFileStore(context).needsHighThroughput(deviceId),
+        )
+        // Preserve the zero-op default path, but release a completed capture's HIGH lease once.
+        if (!connectionPriorityEnabled && !rawCaptureHigh && !rawCapturePriorityApplied) return
         val ops = gattOps ?: return
         // Only read the battery when the RISKY idle throttle is actually armed (threshold > 0); the SAFE
         // HIGH-escalation half doesn't need it, so safe-half-only mode issues no battery read.
@@ -2166,7 +2180,7 @@ class WhoopBleClient(
         // Read the authoritative INTERNAL flags (both set synchronously on this looper), not the
         // published LiveState mirror, which `exitBackfilling` may update a beat later.
         val priority = connectionPriorityFor(
-            offloadActive = backfilling,
+            offloadActive = rawCaptureHigh || (connectionPriorityEnabled && backfilling),
             // #533: gated — the live stream does NOT escalate by default. See [escalateForLiveHr]: the
             // overnight continuous-HRV window keeps this armed for hours, and a 1 Hz stream gains nothing
             // from HIGH. The offload burst below is the case that actually wants the shorter interval.
@@ -2178,6 +2192,7 @@ class WhoopBleClient(
         // binder is handled by the next real op, and skipping a priority request costs nothing. Swallow.
         try {
             ops.requestConnectionPriorityCompat(priority)
+            rawCapturePriorityApplied = rawCaptureHigh
         } catch (t: Throwable) {
             log("connection-priority request failed (${t.javaClass.simpleName}); skipped")
         }
@@ -2211,6 +2226,7 @@ class WhoopBleClient(
         groundTruthImuSessionId = sessionId
         groundTruthImuStoppedAtMs = 0L
         groundTruthImuCommandAllowed = true
+        refreshConnectionPriority()
         try {
             // The verified bounded raw-capture sequence is START_RAW_DATA followed by the
             // realtime IMU selector. Opcode 106 alone ACKs but does not start the producer.
@@ -2240,6 +2256,9 @@ class WhoopBleClient(
         groundTruthImuSessionId = null
         groundTruthImuStoppedAtMs = System.currentTimeMillis()
         _groundTruthImuStatus.update { it.copy(requested = false, note = "Stopped; accepting history repair") }
+        // The collector closes its window before this call. A running history repair keeps HIGH;
+        // otherwise release now and let the next offload acquire a fresh bounded lease.
+        refreshConnectionPriority()
     }
 
     @Synchronized

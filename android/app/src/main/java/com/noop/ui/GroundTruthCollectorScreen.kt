@@ -33,8 +33,10 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.noop.R
 import com.noop.testcentre.GroundTruthCollector
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 /** Bounded 5/MG raw-data capture. */
 @Composable
@@ -67,7 +69,9 @@ fun GroundTruthCollectorScreen(vm: AppViewModel) {
         while (true) {
             nowMs = System.currentTimeMillis()
             latestSensorTs = vm.activeStrapId.takeIf(String::isNotBlank)?.let { vm.repo.latestHrSampleTs(it) }
-            captureStats = sessions.associate { it.id to collector.captureStats(it, nowMs) }
+            captureStats = withContext(Dispatchers.IO) {
+                sessions.associate { it.id to collector.captureStats(it, nowMs) }
+            }
             delay(1_000)
         }
     }
@@ -196,7 +200,7 @@ fun GroundTruthCollectorScreen(vm: AppViewModel) {
             )
             NoopButton(text = stringResource(R.string.ground_truth_stop), kind = NoopButtonKind.Destructive,
                 fullWidth = true, onClick = {
-                    vm.ble.stopGroundTruthImuCapture(); state = collector.stop(); sessions = collector.sessions()
+                    state = collector.stop(); vm.ble.stopGroundTruthImuCapture(); sessions = collector.sessions()
                 })
         } else {
             NoopButton(

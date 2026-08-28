@@ -24,13 +24,14 @@ class ImuSessionFileStore(private val context: Context) {
 
     fun start(id: String, deviceId: String, fromMs: Long) = synchronized(lock) {
         prefs.edit().putStringSet("ids", ids() + id).putString("$id.device", deviceId)
-            .putLong("$id.from", fromMs / 1_000L).remove("$id.to").apply()
+            .putLong("$id.from", fromMs / 1_000L).putLong("$id.fromMs", fromMs)
+            .remove("$id.to").remove("$id.toMs").apply()
         sessionDir(id).mkdirs()
     }
 
     fun complete(id: String, toMs: Long) = synchronized(lock) {
         flushSession(id)
-        if (id in ids()) prefs.edit().putLong("$id.to", toMs / 1_000L).apply()
+        if (id in ids()) prefs.edit().putLong("$id.to", toMs / 1_000L).putLong("$id.toMs", toMs).apply()
     }
 
     fun register(id: String, deviceId: String, fromMs: Long, toMs: Long) = synchronized(lock) {
@@ -41,7 +42,28 @@ class ImuSessionFileStore(private val context: Context) {
     fun remove(id: String) = synchronized(lock) {
         pending.keys.filter { it.startsWith("$id/") }.forEach(pending::remove)
         seen.keys.filter { it.startsWith(sessionDir(id).absolutePath) }.forEach(seen::remove)
-        prefs.edit().putStringSet("ids", ids() - id).remove("$id.device").remove("$id.from").remove("$id.to").apply()
+        prefs.edit().putStringSet("ids", ids() - id).remove("$id.device").remove("$id.from")
+            .remove("$id.fromMs").remove("$id.to").remove("$id.toMs").apply()
+    }
+
+    /** True while a bounded capture is active or still missing seconds recoverable from strap history. */
+    fun needsHighThroughput(deviceId: String): Boolean = synchronized(lock) {
+        ids().any { id ->
+            if (prefs.getString("$id.device", null) != deviceId) return@any false
+            if (!prefs.contains("$id.to")) return@any true
+            val fromMs = prefs.getLong("$id.fromMs", prefs.getLong("$id.from", 0L) * 1_000L)
+            val toMs = prefs.getLong("$id.toMs", prefs.getLong("$id.to", 0L) * 1_000L)
+            val baseFrom = (fromMs + 999L) / 1_000L
+            val to = toMs / 1_000L - 1L
+            if (baseFrom > to) return@any false
+            val present = buildSet {
+                segmentFiles(id).forEach { addAll(timestamps(it)) }
+                pending.filterKeys { it.startsWith("$id/") }.values.flatten().forEach { add(it.ts) }
+            }
+            // Match export's one-second producer-start allowance, without hiding any later gap.
+            val first = present.minOrNull()?.takeIf { it <= baseFrom + 1 } ?: baseFrom
+            (first..to).any { it !in present }
+        }
     }
 
     fun prepareForRead(id: String) = synchronized(lock) { flushSession(id) }
@@ -61,11 +83,17 @@ class ImuSessionFileStore(private val context: Context) {
     }
 
     fun stats(id: String, from: Long, to: Long): Stats = synchronized(lock) {
-        val records = readRecords(id, from, to, includePending = true)
+        // Coverage needs timestamps, not decoded 6-axis payloads. Reuse the per-file timestamp index
+        // instead of inflating every .imus block on each one-second UI refresh.
+        val covered = buildSet {
+            segmentFiles(id).forEach { file -> addAll(timestamps(file).filter { it in from..to }) }
+            pending.filterKeys { it.startsWith("$id/") }.values.flatten()
+                .forEach { record -> if (record.ts in from..to) add(record.ts) }
+        }
         val disk = segmentFiles(id).sumOf { it.length() }
         val pendingBytes = pending.filterKeys { it.startsWith("$id/") }.values.flatten()
             .sumOf { it.columns.size.toLong() * 2 + RECORD_HEADER_BYTES }
-        Stats(disk + pendingBytes, records.map { it.ts }.distinct().size, records.minOfOrNull { it.ts })
+        Stats(disk + pendingBytes, covered.size, covered.minOrNull())
     }
 
     fun append(deviceId: String, frame: ByteArray, receivedAtMs: Long = System.currentTimeMillis()): Int = synchronized(lock) {

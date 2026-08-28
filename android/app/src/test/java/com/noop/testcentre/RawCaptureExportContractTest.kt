@@ -35,6 +35,13 @@ class RawCaptureExportContractTest {
         assertFalse(store.contains("frame.copyOf()"))
     }
 
+    @Test fun liveCoverageUsesTimestampIndexInsteadOfDecodingPayloads() {
+        val store = source("ImuSessionFileStore.kt")
+        val stats = store.substringAfter("fun stats(").substringBefore("fun append(")
+        assertTrue(stats.contains("timestamps(file)"))
+        assertFalse(stats.contains("readRecords("))
+    }
+
     @Test fun editedWindowOwnsPublicEventsAndImuBounds() {
         val collector = source("GroundTruthCollector.kt")
         assertTrue(collector.contains("publicEvents(events, summary.startedAtMs, endMs, deviceId)"))
