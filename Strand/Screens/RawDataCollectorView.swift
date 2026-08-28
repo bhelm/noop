@@ -147,6 +147,7 @@ struct RawDataCollectorView: View {
     }
 
     private func sessionCard(_ session: RawDataSessionStore.Session) -> some View {
+        let coverageText = imuCoverage[session.id, default: "no complete seconds"]
         StrandCard {
             VStack(alignment: .leading, spacing: NoopMetrics.space3) {
                 Text(Self.range(session)).font(StrandFont.headline).foregroundStyle(StrandPalette.textPrimary)
@@ -163,7 +164,7 @@ struct RawDataCollectorView: View {
                     ))
                 }
                 Text(session.active ? "Export status: recording"
-                     : "IMU: \(imuCoverage[session.id, default: "no complete seconds")")
+                     : "IMU: \(coverageText)")
                     .font(StrandFont.caption)
                     .foregroundStyle(session.active ? StrandPalette.statusWarning : StrandPalette.statusPositive)
                 TextField("Session comment", text: Binding(
