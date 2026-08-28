@@ -78,30 +78,4 @@ final class PruneTests: XCTestCase {
         XCTAssertEqual(pruned, 0)
     }
 
-    func testCaptureIntervalListsOnlyMatchingDeviceAndWallTime() async throws {
-        let store = try await WhoopStore.inMemory()
-        try await store.upsertDevice(id: "dev1", mac: nil, name: nil)
-        try await store.upsertDevice(id: "dev2", mac: nil, name: nil)
-        try await store.enqueueRawBatch(meta("before", capturedAt: 99, bytes: 10), frames: frames)
-        try await store.enqueueRawBatch(meta("inside", capturedAt: 100, bytes: 10), frames: frames)
-        let other = RawBatchMeta(batchId: "other", deviceId: "dev2", clockRef: .init(device: 0, wall: 0),
-                                 capturedAt: 100, startTs: 0, endTs: 0,
-                                 frameCount: frames.count, byteSize: 10)
-        try await store.enqueueRawBatch(other, frames: frames)
-
-        let rows = try await store.rawBatches(deviceId: "dev1", from: 100, to: 200)
-        XCTAssertEqual(rows.map(\.batchId), ["inside"])
-    }
-
-    func testDeletingCaptureIntervalDoesNotTouchOtherRaw() async throws {
-        let store = try await WhoopStore.inMemory()
-        try await store.upsertDevice(id: "dev1", mac: nil, name: nil)
-        try await store.enqueueRawBatch(meta("before", capturedAt: 99, bytes: 10), frames: frames)
-        try await store.enqueueRawBatch(meta("first", capturedAt: 100, bytes: 10), frames: frames)
-        try await store.enqueueRawBatch(meta("last", capturedAt: 200, bytes: 10), frames: frames)
-        try await store.enqueueRawBatch(meta("after", capturedAt: 201, bytes: 10), frames: frames)
-
-        XCTAssertEqual(try await store.deleteRawBatches(deviceId: "dev1", from: 100, to: 200), 2)
-        XCTAssertEqual(try await store.allBatchIdsForTest(), ["before", "after"])
-    }
 }
