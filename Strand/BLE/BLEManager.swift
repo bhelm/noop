@@ -1791,7 +1791,6 @@ public final class BLEManager: NSObject, ObservableObject {
     public func startGroundTruthRawCapture(sessionId: String) -> Bool {
         guard !rawCaptureInFlight else { return false }
         rawCaptureInFlight = true
-        collector?.beginGroundTruthRawCapture(sessionId: sessionId)
         send(.startRawData, payload: [0x01], writeType: .withResponse)
         send(.toggleIMUMode,
              payload: selectedModel.deviceFamily == .whoop5 ? [0x01, 0x01] : [0x01],
@@ -1808,7 +1807,6 @@ public final class BLEManager: NSObject, ObservableObject {
                 send(.toggleIMUMode, payload: [0x01, 0x00], writeType: .withResponse)
             }
         }
-        await collector?.endRawCapture()
         rawCaptureInFlight = false
         rawCaptureStoppedAt = Date()
         log("Raw-data session: stopped + flushed")
@@ -1827,22 +1825,9 @@ public final class BLEManager: NSObject, ObservableObject {
         log("Raw IMU fail-safe: unexpected realtime packet type \(frame[8]) while capture was off; stop requested")
     }
 
-    public func finishGroundTruthRawCapture(sessionId: String) {
-        collector?.finishGroundTruthRawCapture(sessionId: sessionId)
-    }
-
-    public func groundTruthRawBatches(from: Int, to: Int) async -> [(RawBatchMeta, [[UInt8]])] {
-        await collector?.rawBatches(from: from, to: to) ?? []
-    }
-
     public func groundTruthHistoryCSV(from: Int, to: Int) async -> Data {
         await collector?.historySensorsCSV(from: from, to: to)
             ?? Data("stream,unix_s,v1,v2,v3,v4\n".utf8)
-    }
-
-    @discardableResult
-    public func deleteGroundTruthRawBatches(from: Int, to: Int) async -> Int {
-        await collector?.deleteRawBatches(from: from, to: to) ?? 0
     }
 
     /// Send a command to the WHOOP strap.

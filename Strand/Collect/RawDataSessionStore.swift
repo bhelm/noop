@@ -188,14 +188,13 @@ final class RawDataSessionStore: ObservableObject {
         min(max(atMs, session.startedAtMs), session.endedAtMs ?? Int64(Date().timeIntervalSince1970 * 1_000))
     }
 
-    func exportEntries(for session: Session,
-                       raw: [(RawBatchMeta, [[UInt8]])], sensorAvailable: Bool? = nil) -> [FileExport.BundleEntry] {
+    func exportEntries(for session: Session, sensorAvailable: Bool = false) -> [FileExport.BundleEntry] {
         var meta: [String: Any] = [
             "schema_version": 3, "capture_kind": "whoop_5mg_raw_data",
             "session_id": session.id, "device_id": session.deviceId,
             "started_at_ms": session.startedAtMs, "ended_at_ms": session.endedAtMs ?? session.startedAtMs,
             "comment": session.comment,
-            "sensor_export_available": sensorAvailable ?? !raw.isEmpty,
+            "sensor_export_available": sensorAvailable,
             "device_family": "iOS",
             "app_version": Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "?",
             "markers": session.events.filter {
@@ -224,22 +223,9 @@ final class RawDataSessionStore: ObservableObject {
             }
             return try? JSONSerialization.data(withJSONObject: row, options: [.sortedKeys])
         }.reduce(into: Data()) { $0.append($1); $0.append(0x0A) }
-        var rawData = Data()
-        for (meta, frames) in raw {
-            for (index, frame) in frames.enumerated() {
-                let row: [String: Any] = ["batch_id": meta.batchId, "captured_at": meta.capturedAt,
-                                          "start_ts": meta.startTs, "end_ts": meta.endTs,
-                                          "frame_index": index,
-                                          "hex": frame.map { String(format: "%02x", $0) }.joined()]
-                if let data = try? JSONSerialization.data(withJSONObject: row, options: [.sortedKeys]) {
-                    rawData.append(data); rawData.append(0x0A)
-                }
-            }
-        }
         return [
             .init(name: "meta.json", data: metaData),
             .init(name: "events.jsonl", data: eventData),
-            .init(name: "raw-frames.jsonl", data: rawData),
         ]
     }
 }

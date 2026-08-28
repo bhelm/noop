@@ -50,7 +50,7 @@
       "kotlin": ["imu_100hz_complete", "private fun covers"]
     },
     "delete_one_and_all_with_confirmation": {
-      "swift": ["Delete this session?", "Delete all sessions?", "deleteGroundTruthRawBatches"],
+      "swift": ["Delete this session?", "Delete all sessions?", "removeMetadata(session.id)"],
       "kotlin": ["ground_truth_delete_session_title", "ground_truth_delete_all_title", "deleteAllSessions"]
     },
     "active_session_delete_guard": {

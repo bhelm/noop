@@ -40,10 +40,10 @@ final class RawDataSessionStoreTests: XCTestCase {
         XCTAssertEqual(saved.markerType, "moment")
         XCTAssertEqual(saved.text, "Recovered")
 
-        let events = try XCTUnwrap(store.exportEntries(for: updated, raw: [])
+        let events = try XCTUnwrap(store.exportEntries(for: updated)
             .first(where: { $0.name == "events.jsonl" }))
         XCTAssertTrue(String(decoding: events.data, as: UTF8.self).contains("\"marker_type\":\"moment\""))
-        let meta = try XCTUnwrap(store.exportEntries(for: updated, raw: [])
+        let meta = try XCTUnwrap(store.exportEntries(for: updated)
             .first(where: { $0.name == "meta.json" }))
         let object = try XCTUnwrap(JSONSerialization.jsonObject(with: meta.data) as? [String: Any])
         let markers = try XCTUnwrap(object["markers"] as? [[String: Any]])
@@ -75,7 +75,7 @@ final class RawDataSessionStoreTests: XCTestCase {
 
         let edited = try XCTUnwrap(store.sessions.first)
         XCTAssertEqual(edited.events.filter { $0.kind == "marker" }.count, 2)
-        let events = try XCTUnwrap(store.exportEntries(for: edited, raw: [])
+        let events = try XCTUnwrap(store.exportEntries(for: edited)
             .first(where: { $0.name == "events.jsonl" }))
         let text = String(decoding: events.data, as: UTF8.self)
         XCTAssertFalse(text.contains("outside"))
@@ -87,10 +87,11 @@ final class RawDataSessionStoreTests: XCTestCase {
         _ = store.start(deviceId: "strap", now: Date(timeIntervalSince1970: 100))
         store.stop(now: Date(timeIntervalSince1970: 110))
         let session = try XCTUnwrap(store.sessions.first)
-        let meta = try XCTUnwrap(store.exportEntries(for: session, raw: [], sensorAvailable: true)
+        let meta = try XCTUnwrap(store.exportEntries(for: session, sensorAvailable: true)
             .first(where: { $0.name == "meta.json" }))
         let object = try XCTUnwrap(JSONSerialization.jsonObject(with: meta.data) as? [String: Any])
         XCTAssertEqual(object["sensor_export_available"] as? Bool, true)
+        XCTAssertFalse(store.exportEntries(for: session).contains { $0.name == "raw-frames.jsonl" })
     }
 
     func testFullSecondBoundsExcludePartialEndpointSeconds() {

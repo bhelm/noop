@@ -63,7 +63,6 @@ final class Collector {
     /// activity sample" action can persist raw even when `enableRawCapture` is off. The window's
     /// monotonic deadline auto-expires so a missed stop callback can't leak raw forever.
     private var rawCapture = RawCaptureWindow()
-    private var groundTruthSessionId: String?
     /// #47: buffer the (raw frame, pre-parsed) pair. The raw bytes are still needed for the raw-capture
     /// outbox; the parse is the one the BLE seam already did, so `flush` doesn't re-decode the batch.
     private var buffer: [(frame: [UInt8], parsed: ParsedFrame)] = []
@@ -92,18 +91,6 @@ final class Collector {
         return try? await s.storageStats()
     }
 
-    func rawBatches(from: Int, to: Int) async -> [(RawBatchMeta, [[UInt8]])] {
-        guard let store = concreteStore,
-              let metas = try? await store.rawBatches(deviceId: deviceId, from: from, to: to) else { return [] }
-        var result: [(RawBatchMeta, [[UInt8]])] = []
-        for meta in metas {
-            if let frames = try? await store.rawFrames(batchId: meta.batchId) {
-                result.append((meta, frames))
-            }
-        }
-        return result
-    }
-
     /// Decoded history rows in a stable long-form CSV for arbitrary user-selected export windows.
     func historySensorsCSV(from: Int, to: Int) async -> Data {
         guard let store = concreteStore, from <= to else { return Data("stream,unix_s,v1,v2,v3,v4\n".utf8) }
@@ -124,12 +111,6 @@ final class Collector {
         lines += await (resp ?? []).map { "resp_raw,\($0.ts),\($0.raw),,," }
         lines += await (gravity ?? []).map { "gravity,\($0.ts),\($0.x),\($0.y),\($0.z),\($0.dynAccel.map { String($0) } ?? "")" }
         return Data((lines.joined(separator: "\n") + "\n").utf8)
-    }
-
-    @discardableResult
-    func deleteRawBatches(from: Int, to: Int) async -> Int {
-        guard let store = concreteStore else { return 0 }
-        return (try? await store.deleteRawBatches(deviceId: deviceId, from: from, to: to)) ?? 0
     }
 
     /// Max persisted HR sample ts (the biometric "data frontier" for the stuck-strap watchdog).
@@ -163,11 +144,6 @@ final class Collector {
         ingest(frame: frame, parsed: parseFrame(frame, family: family))
     }
 
-    /// #423: persist the WHOOP 5/MG raw-IMU offload buffer NOOP already decodes for the deep-buffer log —
-    /// the queryable twin of that (table-less) diagnostics line. Same `noopPuffinCapture` gate; only the
-    /// 1244-B 6-axis buffer decodes (rawColumns nil otherwise). Fire-and-forget into the store, bounded by
-    /// a rolling retention prune. Raw i16, no downstream consumer yet. Twin of Android
-    /// `WhoopBleClient.storeWhoop5RawImuIfBuffer`.
     /// Buffer one complete frame + its pre-parsed decode (synchronous: preserves delegate arrival order).
     /// Auto-flushes via a detached Task when the cadence threshold is hit (flush is async). (#47)
     func ingest(frame: [UInt8], parsed: ParsedFrame) {
@@ -258,16 +234,6 @@ final class Collector {
     /// research toggle off. Auto-expires at the (clamped) monotonic deadline.
     func beginRawCapture(seconds: TimeInterval) {
         rawCapture.open(at: monotonic(), duration: seconds)
-    }
-
-    func beginGroundTruthRawCapture(sessionId: String) {
-        rawCapture.open(at: monotonic(), duration: RawCaptureWindow.maxSeconds)
-        groundTruthSessionId = sessionId
-    }
-
-    func finishGroundTruthRawCapture(sessionId: String) {
-        guard groundTruthSessionId == sessionId else { return }
-        groundTruthSessionId = nil
     }
 
     private func recordGroundTruthImu(_ frame: [UInt8]) {

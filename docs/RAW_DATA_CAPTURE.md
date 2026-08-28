@@ -36,12 +36,6 @@ by a strap Unix timestamp. Accelerometer scale is `1/4096 g/LSB`; gyroscope scal
 `0.06104 deg/s/LSB`. See [BLE reverse engineering](BLE_REVERSE_ENGINEERING.md#4-the-realtime-r10r11-raw-stream-type-43)
 for the byte layout and validation evidence.
 
-An Android Bluetooth HCI capture of the official WHOOP app around a Strength Trainer session was the
-useful behavioural reference: high-rate collection was session-oriented rather than a permanently
-enabled background stream. It helped identify what to test, but NOOP's implementation and validation
-remain clean-room and use only independently implemented protocol commands/decoders. The observation
-also does not establish the battery cost of keeping the mode enabled beyond a workout-sized window.
-
 ## Live capture and history repair
 
 A live BLE connection is not assumed to be lossless. Each session is a time window tied to one strap,
@@ -112,11 +106,9 @@ suggested archive name is `noop-5mg-raw-<session-id>.zip`.
   flash-retention, thermal, or BLE-airtime costs for continuous 24/7 100 Hz operation.
 - A one-hour workout/research capture succeeding does not establish that a 36-hour rolling recorder is
   safe. Any future rolling buffer needs hardware measurements and an explicit retention policy.
-- The older passive “Record 5/MG raw capture” protocol trace and the session collector have different
-  jobs. The former preserves broad offload/debug frames; the latter owns a time-bounded, exportable IMU
-  dataset. They may observe the same wire frame, but the session store deduplicates it by strap time.
-- The retired opt-in `rawImuSample` path existed in earlier builds but did not produce usable stored IMU
-  data in deployment. Session capture therefore has one source of truth: its file-backed segments.
+- The separately enabled protocol trace remains a general diagnostics tool. Starting a Raw Data
+  Collector session does not enable it or duplicate its transport frames into the raw outbox.
+- Session capture has one source of truth for high-rate motion: its file-backed `.imus` segments.
 - Do not use arrival order as time, do not fill gaps silently, and do not claim 100 Hz coverage from
   packet count alone.
 

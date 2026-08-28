@@ -13,7 +13,7 @@ struct RawDataCollectorView: View {
     @State private var confirmDeleteAll = false
     @State private var exportError: String?
     @State private var deleteError: String?
-    @State private var rawBatchCounts: [String: Int] = [:]
+    @State private var imuCoverage: [String: String] = [:]
     @State private var historicalFrom = Date().addingTimeInterval(-3_600)
     @State private var historicalTo = Date()
     @State private var markerDraft: MarkerDraft?
@@ -43,7 +43,7 @@ struct RawDataCollectorView: View {
             // Restore a session after navigation/process lifecycle changes. The BLE layer rejects a
             // duplicate arm, so this is safe when capture never stopped.
             if let active = store.active, live.bonded { _ = model.ble.startGroundTruthRawCapture(sessionId: active.id) }
-            await refreshRawCounts()
+            await refreshImuCoverage()
         }
         .onChangeCompat(of: live.bonded) { bonded in
             if bonded, let active = store.active { _ = model.ble.startGroundTruthRawCapture(sessionId: active.id) }
@@ -163,7 +163,7 @@ struct RawDataCollectorView: View {
                     ))
                 }
                 Text(session.active ? "Export status: recording"
-                     : "Export status: \(rawBatchCounts[session.id, default: 0]) raw batches")
+                     : "IMU: \(imuCoverage[session.id, default: "no complete seconds")")
                     .font(StrandFont.caption)
                     .foregroundStyle(session.active ? StrandPalette.statusWarning : StrandPalette.statusPositive)
                 TextField("Session comment", text: Binding(
@@ -282,7 +282,7 @@ struct RawDataCollectorView: View {
     private func stop() async {
         await model.ble.stopGroundTruthRawCapture()
         store.stop()
-        await refreshRawCounts()
+        await refreshImuCoverage()
     }
 
     private func export(_ session: RawDataSessionStore.Session) async {
@@ -296,7 +296,7 @@ struct RawDataCollectorView: View {
         let history = bounds == nil ? Data("stream,unix_s,v1,v2,v3,v4\n".utf8)
             : await model.ble.groundTruthHistoryCSV(from: from, to: to)
         let sensorAvailable = !segments.isEmpty || history.split(separator: 0x0A).count > 1
-        var entries = store.exportEntries(for: session, raw: [], sensorAvailable: sensorAvailable)
+        var entries = store.exportEntries(for: session, sensorAvailable: sensorAvailable)
         entries.append(.init(name: "history-sensors.csv", data: history))
         // A live capture can only produce its first complete one-second frame after startup.
         // Historical windows must still cover the exact requested start.
@@ -320,30 +320,34 @@ struct RawDataCollectorView: View {
         if result == nil { exportError = "The export file could not be created or shared." }
         else {
             store.markExported(session.id)
-            model.ble.finishGroundTruthRawCapture(sessionId: session.id)
         }
         exportingId = nil
     }
 
     private func delete(_ session: RawDataSessionStore.Session) async {
         guard session.endedAtMs != nil else { return }
-        model.ble.finishGroundTruthRawCapture(sessionId: session.id)
         guard store.removeMetadata(session.id) else {
             deleteError = "The captured data could not be deleted. The session was kept so you can retry."
             return
         }
-        rawBatchCounts[session.id] = nil
+        imuCoverage[session.id] = nil
     }
 
     private func deleteAll() async {
         for session in store.sessions where !session.active { await delete(session) }
     }
 
-    private func refreshRawCounts() async {
+    private func refreshImuCoverage() async {
         for session in store.sessions {
-            guard let end = session.endedAtMs else { continue }
-            rawBatchCounts[session.id] = await model.ble.groundTruthRawBatches(
-                from: Int(session.startedAtMs / 1_000), to: Int(end / 1_000)).count
+            guard let end = session.endedAtMs,
+                  let bounds = Self.fullSecondBounds(fromMs: session.startedAtMs, toMs: end) else { continue }
+            let stats = ImuSessionFileStore.shared.stats(session.id, from: bounds.from, to: bounds.to)
+            let first = stats.firstTs.flatMap { $0 <= Int64(bounds.from + 1) ? Int($0) : nil }
+            let from = session.capturedStartedAtMs == nil ? bounds.from : max(bounds.from, first ?? bounds.from)
+            let expected = max(0, bounds.to - from + 1)
+            let bytes = ByteCountFormatter.string(fromByteCount: stats.bytes, countStyle: .file)
+            let readiness = expected > 0 && stats.coveredSeconds == expected ? "ready" : "incomplete"
+            imuCoverage[session.id] = "\(stats.coveredSeconds)/\(expected) s · \(bytes) · \(readiness)"
         }
     }
 
