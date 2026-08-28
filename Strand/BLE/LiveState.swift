@@ -363,16 +363,26 @@ public final class LiveState: ObservableObject {
     /// card, so the two can't disagree the way they did in #266 (sidebar "Connecting…" vs Settings
     /// "Connected" for the same connected-but-unbonded 5/MG link). Once the link is up and HR is
     /// flowing — even over the unbonded standard profile — this reads "Connected", never "Connecting…".
+    ///
+    /// "Bonded" means [encryptedBond], never [bonded]. The 5/MG live-HR shortcut (#69) sets `bonded` while
+    /// HR streams over the OPEN profile with no pairing at all, so keying the green bonded state off it
+    /// told a strap with no encrypted pairing that it had one — and the encrypted bond is exactly what
+    /// gates buzz, alarms, double-tap and history sync. LiveView has drawn this line since #69; this
+    /// shared label (sidebar + Settings) had not, so the two screens disagreed about the same link.
     public var connectionStatusLabel: String {
-        if connected && bonded { return "Bonded · streaming" }
+        if connected && encryptedBond { return "Bonded · streaming" }
+        if connected && bonded { return "Live HR (not fully paired)" }
         if connected { return "Connected" }
-        if bonded { return "Bonded · idle" }
+        if encryptedBond { return "Bonded · idle" }
+        // No `bonded`-only idle arm: without an encrypted bond there was never a pairing to be idle from.
         return "Disconnected"
     }
-    /// True when the link is up (HR flowing) → status reads green. Drives the sidebar + Settings tone.
-    public var connectionStatusIsActive: Bool { connected }
-    /// True when previously paired but not currently connected → amber.
-    public var connectionStatusIsIdle: Bool { !connected && bonded }
+    /// True when the link is up with a REAL encrypted bond → status reads green. A live-HR-only link is
+    /// amber via [connectionStatusIsIdle]: it works, but every pairing-gated feature is unavailable.
+    public var connectionStatusIsActive: Bool { connected && encryptedBond }
+    /// True when previously paired but not currently connected, OR connected with live HR but no
+    /// encrypted bond → amber either way.
+    public var connectionStatusIsIdle: Bool { (!connected && bonded) || (connected && !encryptedBond) }
 
     /// Fired (live only) when the strap reports a DOUBLE_TAP gesture. Wired by AppModel to the
     /// user's chosen action. Debounced in AppModel.
@@ -732,7 +742,12 @@ public final class LiveState: ObservableObject {
         #endif
         var header = "NOOP strap log (scheduled export) — \(osName)\nApp: \(v)\n\(osName): "
             + ProcessInfo.processInfo.operatingSystemVersionString + "\n"
-        if !extraHeaderLines.isEmpty { header += extraHeaderLines.joined(separator: "\n") + "\n" }
+        // #453: the BODY is scrubbed as it is appended, but these header lines come from the diagnostics
+        // block and never pass through that path - and they carry device ids, which embed a BLE address
+        // for a re-added or second strap. Same redactor, so one export cannot be safe while the other leaks.
+        if !extraHeaderLines.isEmpty {
+            header += extraHeaderLines.map { Self.redactPii($0) }.joined(separator: "\n") + "\n"
+        }
         header += String(repeating: "-", count: 40) + "\n"
         // Same generations-then-current shape as `exportableLogText()`: a scheduled drop that fires after a
         // restart must not report only the (possibly empty) current tail.
@@ -791,7 +806,12 @@ public final class LiveState: ObservableObject {
         let healthLines = HealthSyncStats.summaryLines()
         if !healthLines.isEmpty { header += healthLines.joined(separator: "\n") + "\n" }
         #endif
-        if !extraHeaderLines.isEmpty { header += extraHeaderLines.joined(separator: "\n") + "\n" }
+        // #453: the BODY is scrubbed as it is appended, but these header lines come from the diagnostics
+        // block and never pass through that path - and they carry device ids, which embed a BLE address
+        // for a re-added or second strap. Same redactor, so one export cannot be safe while the other leaks.
+        if !extraHeaderLines.isEmpty {
+            header += extraHeaderLines.map { Self.redactPii($0) }.joined(separator: "\n") + "\n"
+        }
         header += String(repeating: "-", count: 40) + "\n"
         // Previous processes first, so the body stays in chronological order and the log-parsing tools read
         // it unchanged — they just get the night that a wake-time restart used to erase.

@@ -37,6 +37,12 @@ enum DebugDataDiagnostics {
         let model = WhoopModel(rawValue: d.string(forKey: "selectedWhoopModel") ?? "")?.displayName
             ?? "unknown (never paired)"
         lines.append("Model:       \(model)")
+        // NOTE: still the legacy GLOBAL key, and therefore the last strap to connect rather than this
+        // device's own firmware. strapStateLines is sync and prefs-only by contract (the scheduled export
+        // calls it with no store), and the per-device rule needs a registry read for pairedCount. The
+        // Devices block further down IS resolved per device, so a multi-strap export carries the correct
+        // per-device value there; this line is superseded by it and wants the same follow-up as the Apple
+        // write site, which has no peripheral identity to key on today.
         lines.append("Firmware:    \(d.string(forKey: "noop.lastFirmware") ?? "unknown (connect to record)")")
         let syncSec = d.double(forKey: "lastSyncedAt")
         lines.append("Last sync:   \(syncSec > 0 ? relTime(Date().timeIntervalSince1970 - syncSec) : "never")")
@@ -99,6 +105,41 @@ enum DebugDataDiagnostics {
         if let r = days.last(where: { $0.recovery != nil }) {
             lines.append("Last recov.: \(r.day) · \(Int(r.recovery ?? 0))%")
         } else { lines.append("Last recov.: none") }
+        // #1300 follow-up: the header above describes ONE device because it reads the last-connected
+        // prefs, not the registry — so a two-strap install produced a log that never mentioned the
+        // second strap, leaving `dayOwner readId=` and the funnel's orphan check with nothing to be
+        // checked against. Name the whole set instead.
+        // `store` is fetched further down for the funnels; take a handle here rather than moving this
+        // block below the funnel header, so the inventory prints beside the strap identity it qualifies —
+        // the same position it holds on Android.
+        if let invStore = await repo.storeHandle() {
+            let invRegistry = DeviceRegistryStore(dbQueue: invStore.registryWriter)
+            // Bound before the map so the rule below has a count to test. Reading `.all()` inline left
+            // nothing to reference, which app-build caught and no local check could — this file needs
+            // macOS to compile.
+            let invDevices = (try? invRegistry.all()) ?? []
+            let invRows = invDevices.map {
+                // Firmware resolved by the same rule as the Devices card: this device's own persisted
+                // value when there is one, and the LEGACY global key only when a single device is paired
+                // (it cannot have come from anything else). Apple does not yet write the per-device key —
+                // the write site has no peripheral identity to key on — so today this yields the global
+                // value for a single-strap install and "unknown" for a multi-strap one, which is honest
+                // rather than another strap's number.
+                InventoryRow(id: $0.id, brand: $0.brand, model: $0.model,
+                             status: $0.status.rawValue, lastSeenAt: $0.lastSeenAt,
+                             firmware: FirmwareAttribution.resolve(
+                                 live: nil,
+                                 perDevice: FirmwareAttribution.prefKey(peripheralId: $0.peripheralId)
+                                     .flatMap { UserDefaults.standard.string(forKey: $0) },
+                                 legacyGlobal: UserDefaults.standard.string(forKey: "noop.lastFirmware"),
+                                 pairedCount: invDevices.count))
+            }
+            let invActive = (try? invRegistry.activeDeviceId()) ?? nil
+            lines.append(contentsOf: deviceInventoryLines(rows: invRows,
+                                                          activeId: invActive,
+                                                          nowSec: Int(Date().timeIntervalSince1970),
+                                                          relTime: { relTime($0) }))
+        }
 
         // Workout & imported-activity source breakdown (#28/#29 "counted but not shown" class). Runs BEFORE
         // the funnels since those can early-return, so this always lands in the export.
@@ -158,7 +199,14 @@ enum DebugDataDiagnostics {
             // back empty, so a healthy install pays nothing.
             let elsewhere = ((try? await store.rawSampleCountsByDevice(from: cs.startTs, to: cs.endTs)) ?? [])
                 .filter { $0.0 != did }
-            lines.append(orphanedSamplesLine(activeId: did, othersWithSamples: elsewhere))
+            // The registry, so a SECOND strap's night is not reported as a read failure. Only read when
+            // the active id came back empty, so a healthy install still pays nothing.
+            let otherStraps = Set(
+                ((try? DeviceRegistryStore(dbQueue: store.registryWriter).all()) ?? [])
+                    .filter { $0.status != .archived && $0.id != did }
+                    .map(\.id))
+            lines.append(orphanedSamplesLine(activeId: did, othersWithSamples: elsewhere,
+                                             otherLiveStrapIds: otherStraps))
             return lines
         }
         if let rem = SleepStager.remFunnelDiagnostic(start: cs.startTs, end: cs.endTs, grav: grav, hr: hr, rr: rr, resp: resp) {
@@ -435,10 +483,26 @@ enum DebugDataDiagnostics {
     ///
     /// Pure so the wording is unit-tested without a database, a strap, or a registry. Kotlin twin:
     /// `com.noop.testcentre.orphanedSamplesLine`.
-    static func orphanedSamplesLine(activeId: String, othersWithSamples: [(String, Int)]) -> String {
+    /// `otherLiveStrapIds` is the registered, non-archived device ids OTHER than the active one. It exists
+    /// because the "not being read" wording was itself an over-assertion — the mirror image of the one it
+    /// replaced. A wearer with TWO straps has nights owned by the other one, and `DayOwnerResolver` hands
+    /// each day to whichever device actually holds its data. Samples under another id are then completely
+    /// normal, and calling that a read failure sends the reader hunting a bug that is not there. Only when
+    /// the id holding the samples is NOT a live registered strap is the #1193 split the explanation left.
+    static func orphanedSamplesLine(activeId: String, othersWithSamples: [(String, Int)],
+                                    otherLiveStrapIds: Set<String> = []) -> String {
         if othersWithSamples.isEmpty {
             return "(no raw biometric samples under '\(activeId)' for this night — expected on a freshly "
                 + "re-added strap; reconnect + let a history sync run, then re-export)"
+        }
+        let ownedByAnotherStrap = othersWithSamples.filter { otherLiveStrapIds.contains($0.0) }
+        if !ownedByAnotherStrap.isEmpty {
+            let who = ownedByAnotherStrap.sorted { $0.1 != $1.1 ? $0.1 > $1.1 : $0.0 < $1.0 }
+                .map { "'\($0.0)' (\($0.1) rows)" }
+                .joined(separator: ", ")
+            return "(no raw biometric samples under the ACTIVE id '\(activeId)' for this night — they are "
+                + "under \(who), another registered strap. A night worn on a different strap is OWNED by that "
+                + "strap, so this is expected; the dayOwner line for this date names the owner.)"
         }
         // Tie-break on id: Kotlin's sortedByDescending is stable but Swift's `sorted` is NOT, so equal
         // counts could otherwise order differently on the two platforms and the twin lines would diverge.

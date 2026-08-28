@@ -71,7 +71,23 @@ object AndroidDiagnostics {
                     else -> reportedModel(context)?.displayName ?: "unknown (paired, family not yet detected)"
                 },
             )
-            add("Firmware:    ${com.noop.ui.NoopPrefs.lastFirmware(context) ?: "unknown (connect to record)"}")
+            // #1633 follow-up: the ACTIVE device's own firmware. This read used to be the bare global key,
+            // so a two-strap log named whichever strap connected last - a 5/MG log reporting a 4.0's
+            // 41.17.6.0. resolveFirmware falls back to the legacy key only when one device is paired.
+            val fwRows = runCatching {
+                (context.applicationContext as? com.noop.NoopApplication)?.deviceRegistry?.all().orEmpty()
+            }.getOrDefault(emptyList())
+            val fwActive = runCatching {
+                (context.applicationContext as? com.noop.NoopApplication)?.deviceRegistry?.activeDeviceId()
+            }.getOrNull()
+            val fwRow = fwRows.firstOrNull { it.id == fwActive }
+            val fw = com.noop.ble.resolveFirmware(
+                live = null,
+                perDevice = com.noop.ui.NoopPrefs.firmwareFor(context, fwRow?.peripheralId),
+                legacyGlobal = com.noop.ui.NoopPrefs.lastFirmware(context),
+                pairedCount = fwRows.size,
+            )
+            add("Firmware:    ${fw ?: "unknown (connect to record)"}")
             val syncSec = com.noop.ui.NoopPrefs.lastSyncAt(context)
             add("Last sync:   ${if (syncSec > 0L) relTime(System.currentTimeMillis() - syncSec * 1000L) else "never"}")
             // #57: write-health. "Last sync" fires even on an empty/failed offload, so distinguish "rows
@@ -99,6 +115,22 @@ object AndroidDiagnostics {
             val merged = repo.daysMerged("my-whoop")
             add("Last sleep:  ${merged.lastOrNull { (it.totalSleepMin ?: 0.0) > 0.0 }?.let { "${it.day} · ${it.totalSleepMin?.toInt()} min" } ?: "none"}")
             add("Last recov.: ${merged.lastOrNull { it.recovery != null }?.let { "${it.day} · ${it.recovery?.toInt()}%" } ?: "none"}")
+            // #1300 follow-up: the header above describes ONE device because it reads the last-connected
+            // prefs, not the registry — so a two-strap install produced a log that never mentioned the
+            // second strap, leaving `dayOwner readId=` and the funnel's orphan check with nothing to be
+            // checked against. Name the whole set instead.
+            val invRows = runCatching {
+                (context.applicationContext as? com.noop.NoopApplication)?.deviceRegistry?.all().orEmpty()
+                    .map {
+                            InventoryRow(it.id, it.brand, it.model, it.status, it.lastSeenAt,
+                                         com.noop.ui.NoopPrefs.firmwareFor(context, it.peripheralId))
+                        }
+            }.getOrDefault(emptyList())
+            val invActive = runCatching {
+                (context.applicationContext as? com.noop.NoopApplication)?.deviceRegistry?.activeDeviceId()
+            }.getOrNull()
+            deviceInventoryLines(invRows, invActive, System.currentTimeMillis() / 1000L) { relTime(it) }
+                .forEach { add(it) }
         }.onFailure { add("(strap/data state unavailable: ${it.message})") }
     }
 
@@ -164,7 +196,15 @@ object AndroidDiagnostics {
                     repo.rawSampleCountsByDevice(session.startTs, session.endTs)
                         .filter { it.first != id }
                 }.getOrDefault(emptyList())
-                add(orphanedSamplesLine(id, elsewhere))
+                // The registry, so a SECOND strap's night is not reported as a read failure. Only queried
+                // when the active id came back empty, so a healthy install still pays nothing.
+                val otherStraps = runCatching {
+                    repo.pairedDevices()
+                        .filter { it.status != "archived" && it.id != id }
+                        .map { it.id }
+                        .toSet()
+                }.getOrDefault(emptySet())
+                add(orphanedSamplesLine(id, elsewhere, otherStraps))
                 return@runCatching
             }
             com.noop.analytics.SleepStager.remFunnelDiagnostic(session.startTs, session.endTs, grav, hr, rr, resp)
@@ -446,12 +486,33 @@ object AndroidDiagnostics {
      * the same window. Empty means the samples genuinely are not there and the fresh-re-add wording is
      * right; non-empty names the id that has them so the split is visible rather than inferred.
      *
+     * [otherLiveStrapIds] is the registered, non-archived device ids OTHER than the active one. It exists
+     * because the "not being read" wording was itself an over-assertion — the mirror image of the one it
+     * replaced. A wearer with TWO straps has nights owned by the other one, and [DayOwnerResolver] hands
+     * each day to whichever device actually holds its data. Samples under another id are then completely
+     * normal, and calling that a read failure sends the reader hunting a bug that is not there (it sent
+     * ME hunting one). Only when the id holding the samples is NOT a live registered strap is the #1193
+     * split the remaining explanation.
+     *
      * Pure so the wording is unit-tested without a database, a strap, or a registry.
      */
-    internal fun orphanedSamplesLine(activeId: String, othersWithSamples: List<Pair<String, Int>>): String {
+    internal fun orphanedSamplesLine(
+        activeId: String,
+        othersWithSamples: List<Pair<String, Int>>,
+        otherLiveStrapIds: Set<String> = emptySet(),
+    ): String {
         if (othersWithSamples.isEmpty()) {
             return "(no raw biometric samples under '$activeId' for this night — expected on a freshly " +
                 "re-added strap; reconnect + let a history sync run, then re-export)"
+        }
+        val ownedByAnotherStrap = othersWithSamples.filter { it.first in otherLiveStrapIds }
+        if (ownedByAnotherStrap.isNotEmpty()) {
+            val who = ownedByAnotherStrap
+                .sortedWith(compareByDescending<Pair<String, Int>> { it.second }.thenBy { it.first })
+                .joinToString(", ") { "'${it.first}' (${it.second} rows)" }
+            return "(no raw biometric samples under the ACTIVE id '$activeId' for this night — they are " +
+                "under $who, another registered strap. A night worn on a different strap is OWNED by that " +
+                "strap, so this is expected; the dayOwner line for this date names the owner.)"
         }
         // Tie-break on id: Kotlin's sortedByDescending is stable but Swift's `sorted` is NOT, so equal
         // counts could otherwise order differently on the two platforms and the twin lines would diverge.

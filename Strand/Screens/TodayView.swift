@@ -65,24 +65,32 @@ private struct HRChartFrameKey: PreferenceKey {
 struct ActiveWorkoutIndicatorModel: Equatable {
     let sport: String
     let startedAt: Date
+    /// The pause state has to be CARRIED, not just consulted: this value type is what the card renders
+    /// from, so without these two fields the indicator cannot subtract the paused time or say it is
+    /// paused, however correct `AppModel` is. That is precisely how it kept counting through #1533.
+    var pausedAt: Date? = nil
+    var pausedDuration: TimeInterval = 0
+
+    var isPaused: Bool { pausedAt != nil }
 
     static func make(from workout: AppModel.ActiveWorkout?) -> ActiveWorkoutIndicatorModel? {
         guard let workout else { return nil }
-        return ActiveWorkoutIndicatorModel(sport: workout.sport, startedAt: workout.start)
+        return ActiveWorkoutIndicatorModel(sport: workout.sport, startedAt: workout.start,
+                                           pausedAt: workout.pausedAt,
+                                           pausedDuration: workout.pausedDuration)
     }
 
-    /// Elapsed time since `start`, formatted M:SS up to an hour and H:MM:SS once an hour has passed (so a
+    /// Elapsed ACTIVE time, formatted M:SS up to an hour and H:MM:SS once an hour has passed (so a
     /// 90-minute session reads "1:30:00", not "90:00"). Clamped at zero so a clock-skew negative reads 0:00.
     /// Pure + injectable `now` for deterministic tests. (StrandFont.bodyNumber already applies tabular figures,
     /// so the call site does NOT add `.monospacedDigit()`.)
-    static func elapsed(since start: Date, now: Date = Date()) -> String {
-        let total = max(0, Int(now.timeIntervalSince(start)))
-        let h = total / 3600
-        let m = (total % 3600) / 60
-        let s = total % 60
-        return h > 0
-            ? String(format: "%d:%02d:%02d", h, m, s)
-            : String(format: "%d:%02d", m, s)
+    ///
+    /// `pausedAt`/`pausedDuration` default to "never paused" so the existing call sites and tests that
+    /// predate pause keep their exact meaning; the math itself lives in `ActiveWorkoutClock`.
+    static func elapsed(since start: Date, pausedAt: Date? = nil, pausedDuration: TimeInterval = 0,
+                        now: Date = Date()) -> String {
+        ActiveWorkoutClock.clock(Int(ActiveWorkoutClock.activeElapsed(
+            start: start, pausedAt: pausedAt, pausedDuration: pausedDuration, now: now)))
     }
 }
 
@@ -103,12 +111,22 @@ private struct ActiveWorkoutIndicatorCard: View {
                         .font(StrandFont.overline)
                         .tracking(StrandFont.overlineTracking)
                         .foregroundStyle(StrandPalette.metricRose)
+                    // A frozen clock alone is ambiguous with a STALLED one, so say which it is. Reuses the
+                    // "Paused" string #1533 already localized rather than minting new copy for a tag.
+                    if model.isPaused {
+                        Text("Paused")
+                            .font(StrandFont.overline)
+                            .tracking(StrandFont.overlineTracking)
+                            .foregroundStyle(StrandPalette.textSecondary)
+                    }
                     Spacer(minLength: NoopMetrics.space2)
                     // A per-second live clock. The TimelineView re-evaluates ONLY this Text every second, so
                     // the tick never re-renders the rest of the card (let alone TodayView.body). bodyNumber
                     // already carries `.monospacedDigit()`, so no extra modifier here.
                     TimelineView(.periodic(from: .now, by: 1)) { context in
-                        Text(ActiveWorkoutIndicatorModel.elapsed(since: model.startedAt, now: context.date))
+                        Text(ActiveWorkoutIndicatorModel.elapsed(
+                            since: model.startedAt, pausedAt: model.pausedAt,
+                            pausedDuration: model.pausedDuration, now: context.date))
                             .font(StrandFont.bodyNumber)
                             .foregroundStyle(StrandPalette.textPrimary)
                     }
@@ -3808,6 +3826,20 @@ struct TodayView: View {
                 sparkline: sparks["active_kcal"],
                 sparkColor: StrandPalette.metricAmber
             )
+        case .skinTemp:
+            // Added 2026-08-24 (queue 11c follow-up): first Key Metrics appearance for Skin Temp — was
+            // already a "Your Cards" tile (`DashboardCard.skinTemp`), never a Key Metrics one. Reuses the
+            // SAME value chain and `skinTempCardValue` formatter the "Your Cards" case above already
+            // uses, so the two tiles can never disagree.
+            let skinTempValue = d?.skinTempDevC ?? lastVitalsDay?.skinTempDevC ?? lastSkinTempDay?.skinTempDevC
+            StatTile(
+                label: "Skin Temp",
+                value: Self.skinTempCardValue(skinTempValue, fahrenheit: temperatureUnit == .fahrenheit),
+                caption: skinTempValue == nil ? Self.needsStrapCaption : "",
+                accent: skinTempValue == nil ? StrandPalette.textPrimary : StrandPalette.metricAmber,
+                sparkline: sparks["skin_temp"],
+                sparkColor: StrandPalette.metricAmber
+            )
         }
     }
 
@@ -4256,6 +4288,10 @@ struct TodayView: View {
         // toggle is OFF (the engine writes nothing) or the owner has no in-band reading. Used as a
         // fallback for the Blood Oxygen tile when `spo2Pct` is nil, labelled "strap estimate (unverified)".
         async let spo2CandidateSpark = sparkValuesExplore("spo2_candidate", source: "my-whoop", window: 14)
+        // Added 2026-08-24 (queue 11c follow-up) for the new Skin Temp Key Metrics tile. `exploreSeries`
+        // so a BLE-only strap's computed `DailyMetric.skinTempDevC` column backs the trend, same as
+        // `resp_rate` above — the engine writes the column, not a metricSeries point.
+        async let skinTempSpark      = sparkValuesExplore("skin_temp", source: "my-whoop", window: 14)
         // `resp_rate` via `exploreSeries` so a BLE-only WHOOP 5 user's on-device computed
         // `DailyMetric.respRateBpm` backs the trend (the engine writes the column, not a metricSeries
         // point). The old `series(… source: "apple-health")` read only Apple Health's metricSeries,
@@ -4273,6 +4309,7 @@ struct TodayView: View {
         sparks["rhr"]             = await rhrSpark
         sparks["spo2"]            = await spo2Spark
         sparks["spo2_candidate"]  = await spo2CandidateSpark
+        sparks["skin_temp"]       = await skinTempSpark
         sparks["resp_rate"]   = await respRateSpark
         sparks["steps"]       = await stepsAppleSpark
         // Steps prefer the strap's own @57 daily total (no metricSeries, it lives on the daily row),

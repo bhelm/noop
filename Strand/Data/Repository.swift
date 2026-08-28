@@ -285,6 +285,40 @@ final class Repository: ObservableObject {
         return byDay.values.sorted { $0.day < $1.day }
     }
 
+    /// Gravity samples across the imported union, deduped by timestamp with the ACTIVE STRAP winning.
+    ///
+    /// #1643: the Steps calibration screen read a SINGLE id and so disagreed with the estimator, which
+    /// resolves an owner per day before reading gravity. Android hit the canonical half of this (it
+    /// hardcoded "my-whoop" and missed a re-added strap's live motion, @kavemang's #1644); the Swift
+    /// screen had the mirror half — it read the ACTIVE id and so missed the canonical history a prior
+    /// import or an earlier strap identity had banked.
+    ///
+    /// Twin of Kotlin `WhoopRepository.gravitySamplesUnion`. It takes the active id as a parameter
+    /// because its repository is not device-scoped; this one already knows `importedReadIds`.
+    func gravitySamplesUnion(from: Int, to: Int, limit: Int = 200_000) async -> [GravitySample] {
+        guard let store = await storeHandle() else { return [] }
+        var lists: [[GravitySample]] = []
+        for id in importedReadIds {   // active strap FIRST → it wins any shared timestamp
+            lists.append((try? await store.gravitySamples(deviceId: id, from: from, to: to, limit: limit)) ?? [])
+        }
+        return Self.mergeGravityByTs(lists)
+    }
+
+    /// Merge gravity lists into one time-ordered stream, deduped by timestamp with the FIRST list (the
+    /// active strap) winning a tie. A single-id read is returned UNCHANGED, so a single-device install
+    /// performs exactly the read it did before the union existed.
+    ///
+    /// Byte-identical rule to Kotlin `mergeGravityByTs`. Pure + static so the dedup is unit-tested
+    /// without a store — the property that actually matters here is "active wins, nothing double-counts".
+    nonisolated static func mergeGravityByTs(_ lists: [[GravitySample]]) -> [GravitySample] {
+        if lists.count == 1 { return lists[0] }
+        var byTs: [Int: GravitySample] = [:]
+        for list in lists {
+            for s in list where byTs[s.ts] == nil { byTs[s.ts] = s }
+        }
+        return byTs.values.sorted { $0.ts < $1.ts }
+    }
+
     /// One day held by two source ids in the SAME bucket, folded into `winner`'s row: `winner` keeps every
     /// column it carries (NON-nil — a measured zero is a reading) and `filler` supplies only the ones it
     /// left nil. Whole-row first-wins let a hollow row (steps and nothing else) discard a complete one, and
@@ -317,7 +351,10 @@ final class Repository: ObservableObject {
             steps: winner.steps ?? filler.steps,
             activeKcalEst: winner.activeKcalEst ?? filler.activeKcalEst,
             spo2Red: rawSpo2FromFiller ? filler.spo2Red : winner.spo2Red,
-            spo2Ir: rawSpo2FromFiller ? filler.spo2Ir : winner.spo2Ir
+            spo2Ir: rawSpo2FromFiller ? filler.spo2Ir : winner.spo2Ir,
+            // Strap-only, like raw SpO2: an imported winner carries no absolute skin temp, so take the
+            // filler's rather than let the union blank a value the strap did record (#1636).
+            skinTempC: winner.skinTempC ?? filler.skinTempC
         )
     }
 
@@ -936,7 +973,8 @@ final class Repository: ObservableObject {
                         steps: steps,
                         activeKcalEst: existing.activeKcalEst,
                         spo2Red: existing.spo2Red,
-                        spo2Ir: existing.spo2Ir
+                        spo2Ir: existing.spo2Ir,
+                        skinTempC: existing.skinTempC
                     )
                 }
             } else {
@@ -3073,7 +3111,10 @@ private extension DailyMetric {
             // backfilled from the computed fallback — otherwise the nightly means would be lost. (#93)
             spo2Red: spo2Red ?? fallback.spo2Red,
             spo2Ir: spo2Ir ?? fallback.spo2Ir,
-            avgSdnn: avgSdnn ?? fallback.avgSdnn
+            avgSdnn: avgSdnn ?? fallback.avgSdnn,
+            // On-device only (imports never carry it), so an imported row's nil is backfilled from the
+            // computed fallback — otherwise the night's absolute would be lost. (#1636)
+            skinTempC: skinTempC ?? fallback.skinTempC
         )
     }
 
@@ -3102,7 +3143,8 @@ private extension DailyMetric {
             activeKcalEst: activeKcalEst,
             spo2Red: spo2Red,   // non-sleep field: preserved as-is (#93)
             spo2Ir: spo2Ir,
-            avgSdnn: avgSdnn    // non-sleep (HRV) field: preserved as-is
+            avgSdnn: avgSdnn,   // non-sleep (HRV) field: preserved as-is
+            skinTempC: skinTempC // non-sleep (thermal) field: preserved as-is (#1636)
         )
     }
 }

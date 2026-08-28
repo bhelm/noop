@@ -746,6 +746,15 @@ object IntelligenceEngine {
         // Together with [dayCacheReused] this is the honest denominator for the reuse ratio — see the
         // diagnostic at the end of the loop.
         var dayCacheCacheable = 0
+        // #1538: backward sliding read buffers for the two heavy streams. Pass 1 walks backwards over
+        // 54-hour windows on a 24-hour stride, so consecutive days overlap by 30 hours and every row was
+        // being materialised ~2.25x per pass. These read the missing stride only; every case the planner
+        // cannot prove safe falls back to exactly the read that shipped before them. HR and R-R only:
+        // ~86k and ~54k rows a night against thousands for the other eight streams, so this is nearly all
+        // of the win for two call sites of blast radius.
+        val hrWindow = hrReadWindow(repo)
+        val rrWindow = rrReadWindow(repo)
+
         // #1005: memoise the UN-coalesced registered WHOOP family per owner (null = non-WHOOP → never
         // cached). Kept separate from [skinFamilyByOwner] (which coalesces unknown → WHOOP5 for the skin
         // scale); this must NOT coalesce so a ring can't be cached as a WHOOP.
@@ -848,7 +857,7 @@ object IntelligenceEngine {
             // itself end to end, so whether the per-night cost is store reads or analyzeDay is unmeasured,
             // and that split decides whether narrowing the read windows is worth building.
             val tPrep0 = System.nanoTime()
-            val hr = repo.hrSamples(owner, from, to, STREAM_LIMIT)
+            val hr = hrWindow.rows(owner, from, to)
             // CAPTURE-B: capture this day's resolved read owner + HR-row count so PASS 2 can emit the
             // verbatim universal `dayOwner …` line per SCORED day (matching the iOS emit, which is in the
             // scored-days loop, NOT here). Only when the universal sink is on. A day skipped below for too
@@ -875,7 +884,7 @@ object IntelligenceEngine {
                 skippedSleepDays.add(day, hr.size)
                 continue
             }
-            val rr = repo.rrIntervals(owner, from, to, STREAM_LIMIT)
+            val rr = rrWindow.rows(owner, from, to)
             // ONE read, TWO consumers, and they must not be confused for each other. `forScoring` strips
             // an Oura ring's rows from the STAGER's input: the stager reads this stream as a ~1 Hz raw ADC
             // waveform and peak-detects it, and the ring's rows are a per-window RATE — the wrong shape,
@@ -888,50 +897,16 @@ object IntelligenceEngine {
             val vendorResp = OuraRespScale.forVendorRate(respRows, owner)
             val grav = repo.gravitySamples(owner, from, to, STREAM_LIMIT)
             val steps = repo.stepSamples(owner, from, to, STREAM_LIMIT)
-            val skin = repo.skinTempSamples(owner, from, to, STREAM_LIMIT)
-            // #93: WHOOP 4.0 raw SpO2 PPG samples for the night; analyzeDay banks the nightly red/IR ADC
-            // means on the DailyMetric. Empty on a 5/MG (no v24 spo2 channels) → the raw means stay null.
-            val spo2 = repo.spo2Samples(owner, from, to, STREAM_LIMIT)
-            // #938: the strap family that WROTE this owner's skin-temp rows, so analyzeDay converts the raw
-            // register on the right scale (5/MG banks centidegrees, a WHOOP 4.0 v24 banks a raw ADC). The
-            // owner source resolves it from the registry; unknown/non-WHOOP owners fall back to WHOOP5 (the
-            // prior /100 behaviour), so only a device positively identified as a 4.0 changes scale.
-            // Resolved once per DISTINCT owner via [skinFamilyByOwner] (#970 read efficiency, see above).
-            val skinFamily = skinFamilyByOwner.getOrPut(owner) {
-                ownerSource?.skinTempFamily(owner) ?: DeviceFamily.WHOOP5
-            }
-            // #1467: the worn-gate timestamp tolerance for this owner (0 for WHOOP, byte-identical).
-            val skinWornToleranceSec = skinWornToleranceByOwner.getOrPut(owner) {
-                ownerSource?.skinTempWornToleranceSec(owner) ?: 0
-            }
-            // #938 (second capture): learn THIS device's worn skin-temp anchor raw ONCE, WINDOW-WIDE (the
-            // whole scan window's skin samples), not per-night. The @72 skin-temp ADC's register offset is
-            // per-device — a second real 4.0 strap shares the no-contact floor (~509) + 11-bit saturation
-            // (2047) but a worn band ~1100–1600 (nightly mean raw ~1290), which the global 826 anchor maps to
-            // 47–72 °C, so 100% of its worn samples fail the 28–42 °C gate (kept=0, no baseline, no signal).
-            // WINDOW-WIDE, not per-night: a per-night re-centre would subtract each night's own mean and ERASE
-            // the cross-night deviation the skinTempDevC signal exists to carry. Deterministic per run; SAFE
-            // because the skin baseline is re-folded from the SAME window's nightly means every run, so this
-            // constant offset cancels in the deviation. null for a non-4.0 owner (WHOOP5 ignores the anchor)
-            // or when <100 in-band samples exist → the conversion falls back to the global anchor (byte-
-            // identical to today). Computed here once per owner alongside the family resolution.
-            val skinAnchorRaw = if (skinFamily == DeviceFamily.WHOOP4) {
-                if (!skinAnchorResolvedOwners.contains(owner)) {
-                    val windowSkin = repo.skinTempSamples(owner, skinAnchorScanFrom, skinAnchorScanTo, STREAM_LIMIT)
-                    Whoop4SkinTemp.deviceAnchorRaw(windowSkin.map { it.raw })?.let { skinAnchorByOwner[owner] = it }
-                    skinAnchorResolvedOwners.add(owner)
-                }
-                skinAnchorByOwner[owner]
-            } else {
-                null
-            }
-            // Wrist-wear events in the night window, paired into off-wrist [start, end) intervals for the
-            // off-wrist sleep backstop (#500). The HR-gap proxy in the stager is the always-on guard;
-            // these explicit intervals sharpen it under the FRACTIONAL rule (#504) , a session is dropped
-            // only when its off-wrist coverage reaches maxOffWristSleepFraction, so a real night with a
-            // short off-wrist tail survives. Pairing needs WRIST_ON too (to bound each interval); a span
-            // still open at the window end closes at `to`. Empty when the strap emitted no wrist events.
-            val wristOff = AnalyticsEngine.offWristIntervals(repo.events(owner, from, to, STREAM_LIMIT), to)
+            val skinReads = readDaySkinAndWristOff(
+                repo, owner, from, to, ownerSource, skinFamilyByOwner, skinWornToleranceByOwner,
+                skinAnchorByOwner, skinAnchorResolvedOwners, skinAnchorScanFrom, skinAnchorScanTo,
+            )
+            val skin = skinReads.skin
+            val spo2 = skinReads.spo2
+            val skinFamily = skinReads.skinFamily
+            val skinWornToleranceSec = skinReads.skinWornToleranceSec
+            val skinAnchorRaw = skinReads.skinAnchorRaw
+            val wristOff = skinReads.wristOff
 
             // Calendar-day window for the ADDITIVE daily totals (steps + calories). The night window
             // above is anchored to the current time-of-day and ends at dayStart+12h, so for a PAST
@@ -1051,6 +1026,11 @@ object IntelligenceEngine {
             // windowed avgHrv. Emitted here where `rr` is in scope; byte-identical to the Swift line.
             val sleepRrRows = rr.filter { r -> res.sleepSessions.any { r.ts >= it.start && r.ts < it.end } }
             val sleepRr = sleepRrRows.map { it.rrMs.toDouble() }
+            // #1331: the RSA gate's inputs, carried to the resp diagnostic below. Declared out here because
+            // the HRV block is one scope deeper; a night with no sleep R-R leaves them null and the resp
+            // line falls back to its original one-field form.
+            var respGateAcc: Double? = null
+            var respGateIntegrity: String? = null
             if (sleepRr.isNotEmpty()) {
                 val h = HrvAnalyzer.analyzeRaw(sleepRr)
                 val ms = { v: Double? -> v?.let { String.format(java.util.Locale.US, "%.0f", it) } ?: "nil" }
@@ -1090,10 +1070,12 @@ object IntelligenceEngine {
                 // right to ~1% (meanNN and RHR stay correct and WHOOP-validated) while the individual
                 // intervals are not. Gate on that too. Twin of the Swift line.
                 val accVal = HrvAnalyzer.beatAccurateFraction(ts, sleepRr)
+                respGateAcc = accVal
                 val acc = String.format(java.util.Locale.US, "%.2f", accVal)
                 val sdnnField =
                     if (HrvAnalyzer.beatSpreadIsTrustworthy(verdict) &&
                         HrvAnalyzer.beatValuesAreTrustworthy(accVal)) "${ms(h.sdnn)}ms" else "withheld"
+                respGateIntegrity = verdict.raw
                 dayDiag("hrv diag day=${res.daily.day} rmssd=${ms(h.rmssd)}ms sdnn=$sdnnField meanNN=${ms(h.meanNN)}ms " +
                     "rr=${h.nInput}/${h.nClean} rejected=$rej% coverage=$cov collapsedCov=$colCov dupBeats=$dup " +
                     "beatAccurate=$acc " +
@@ -1208,8 +1190,8 @@ object IntelligenceEngine {
             nightlyRespByDay[day] = res.daily.respRateBpm
             // #1331 respiratory diagnostic: log each night's breaths/min (or "nil") so a "respiratory not
             // showing" report is explainable from the strap log — a run of nil nights localises when it
-            // stopped. Logging only; no scoring change. The Swift diag twin lands with the iOS carry (#1331 follow-up).
-            dayDiag(respRateLogLine(day, res.daily.respRateBpm))
+            // stopped. Logging only; no scoring change. The Swift twin exists and emits the same line.
+            dayDiag(respRateLogLine(day, res.daily.respRateBpm, respGateAcc, respGateIntegrity))
             // ── RHR floor-vs-mean diagnostic (#691) ────────────────────────────────────────────────
             // Make the recurring "NOOP's resting HR reads LOWER than my sleeping-HR app" reports
             // explainable from the strap log instead of a guess. The two numbers measure different
@@ -1295,6 +1277,7 @@ object IntelligenceEngine {
         // (each row materialised ~2.25x per pass) is worth narrowing; analyzeDay dominating means it is
         // not, whatever the row counts look like. Byte-identical line to the Swift twin.
         diag("analyzeRecent cost prep=${dayPrepNanos / 1_000_000}ms score=${dayScoreNanos / 1_000_000}ms")
+        diag(WindowedStreamPlan.logLine(hrWindow.rowsRead, hrWindow.rowsServed, rrWindow.rowsRead, rrWindow.rowsServed))
 
         // ── Seed the baseline from the UNION of imported nightly history + the nightly
         // values just computed. This is the recovery fix: the "-noop" nightly avgHrv/
@@ -1573,7 +1556,7 @@ object IntelligenceEngine {
                 )
             }
             // Stamp the computed source id + the re-scored recovery & skin-temp deviation onto the row.
-            dailies.add(daily.copy(deviceId = computedId, recovery = recovery, skinTempDevC = skinTempDevC))
+            dailies.add(scoredDailyRow(daily, computedId, recovery, skinTempDevC, res.nightlySkinTempC))
             // Map the rich DetectedSleep sessions → Room SleepSession cache rows.
             for (s in res.sleepSessions) {
                 sleepRows.add(
@@ -2523,6 +2506,30 @@ object IntelligenceEngine {
         return rows.isNotEmpty()
     }
 
+    /**
+     * The scored row as persisted: the day's metrics plus this pass's Charge and BOTH thermal values.
+     *
+     * Extracted rather than inlined at the call site because [analyzeRecentOnCpu] sits within ~4 KB of
+     * the 64 KB JVM method ceiling once JaCoCo instruments it (guarded by IntelligenceEngineJacocoBudgetTest,
+     * which caught this addition going 25 bytes over). A named `copy` argument is cheap in source and not
+     * in bytecode; keeping row assembly out of that method is what buys the headroom back.
+     *
+     * The absolute (#1636) is written in the SAME call as the deviation derived from it, so the two can
+     * never describe different nights and no second derivation exists to drift.
+     */
+    private fun scoredDailyRow(
+        daily: DailyMetric,
+        computedId: String,
+        recovery: Double?,
+        skinTempDevC: Double?,
+        skinTempC: Double?,
+    ): DailyMetric = daily.copy(
+        deviceId = computedId,
+        recovery = recovery,
+        skinTempDevC = skinTempDevC,
+        skinTempC = skinTempC,
+    )
+
     private fun recomputeSkinTempDev(nightly: Double?, base: BaselineState?): Double? {
         val v = nightly ?: return null
         val b = base?.takeIf { it.usable } ?: return null
@@ -2640,6 +2647,111 @@ object IntelligenceEngine {
         return if (dayStart < nowLocalMidnight) nextMidnight else minOf(nextMidnight, now)
     }
 
+    /** The pass-1 HR sliding read window. Constructed OUTSIDE `analyzeRecentOnCpu` so neither the
+     *  element lambda nor the reader lambda counts against that method's bytecode budget, which the
+     *  extraction next door exists to protect. */
+    private fun hrReadWindow(repo: com.noop.data.WhoopRepository) =
+        SlidingStreamWindow<com.noop.data.HrSample>({ it.ts }, STREAM_LIMIT) { o, f, t ->
+            repo.hrSamples(o, f, t, STREAM_LIMIT)
+        }
+
+    /** The pass-1 R-R sliding read window. Same reason as [hrReadWindow] for living out here. */
+    private fun rrReadWindow(repo: com.noop.data.WhoopRepository) =
+        SlidingStreamWindow<com.noop.data.RrInterval>({ it.ts }, STREAM_LIMIT) { o, f, t ->
+            repo.rrIntervals(o, f, t, STREAM_LIMIT)
+        }
+
+
+    /**
+     * The per-day skin-temp, SpO2 and off-wrist reads, lifted out of `analyzeRecentOnCpu` (#1538).
+     *
+     * Nothing about this block changed; it moved. The method it came from sits 17 bytes under the JaCoCo
+     * budget its own guard pins, so it could not accept another line — and the established remedy in this
+     * file is to extract, not to raise the budget (see `persistFitnessVitalityAndSteps`, extracted for the
+     * same reason and pinned in place by its own test).
+     *
+     * The per-owner memo maps are passed in and MUTATED here, exactly as they were inline: the WHOOP 4.0
+     * ADC anchor is a property of the device rather than the night, so it is learned once per owner across
+     * the whole scan window and reused for every night. Moving that behind a function does not change when
+     * it is learned or what it is learned from.
+     *
+     * DELIBERATELY ONE-SIDED — do not mirror it. The Swift engine keeps this block inline, because the
+     * constraint that forced the extraction is a JVM one: a method's bytecode must fit 64 KB, and JaCoCo's
+     * instrumentation of it must too. Swift has no equivalent limit and no equivalent guard, so a twin
+     * helper there would buy nothing and cost a reader the question of what it was for. A parity audit
+     * that finds this with no Swift counterpart has found the intended state, not a gap.
+     */
+    private suspend fun readDaySkinAndWristOff(
+        repo: com.noop.data.WhoopRepository,
+        owner: String,
+        from: Long,
+        to: Long,
+        ownerSource: DayOwnerSource?,
+        skinFamilyByOwner: HashMap<String, DeviceFamily>,
+        skinWornToleranceByOwner: HashMap<String, Long>,
+        skinAnchorByOwner: HashMap<String, Double>,
+        skinAnchorResolvedOwners: HashSet<String>,
+        skinAnchorScanFrom: Long,
+        skinAnchorScanTo: Long,
+    ): DaySkinReads {
+        val skin = repo.skinTempSamples(owner, from, to, STREAM_LIMIT)
+        // #93: WHOOP 4.0 raw SpO2 PPG samples for the night; analyzeDay banks the nightly red/IR ADC
+        // means on the DailyMetric. Empty on a 5/MG (no v24 spo2 channels) → the raw means stay null.
+        val spo2 = repo.spo2Samples(owner, from, to, STREAM_LIMIT)
+        // #938: the strap family that WROTE this owner's skin-temp rows, so analyzeDay converts the raw
+        // register on the right scale (5/MG banks centidegrees, a WHOOP 4.0 v24 banks a raw ADC). The
+        // owner source resolves it from the registry; unknown/non-WHOOP owners fall back to WHOOP5 (the
+        // prior /100 behaviour), so only a device positively identified as a 4.0 changes scale.
+        // Resolved once per DISTINCT owner via [skinFamilyByOwner] (#970 read efficiency, see above).
+        val skinFamily = skinFamilyByOwner.getOrPut(owner) {
+            ownerSource?.skinTempFamily(owner) ?: DeviceFamily.WHOOP5
+        }
+        // #1467: the worn-gate timestamp tolerance for this owner (0 for WHOOP, byte-identical).
+        val skinWornToleranceSec = skinWornToleranceByOwner.getOrPut(owner) {
+            ownerSource?.skinTempWornToleranceSec(owner) ?: 0
+        }
+        // #938 (second capture): learn THIS device's worn skin-temp anchor raw ONCE, WINDOW-WIDE (the
+        // whole scan window's skin samples), not per-night. The @72 skin-temp ADC's register offset is
+        // per-device — a second real 4.0 strap shares the no-contact floor (~509) + 11-bit saturation
+        // (2047) but a worn band ~1100–1600 (nightly mean raw ~1290), which the global 826 anchor maps to
+        // 47–72 °C, so 100% of its worn samples fail the 28–42 °C gate (kept=0, no baseline, no signal).
+        // WINDOW-WIDE, not per-night: a per-night re-centre would subtract each night's own mean and ERASE
+        // the cross-night deviation the skinTempDevC signal exists to carry. Deterministic per run; SAFE
+        // because the skin baseline is re-folded from the SAME window's nightly means every run, so this
+        // constant offset cancels in the deviation. null for a non-4.0 owner (WHOOP5 ignores the anchor)
+        // or when <100 in-band samples exist → the conversion falls back to the global anchor (byte-
+        // identical to today). Computed here once per owner alongside the family resolution.
+        val skinAnchorRaw = if (skinFamily == DeviceFamily.WHOOP4) {
+            if (!skinAnchorResolvedOwners.contains(owner)) {
+                val windowSkin = repo.skinTempSamples(owner, skinAnchorScanFrom, skinAnchorScanTo, STREAM_LIMIT)
+                Whoop4SkinTemp.deviceAnchorRaw(windowSkin.map { it.raw })?.let { skinAnchorByOwner[owner] = it }
+                skinAnchorResolvedOwners.add(owner)
+            }
+            skinAnchorByOwner[owner]
+        } else {
+            null
+        }
+        // Wrist-wear events in the night window, paired into off-wrist [start, end) intervals for the
+        // off-wrist sleep backstop (#500). The HR-gap proxy in the stager is the always-on guard;
+        // these explicit intervals sharpen it under the FRACTIONAL rule (#504) , a session is dropped
+        // only when its off-wrist coverage reaches maxOffWristSleepFraction, so a real night with a
+        // short off-wrist tail survives. Pairing needs WRIST_ON too (to bound each interval); a span
+        // still open at the window end closes at `to`. Empty when the strap emitted no wrist events.
+        val wristOff = AnalyticsEngine.offWristIntervals(repo.events(owner, from, to, STREAM_LIMIT), to)
+        return DaySkinReads(skin, spo2, skinFamily, skinWornToleranceSec, skinAnchorRaw, wristOff)
+    }
+
+    /** What [readDaySkinAndWristOff] hands back. A holder rather than loose returns so the call site
+     *  re-binds the same names it used inline and the rest of the loop is untouched. */
+    private data class DaySkinReads(
+        val skin: List<com.noop.data.SkinTempSample>,
+        val spo2: List<com.noop.data.Spo2Sample>,
+        val skinFamily: DeviceFamily,
+        val skinWornToleranceSec: Long,
+        val skinAnchorRaw: Double?,
+        val wristOff: List<Pair<Long, Long>>,
+    )
+
     /**
      * The per-day diagnostic source token from the imported day-key sets. A WHOOP export covering [day]
      * WINS the dashboard merge over our computed row (imports win field-by-field , mergeDaily), so it
@@ -2712,10 +2824,44 @@ object IntelligenceEngine {
             "hrRows=$hrRows provenance=$provenance"
     }
 
-    /** #1331 diagnostic line: the night's computed respiratory rate (breaths/min) or "nil". Format kept
-     *  simple so the planned Swift twin (iOS #1331 follow-up) can match it byte-for-byte. */
-    internal fun respRateLogLine(day: String, respRateBpm: Double?): String =
-        "resp day=$day rpm=${respRateBpm?.let { String.format(Locale.US, "%.1f", it) } ?: "nil"}"
+    /**
+     * #1331 diagnostic line: the night's computed respiratory rate (breaths/min) or "nil".
+     *
+     * When the rate is nil the line now carries WHY, because "nil" on its own sent an investigation
+     * across two subsystems to find out. The RSA estimate needs per-beat-accurate R-R, so
+     * [HrvAnalyzer.beatValuesAreTrustworthy] refuses a stream whose intervals are not beat-to-beat
+     * measurements — and on a WHOOP 4.0 carrying the #1008/#1118 over-count that gate is what empties
+     * the card, on nearly every night, silently. Printing the fraction beside the boundary turns
+     * "Respiratory: No data" from a mystery into a reading.
+     *
+     * It distinguishes the two cases rather than asserting one: below the boundary the gate refused the
+     * R-R; at or above it the gate passed and the cause is one of the estimator's other exits (too few
+     * beats, too short a span, too coarse a grid), which this deliberately does not guess between.
+     * Omitting [beatAccurate] restores the original one-field line exactly, so a night that never
+     * reached the HRV block reads as it always did.
+     *
+     * Swift twin: `IntelligenceEngine.respRateLogLine`.
+     */
+    internal fun respRateLogLine(
+        day: String,
+        respRateBpm: Double?,
+        beatAccurate: Double? = null,
+        rrIntegrity: String? = null,
+    ): String {
+        val base = "resp day=$day rpm=${respRateBpm?.let { String.format(Locale.US, "%.1f", it) } ?: "nil"}"
+        if (respRateBpm != null || beatAccurate == null) return base
+        // "NaN" explicitly rather than via %.2f: the JVM renders a non-finite as "NaN" and C-style
+        // %f renders it "nan", so leaving it to the formatter would make the twin lines differ on
+        // exactly the input the gate treats specially. One spelling, chosen here, on both platforms.
+        val acc = if (beatAccurate.isNaN()) "NaN" else String.format(Locale.US, "%.2f", beatAccurate)
+        val gate = String.format(Locale.US, "%.2f", HrvAnalyzer.BEAT_ACCURACY_MIN_FRACTION)
+        val integrity = rrIntegrity ?: "unknown"
+        return if (beatAccurate < HrvAnalyzer.BEAT_ACCURACY_MIN_FRACTION) {
+            "$base beatAccurate=$acc<$gate rrIntegrity=$integrity — RSA gate refused the R-R"
+        } else {
+            "$base beatAccurate=$acc>=$gate rrIntegrity=$integrity — gate passed, cause is elsewhere"
+        }
+    }
 
     /**
      * The per-day RHR floor-vs-mean diagnostic line (#691). NOOP's [floor] is the WHOOP-style resting

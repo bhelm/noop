@@ -2522,4 +2522,13 @@
     <string name="l10n_health_screen_your_strap_reports_a_blood_oxygen_349fe34a">Tu pulsera ofrece una estimación de oxígeno en sangre, pero no está verificada y viene desactivada. Actívala en Ajustes, o importa una exportación de WHOOP en Fuentes de datos para el valor calibrado.</string>
     <string name="l10n_health_screen_no_blood_oxygen_percentage_from_a_1d3d383e">Sin porcentaje de oxígeno en sangre desde un WHOOP 4.0</string>
     <string name="l10n_health_screen_your_strap_banks_the_raw_optical_b52a0f80">Tu pulsera guarda los canales ópticos en bruto, pero NOOP no los convierte en un porcentaje de oxígeno en sangre, así que esto seguirá vacío por mucho que la lleves. Importa una exportación de WHOOP en Fuentes de datos para rellenarlo con tu historial.</string>
+    <string name="l10n_settings_screen_ask_android_to_pair_experimental_250a81e9">Pedir a Android que vincule (experimental)</string>
+    <string name="l10n_settings_screen_noop_has_always_hoped_that_writing_19967036">NOOP siempre ha confiado en que escribir en tu 5.0/MG hiciera que Android lo vinculara. Nunca ocurre. Esta opción se lo pide a Android directamente, por lo que puede mostrar un diálogo de vinculación del sistema. La frecuencia cardíaca en directo sigue funcionando igualmente; desactívala si el diálogo molesta.</string>
+    <string name="l10n_settings_screen_ask_android_to_pair_323fccbe">Pedir a Android que vincule</string>
+    <string name="l10n_settings_screen_send_hello_despite_bond_refusal_experimental_2f8de795">Enviar hello pese al rechazo de vinculación (experimental)</string>
+    <string name="l10n_settings_screen_send_hello_despite_bond_refusal_65c9d9fd">Enviar hello pese al rechazo de vinculación</string>
+    <string name="l10n_settings_screen_check_automatically_7cd229d2">Comprobar automáticamente</string>
+    <string name="l10n_settings_screen_once_a_day_noop_asks_github_5683aad3">Una vez al día, NOOP consulta a GitHub el número de la última versión y deja un aviso en Novedades si hay una más reciente. No se envía nada sobre ti y nunca instala nada.</string>
+    <string name="l10n_updates_noop_1s_is_available_05d8ef55">NOOP %1$s ya está disponible</string>
+    <string name="l10n_updates_youre_on_1s_open_settings_and_35b9e135">Tienes la %1$s. Abre Ajustes y usa Buscar actualizaciones para ver las novedades y descargar la %2$s.</string>
 </resources>

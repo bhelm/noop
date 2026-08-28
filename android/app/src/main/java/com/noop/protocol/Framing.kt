@@ -312,6 +312,12 @@ object Framing {
             "METADATA" -> decodeMetadataWhoop5(frame, parsed)
             "EVENT" -> decodeEventWhoop5(frame, parsed)
             "COMMAND_RESPONSE" -> decodeCommandResponseWhoop5(frame, parsed)
+            // WHOOP 5/MG ONLY, and that is a gap rather than a decision. Swift decodes the 4.0 console
+            // layout too (`PostHooks`, offsets 11..len-1, pinned by a test on real 4.0 text), so after the
+            // Apple consumer was wired up a WHOOP 4.0 narrates into an iOS strap log and stays silent in an
+            // Android one — the same defect this fixed on Apple, mirrored onto the other strap. Left for a
+            // follow-up rather than smuggled in here: it needs the 4.0 offsets and its own vector, and this
+            // change is already about a key three implementations disagreed on.
             "CONSOLE_LOGS" -> decodeConsoleLogsWhoop5(frame, parsed)
             else -> Unit
         }
@@ -376,6 +382,11 @@ object Framing {
                 if (pay.size >= 97 && (pay[93].toInt() and 0xFF) == 50) {
                     parsed["fw_version"] = "${pay[93].toInt() and 0xFF}.${pay[94].toInt() and 0xFF}." +
                         "${pay[95].toInt() and 0xFF}.${pay[96].toInt() and 0xFF}"
+                } else {
+                    // The guards fail closed by design, which left a strap reporting no firmware with no way to
+                    // say WHY - a different generation byte and a MOVED offset look identical from a log. Carry
+                    // the evidence instead; see [firmwareGateDiagnostic].
+                    parsed["fw_gate"] = firmwareGateDiagnostic(pay, i)
                 }
             }
         }
@@ -405,7 +416,10 @@ object Framing {
         val text = frame.copyOfRange(21, payEnd)
             .toString(Charsets.UTF_8)
             .trimEnd('\u0000')
-        if (text.isNotEmpty()) parsed["console"] = text.take(2048)
+        // Key "log", not "console": the Python reference decoder golden.json is generated from uses
+        // "log", and Swift matches it under a parity guard. This side was the odd one out, which is
+        // how the Apple consumer ported from here read the wrong key and silently found nothing.
+        if (text.isNotEmpty()) parsed["log"] = text.take(2048)
     }
 
     /**

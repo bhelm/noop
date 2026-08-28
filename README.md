@@ -95,9 +95,7 @@ Pre-built apps you can run right now:
 
 Prefer to build it yourself? See [`docs/BUILD.md`](docs/BUILD.md).
 
-Everything is **offline by default**. Network access is limited to features you explicitly enable:
-the **AI Coach**, the compile-time-optional Oura history import, and Android's Experimental one-way
-push to an endpoint you own. NOOP operates no server, account, or telemetry service.
+Everything runs **offline by default** — nothing about you leaves the device unless you switch on a feature that sends it. NOOP makes only three kinds of network request, all described in [`docs/PRIVACY_SECURITY.md`](docs/PRIVACY_SECURITY.md): the optional **AI Coach** (off until you add your own API key), a once-a-day check for a newer release, which sends nothing about you and never installs anything, and Android's default-off Experimental one-way **push** to an endpoint you own. Turn the check off in Settings → About and it makes no request at all. NOOP operates no server, account, or telemetry service.
 
 ---
 
@@ -527,6 +525,12 @@ Every arrow stays on your machine.
 and computed metrics live in a local SQLite database on your device. They leave only through an
 export or optional network feature you deliberately configure, including Android's default-off
 Experimental one-way push to your own endpoint; see
+[`docs/PRIVACY_SECURITY.md`](docs/PRIVACY_SECURITY.md).
+
+The app makes two kinds of network request, neither carrying anything about you: the optional
+**AI Coach** (off until you add your own key), and a once-a-day read of the latest release number so a
+sideloaded install can tell you an update exists — on by default, switchable off in Settings → About,
+and it never installs anything. Both are detailed in
 [`docs/PRIVACY_SECURITY.md`](docs/PRIVACY_SECURITY.md).
 
 ---

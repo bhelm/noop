@@ -2521,4 +2521,13 @@
     <string name="l10n_health_screen_your_strap_reports_a_blood_oxygen_349fe34a">Votre bracelet fournit une estimation de l\'oxygène sanguin, mais elle n\'est pas vérifiée et désactivée par défaut. Activez-la dans Réglages, ou importez un export WHOOP dans Sources de données pour la valeur calibrée.</string>
     <string name="l10n_health_screen_no_blood_oxygen_percentage_from_a_1d3d383e">Pas de pourcentage d\'oxygène sanguin depuis un WHOOP 4.0</string>
     <string name="l10n_health_screen_your_strap_banks_the_raw_optical_b52a0f80">Votre bracelet enregistre les canaux optiques bruts, mais NOOP ne les convertit pas en pourcentage d\'oxygène sanguin : cette section restera vide quel que soit le temps de port. Importez un export WHOOP dans Sources de données pour la remplir depuis votre historique.</string>
+    <string name="l10n_settings_screen_ask_android_to_pair_experimental_250a81e9">Demander à Android de s\'appairer (expérimental)</string>
+    <string name="l10n_settings_screen_noop_has_always_hoped_that_writing_19967036">NOOP a toujours compté sur l\'écriture vers votre 5.0/MG pour qu\'Android s\'appaire. Cela n\'arrive jamais. Cette option le demande directement à Android et peut afficher une boîte de dialogue d\'appairage du système. La fréquence cardiaque en direct continue de fonctionner dans les deux cas ; désactivez-la si la boîte de dialogue vous gêne.</string>
+    <string name="l10n_settings_screen_ask_android_to_pair_323fccbe">Demander à Android de s\'appairer</string>
+    <string name="l10n_settings_screen_send_hello_despite_bond_refusal_experimental_2f8de795">Envoyer le hello malgré le refus d\'appairage (expérimental)</string>
+    <string name="l10n_settings_screen_send_hello_despite_bond_refusal_65c9d9fd">Envoyer le hello malgré le refus d\'appairage</string>
+    <string name="l10n_settings_screen_check_automatically_7cd229d2">Vérifier automatiquement</string>
+    <string name="l10n_settings_screen_once_a_day_noop_asks_github_5683aad3">Une fois par jour, NOOP demande à GitHub le numéro de la dernière version et dépose une note dans Mises à jour s’il en existe une plus récente. Aucune donnée vous concernant n’est envoyée, et rien n’est jamais installé.</string>
+    <string name="l10n_updates_noop_1s_is_available_05d8ef55">NOOP %1$s est disponible</string>
+    <string name="l10n_updates_youre_on_1s_open_settings_and_35b9e135">Vous utilisez la version %1$s. Ouvrez les Réglages et utilisez Rechercher des mises à jour pour voir les nouveautés et télécharger la %2$s.</string>
 </resources>

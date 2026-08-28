@@ -18,12 +18,16 @@ public final class FrameRouter {
         // #900: a fresh connection is a fresh capture session — re-arm the per-command raw-frame dump so
         // each connect can re-capture the disputed COMMAND_RESPONSE prefix once. `family` is set fresh per
         // connection by BLEManager (connectCore), so this is the per-session reset hook.
-        didSet { rawDumpedRespCmds.removeAll() }
+        didSet { rawDumpedRespCmds.removeAll(); loggedFirmwareGate = nil }
     }
 
     /// #900: resp command names (e.g. "GET_BATTERY_LEVEL(26)") whose raw COMMAND_RESPONSE frame has already
     /// been dumped this connection. The provenance dump fires once per command per session so a 4.0's
     /// per-poll battery reads don't flood the strap log. Reset when `family` is set at connect.
+    /// #1634: last firmware-gate line logged, so a stable per-connection value is not repeated on every
+    /// hello. Cleared alongside the other per-connection routing state.
+    private var loggedFirmwareGate: String?
+
     private var rawDumpedRespCmds: Set<String> = []
 
     public init(state: LiveState) {
@@ -111,6 +115,14 @@ public final class FrameRouter {
                 state.strapFirmware = fw
                 // Persist so the debug export can name the firmware offline (state clears on disconnect).
                 UserDefaults.standard.set(fw, forKey: "noop.lastFirmware")
+            }
+
+            // #1634: the 5/MG hello decoded no firmware. The guards fail closed by design, so this is the
+            // only place that can say WHY - a different generation byte vs a MOVED offset. Logged once per
+            // connection (the value is stable), so a capture from an undecoded strap carries the evidence.
+            if let gate = parsed.parsed["fw_gate"]?.stringValue, loggedFirmwareGate != gate {
+                loggedFirmwareGate = gate
+                state.append(log: gate, domain: .connection)
             }
             // Advertising-name replies (WHOOP 4.0 / Harvard). GET (cmd 76) carries the current name in
             // its payload; SET (cmd 77) carries only a result byte. The schema has no field decode for
@@ -276,6 +288,20 @@ public final class FrameRouter {
                     state.append(log: "  raw frame (#900 — [seq][result] provenance): \(Self.fullFrameHex(frame))")
                 }
             }
+
+        case "CONSOLE_LOGS":
+            // The 5/MG strap narrates its own sync engine here — "BLE: PullStats: Data: N, Events: N…",
+            // "History burst success. Trim: 0x…", "Historical Dump Complete". Android has mirrored this
+            // into the strap log since #78 and calls it gold for protocol research; this side decoded the
+            // text and then dropped it on the floor, so an Apple strap log has never carried a word of it.
+            //
+            // It is worth more than curiosity. `PullStats: Data: 0` is the STRAP stating it sent no
+            // records, which is a far stronger answer to a "synced but no data" report (#1683) than NOOP
+            // inferring emptiness from its own decode — the difference between the strap saying nothing
+            // was there and us saying we found nothing.
+            //
+            // Capped at 300 characters to match the Kotlin twin exactly; the ring buffer holds 2k lines.
+            appendStrapConsole(parsed)
 
         case "EVENT":
             if let ev = parsed.parsed["event"]?.stringValue {
@@ -497,6 +523,32 @@ public final class FrameRouter {
     /// RTC (fix #72) — a live gesture is ~now in the strap's clock, a historical replay is old in it.
     /// Deliberately does NOT touch lastEvent / sync trigger / bonded / battery — those stay on the normal
     /// handle(frame:) path, so backfill UI behaviour is otherwise unchanged.
+    /// Mirror a CONSOLE_LOGS frame's text even during a backfill.
+    ///
+    /// The strap narrates its sync engine EXACTLY while offloading — "BLE: PullStats: Data: N",
+    /// "History burst success. Trim: 0x…", "Historical Dump Complete" — and offload frames are routed
+    /// straight to the Backfiller, bypassing `handle` entirely. So the `case "CONSOLE_LOGS"` there only
+    /// ever sees the rare console frame that arrives outside a sync, which is not the one worth having.
+    /// This is the same carve-out `dispatchLiveGestureIfFresh` makes for a live gesture mid-offload.
+    ///
+    /// Same cheap pre-check as that method: a single type-byte compare skips the CRC + FieldBuilder
+    /// decode for the thousands of type-47 records a sync produces, so the cost on the offload path is a
+    /// byte compare per frame. Family-aware (WHOOP4 type @[4], 5/MG @[8]).
+    func mirrorStrapConsoleIfPresent(frame: [UInt8]) {
+        guard frameTypeName(frame, family: family) == "CONSOLE_LOGS" else { return }
+        let parsed = parseFrame(frame, family: family)
+        guard parsed.ok, parsed.crcOK != false else { return }
+        appendStrapConsole(parsed)
+    }
+
+    /// The one place the strap's own narration reaches the log, so the live and offload paths cannot
+    /// drift in what they emit. Capped at 300 characters to match the Kotlin twin exactly.
+    private func appendStrapConsole(_ parsed: ParsedFrame) {
+        guard parsed.typeName == "CONSOLE_LOGS",
+              let txt = parsed.parsed["log"]?.stringValue, !txt.isEmpty else { return }
+        state.append(log: "strap: \(String(txt.prefix(300)))")
+    }
+
     func dispatchLiveGestureIfFresh(frame: [UInt8], now: Int = Int(Date().timeIntervalSince1970)) {
         // #47: this fires for EVERY frame on the OFFLOAD path (thousands of type-47 records over a
         // multi-minute sync) purely to catch a rare EVENT gesture. Cheap type-only pre-check skips the full

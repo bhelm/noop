@@ -191,6 +191,41 @@ struct BondRefusalGiveUp {
         "NOOP stopped retrying because your strap keeps refusing to pair. It is likely still held by the official WHOOP app, or your phone is holding an old pairing. Close the WHOOP app, put the strap in pairing mode (tap until the LEDs flash blue), and if it is listed in your Bluetooth settings choose Forget This Device. Then tap Connect to try again."
     }
 
+    /// #1635: the log epitaph for the SUPPRESSION path.
+    ///
+    /// Separate from [epitaphLine] because that one asserts a cause ("almost certainly held by the
+    /// official WHOOP app") that only an auth refusal supports. Reusing it here would print a confident
+    /// explanation for a write that simply vanished.
+    ///
+    /// Pure. Byte-identical to the Kotlin `BondRefusalGiveUp.helloSuppressedEpitaph`.
+    static func helloSuppressedEpitaph(refusals: Int, opaqueId: String) -> String {
+        "Bond epitaph: the strap [\(opaqueId)] never acknowledged the secure handshake \(refusals)x in a row, and the attempt is what drops the link - leaving the handshake off so live heart rate keeps streaming. Tap Connect to try it again."
+    }
+
+    /// #1635: the hint shown when the hello is switched off and the link is KEPT.
+    ///
+    /// Nothing is paused on this branch, so it must not say auto-reconnect stopped. It names what was lost
+    /// (history sync) and the one action that restores the attempt, without asserting a cause.
+    ///
+    /// Pure. Byte-identical to the Kotlin `BondRefusalGiveUp.helloSuppressedHint`.
+    static func helloSuppressedHint() -> String {
+        "The secure handshake with your strap never completes, and the attempt itself is what drops the link. NOOP has switched it off for this strap so live heart rate keeps streaming. History sync stays unavailable until it pairs. Tap Connect to try the handshake again."
+    }
+
+    /// The paused hint for a bond that failed WITHOUT the strap ever answering (#1635).
+    ///
+    /// [pausedHint] names a cause — the strap still held by the official WHOOP app, or a stale OS pairing —
+    /// which is well founded when the refusal arrived as INSUFFICIENT_AUTHENTICATION or
+    /// INSUFFICIENT_ENCRYPTION: the strap actively said no. It is NOT founded when the CLIENT_HELLO simply
+    /// goes unanswered and the link drops on a timer, which is a different observation with several
+    /// possible causes. Telling that user to close the WHOOP app would be a guess dressed as instruction,
+    /// and if it is wrong they have no way to know.
+    ///
+    /// Pure. Byte-identical to the Kotlin `BondRefusalGiveUp.pausedHintHandshakeUnanswered`.
+    static func pausedHintHandshakeUnanswered() -> String {
+        "NOOP stopped retrying because the secure handshake with your strap never completes: the strap does not answer, and the link drops a few seconds later. Auto-reconnect is paused so it stops draining both batteries. Tap Connect to try again, and if it keeps happening please share your strap log."
+    }
+
     /// #750: a short OPAQUE token from a CoreBluetooth-local peripheral UUID for the epitaph. The CB UUID is
     /// per-install (NOT the hardware MAC), and we keep only its first 8 hex chars, so the token is stable
     /// within a log but carries no device-identifying PII. Pure + deterministic. Twin of the Android helper.
@@ -507,6 +542,17 @@ public final class BLEManager: NSObject, ObservableObject {
     static let disService       = CBUUID(string: "180A")
     static let disSerialChar    = CBUUID(string: "2A25") // Serial Number String
     static let disHwRevChar     = CBUUID(string: "2A27") // Hardware Revision String
+    static let disFwRevChar     = CBUUID(string: "2A26") // Firmware Revision String
+    static let disManufacturerChar = CBUUID(string: "2A29") // Manufacturer Name String
+    static let disModelNumberChar  = CBUUID(string: "2A24") // Model Number String
+    static let disSwRevChar     = CBUUID(string: "2A28") // Software Revision String
+    /// Every DIS characteristic NOOP reads, in ONE place. The failure reporter tests membership here, so
+    /// a characteristic added beside these cannot go silently unreported — the exact "a refused read is
+    /// indistinguishable from one never issued" gap the reporter exists to close. Kotlin twin: DIS_CHARS.
+    static let disChars: Set<CBUUID> = [
+        disSerialChar, disHwRevChar, disFwRevChar,
+        disManufacturerChar, disModelNumberChar, disSwRevChar,
+    ]
 
     static let restoreID = "com.openwhoop.ble.central"
 
@@ -871,6 +917,11 @@ public final class BLEManager: NSObject, ObservableObject {
     /// callback (the settle resolved); if it fires instead, the state never settled — the wedged-grant
     /// shape (#429) — and the #295 re-grant banner is shown after all.
     private var unauthorizedSettleWork: DispatchWorkItem?
+    /// When the 5/MG CLIENT_HELLO went out, or nil when none is outstanding. Consumed ONLY by a
+    /// completion on the hello's own characteristic (or a failed one, or the link dropping) — never by an
+    /// unrelated command's callback, which would otherwise either inherit the window or close it out from
+    /// under a genuine ack still in flight (#1635). Kotlin twin: `WhoopBleClient.clientHelloWriteAtMs`.
+    private var clientHelloWriteAt: Date?
     private var cmdCharacteristic: CBCharacteristic?
     /// #613: true when a command would ACTUALLY reach the strap right now — the same condition `send()`
     /// requires (connected peripheral + a discovered command characteristic). The alarm-arm log and the
@@ -890,14 +941,35 @@ public final class BLEManager: NSObject, ObservableObject {
     private var dataNotifyCharacteristic: CBCharacteristic?
     private var heartRateCharacteristic: CBCharacteristic?
     private var batteryCharacteristic: CBCharacteristic?
-    /// #520 DIS: remembered at discovery, READ post-bond (see the #490 note — a 5/MG refuses standard
-    /// reads before the link is encrypted). Serial + hardware revision are immutable, so they are read
-    /// ONCE per connection (`disRead`), never re-polled like the battery.
+    /// #520 DIS: remembered at discovery, READ post-bond — and since #1635 also on a SUPPRESSED link that
+    /// will never bond, which is now a permanent state rather than a transient one. The #490 note (a 5/MG
+    /// refuses standard reads before the link is encrypted) is the open question that attempt settles
+    /// either way. Serial + hardware revision are immutable, so they are read ONCE per connection
+    /// (`disRead`), never re-polled like the battery.
+    /// Peripheral whose GATT tree has already been dumped, so the ~30-line enumeration is emitted once per
+    /// device rather than once per connect (#1635). Not persisted: a fresh launch is exactly when the tree
+    /// is worth seeing again, and a strap whose firmware changed between runs may expose something new.
+    private var gattTreeDumpedFor: UUID?
+
     private var disSerialCharacteristic: CBCharacteristic?
     private var disHwRevCharacteristic: CBCharacteristic?
     private var disRead = false
+    /// 3.0s — the Kotlin twin's `BATTERY_ON_CONNECT_DELAY_MS * 2` (1500 × 2), and the same 1.5s on-connect
+    /// pacing this file already uses before `requestSync(.connect)`. Long enough that the link has settled
+    /// after the suppression decision, short enough to land in the same session. Pinned to the twin's
+    /// number rather than an independently chosen one: this read can cost the link, so the two platforms
+    /// should not be probing at different moments when a field capture has to explain a drop.
+    static let unbondedDisReadDelay: TimeInterval = 3.0
     private var disSerial: String?
     private var disHwRev: String?
+    /// #1635 follow-up: the DIS identity extras (firmware, manufacturer, model, software revision) as
+    /// discovered. Held as a list rather than one property each because nothing branches on them
+    /// individually — they are read as a set and reported as a set.
+    private var disExtraCharacteristics: [CBCharacteristic] = []
+    /// The DIS firmware string (0x2A26), which is the ONLY firmware source an unbonded 5/MG has: the
+    /// puffin report needs the bond that never happens. Published only as a fallback, never as an
+    /// override — see `shouldPublishDisFirmware`.
+    private var disFirmware: String?
     /// EXPERIMENTAL WHOOP 5.0/MG puffin notify chars (fd4b0003/4/5/7), remembered at discovery so we
     /// can re-subscribe them AFTER bonding — the strap refuses them ("Authentication is insufficient")
     /// until the link is encrypted (issue #17).
@@ -905,6 +977,11 @@ public final class BLEManager: NSObject, ObservableObject {
     private var reassembler = Reassembler()
     private var seq: UInt8 = 0
     private var didBond = false
+    /// #1635: one explicit Connect grants one fresh CLIENT_HELLO even when the suppression latch is set.
+    /// Consumed unconditionally by the write site, so the retry belongs to THIS session — leaving it set
+    /// would hand a stale retry to some later automatic reconnect and restart the loop the suppression
+    /// exists to end. Kotlin twin: `WhoopBleClient.helloRetryRequested`.
+    private var helloRetryRequested = false
     /// WHOOP 5/MG only: realtime HR has been armed (puffin TOGGLE_REALTIME_HR sent) once for this
     /// connection, so the post-bond callback re-firing on later `.withResponse` writes doesn't re-send it.
     private var whoop5RealtimeArmed = false
@@ -1209,7 +1286,8 @@ public final class BLEManager: NSObject, ObservableObject {
         // persists raw frames. Flip "enableRawCapture" in UserDefaults to capture raw again.
         let enableRawCapture = UserDefaults.standard.bool(forKey: "enableRawCapture")
         collector = Collector(store: store, deviceId: deviceId,
-                              enableRawCapture: enableRawCapture)
+                              enableRawCapture: enableRawCapture,
+                              log: { [weak self] line in self?.log(line) })
         // The store can finish bootstrapping AFTER connect(model:) already ran (both wait on
         // poweredOn), so apply the family/clock configuration here too — whichever runs last wins.
         configureCollectorFamily()
@@ -1315,6 +1393,12 @@ public final class BLEManager: NSObject, ObservableObject {
             autoReconnectPausedForBondLoop = false
             bondLoopPausedAt = nil
         }
+        // #1635: the suppression path pauses NOTHING, so the reset above never fires for it. An explicit
+        // Connect is exactly the signal that the user has acted (pairing mode, closed the WHOOP app), so
+        // it must grant a fresh handshake regardless — that is also the only way to clear the latch short
+        // of a genuine bond. Deliberately NOT in connectCore: a system-initiated reconnect must not.
+        helloRetryRequested = true
+        bondGiveUp.reset()
         connectCore(model: model)
     }
 
@@ -1437,6 +1521,9 @@ public final class BLEManager: NSObject, ObservableObject {
     public func forgetDevice(_ peripheralId: String?) {
         let target = peripheralId.flatMap { UUID(uuidString: $0) }
         let isCurrent = target == nil || peripheral?.identifier == target
+        // Captured BEFORE the teardown below nils `peripheral`, since a nil argument means "the current
+        // strap" and that is the only place its identifier can still be read.
+        let releasedUUID = peripheralId ?? peripheral?.identifier.uuidString
         intentionalDisconnect = true            // defuses the disconnect→3s-reconnect loop's guard
         cancelScanFallback()
         readoptingTo = nil                       // abandon any in-flight #52 pin handoff
@@ -1457,6 +1544,12 @@ public final class BLEManager: NSObject, ObservableObject {
         }
         // #747/#750 invariant: releasing a strap fully resets the give-up + pause (like disconnect()) so
         // a paused state can never outlive the strap it belonged to and wedge a later re-add.
+        //
+        // #1635: the hello-suppression latch is exactly that kind of state, and it is PERSISTED - so
+        // without this it outlives the strap it belonged to, silently suppressing the handshake on a
+        // re-add and leaving a stale key behind for a strap the user removed. Re-latching costs the same
+        // five refusals it always did, so a strap that genuinely cannot bond is no worse off.
+        HelloSuppressionStore.setSuppressed(releasedUUID, false)
         bondGiveUp.reset()
         autoReconnectPausedForBondLoop = false
         bondLoopPausedAt = nil
@@ -2346,8 +2439,31 @@ public final class BLEManager: NSObject, ObservableObject {
                     ? "console-only across \(state.consoleChunksThisSession) chunks"
                     : "metadata-only, 0 sensor rows persisted"
                 log("Backfill: completed but the strap banked no sensor history (\(detail)); consecutive empty syncs = \(emptySyncTracker.consecutiveEmptySyncs).")
+                // #1683: say HOW OLD the strap's newest stored record is. Without it the line above reads
+                // identically for a strap that is caught up and one that stopped banking three weeks ago -
+                // GET_DATA_RANGE already told us the difference and we simply never said so, which is why
+                // #1541 stayed open and unactionable. Rare-event evidence, so always-on.
+                let wallNowUnix = Int(Date().timeIntervalSince1970)
+                // Read the field ONCE: it feeds both the log line and the banner below, and they must not
+                // disagree about whether the strap is stale.
+                // WHOOP4 only, explicitly, on BOTH platforms. Redundant here today - `strapNewestTs` is
+                // only assigned when `feedsSync` (#695), which is WHOOP4 - but stated so a later widening
+                // of feedsSync cannot make this fire where the Android twin does not. A 5/MG that cannot
+                // offload has no business being told it stopped saving to flash.
+                let staleNewest: Int? = selectedModel.deviceFamily == .whoop4
+                    ? strapNewestTs.flatMap {
+                        Backfiller.isStaleNewestRecord(newestUnix: $0, wallNowUnix: wallNowUnix) ? $0 : nil
+                    }
+                    : nil
+                if let newest = staleNewest {
+                    log(Backfiller.staleRecordLine(newestUnix: newest, wallNowUnix: wallNowUnix))
+                }
+                // #1683: when the strap's own newest record dates the silence, SAY it. The generic copy
+                // below omits that and promises a recovery the charge advice has already been retried for
+                // every session; the dated version is the one a stuck user can act on.
                 state.lastSyncError = sustainedEmpty
-                    ? "Synced, but your strap had no stored history to hand over - only its diagnostic output. This usually means its clock has lost sync, so it isn't saving data to flash. Fully charge it to 100%, then reconnect, and it should start banking again."
+                    ? (staleNewest.map { Backfiller.staleRecordBanner(newestUnix: $0, wallNowUnix: wallNowUnix) }
+                        ?? "Synced, but your strap had no stored history to hand over - only its diagnostic output. This usually means its clock has lost sync, so it isn't saving data to flash. Fully charge it to 100%, then reconnect, and it should start banking again.")
                     : nil
             } else if let futureBanner = futureClockBanner {
                 // #324/#928: the strap banked records but its newest is dated implausibly in the FUTURE
@@ -3716,6 +3832,20 @@ public final class BLEManager: NSObject, ObservableObject {
             log("ECG probe: ignored — not connected")
             return false
         }
+        // #1635: the MG check above used to block this incidentally on a suppressed strap, because the
+        // variant could only resolve from a POST-BOND DIS read and so stayed `.unknown` forever. Now that
+        // DIS is read on an unbonded link too, a suppressed MG can attest itself — and this gate would
+        // have let the probe write puffin frames to fd4b0002, the very characteristic whose write tears
+        // the link down. That would spend the stable link the suppression exists to buy, on commands the
+        // strap cannot answer unbonded anyway.
+        //
+        // The ECG GATE-WRITE path already required this and says why (#269: a config write over the
+        // live-HR-only link silently fails). The probe needs it for the same reason, and now also to stay
+        // out of the way of #1635.
+        guard state.encryptedBond else {
+            log("ECG probe: ignored — needs the full encrypted bond, not the live-HR-only link (#1635/#269)")
+            return false
+        }
         return true
     }
 
@@ -3977,8 +4107,18 @@ public final class BLEManager: NSObject, ObservableObject {
     }
 
     private func keepAliveFire() {
-        guard state.connected, didBond else { return }
-        enableLiveNotifications(reason: "keepalive")
+        // #1635: a SUPPRESSED 5/MG never bonds, so a bare `didBond` gate switches this whole timer off for
+        // exactly the link that now stays up for hours - taking the liveness watchdog below with it and
+        // leaving a stalled stream with nothing to bounce it. That would quietly break the "stable live HR"
+        // the suppression exists to deliver. Android gates its twin on `bonded` (the live-HR shortcut, #69)
+        // and so reaches the same watchdog.
+        //
+        // Deliberately NARROWER than Android's gate: admitted only for a streaming 5/MG, and only as far as
+        // the watchdog. Everything past it needs the encrypted bond, so a second `didBond` guard closes the
+        // door again rather than letting an unbonded link issue puffin work that cannot land.
+        guard keepAliveMayRun(connected: state.connected, didBond: didBond,
+                              bonded: state.bonded, family: selectedModel.deviceFamily) else { return }
+        if didBond { enableLiveNotifications(reason: "keepalive") }
         // Liveness watchdog: if NOTHING has arrived for a while, the stream/link stalled.
         // Bounce the connection — the auto-rescan on disconnect re-bonds and resumes streaming.
         // #580 / #1414: the standard 0x2A37 HR profile keeps the link genuinely alive, but its packets can
@@ -3995,6 +4135,9 @@ public final class BLEManager: NSObject, ObservableObject {
             if let p = peripheral { central.cancelPeripheralConnection(p) }
             return
         }
+        // The watchdog above is the whole of the keep-alive an unbonded 5/MG can use. Everything below
+        // sends puffin-framed work that needs the encrypted bond.
+        guard didBond else { return }
         guard !backfilling else { return }            // never poke the strap mid-offload
         // #927: continuous capture can be overnight-only, which makes the want TIME-dependent; nothing
         // else re-evaluates it while the app just sits connected, so the keep-alive tick re-derives it.
@@ -4141,9 +4284,11 @@ public final class BLEManager: NSObject, ObservableObject {
         batteryCharacteristic = nil
         disSerialCharacteristic = nil
         disHwRevCharacteristic = nil
+        disExtraCharacteristics = []
         disRead = false
         disSerial = nil
         disHwRev = nil
+        disFirmware = nil
         whoop5NotifyCharacteristics.removeAll()
     }
 
@@ -4268,7 +4413,78 @@ public final class BLEManager: NSObject, ObservableObject {
             disRead = true
             p.readValue(for: serialChar)
             if let c = disHwRevCharacteristic, c.properties.contains(.read) { p.readValue(for: c) }
+            readDisExtras(p)
         }
+    }
+
+    /// Read the DIS identity extras — firmware above all, which an unbonded 5/MG has no other source for.
+    ///
+    /// DIVERGENCE FROM ANDROID (deliberate, platform): the Kotlin twin CHAINS these one read per callback,
+    /// because its GATT queue runs a single operation at a time and a second read issued early is simply
+    /// dropped. CoreBluetooth queues reads itself, so chaining here would add a state machine to serialise
+    /// something already serialised. Same characteristics, same data, no chain.
+    ///
+    /// A strap need not implement all of DIS: a missing or unreadable characteristic is skipped, because
+    /// "not implemented" is per-characteristic and the ones it DOES publish should still be read.
+    private func readDisExtras(_ p: CBPeripheral) {
+        for c in disExtraCharacteristics where c.properties.contains(.read) {
+            p.readValue(for: c)
+        }
+    }
+
+    /// The UNBONDED DIS attempt (#1635 follow-up). Deliberately separate from the post-bond identity read,
+    /// which runs only inside the handshake and therefore never runs at all on a strap that will not bond.
+    ///
+    /// Delayed for the same reason the Kotlin twin delays it: this is only safe in the settled state the
+    /// suppression leaves behind — no handshake outstanding, nothing else in flight, the link holding.
+    private func scheduleUnbondedDisRead() {
+        DispatchQueue.main.asyncAfter(deadline: .now() + BLEManager.unbondedDisReadDelay) { [weak self] in
+            self?.readDisIdentityUnbonded()
+        }
+    }
+
+    private func readDisIdentityUnbonded() {
+        // `peripheral` is only cleared by forgetDevice, so it OUTLIVES a disconnect - and this read is
+        // scheduled with a delay, on a strap whose entire failure mode is dropping the link. Without the
+        // connected check the reads would be issued into a dead link and the line below would claim an
+        // attempt that never happened, which is precisely what a diagnostic may not do.
+        guard state.connected, let p = peripheral else { return }
+        let refused = disRefusedPrefKey(p.identifier.uuidString)
+            .map { UserDefaults.standard.bool(forKey: $0) } ?? false
+        guard shouldReadDisUnbonded(isWhoop5: selectedModel.deviceFamily == .whoop5,
+                                    bonded: didBond,
+                                    alreadyReadThisLink: disRead,
+                                    previouslyRefused: refused) else { return }
+        guard let serialChar = disSerialCharacteristic, serialChar.properties.contains(.read) else {
+            log("DIS: serial characteristic unavailable — hardware variant stays unknown")
+            return
+        }
+        log("DIS: trying the identity read on an UNbonded link — unproven, and a refusal is itself the answer to whether DIS needs an encrypted bond (#490)")
+        disRead = true
+        p.readValue(for: serialChar)
+        if let c = disHwRevCharacteristic, c.properties.contains(.read) { p.readValue(for: c) }
+        readDisExtras(p)
+    }
+
+    /// A DIS read that came back with a failure status.
+    ///
+    /// Scoped to the DIS characteristics: they are the reads whose refusal is a FINDING (it settles #490
+    /// and means the firmware cannot be had without a bond). The refusal is latched per device, so a strap
+    /// that declines says so once instead of on every reconnect forever.
+    private func noteDisReadFailure(_ uuid: CBUUID, _ error: Error) {
+        guard BLEManager.disChars.contains(uuid) else { return }
+        log(disReadFailureLine(uuid: uuid.uuidString, status: error.localizedDescription))
+        // Report it, but latch it ONLY for an unbonded attempt. The latch is persisted and permanent, so a
+        // transient failure on a BONDED link would disable the unbonded read for this strap for good and
+        // blame the strap for something that was never its policy. This is the analogue of the Kotlin
+        // twin's explicit-bond guard: same reasoning, different thing to exclude, because the bonded read
+        // is the only way a DIS failure reaches here without being the finding we are looking for.
+        guard !didBond else {
+            log("DIS: not latching that refusal — the link is bonded, so the failure is not attributable to the strap's unbonded-read policy")
+            return
+        }
+        guard let key = disRefusedPrefKey(peripheral?.identifier.uuidString) else { return }
+        UserDefaults.standard.set(true, forKey: key)
     }
 
     /// Resolve + log the 5/MG hardware variant once a DIS string lands (#520). Both characteristics
@@ -4295,12 +4511,42 @@ public final class BLEManager: NSObject, ObservableObject {
     /// #716 stamp (which only fixed the "WHOOP" placeholder). ONE-DIRECTIONAL: attestation can only upgrade
     /// 4.0→5.0, never the reverse, and once corrected the guard below no longer matches, so it self-limits.
     private func reconcileModelFromAttestation(_ variant: Whoop5Variant) {
-        guard variant != .unknown, let rs = registryStore,
-              let active = try? rs.all().first(where: { $0.status == .active }),
-              DeviceFamily.forRegistryDevice(model: active.model, brand: active.brand) == .whoop4
+        guard variant != .unknown, let rs = registryStore else { return }
+        guard let attestingId = peripheral?.identifier.uuidString else {
+            // Should not happen — the attestation arrives on a connected link — but a silent return is one
+            // more path that goes quiet exactly when something is off.
+            log("DIS attestation (variant=\(variant.label)) not applied — the connected strap's id is unknown")
+            return
+        }
+        // Correct the row the attestation CAME FROM, never merely "whichever is active". Those are the
+        // same device on a single-strap install, and different ones the moment somebody pairs a 4.0
+        // alongside a 5/MG and leaves the 4.0 active — at which point relabelling by status rewrites the
+        // 4.0's row as "WHOOP 5.0 / MG" on the strength of the OTHER strap's DIS block.
+        //
+        // Unreachable today, because `Whoop5Variant.from` here is never given a model number and a real MG
+        // reports a serial prefix and hardware revision matching neither heuristic — so this returns on
+        // `.unknown` every time. Fixed anyway: the Android twin's identical bug went live the moment its
+        // resolver was widened, and twinning the DIS model-number read would do exactly that here (#520).
+        let devices = (try? rs.all())?.filter { $0.status != .archived } ?? []
+        let byId = devices.first { $0.peripheralId?.caseInsensitiveCompare(attestingId) == .orderedSame }
+        // The sole non-archived device is not a guess: there is nothing else the attestation could have
+        // come from, and `peripheralId` is nil on the seeded row until the strap is adopted — the very
+        // single-strap install this correction exists for.
+        // The fallback requires the sole row to be UNADOPTED. "One device, so it must be the one attesting"
+        // holds only while that row has never been bound to an id; a row that HAS one and does not match is
+        // a different strap, and relabelling it is the corruption this guard exists to prevent. That is not
+        // hypothetical — adding a 5/MG to an install whose only row is a 4.0 reaches here before the new
+        // strap is registered.
+        let soleUnadopted = (devices.count == 1 && devices[0].peripheralId == nil) ? devices[0] : nil
+        guard let attesting = byId ?? soleUnadopted else {
+            log("DIS attestation (variant=\(variant.label)) not applied — \(devices.count) paired devices"
+                + " and none carries this strap's id, so it cannot be attributed")
+            return
+        }
+        guard DeviceFamily.forRegistryDevice(model: attesting.model, brand: attesting.brand) == .whoop4
         else { return }
-        try? rs.setModel(active.id, model: "WHOOP 5.0 / MG")
-        log("Corrected device model \"\(active.model ?? "nil")\" → \"WHOOP 5.0 / MG\" from DIS attestation (variant=\(variant.label))")
+        try? rs.setModel(attesting.id, model: "WHOOP 5.0 / MG")
+        log("Corrected device model \"\(attesting.model ?? "nil")\" → \"WHOOP 5.0 / MG\" from DIS attestation (variant=\(variant.label))")
     }
 
     private func requestNotify(_ c: CBCharacteristic, on p: CBPeripheral, reason: String) {
@@ -4850,6 +5096,48 @@ extension BLEManager: @preconcurrency CBCentralManagerDelegate {
         return "code?"
     }
 
+    /// Feed one 5/MG bond refusal into the #747 give-up and act on the trip (#1635).
+    ///
+    /// Both causes arrive here, and they want OPPOSITE treatment — see `giveUpSuppressesHello`. An auth
+    /// refusal means the strap actively declined, so pausing auto-reconnect is right. An unanswered
+    /// handshake means the write vanished while the link streamed live HR the whole time, so pausing
+    /// would throw away a working strap to punish a handshake nobody is waiting on.
+    ///
+    /// Shared by both call sites so the split cannot drift: the auth path (a write error) and the
+    /// unanswered path (a disconnect with a hello still outstanding) reach the same decision.
+    private func recordWhoop5BondRefusal(authRefusal: Bool, peripheralUUID: String) {
+        guard bondGiveUp.recordRefusal() else { return }
+        let opaque = BondRefusalGiveUp.opaqueId(fromLocalUUID: peripheralUUID)
+        let suppress = giveUpSuppressesHello(authRefusal: authRefusal)
+        if suppress {
+            HelloSuppressionStore.setSuppressed(peripheralUUID, true)
+            log(BondRefusalGiveUp.helloSuppressedEpitaph(refusals: bondGiveUp.refusals, opaqueId: opaque))
+        } else {
+            autoReconnectPausedForBondLoop = true
+            bondLoopPausedAt = Date()   // starts the #78 hole-4 salvage-probe floor
+            // #1539: park the connect in the same breath as the pause, so this can end while backgrounded.
+            standingConnectWhilePausedIfDue(justTripped: true)
+            log(BondRefusalGiveUp.epitaphLine(refusals: bondGiveUp.refusals, opaqueId: opaque))
+        }
+        // Each branch gets the hint that matches what it actually DID. The paused hints say "auto-reconnect
+        // is paused"; on the suppression branch nothing is paused, so saying so would be the same
+        // confidently-wrong diagnostic this issue has produced twice already (#1635). The third arm is
+        // unreachable while `giveUpSuppressesHello` is `!authRefusal`, and is kept because the Kotlin twin
+        // keeps it: if that rule ever changes, both platforms must change behaviour together.
+        if suppress {
+            state.pairingHint = BondRefusalGiveUp.helloSuppressedHint()
+        } else if authRefusal {
+            state.pairingHint = BondRefusalGiveUp.pausedHint()
+        } else {
+            state.pairingHint = BondRefusalGiveUp.pausedHintHandshakeUnanswered()
+        }
+        if TestCentre.active(.connection) {
+            state.append(log: "bond gaveUp refusals=\(bondGiveUp.refusals) id=\(opaque) " +
+                (suppress ? "(hello suppressed, staying connected)" : "(auto-reconnect paused)"),
+                domain: .connection)
+        }
+    }
+
     public func centralManager(_ central: CBCentralManager,
                                didDisconnectPeripheral peripheral: CBPeripheral,
                                error: Error?) {
@@ -4967,7 +5255,20 @@ extension BLEManager: @preconcurrency CBCentralManagerDelegate {
         }
         state.clearBiometrics()       // and a stale HR / R-R must not outlive the link either
         state.liveFeedActive = false  // a drop while Live is open must not leave a stale "Stop live feed"
+        // #1635: an unanswered CLIENT_HELLO produces no write error at all - the link simply drops a few
+        // seconds later - so it never reached the give-up on this platform and nothing could end the loop.
+        // Read it HERE, while `clientHelloWriteAt` and `didBond` are both still valid, and feed it in
+        // through the same split the auth path uses. `countsAsBondRefusal` gates on family, so a 4.0 (which
+        // bonds cleanly) can never latch the suppression.
+        if countsAsBondRefusal(isAuthRefusalStatus: false,
+                               helloUnacked: clientHelloWriteAt != nil,
+                               alreadyBonded: didBond,
+                               family: selectedModel.deviceFamily) {
+            recordWhoop5BondRefusal(authRefusal: false,
+                                    peripheralUUID: peripheral.identifier.uuidString)
+        }
         didBond = false
+        clientHelloWriteAt = nil   // #1635: no hello survives the link that carried it
         whoop5RealtimeArmed = false
         // The strap forgets the realtime-HR toggle across a disconnect; the post-bond branch re-arms it
         // from `wantsRealtime`. Clear only the "what we last sent" flag — `screenWantsRealtime` /
@@ -5233,9 +5534,11 @@ extension BLEManager: @preconcurrency CBPeripheralDelegate {
             case BLEManager.batteryService:
                 peripheral.discoverCharacteristics([BLEManager.batteryChar], for: s)
             case BLEManager.disService:
-                // #520: read-only identity strings. Discovered here, but READ post-bond (below).
+                // #520: read-only identity strings. Discovered here; READ post-bond, or on a suppressed
+                // link via `readDisIdentityUnbonded` (#1635) — a strap that never bonds has no other
+                // source for its firmware at all.
                 peripheral.discoverCharacteristics(
-                    [BLEManager.disSerialChar, BLEManager.disHwRevChar], for: s)
+                    BLEManager.disChars.map { $0 }, for: s)
             case BLEManager.whoop5Service:
                 // EXPERIMENTAL WHOOP 5.0/MG path: discover the puffin command + notify characteristics
                 // so we can send CLIENT_HELLO and receive frames. Live HR/battery still arrive over the
@@ -5257,6 +5560,28 @@ extension BLEManager: @preconcurrency CBPeripheralDelegate {
             return
         }
         guard let chars = service.characteristics else { return }
+        // #1635: dump what the strap actually OFFERS, once per peripheral. Every characteristic below is
+        // matched against a UUID someone hardcoded, so anything a 5/MG exposes that nobody guessed has
+        // never been visible. Sends nothing — the tree has already been discovered, so this reads a local
+        // cache and cannot provoke the teardown that writing to an encrypted characteristic can.
+        //
+        // Emitted only once EVERY service has reported its characteristics, because this callback fires
+        // per service: dumping on each would print a partial tree N times. Once per peripheral rather than
+        // per connect — the tree is static and the dump is ~30 lines, which would otherwise evict the
+        // connect/drop/bond evidence from a rolling buffer on a strap that reconnects every few seconds.
+        if TestCentre.active(.connection),
+           gattTreeDumpedFor != peripheral.identifier,
+           let all = peripheral.services,
+           all.allSatisfy({ $0.characteristics != nil }) {
+            gattTreeDumpedFor = peripheral.identifier
+            let tree: [(String, [(String, UInt)])] = all.map { svc in
+                (svc.uuid.uuidString,
+                 (svc.characteristics ?? []).map { ($0.uuid.uuidString, $0.properties.rawValue) })
+            }
+            for line in GattCapability.treeLines(tree) {
+                state.append(log: line, domain: .connection)
+            }
+        }
         for c in chars {
             switch c.uuid {
             case BLEManager.cmdWriteChar:
@@ -5274,7 +5599,21 @@ extension BLEManager: @preconcurrency CBPeripheralDelegate {
                 // fires for a 5/MG strap. Live HR/battery come from the standard profiles; this just
                 // opens the puffin session. Unverified on real MG hardware.
                 cmdCharacteristic = c
-                if let hello = selectedModel.deviceFamily.clientHello {
+                // #1635: once the give-up has latched, the hello is what ends the link — skip it and let
+                // the standard-profile HR stream keep running. Consumed unconditionally so an explicit
+                // Connect's single retry belongs to this session and cannot leak into a later automatic one.
+                let helloUserAsked = helloRetryRequested
+                helloRetryRequested = false
+                let helloSuppressed = HelloSuppressionStore.suppressed(peripheral.identifier.uuidString)
+                if !shouldSendClientHello(suppressedForDevice: helloSuppressed, userInitiated: helloUserAsked) {
+                    log("WHOOP 5/MG: CLIENT_HELLO suppressed for this strap - it was never acknowledged and the write is what drops the link. Staying on live HR (not fully paired); press Connect to try the handshake again (#1635).")
+                    state.pairingHint = BondRefusalGiveUp.helloSuppressedHint()
+                    // The unbonded DIS attempt rides HERE and nowhere else: this is the only 5/MG state
+                    // known to be stable - the handshake is off and the link is holding - and it is now
+                    // PERMANENT rather than transient, so without it a suppressed strap never learns its
+                    // firmware or whether it is an MG at all (#490).
+                    scheduleUnbondedDisRead()
+                } else if let hello = selectedModel.deviceFamily.clientHello {
                     // CONTRIBUTOR FIX (issue #17 — diagnosed from the logs, unverified on hardware here):
                     // write CLIENT_HELLO with .withResponse so CoreBluetooth runs just-works bonding when
                     // the link needs authenticating, AND so didWriteValueFor fires. That callback is where
@@ -5284,6 +5623,7 @@ extension BLEManager: @preconcurrency CBPeripheralDelegate {
                     // "Finishing the secure pairing handshake…".
                     log("WHOOP 5/MG: writing CLIENT_HELLO to fd4b0002 with response (to trigger bonding, experimental).")
                     state.pairingHint = nil   // fresh attempt; clear any stale pairing-mode guidance
+                    clientHelloWriteAt = Date()   // #1635: a hello is now outstanding
                     peripheral.writeValue(Data(hello), for: c, type: .withResponse)
                 }
                 // The realtime-HR stream is armed POST-bond (in didWriteValueFor / startRealtime) with
@@ -5306,13 +5646,22 @@ extension BLEManager: @preconcurrency CBPeripheralDelegate {
                 default: break
                 }
                 requestNotify(c, on: peripheral, reason: "discovery")
-            case BLEManager.disSerialChar, BLEManager.disHwRevChar:
-                // #520: CAPTURE ONLY — the read is issued post-bond (a 5/MG refuses standard reads on an
-                // unencrypted link, see #490). These are read-only identity strings: never subscribed
-                // (no notify property) and never written. Must be handled BEFORE `default`, or they'd be
-                // retained as puffin notify characteristics.
+            case BLEManager.disSerialChar, BLEManager.disHwRevChar, BLEManager.disFwRevChar,
+                 BLEManager.disManufacturerChar, BLEManager.disModelNumberChar, BLEManager.disSwRevChar:
+                // #520: CAPTURE ONLY — the read is issued post-bond, and since #1635 ALSO on a suppressed
+                // link that will never bond (see `readDisIdentityUnbonded`; whether a 5/MG answers a
+                // standard read unencrypted is the open question #490 asks). These are read-only identity
+                // strings: never subscribed (no notify property) and never written. Must be handled BEFORE
+                // `default`, or they'd be retained as puffin notify characteristics.
                 if c.uuid == BLEManager.disSerialChar {
                     disSerialCharacteristic = c
+                } else if c.uuid != BLEManager.disHwRevChar {
+                    // The identity extras are read straight off the discovered service, so they need no
+                    // dedicated property — but they must still be claimed here or `default` would retain
+                    // them as puffin notify characteristics.
+                    if !disExtraCharacteristics.contains(where: { $0.uuid == c.uuid }) {
+                        disExtraCharacteristics.append(c)
+                    }
                 } else {
                     disHwRevCharacteristic = c
                 }
@@ -5334,6 +5683,10 @@ extension BLEManager: @preconcurrency CBPeripheralDelegate {
                            error: Error?) {
         if let error = error {
             log("Confirmed write failed: \(error.localizedDescription)")
+            // #1635: a failed write owes no ack. Leaving the window open would let the NEXT completion on
+            // fd4b0002 — DISABLE_ALARM and every other puffin command share it — satisfy both halves of
+            // the bond gate below and declare a bond the strap never granted, which is the whole bug.
+            if characteristic.uuid == BLEManager.whoop5CmdWriteChar { clientHelloWriteAt = nil }
             // #78 hole-1: classify by ATT code first (locale-proof), English string fallback second.
             // This one change repairs the pairing hint (streak>=2), the #747 give-up (5) AND the #52
             // stale-pin handoff below for non-English devices, which all key off this same flag.
@@ -5374,19 +5727,11 @@ extension BLEManager: @preconcurrency CBPeripheralDelegate {
                 // threshold (the pairing hint has had several cycles to be acted on), pause auto-reconnect so
                 // we stop hammering a strap that can't bond, write the one-line epitaph (opaque id only, no
                 // PII), and surface the honest paused hint. A genuine bond or a manual reconnect re-arms it.
-                if bondGiveUp.recordRefusal() {
-                    autoReconnectPausedForBondLoop = true
-                    bondLoopPausedAt = Date()   // starts the #78 hole-4 salvage-probe floor
-                    // #1539: same reasoning as the #617 trip — park a connect now so this pause can end
-                    // while the app is backgrounded, not only when the user next opens it.
-                    standingConnectWhilePausedIfDue(justTripped: true)
-                    let opaque = BondRefusalGiveUp.opaqueId(fromLocalUUID: peripheral.identifier.uuidString)
-                    log(BondRefusalGiveUp.epitaphLine(refusals: bondGiveUp.refusals, opaqueId: opaque))
-                    state.pairingHint = BondRefusalGiveUp.pausedHint()
-                    if TestCentre.active(.connection) {
-                        state.append(log: "bond gaveUp refusals=\(bondGiveUp.refusals) id=\(opaque) (auto-reconnect paused)", domain: .connection)
-                    }
-                }
+                // #1635: the trip itself now lives in recordWhoop5BondRefusal, shared with the
+                // unanswered-handshake path at disconnect, so the two causes cannot drift apart. This
+                // one is an AUTH refusal — the strap actively declined — so it still pauses.
+                recordWhoop5BondRefusal(authRefusal: true,
+                                        peripheralUUID: peripheral.identifier.uuidString)
             }
             // Multi-WHOOP stale-pin recovery (#52). When a stale registry pin points at a strap that keeps
             // refusing the encrypted bond ("Encryption/Authentication is insufficient") but a DIFFERENT
@@ -5413,8 +5758,34 @@ extension BLEManager: @preconcurrency CBPeripheralDelegate {
         // which the strap refused before the link was encrypted. Do NOT run the WHOOP4 command handshake
         // below — a 5/MG strap rejects WHOOP4-framed commands (the send() guard drops them anyway).
         if selectedModel.deviceFamily == .whoop5 {
-            if !didBond {
+            // #1635: only the CLIENT_HELLO's OWN completion is evidence of a bond. Declining withholds
+            // the bond declaration ONLY — the puffin re-subscribe below is unchanged, so a link that is
+            // genuinely up keeps its notifications either way.
+            let isHelloChar = characteristic.uuid == BLEManager.whoop5CmdWriteChar
+            let helloOutstanding = clientHelloWriteAt != nil
+            // Consume the window ONLY for the hello's own completion. A foreign completion that cleared it
+            // would make a genuine ack arriving afterwards look unsolicited, costing a real bond.
+            //
+            // An UNACKED hello leaves the window open, and the pair of conditions cannot be satisfied by a
+            // later command on the same characteristic: `send` writes `.withoutResponse` by default, which
+            // produces no completion at all, and the `.withResponse` senders (the offload acks) only run
+            // after a bond, where `alreadyBonded` short-circuits this. The link dropping clears it anyway.
+            if isHelloChar { clientHelloWriteAt = nil }
+            if !helloOutstanding, !didBond {
+                // Declining must not be silent — see `ClientHelloOutcome.declinedLine`.
+                log(ClientHelloOutcome.declinedLine(charUuid: characteristic.uuid.uuidString, status: nil))
+            }
+            if ClientHelloOutcome.isAck(
+                isHelloChar: isHelloChar,
+                helloOutstanding: helloOutstanding,
+                alreadyBonded: didBond,
+                isWhoop5: true
+            ) {
                 didBond = true
+                // #1635: the handshake demonstrably works on this strap - drop the latch so a later
+                // transient failure starts from a clean slate rather than inheriting an old verdict.
+                HelloSuppressionStore.setSuppressed(peripheral.identifier.uuidString, false)
+                bondGiveUp.reset()
                 state.bonded = true
                 state.encryptedBond = true   // genuine encrypted bond (not the live-HR shortcut) — #69
                 bondedAt = Date()            // #617: start the bond→drop stopwatch for the bond-loop detector
@@ -5724,6 +6095,9 @@ extension BLEManager: @preconcurrency CBPeripheralDelegate {
                            didUpdateValueFor characteristic: CBCharacteristic,
                            error: Error?) {
         if let error {
+            // A DIS refusal is a FINDING, not noise — report it specifically and latch it, or a capture
+            // cannot tell a refusal from a read that was never issued (#490, #1635).
+            noteDisReadFailure(characteristic.uuid, error)
             log("Notify update failed for \(characteristic.uuid): \(error.localizedDescription)")
             return
         }
@@ -5740,6 +6114,11 @@ extension BLEManager: @preconcurrency CBPeripheralDelegate {
             if selectedModel.deviceFamily == .whoop5, !state.bonded {
                 state.bonded = true
                 log("WHOOP 5/MG: live HR streaming — marking the link established (experimental).")
+                // #1635: a 5/MG has no confirmed-write handshake, so the keep-alive (and with it the
+                // liveness watchdog) is started HERE, on the bonded transition, exactly as the Kotlin twin
+                // does. The other two start sites are post-bond, which a suppressed strap never reaches —
+                // and this also covers an unbonded 5/MG that has not latched yet.
+                startKeepAlive()
             }
         case BLEManager.batteryChar:
             // 0x2A19 = percent — 5/MG ONLY. The WHOOP 4.0's 0x2A19 is a stub constant 100 (real value =
@@ -5757,6 +6136,37 @@ extension BLEManager: @preconcurrency CBPeripheralDelegate {
             disHwRev = String(decoding: bytes, as: UTF8.self)
                 .trimmingCharacters(in: CharacterSet(charactersIn: "\0").union(.whitespacesAndNewlines))
             noteWhoop5VariantFromDIS()
+        case BLEManager.disFwRevChar:
+            disFirmware = String(decoding: bytes, as: UTF8.self)
+                .trimmingCharacters(in: CharacterSet(charactersIn: "\0").union(.whitespacesAndNewlines))
+            // FALLBACK only. The puffin report is the strap's own account of what it is running and lands
+            // later in the connect; a value that appeared and then changed would be worse than one that
+            // arrived once, so this yields rather than racing it.
+            if shouldPublishDisFirmware(disFirmware: disFirmware, alreadyDecoded: state.strapFirmware) {
+                state.strapFirmware = disFirmware
+                // #1634: persist it against THIS strap. The per-device key has readers (DevicesView, the
+                // debug export) but had no writer at all - the decoded path cannot key on identity, which
+                // its own comment concedes - so `perDevice` always resolved nil and iOS fell back to a
+                // global value that is wrong the moment a second strap exists. This site DOES have the
+                // peripheral, so it is the one place that can attribute a firmware honestly. Kotlin twin:
+                // NoopPrefs.setFirmwareFor beside the same publish.
+                if let key = FirmwareAttribution.prefKey(peripheralId: peripheral.identifier.uuidString),
+                   let fw = disFirmware {
+                    UserDefaults.standard.set(fw, forKey: key)
+                }
+                // Named as the DIS source, because it is not the same reading as the decoded one a 4.0
+                // shows and a capture must not have to guess which it is looking at.
+                log("DIS: firmware=\(disFirmware ?? "?") (standard profile, no bond required)")
+            } else {
+                let shown = (disFirmware?.isEmpty ?? true) ? "?" : (disFirmware ?? "?")
+                log("DIS: firmware=\(shown) not published — a decoded value already stands")
+            }
+        case BLEManager.disManufacturerChar, BLEManager.disModelNumberChar, BLEManager.disSwRevChar:
+            // Diagnostic only: nothing gates on these, but they cost one read each and are exactly what
+            // is missing when someone reports an unidentified strap.
+            let v = String(decoding: bytes, as: UTF8.self)
+                .trimmingCharacters(in: CharacterSet(charactersIn: "\0").union(.whitespacesAndNewlines))
+            if !v.isEmpty { log("DIS: \(characteristic.uuid.uuidString) = \(v)") }
         case BLEManager.dataNotifyChar,
              BLEManager.cmdNotifyChar,
              BLEManager.eventNotifyChar:
@@ -5771,6 +6181,8 @@ extension BLEManager: @preconcurrency CBPeripheralDelegate {
                     // …but a REAL-TIME physical gesture (double-tap / wrist) must still fire even mid-
                     // offload (#69). Gated on ts≈now so replayed historical EVENTs (old ts) are ignored.
                     router.dispatchLiveGestureIfFresh(frame: frame, now: strapClockNow)
+                    // …and the strap's own console narration, which it emits precisely DURING a sync.
+                    router.mirrorStrapConsoleIfPresent(frame: frame)
                     continue
                 }
                 // #47: decode this live WHOOP4 frame ONCE here and thread the result to every consumer
@@ -5868,6 +6280,8 @@ extension BLEManager: @preconcurrency CBPeripheralDelegate {
                         // A real-time double-tap / wrist gesture still fires during a 5/MG offload (which
                         // runs for minutes, #69); the ts≈now gate rejects replayed historical EVENTs.
                         router.dispatchLiveGestureIfFresh(frame: frame, now: strapClockNow)
+                        // …and the strap's own console narration, which it emits precisely DURING a sync.
+                        router.mirrorStrapConsoleIfPresent(frame: frame)
                         continue
                     }
                     router.handle(frame: frame)

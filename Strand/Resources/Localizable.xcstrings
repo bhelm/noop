@@ -7,8 +7,8 @@
     "HRV −%lld%%": { "localizations": {
       "de": { "stringUnit": { "state": "translated", "value": "HRV −%lld%%" } }, "en": { "stringUnit": { "state": "translated", "value": "HRV −%lld%%" } }, "es": { "stringUnit": { "state": "translated", "value": "VFC −%lld%%" } }, "fr": { "stringUnit": { "state": "translated", "value": "VFC −%lld%%" } }, "it": { "stringUnit": { "state": "translated", "value": "HRV −%lld%%" } }, "pl": { "stringUnit": { "state": "translated", "value": "HRV −%lld%%" } }, "pt-PT": { "stringUnit": { "state": "translated", "value": "VFC −%lld%%" } }, "ru": { "stringUnit": { "state": "translated", "value": "ВСР −%lld%%" } }, "zh-Hans": { "stringUnit": { "state": "translated", "value": "HRV −%lld%%" } }, "zh-Hant": { "stringUnit": { "state": "translated", "value": "HRV −%lld%%" } }
     } },
-    "Skin temperature +%@ °C": { "localizations": {
-      "de": { "stringUnit": { "state": "translated", "value": "Hauttemperatur +%@ °C" } }, "en": { "stringUnit": { "state": "translated", "value": "Skin temperature +%@ °C" } }, "es": { "stringUnit": { "state": "translated", "value": "Temperatura de la piel +%@ °C" } }, "fr": { "stringUnit": { "state": "translated", "value": "Température cutanée +%@ °C" } }, "it": { "stringUnit": { "state": "translated", "value": "Temperatura cutanea +%@ °C" } }, "pl": { "stringUnit": { "state": "translated", "value": "Temperatura skóry +%@ °C" } }, "pt-PT": { "stringUnit": { "state": "translated", "value": "Temperatura da pele +%@ °C" } }, "ru": { "stringUnit": { "state": "translated", "value": "Температура кожи +%@ °C" } }, "zh-Hans": { "stringUnit": { "state": "translated", "value": "皮肤温度 +%@ °C" } }, "zh-Hant": { "stringUnit": { "state": "translated", "value": "皮膚溫度 +%@ °C" } }
+    "Skin temperature %@": { "localizations": {
+      "de": { "stringUnit": { "state": "translated", "value": "Hauttemperatur %@" } }, "en": { "stringUnit": { "state": "translated", "value": "Skin temperature %@" } }, "es": { "stringUnit": { "state": "translated", "value": "Temperatura de la piel %@" } }, "fr": { "stringUnit": { "state": "translated", "value": "Température cutanée %@" } }, "it": { "stringUnit": { "state": "translated", "value": "Temperatura cutanea %@" } }, "pl": { "stringUnit": { "state": "translated", "value": "Temperatura skóry %@" } }, "pt-PT": { "stringUnit": { "state": "translated", "value": "Temperatura da pele %@" } }, "ru": { "stringUnit": { "state": "translated", "value": "Температура кожи %@" } }, "zh-Hans": { "stringUnit": { "state": "translated", "value": "皮肤温度 %@" } }, "zh-Hant": { "stringUnit": { "state": "translated", "value": "皮膚溫度 %@" } }
     } },
     "Respiration up": { "localizations": {
       "de": { "stringUnit": { "state": "translated", "value": "Atemfrequenz erhöht" } }, "en": { "stringUnit": { "state": "translated", "value": "Respiration up" } }, "es": { "stringUnit": { "state": "translated", "value": "Respiración elevada" } }, "fr": { "stringUnit": { "state": "translated", "value": "Respiration élevée" } }, "it": { "stringUnit": { "state": "translated", "value": "Respirazione elevata" } }, "pl": { "stringUnit": { "state": "translated", "value": "Oddech podwyższony" } }, "pt-PT": { "stringUnit": { "state": "translated", "value": "Respiração elevada" } }, "ru": { "stringUnit": { "state": "translated", "value": "Частота дыхания повышена" } }, "zh-Hans": { "stringUnit": { "state": "translated", "value": "呼吸频率升高" } }, "zh-Hant": { "stringUnit": { "state": "translated", "value": "呼吸頻率升高" } }
@@ -50636,6 +50636,390 @@
           "stringUnit": {
             "state": "translated",
             "value": "Połączony."
+          }
+        }
+      }
+    },
+    "Live heart rate is streaming, but your strap is not fully paired. Buzz, alarms and history sync need the encrypted pairing.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Die Live-Herzfrequenz wird übertragen, aber dein Strap ist nicht vollständig gekoppelt. Vibration, Wecker und Verlaufssynchronisierung benötigen die verschlüsselte Kopplung."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Live heart rate is streaming, but your strap is not fully paired. Buzz, alarms and history sync need the encrypted pairing."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La frecuencia cardíaca en tiempo real se está transmitiendo, pero tu pulsera no está completamente emparejada. La vibración, las alarmas y la sincronización del historial necesitan el emparejamiento cifrado."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La fréquence cardiaque en direct est diffusée, mais votre bracelet n'est pas entièrement associé. Les vibrations, les alarmes et la synchronisation de l'historique nécessitent l'association chiffrée."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La frequenza cardiaca in tempo reale è in streaming, ma la tua fascia non è completamente associata. Vibrazione, sveglie e sincronizzazione della cronologia richiedono l'associazione cifrata."
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tętno na żywo jest przesyłane, ale twój pasek nie jest w pełni sparowany. Wibracje, alarmy i synchronizacja historii wymagają szyfrowanego parowania."
+          }
+        },
+        "pt-PT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "A frequência cardíaca em tempo real está a ser transmitida, mas a tua bracelete não está totalmente emparelhada. A vibração, os alarmes e a sincronização do histórico necessitam do emparelhamento encriptado."
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Пульс в реальном времени передаётся, но ваш браслет сопряжён не полностью. Вибрация, будильники и синхронизация истории требуют зашифрованного сопряжения."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "实时心率正在传输，但你的手环尚未完全配对。震动、闹钟和历史同步需要加密配对。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "即時心率正在傳輸，但你的手環尚未完全配對。震動、鬧鐘和歷史同步需要加密配對。"
+          }
+        }
+      }
+    },
+    "Check automatically": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Automatisch prüfen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Check automatically"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Comprobar automáticamente"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vérifier automatiquement"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Controlla automaticamente"
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sprawdzaj automatycznie"
+          }
+        },
+        "pt-PT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Verificar automaticamente"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Проверять автоматически"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "自动检查"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "自動檢查"
+          }
+        }
+      }
+    },
+    "Once a day, NOOP asks GitHub for the latest version number and puts a note in Updates if there's a newer one. Nothing about you is sent, and it never installs anything.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Einmal täglich fragt NOOP bei GitHub die neueste Versionsnummer ab und legt einen Hinweis in Updates ab, wenn es eine neuere gibt. Es werden keine Daten über dich gesendet, und es wird nie etwas installiert."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Once a day, NOOP asks GitHub for the latest version number and puts a note in Updates if there's a newer one. Nothing about you is sent, and it never installs anything."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Una vez al día, NOOP consulta a GitHub el número de la última versión y deja un aviso en Novedades si hay una más reciente. No se envía nada sobre ti y nunca instala nada."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Une fois par jour, NOOP demande à GitHub le numéro de la dernière version et dépose une note dans Mises à jour s'il en existe une plus récente. Aucune donnée vous concernant n'est envoyée, et rien n'est jamais installé."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Una volta al giorno, NOOP chiede a GitHub il numero dell'ultima versione e lascia una nota in Aggiornamenti se ne esiste una più recente. Non viene inviato nulla su di te e non installa mai nulla."
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Raz dziennie NOOP pyta GitHub o numer najnowszej wersji i dodaje notatkę w Aktualizacjach, jeśli jest nowsza. Nic o tobie nie jest wysyłane i nic nigdy nie jest instalowane."
+          }
+        },
+        "pt-PT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Uma vez por dia, o NOOP pergunta ao GitHub o número da versão mais recente e deixa uma nota em Atualizações se existir uma mais recente. Não é enviado nada sobre si e nunca instala nada."
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Раз в день NOOP запрашивает у GitHub номер последней версии и оставляет заметку в «Обновлениях», если появилась более новая. Ничего о вас не отправляется, и ничего никогда не устанавливается."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "NOOP 每天向 GitHub 查询一次最新版本号，如果有更新版本，就在「更新」中留下提示。不会发送任何与你有关的信息，也绝不会安装任何东西。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "NOOP 每天向 GitHub 查詢一次最新版本號，如果有更新版本，就在「更新」中留下提示。不會傳送任何與你有關的資訊，也絕不會安裝任何東西。"
+          }
+        }
+      }
+    },
+    "NOOP %@ is available": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "NOOP %@ ist verfügbar"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "NOOP %@ is available"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "NOOP %@ ya está disponible"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "NOOP %@ est disponible"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "NOOP %@ è disponibile"
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "NOOP %@ jest dostępny"
+          }
+        },
+        "pt-PT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "O NOOP %@ está disponível"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Доступна версия NOOP %@"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "NOOP %@ 可用"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "NOOP %@ 可用"
+          }
+        }
+      }
+    },
+    "You're on %@. Open Settings and use Check for updates to see what's new and download %@.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Du nutzt %@. Öffne die Einstellungen und tippe auf „Nach Updates suchen“, um die Neuerungen zu sehen und %@ herunterzuladen."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "You're on %@. Open Settings and use Check for updates to see what's new and download %@."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tienes la %@. Abre Ajustes y usa Buscar actualizaciones para ver las novedades y descargar la %@."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vous utilisez la version %@. Ouvrez les Réglages et utilisez Rechercher des mises à jour pour voir les nouveautés et télécharger la %@."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Stai usando la %@. Apri Impostazioni e usa Cerca aggiornamenti per vedere le novità e scaricare la %@."
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Masz wersję %@. Otwórz Ustawienia i użyj opcji Sprawdź aktualizacje, aby zobaczyć nowości i pobrać %@."
+          }
+        },
+        "pt-PT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tem a versão %@. Abra as Definições e use Procurar atualizações para ver as novidades e transferir a %@."
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "У вас версия %@. Откройте «Настройки» и нажмите «Проверить обновления», чтобы посмотреть, что нового, и загрузить %@."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "你当前使用 %@。打开「设置」并使用「检查更新」查看新增内容并下载 %@。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "你目前使用 %@。開啟「設定」並使用「檢查更新」查看新增內容並下載 %@。"
+          }
+        }
+      }
+    },
+    "AltStore or SideStore can install it for you automatically if you added NOOP's source; a direct .ipa still has to be signed on your device.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "AltStore oder SideStore installieren es automatisch für dich, wenn du NOOPs Quelle hinzugefügt hast; eine direkte .ipa muss weiterhin auf deinem Gerät signiert werden."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "AltStore or SideStore can install it for you automatically if you added NOOP's source; a direct .ipa still has to be signed on your device."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "AltStore o SideStore pueden instalarla automáticamente si añadiste la fuente de NOOP; un .ipa directo aún debe firmarse en tu dispositivo."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "AltStore ou SideStore peuvent l'installer automatiquement si vous avez ajouté la source de NOOP ; un .ipa direct doit toujours être signé sur votre appareil."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "AltStore o SideStore possono installarla automaticamente se hai aggiunto la sorgente di NOOP; un .ipa diretto deve comunque essere firmato sul tuo dispositivo."
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "AltStore lub SideStore zainstalują ją automatycznie, jeśli dodano źródło NOOP; bezpośredni plik .ipa nadal trzeba podpisać na urządzeniu."
+          }
+        },
+        "pt-PT": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "O AltStore ou o SideStore podem instalá-la automaticamente se adicionou a fonte do NOOP; um .ipa direto continua a ter de ser assinado no seu dispositivo."
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "AltStore или SideStore установят её автоматически, если вы добавили источник NOOP; прямой .ipa всё равно нужно подписать на устройстве."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "如果你添加了 NOOP 的源，AltStore 或 SideStore 可以自动为你安装；直接下载的 .ipa 仍需在设备上签名。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "如果你加入了 NOOP 的來源，AltStore 或 SideStore 可以自動為你安裝；直接下載的 .ipa 仍需在裝置上簽名。"
           }
         }
       }

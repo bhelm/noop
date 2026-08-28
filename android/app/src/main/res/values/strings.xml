@@ -1552,6 +1552,9 @@
     <string name="l10n_settings_screen_backup_restore_a1616284">Backup &amp; restore</string>
     <string name="l10n_settings_screen_battery_pct_roundtoint_e02e2891">Battery %1$s%%</string>
     <string name="l10n_settings_screen_broadcast_heart_rate_d1af1c79">Broadcast heart rate</string>
+    <string name="l10n_settings_screen_ask_android_to_pair_experimental_250a81e9">Ask Android to pair (experimental)</string>
+    <string name="l10n_settings_screen_noop_has_always_hoped_that_writing_19967036">NOOP has always hoped that writing to your 5.0/MG would make Android pair with it. It never does. This asks Android directly, so it may show a system pairing dialog. Live heart rate keeps working either way; turn it off if the dialog is a nuisance.</string>
+    <string name="l10n_settings_screen_ask_android_to_pair_323fccbe">Ask Android to pair</string>
     <string name="l10n_settings_screen_broadcast_strap_hr_garmin_ant_a39d0654">Broadcast strap HR (Garmin/ANT)</string>
     <string name="l10n_settings_screen_buzz_the_time_on_your_strap_06fc879d">Buzz the time on your strap</string>
     <string name="l10n_settings_screen_cancel_77dfd213">Cancel</string>
@@ -2549,4 +2552,10 @@
     <string name="l10n_health_screen_your_strap_reports_a_blood_oxygen_349fe34a">Your strap reports a blood oxygen estimate, but it is unverified and off by default. Turn on the strap estimate in Settings to see it, or import a WHOOP export in Data Sources for the calibrated value.</string>
     <string name="l10n_health_screen_no_blood_oxygen_percentage_from_a_1d3d383e">No blood oxygen percentage from a WHOOP 4.0</string>
     <string name="l10n_health_screen_your_strap_banks_the_raw_optical_b52a0f80">Your strap banks the raw optical channels, but NOOP does not turn them into a blood oxygen percentage, so this stays empty however long you wear it. Import a WHOOP export in Data Sources to fill it from your account history.</string>
+    <string name="l10n_settings_screen_send_hello_despite_bond_refusal_experimental_2f8de795">Send hello despite bond refusal (experimental)</string>
+    <string name="l10n_settings_screen_send_hello_despite_bond_refusal_65c9d9fd">Send hello despite bond refusal</string>
+    <string name="l10n_settings_screen_check_automatically_7cd229d2">Check automatically</string>
+    <string name="l10n_settings_screen_once_a_day_noop_asks_github_5683aad3">Once a day, NOOP asks GitHub for the latest version number and puts a note in Updates if there’s a newer one. Nothing about you is sent, and it never installs anything.</string>
+    <string name="l10n_updates_noop_1s_is_available_05d8ef55">NOOP %1$s is available</string>
+    <string name="l10n_updates_youre_on_1s_open_settings_and_35b9e135">You\'re on %1$s. Open Settings and use Check for updates to see what\'s new and download %2$s.</string>
 </resources>

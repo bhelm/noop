@@ -1330,6 +1330,22 @@ class WhoopRepository(
     suspend fun gravitySamples(deviceId: String, from: Long, to: Long, limit: Int = DEFAULT_LIMIT) =
         dao.gravitySamples(deviceId, from, to, limit)
 
+    /**
+     * Gravity samples over the read-side union of the active strap id and canonical "my-whoop",
+     * deduped by timestamp with the active strap winning. A re-added strap banks live motion under its
+     * fresh device id while older/imported motion can remain under the canonical id; calibration reads
+     * need both histories just like [hrSamplesUnion]. A canonical active id still performs one unchanged
+     * DAO read.
+     */
+    suspend fun gravitySamplesUnion(
+        activeDeviceId: String,
+        from: Long,
+        to: Long,
+        limit: Int = DEFAULT_LIMIT,
+    ): List<GravitySample> = mergeGravityByTs(
+        importedSourceIds(activeDeviceId).map { dao.gravitySamples(it, from, to, limit) },
+    )
+
     suspend fun sleepSessions(deviceId: String, from: Long, to: Long, limit: Int = DEFAULT_LIMIT) =
         dao.sleepSessions(deviceId, from, to, limit)
 
@@ -2312,6 +2328,9 @@ class WhoopRepository(
                 restingHr = winner.restingHr ?: filler.restingHr,
                 avgHrv = winner.avgHrv ?: filler.avgHrv,
                 avgSdnn = winner.avgSdnn ?: filler.avgSdnn,
+                // Strap-only, like raw SpO2: an imported winner carries no absolute skin temp, so
+                // take the filler's rather than blank a value the strap did record (#1636).
+                skinTempC = winner.skinTempC ?: filler.skinTempC,
                 recovery = winner.recovery ?: filler.recovery,
                 strain = winner.strain ?: filler.strain,
                 exerciseCount = winner.exerciseCount ?: filler.exerciseCount,
@@ -2332,6 +2351,18 @@ class WhoopRepository(
         internal fun mergeHrByTs(lists: List<List<HrSample>>): List<HrSample> {
             if (lists.size == 1) return lists[0]
             val byTs = LinkedHashMap<Long, HrSample>()
+            for (list in lists) for (s in list) byTs.putIfAbsent(s.ts, s)
+            return byTs.values.sortedBy { it.ts }
+        }
+
+        /**
+         * Merge gravity sample lists into one time-ordered stream, deduped by timestamp with the FIRST
+         * list (the active strap) winning on a tie. A single-id read is returned unchanged, matching the
+         * pre-union path and [mergeHrByTs].
+         */
+        internal fun mergeGravityByTs(lists: List<List<GravitySample>>): List<GravitySample> {
+            if (lists.size == 1) return lists[0]
+            val byTs = LinkedHashMap<Long, GravitySample>()
             for (list in lists) for (s in list) byTs.putIfAbsent(s.ts, s)
             return byTs.values.sortedBy { it.ts }
         }
@@ -2414,6 +2445,7 @@ class WhoopRepository(
                     restingHr = d.restingHr ?: c.restingHr,
                     avgHrv = d.avgHrv ?: c.avgHrv,
                     avgSdnn = d.avgSdnn ?: c.avgSdnn,
+                    skinTempC = d.skinTempC ?: c.skinTempC,
                     recovery = d.recovery ?: c.recovery,
                     strain = d.strain ?: c.strain,
                     exerciseCount = d.exerciseCount ?: c.exerciseCount,
