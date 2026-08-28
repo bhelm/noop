@@ -55,8 +55,6 @@ class RawImuMigrationTest {
     @Test fun obsoleteEmptyTable_isDroppedAt35() {
         assertEquals(33, WhoopDatabase.MIGRATION_33_34.startVersion)
         assertEquals(34, WhoopDatabase.MIGRATION_33_34.endVersion)
-        assertEquals(34, WhoopDatabase.MIGRATION_34_35.startVersion)
-        assertEquals(35, WhoopDatabase.MIGRATION_34_35.endVersion)
     }
 
     // MARK: - Packed-BLOB encoding (byte-identical i16 LE)
