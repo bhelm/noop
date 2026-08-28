@@ -24,6 +24,7 @@ final class RawDataSessionStore: ObservableObject {
         var capturedEndedAtMs: Int64?
         var comment: String
         var exported: Bool
+        var lastExportedAtMs: Int64?
         var events: [Event]
 
         var active: Bool { endedAtMs == nil }
@@ -62,7 +63,7 @@ final class RawDataSessionStore: ObservableObject {
         let started = Event(atMs: millis, kind: "start")
         let session = Session(id: String(millis), deviceId: deviceId, startedAtMs: millis,
                               endedAtMs: nil, capturedStartedAtMs: millis, capturedEndedAtMs: nil,
-                              comment: "", exported: false, events: [started])
+                              comment: "", exported: false, lastExportedAtMs: nil, events: [started])
         sessions.insert(session, at: 0)
         persist(session)
         ImuSessionFileStore.shared.start(id: session.id, deviceId: deviceId, fromMs: millis)
@@ -89,7 +90,7 @@ final class RawDataSessionStore: ObservableObject {
         let events = [Event(atMs: fromMs, kind: "start"), Event(atMs: toMs, kind: "stop")]
         let session = Session(id: id, deviceId: deviceId, startedAtMs: fromMs, endedAtMs: toMs,
                               capturedStartedAtMs: nil, capturedEndedAtMs: nil, comment: "",
-                              exported: false, events: events)
+                              exported: false, lastExportedAtMs: nil, events: events)
         sessions.insert(session, at: 0); persist(session)
         ImuSessionFileStore.shared.register(id: id, deviceId: deviceId, fromMs: fromMs, toMs: toMs)
         return session
@@ -104,7 +105,7 @@ final class RawDataSessionStore: ObservableObject {
             session = Session(id: session.id, deviceId: session.deviceId, startedAtMs: fromMs,
                               endedAtMs: toMs, capturedStartedAtMs: session.capturedStartedAtMs,
                               capturedEndedAtMs: session.capturedEndedAtMs, comment: session.comment,
-                              exported: false, events: session.events)
+                              exported: false, lastExportedAtMs: nil, events: session.events)
         }
         if let session = sessions.first(where: { $0.id == sessionId }) {
             ImuSessionFileStore.shared.register(id: sessionId, deviceId: session.deviceId, fromMs: fromMs, toMs: toMs)
@@ -143,7 +144,12 @@ final class RawDataSessionStore: ObservableObject {
         mutate(sessionId) { $0.events.removeAll { $0.kind == "marker" && $0.markerId == markerId } }
     }
 
-    func markExported(_ sessionId: String) { mutate(sessionId) { $0.exported = true } }
+    func markExported(_ sessionId: String, now: Date = Date()) {
+        mutate(sessionId) {
+            $0.exported = true
+            $0.lastExportedAtMs = Int64(now.timeIntervalSince1970 * 1_000)
+        }
+    }
 
     @discardableResult
     func removeMetadata(_ sessionId: String,

@@ -167,6 +167,11 @@ struct RawDataCollectorView: View {
                      : String(localized: "IMU: \(coverageText)"))
                     .font(StrandFont.caption)
                     .foregroundStyle(session.active ? StrandPalette.statusWarning : StrandPalette.statusPositive)
+                if let exportedAt = session.lastExportedAtMs {
+                    Text(String(localized: "Last exported \(Self.time(exportedAt)) · export remains available"))
+                        .font(StrandFont.caption)
+                        .foregroundStyle(StrandPalette.textSecondary)
+                }
                 TextField("Session comment", text: Binding(
                     get: { store.sessions.first(where: { $0.id == session.id })?.comment ?? session.comment },
                     set: { store.setComment($0, sessionId: session.id) }

@@ -120,6 +120,18 @@ final class RawDataSessionStoreTests: XCTestCase {
         XCTAssertEqual(store.sessions.map(\.id), [active.id])
     }
 
+    func testLastExportTimePersists() throws {
+        let directory = try temporaryDirectory()
+        let store = RawDataSessionStore(directory: directory)
+        let session = try XCTUnwrap(store.start(deviceId: "strap"))
+        store.stop()
+        store.markExported(session.id, now: Date(timeIntervalSince1970: 123))
+
+        let restored = try XCTUnwrap(RawDataSessionStore(directory: directory).sessions.first)
+        XCTAssertTrue(restored.exported)
+        XCTAssertEqual(restored.lastExportedAtMs, 123_000)
+    }
+
     func testCompletedSessionCanBeDeleted() throws {
         let directory = try temporaryDirectory()
         let store = RawDataSessionStore(directory: directory)
