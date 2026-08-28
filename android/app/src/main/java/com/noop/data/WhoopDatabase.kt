@@ -8,6 +8,8 @@ import com.noop.push.PushDao
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 
+private const val ROOM_SCHEMA_VERSION = 35
+
 /**
  * Local Room database, the Android port of the GRDB store in
  * Packages/WhoopStore (Database.swift schema). Holds phone-collected raw streams
@@ -53,7 +55,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         V18AuxSampleEntity::class,
         AppleStepHour::class,
     ],
-    version = 34,
+    version = ROOM_SCHEMA_VERSION,
     // #775: ON so Room's KSP processor writes the generated schema (every table's exact `CREATE TABLE`,
     // columns in declaration order with affinity/NOT NULL/default, PK and indices) as JSON. That export
     // is what lets a plain JVM test — no device, no Robolectric — read Android's REAL schema and compare
@@ -73,7 +75,7 @@ abstract class WhoopDatabase : RoomDatabase() {
         const val DB_NAME = "noop_whoop.db"
         /** Room schema version — MUST equal the `@Database(version = …)` above. Surfaced in the backup
          *  manifest (#1410) so an export states its schema. Bump both together on a migration. */
-        const val SCHEMA_VERSION = 35
+        const val SCHEMA_VERSION = ROOM_SCHEMA_VERSION
 
         @Volatile
         private var instance: WhoopDatabase? = null
