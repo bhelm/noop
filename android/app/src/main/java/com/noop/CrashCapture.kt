@@ -1,6 +1,7 @@
 package com.noop
 
 import android.content.Context
+import android.os.Build
 import java.io.File
 import java.io.PrintWriter
 import java.io.StringWriter
@@ -27,8 +28,17 @@ object CrashCapture {
                 val sw = StringWriter()
                 throwable.printStackTrace(PrintWriter(sw))
                 val text = buildString {
-                    appendLine("when:   ${java.util.Date()}")
-                    appendLine("thread: ${thread.name}")
+                    append(crashHeader(
+                        whenText = java.util.Date().toString(),
+                        threadName = thread.name,
+                        appVersion = BuildConfig.VERSION_NAME,
+                        versionCode = BuildConfig.VERSION_CODE,
+                        packageName = appContext.packageName,
+                        androidRelease = Build.VERSION.RELEASE,
+                        sdk = Build.VERSION.SDK_INT,
+                        manufacturer = Build.MANUFACTURER,
+                        model = Build.MODEL,
+                    ))
                     appendLine(sw.toString())
                 }
                 File(appContext.filesDir, FILE).writeText(text)
@@ -64,4 +74,22 @@ object CrashCapture {
     internal fun fingerprint(text: String): String = MessageDigest.getInstance("SHA-256")
         .digest(text.toByteArray(Charsets.UTF_8))
         .joinToString("") { "%02x".format(it) }
+
+    internal fun crashHeader(
+        whenText: String,
+        threadName: String,
+        appVersion: String,
+        versionCode: Int,
+        packageName: String,
+        androidRelease: String,
+        sdk: Int,
+        manufacturer: String,
+        model: String,
+    ) = buildString {
+        appendLine("when:   $whenText")
+        appendLine("app:    $appVersion ($versionCode) · $packageName")
+        appendLine("os:     Android $androidRelease (API $sdk)")
+        appendLine("device: $manufacturer $model")
+        appendLine("thread: $threadName")
+    }
 }
