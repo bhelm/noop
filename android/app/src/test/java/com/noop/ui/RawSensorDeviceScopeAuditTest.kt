@@ -154,4 +154,30 @@ class RawSensorDeviceScopeAuditTest {
             assertTrue("Stress must read through $api", source.contains(api))
         }
     }
+
+    @Test
+    fun coachStressAndFullDayChartUseDeviceAwareRawTimelines() {
+        val javaRoot = uiSourceDir().parentFile
+        val coach = File(javaRoot, "ai/AiCoach.kt")
+        val chart = File(uiSourceDir(), "FullDayChartScreen.kt")
+        assertTrue("AiCoach.kt not found", coach.isFile)
+        assertTrue("FullDayChartScreen.kt not found", chart.isFile)
+
+        val coachSource = stripComments(coach.readText())
+        assertTrue(
+            "AI Coach derived stress must include archived strap R-R history",
+            coachSource.contains("repo.rrIntervalsUnion(activeStrapId()"),
+        )
+        assertFalse(
+            "AI Coach derived stress must not bypass the device-aware R-R resolver",
+            coachSource.contains("repo.rrIntervals(activeStrapId()"),
+        )
+
+        val chartSource = stripComments(chart.readText())
+        for (api in listOf("hrSamplesUnion(", "hrBucketsUnion(", "rrIntervalsUnion(", "gravitySamplesUnion(")) {
+            assertTrue("Full-day chart must read through $api", chartSource.contains(api))
+        }
+        assertFalse(chartSource.contains("repo.rrIntervals(deviceId"))
+        assertFalse(chartSource.contains("repo.gravitySamples(deviceId"))
+    }
 }
