@@ -925,7 +925,23 @@ abstract class WhoopDatabase : RoomDatabase() {
         }
 
         internal val MIGRATION_34_35 = object : Migration(34, 35) {
-            override fun migrate(db: SupportSQLiteDatabase) { db.execSQL("DROP TABLE IF EXISTS `rawImuSample`") }
+            override fun migrate(db: SupportSQLiteDatabase) {
+                // Preview repair builds could leave user_version=34 on the pre-v34 shape. Heal that
+                // exact additive column before Room validates v35; genuine v34 databases already have
+                // it, so this remains a no-op for the normal upgrade path.
+                val hasSkinTempC = db.query("PRAGMA table_info(`dailyMetric`)").use { cursor ->
+                    val nameIndex = cursor.getColumnIndex("name")
+                    var found = false
+                    while (cursor.moveToNext()) {
+                        if (nameIndex >= 0 && cursor.getString(nameIndex) == "skinTempC") found = true
+                    }
+                    found
+                }
+                if (!hasSkinTempC) {
+                    db.execSQL("ALTER TABLE `dailyMetric` ADD COLUMN `skinTempC` REAL")
+                }
+                db.execSQL("DROP TABLE IF EXISTS `rawImuSample`")
+            }
         }
 
         /**
