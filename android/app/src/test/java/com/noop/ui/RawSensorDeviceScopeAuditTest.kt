@@ -36,6 +36,13 @@ class RawSensorDeviceScopeAuditTest {
         return found!!
     }
 
+    private fun repositorySource(): String {
+        val javaRoot = uiSourceDir().parentFile
+        val repository = File(javaRoot, "data/WhoopRepository.kt")
+        assertTrue("WhoopRepository.kt not found", repository.isFile)
+        return stripComments(repository.readText())
+    }
+
     /** Removes comments so examples and migration notes do not count as production calls. */
     private fun stripComments(source: String): String {
         val withoutBlocks = Regex("/\\*.*?\\*/", RegexOption.DOT_MATCHES_ALL).replace(source, "")
@@ -59,7 +66,7 @@ class RawSensorDeviceScopeAuditTest {
         }
     }
 
-    private val directRawRead = Regex("""\b(hrSamples|rrIntervals|gravitySamples)\s*\(""")
+    private val directRawRead = Regex("""\b(hrSamples(?:ForDevice)?|rrIntervals(?:ForDevice)?|gravitySamples(?:ForDevice)?)\s*\(""")
 
     private data class RawCall(val method: String, val args: String, val offset: Int)
 
@@ -105,6 +112,7 @@ class RawSensorDeviceScopeAuditTest {
         assertTrue(offenders("repo.hrSamples(\"my-whoop\", from, to)").isNotEmpty())
         assertTrue(offenders("repo.rrIntervals(\n deviceId = \"my-whoop\", from, to)").isNotEmpty())
         assertTrue(offenders("repo.gravitySamples(  \"my-whoop\", from, to)").isNotEmpty())
+        assertTrue(offenders("repo.hrSamplesForDevice(\"my-whoop\", from, to)").isNotEmpty())
         assertTrue(
             offenders(
                 "repo.hrSamples(from = from, to = to, limit = 5, deviceId = \"my-whoop\")",
@@ -116,6 +124,23 @@ class RawSensorDeviceScopeAuditTest {
         assertTrue(offenders("repo.rrIntervals(session.deviceId, from, to)").isEmpty())
         assertTrue(offenders("// repo.hrSamples(\"my-whoop\", from, to)").isEmpty())
         assertTrue(offenders("/* repo.gravitySamples(\"my-whoop\", from, to) */").isEmpty())
+    }
+
+    @Test
+    fun repositoryHasNoAmbiguousDeviceScopedRawReaderNames() {
+        val source = repositorySource()
+        for (oldName in listOf("hrSamples", "hrBuckets", "rrIntervals", "gravitySamples", "sleepSessions")) {
+            assertFalse(
+                "Device-scoped repository reads must say ForDevice; ambiguous $oldName can be misused by UI",
+                Regex("""suspend\s+fun\s+$oldName\s*\(""").containsMatchIn(source),
+            )
+        }
+        for (explicitName in listOf(
+            "hrSamplesForDevice", "hrBucketsForDevice", "rrIntervalsForDevice",
+            "gravitySamplesForDevice", "sleepSessionsForDevice",
+        )) {
+            assertTrue("Missing explicit repository API $explicitName", source.contains("fun $explicitName("))
+        }
     }
 
     @Test
@@ -170,14 +195,14 @@ class RawSensorDeviceScopeAuditTest {
         )
         assertFalse(
             "AI Coach derived stress must not bypass the device-aware R-R resolver",
-            coachSource.contains("repo.rrIntervals(activeStrapId()"),
+            coachSource.contains("repo.rrIntervalsForDevice(activeStrapId()"),
         )
 
         val chartSource = stripComments(chart.readText())
         for (api in listOf("hrSamplesUnion(", "hrBucketsUnion(", "rrIntervalsUnion(", "gravitySamplesUnion(")) {
             assertTrue("Full-day chart must read through $api", chartSource.contains(api))
         }
-        assertFalse(chartSource.contains("repo.rrIntervals(deviceId"))
-        assertFalse(chartSource.contains("repo.gravitySamples(deviceId"))
+        assertFalse(chartSource.contains("repo.rrIntervalsForDevice(deviceId"))
+        assertFalse(chartSource.contains("repo.gravitySamplesForDevice(deviceId"))
     }
 }

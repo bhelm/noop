@@ -959,7 +959,7 @@ class WhoopRepository(
 
     // MARK: - Reads
 
-    suspend fun hrSamples(deviceId: String, from: Long, to: Long, limit: Int = DEFAULT_LIMIT) =
+    suspend fun hrSamplesForDevice(deviceId: String, from: Long, to: Long, limit: Int = DEFAULT_LIMIT) =
         dao.hrSamples(deviceId, from, to, limit)
 
     /** #856: HR samples over an EXPLICIT id list, deduped by ts with earlier ids winning — the sample
@@ -1033,7 +1033,7 @@ class WhoopRepository(
             .map { it.ts to StreamPersistence.unpackImuColumns(it.samples) }
 
     /** Downsampled HR (mean bpm per [bucketSeconds]) for the strap, for the Today 24h trend chart. */
-    suspend fun hrBuckets(deviceId: String, from: Long, to: Long, bucketSeconds: Long = 300L) =
+    suspend fun hrBucketsForDevice(deviceId: String, from: Long, to: Long, bucketSeconds: Long = 300L) =
         dao.hrBuckets(deviceId, from, to, bucketSeconds)
 
     /** #856: the same dedup over an EXPLICIT id list, so a workout can read its OWN recording strap
@@ -1156,7 +1156,7 @@ class WhoopRepository(
         }
     }
 
-    suspend fun rrIntervals(deviceId: String, from: Long, to: Long, limit: Int = DEFAULT_LIMIT) =
+    suspend fun rrIntervalsForDevice(deviceId: String, from: Long, to: Long, limit: Int = DEFAULT_LIMIT) =
         dao.rrIntervals(deviceId, from, to, limit)
 
     /** R-R beats over active strap + canonical history. Exact duplicate beats are removed with the
@@ -1347,7 +1347,7 @@ class WhoopRepository(
     suspend fun respSamples(deviceId: String, from: Long, to: Long, limit: Int = DEFAULT_LIMIT) =
         dao.respSamples(deviceId, from, to, limit)
 
-    suspend fun gravitySamples(deviceId: String, from: Long, to: Long, limit: Int = DEFAULT_LIMIT) =
+    suspend fun gravitySamplesForDevice(deviceId: String, from: Long, to: Long, limit: Int = DEFAULT_LIMIT) =
         dao.gravitySamples(deviceId, from, to, limit)
 
     /**
@@ -1376,7 +1376,7 @@ class WhoopRepository(
             dao.pairedDevices().filter { it.brand.equals("WHOOP", ignoreCase = true) }.map { it.id },
         )
 
-    suspend fun sleepSessions(deviceId: String, from: Long, to: Long, limit: Int = DEFAULT_LIMIT) =
+    suspend fun sleepSessionsForDevice(deviceId: String, from: Long, to: Long, limit: Int = DEFAULT_LIMIT) =
         dao.sleepSessions(deviceId, from, to, limit)
 
     /**
