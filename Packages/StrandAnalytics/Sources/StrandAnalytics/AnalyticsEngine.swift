@@ -546,17 +546,36 @@ public enum AnalyticsEngine {
         var deepS = 0.0, remS = 0.0, lightS = 0.0, tstS = 0.0
         var inBedS = 0.0, effWeighted = 0.0
         var disturbances = 0
+        // Hypnogram COVERAGE across the group: how much of the fragments' own spans the stage segments
+        // actually account for. Accumulated separately from `inBedS` because that one later absorbs the
+        // inter-fragment gap (#777/#705), which is a different quantity — a bridged out-of-bed gap is
+        // known-awake time between two fragments, whereas a hole INSIDE a fragment is time we never
+        // observed at all. Summed straight off `s.stages` (no JSON re-parse: the segments are already
+        // decoded here), then handed to `HypnogramCoverage` so the ratio/clamp/nil rules have ONE
+        // definition shared with the merge-side guard.
+        // NOTE on scope at THIS call site: coverage here is summed off the DECODED segments, not off
+        // `stagesJSON`, so the timestamp-free shapes are not screened out by the payload-shape rule the
+        // merge side uses. A minute-dict session decodes to zero segments and contributes span with no
+        // cover, and what keeps it from reading as a holed night is `fraction`'s `coveredSeconds > 0`
+        // returning nil for a group with no timestamped stages at all. Same outcome, different
+        // mechanism — and it holds only while a group is single-sourced, which the day merge ensures by
+        // choosing one side. A group mixing a timestamped fragment with a minute-dict one would read as
+        // holed; `HypnogramCoverageTests.testMixedSourceGroupReadsAsHoled` pins both halves.
+        var coveredS = 0.0, spanS = 0.0
         for s in mainGroup {
             let m = SleepStager.hypnogramMetrics(s)
             let inBed = Double(s.end - s.start)
             inBedS += inBed                       // each fragment's own in-bed span (the gap is added below)
             effWeighted += s.efficiency * inBed   // in-bed-weighted efficiency across the group
+            spanS += inBed
+            for seg in s.stages where seg.end > seg.start { coveredS += Double(seg.end - seg.start) }
             deepS += m.deepMin * 60.0
             remS += m.remMin * 60.0
             lightS += m.lightMin * 60.0
             tstS += m.tstS
             disturbances += m.disturbances
         }
+        let stageCoverage = HypnogramCoverage.fraction(coveredSeconds: coveredS, spanSeconds: spanS)
         // OUT-OF-BED time BETWEEN bridged fragments is AWAKE (#777/#705): a main night bridged from two
         // fragments split by a 20-min wake gap was reporting that gap as nowhere (it is in no fragment's
         // [start,end) span), so 20+ min of real awake read as ~4 min - a v7.1 regression, multi-reporter.
@@ -952,11 +971,14 @@ public enum AnalyticsEngine {
         let effortConfidence = ScoreConfidence.effort(strain: strain, hrSampleCount: hr.count)
         // Rest confidence with H9: downgrade a high-efficiency night whose deep+REM share is implausibly low
         // to low-confidence (likely staging miss) — honest, no faked stages. tstS/efficiency are the
-        // main-group totals computed above; restorative = deepS + remS.
+        // main-group totals computed above; restorative = deepS + remS. `stageCoverage` adds the third
+        // guard: a night whose stage timeline covers only part of its own span (an incompletely-received
+        // device hypnogram) cannot earn a SOLID Rest either, and neither of the other two can see it.
         let restConfidence = ScoreConfidence.rest(hasSession: !matched.isEmpty,
                                                   hasStagedSleep: hasStagedSleep,
                                                   asleepSeconds: tstS, restorativeSeconds: deepS + remS,
-                                                  efficiency: efficiency, gravitySparse: gravitySparse)
+                                                  efficiency: efficiency, gravitySparse: gravitySparse,
+                                                  stageCoverage: stageCoverage)
 
         return DayResult(daily: daily, sleepSessions: matched, cachedSleep: cachedSleep,
                          workouts: workouts, recovery: recovery, strain: strain,

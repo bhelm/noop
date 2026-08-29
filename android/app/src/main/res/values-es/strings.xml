@@ -659,6 +659,8 @@
     <string name="l10n_smart_alarm_screen_remind_me_to_wind_down_4839f0d0">Recuérdame relajarme</string>
     <string name="l10n_smart_alarm_screen_shorten_window_5bf5b37d">Ventana corta</string>
     <string name="l10n_smart_alarm_screen_strap_wake_alarm_1828fff3">Alarma de despertar de la pulsera</string>
+    <string name="smart_alarm_check_strap_alarm">Comprobar qué tiene guardado la pulsera</string>
+    <string name="smart_alarm_check_strap_alarm_help">La respuesta de la pulsera aparece en el registro y en la exportación de diagnóstico, con los bytes recibidos.</string>
     <string name="l10n_smart_alarm_screen_the_earliest_noop_will_wake_you_b641a2d4">La primera NOOP te despertará.</string>
     <string name="l10n_smart_alarm_screen_the_guaranteed_alarm_fires_this_long_b0c51052">La alarma garantizada dispara tanto tiempo después de su primer tiempo.</string>
     <string name="l10n_smart_alarm_screen_this_is_a_coarse_cue_from_d6bbabe7">Este es un cue grueso de la frecuencia cardíaca, no una lectura clínica del estadio del sueño. Si la correa</string>
@@ -2615,4 +2617,8 @@
     <string name="l10n_settings_screen_once_a_day_noop_asks_github_5683aad3">Una vez al día, NOOP consulta a GitHub el número de la última versión y deja un aviso en Novedades si hay una más reciente. No se envía nada sobre ti y nunca instala nada.</string>
     <string name="l10n_updates_noop_1s_is_available_05d8ef55">NOOP %1$s ya está disponible</string>
     <string name="l10n_updates_youre_on_1s_open_settings_and_35b9e135">Tienes la %1$s. Abre Ajustes y usa Buscar actualizaciones para ver las novedades y descargar la %2$s.</string>
+    <string name="crash_recovery_title">NOOP se cerró inesperadamente</string>
+    <string name="crash_recovery_body">El último fallo aparece abajo. Puedes copiarlo para informar del error y volver a intentar abrir la aplicación.</string>
+    <string name="crash_recovery_copy">Copiar error</string>
+    <string name="crash_recovery_continue">Intentar abrir NOOP</string>
 </resources>

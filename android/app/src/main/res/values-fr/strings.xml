@@ -677,6 +677,8 @@
     <string name="l10n_smart_alarm_screen_remind_me_to_wind_down_4839f0d0">Me rappeler de me détendre</string>
     <string name="l10n_smart_alarm_screen_shorten_window_5bf5b37d">Écourter la fenêtre</string>
     <string name="l10n_smart_alarm_screen_strap_wake_alarm_1828fff3">Alarme de réveil du bracelet</string>
+    <string name="smart_alarm_check_strap_alarm">Vérifier ce que le bracelet a enregistré</string>
+    <string name="smart_alarm_check_strap_alarm_help">La réponse du bracelet apparaît dans le journal et l’export de diagnostic, avec les octets bruts reçus.</string>
     <string name="l10n_smart_alarm_screen_the_earliest_noop_will_wake_you_b641a2d4">Le premier NOOP vous réveillera.</string>
     <string name="l10n_smart_alarm_screen_the_guaranteed_alarm_fires_this_long_b0c51052">L\'alarme garantie tire aussi longtemps après votre plus jeune heure.</string>
     <string name="l10n_smart_alarm_screen_this_is_a_coarse_cue_from_d6bbabe7">Il s\'agit d\'un signal grossier de la fréquence cardiaque, et non d\'une lecture clinique au stade du sommeil. Si le bracelet </string>
@@ -2614,4 +2616,8 @@
     <string name="l10n_settings_screen_once_a_day_noop_asks_github_5683aad3">Une fois par jour, NOOP demande à GitHub le numéro de la dernière version et dépose une note dans Mises à jour s’il en existe une plus récente. Aucune donnée vous concernant n’est envoyée, et rien n’est jamais installé.</string>
     <string name="l10n_updates_noop_1s_is_available_05d8ef55">NOOP %1$s est disponible</string>
     <string name="l10n_updates_youre_on_1s_open_settings_and_35b9e135">Vous utilisez la version %1$s. Ouvrez les Réglages et utilisez Rechercher des mises à jour pour voir les nouveautés et télécharger la %2$s.</string>
+    <string name="crash_recovery_title">NOOP s’est arrêté inopinément</string>
+    <string name="crash_recovery_body">Le dernier plantage est affiché ci-dessous. Vous pouvez le copier pour un rapport, puis réessayer d’ouvrir l’application.</string>
+    <string name="crash_recovery_copy">Copier l’erreur</string>
+    <string name="crash_recovery_continue">Réessayer d’ouvrir NOOP</string>
 </resources>

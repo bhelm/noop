@@ -4676,6 +4676,27 @@ class WhoopBleClient(
     }
 
     /**
+     * Ask the strap what alarm it currently has stored (#1706). The reply lands on the command-notify
+     * characteristic and is handled by the same GET_ALARM_TIME branch an arm's own follow-up read uses,
+     * so it persists `alarm.lastReportedEpoch` + the RAW response bytes for the debug export.
+     *
+     * Port of Swift `BLEManager.getStrapAlarm`, which until now had no caller on either platform. It
+     * exists here because the readback was otherwise only reachable by ARMING: a user whose alarm is off
+     * could not produce the evidence needed to explain what their strap reports, and on Android arming
+     * was the sole trigger.
+     *
+     * Not family-gated, unlike [armStrapAlarm] — but that is defensive, not a feature. [send] already
+     * no-ops when nothing is connected, and only the 4.0 branch decodes the reply, so an errant call
+     * costs one ignored write. The single caller today is the 4.0 side of the strap-alarm card, so the
+     * 5/MG frame is NOT currently captured by anything; a caller could be added there if that layout
+     * ever needs recording, and this method would not have to change.
+     */
+    fun getStrapAlarm() {
+        send(CommandNumber.GET_ALARM_TIME, byteArrayOf(0x01))
+        log("Alarm: requested current alarm time")
+    }
+
+    /**
      * Arm the strap's **firmware** alarm to buzz at [epochSec] (absolute UTC seconds). The strap fires
      * at that instant even if the phone is asleep or NOOP is closed. SET_CLOCK is sent first so the
      * strap's RTC is UTC-correct (a wrong RTC fires the alarm at the wrong wall-clock time). The 4.0
@@ -9835,10 +9856,12 @@ internal fun isPlausibleAlarmEpoch(epoch: Long): Boolean = epoch in 1_500_000_00
 
 /**
  * Extract the armed-alarm epoch from a GET_ALARM_TIME (cmd 67) COMMAND_RESPONSE, defensively (#401
- * close-out). The WHOOP 4.0 response layout is UNDOCUMENTED, so this tries the two shapes the firmware
- * could plausibly answer with - the SET_ALARM_TIME mirror (`[form 0x01][u32 LE epoch]…`, matching the
- * 9-byte payload we arm with) first, then a bare leading u32 LE - and accepts a candidate only when it
- * passes [isPlausibleAlarmEpoch]. Anything else returns null and the caller logs raw hex instead.
+ * close-out). The WHOOP 4.0 response layout is UNDOCUMENTED, so this tries the shapes the firmware has
+ * been seen to answer with - the 11-byte GET readback captured on fw 41.17.6.0
+ * (`[form 0x01][stored flag][u32 LE epoch][00 00][04 00 20]`, epoch at offset 2) first, then the
+ * SET_ALARM_TIME mirror (`[form 0x01][u32 LE epoch]…`, matching the 9-byte payload we arm with), then
+ * a bare leading u32 LE - and accepts a candidate only when it passes [isPlausibleAlarmEpoch].
+ * Anything else returns null and the caller logs raw hex instead.
  * Pinned by `AlarmReadbackDecodeTest`; twin of the Swift `FrameRouter.armedAlarmEpoch`.
  */
 internal fun whoop4ArmedAlarmEpoch(frame: ByteArray): Long? {
@@ -9850,6 +9873,18 @@ internal fun whoop4ArmedAlarmEpoch(frame: ByteArray): Long? {
             ((payload[at + 2].toLong() and 0xFFL) shl 16) or
             ((payload[at + 3].toLong() and 0xFFL) shl 24)
     }
+    // The GET readback (fw 41.17.6.0, three arm/readback captures 2026-08-26..28, #34/#1706): the
+    // epoch sits ONE byte further than in the SET mirror, because the readback carries a stored flag
+    // (0x00 = nothing stored, 0x01 = stored) the arm payload does not. The mirror-offset read of this
+    // shape returns the epoch's LOW THREE bytes shifted up a byte, plus the flag — wrong by roughly
+    // 256x and free to land anywhere in u32 range. In all three captures it landed on a 2045 date
+    // INSIDE the 2017..2100 plausibility window (an arm for 2026-08-26 read back as 2045-09-24), so
+    // the gate did not catch it and a MISMATCH was counted against a strap whose register is fine. So
+    // on this shape the mirror offsets are known-wrong and must NOT be tried: offset 2 decodes, or
+    // the payload falls to the raw-hex line.
+    if (payload.size == 11 && payload[0] == 0x01.toByte()) {
+        return u32le(2)?.takeIf { isPlausibleAlarmEpoch(it) }
+    }
     if (payload.isNotEmpty() && payload[0] == 0x01.toByte()) {
         u32le(1)?.takeIf { isPlausibleAlarmEpoch(it) }?.let { return it }
     }
@@ -9858,8 +9893,10 @@ internal fun whoop4ArmedAlarmEpoch(frame: ByteArray): Long? {
 
 /**
  * True when a GET_ALARM_TIME readback explicitly reports NO alarm stored — the epoch field decodes to
- * 0 in the same shapes [whoop4ArmedAlarmEpoch] reads (SET-mirror `[0x01][u32=0]` first, then a bare
- * leading `u32=0`). This is the strap's "nothing armed" sentinel, distinct from a genuinely unparseable
+ * 0 in the same shapes [whoop4ArmedAlarmEpoch] reads (the 11-byte GET readback `[0x01][flag][u32=0]…`
+ * first — the #34 field-report payload `01 00 00 00 00 00 00 00 04 00 20` is exactly this shape with
+ * the stored flag 0x00 — then the SET-mirror `[0x01][u32=0]`, then a bare leading `u32=0`). This is
+ * the strap's "nothing armed" sentinel, distinct from a genuinely unparseable
  * payload: an arm the strap silently dropped reads back as epoch 0, so labelling it "unrecognised" hid
  * the real signal (#34). Only consulted AFTER [whoop4ArmedAlarmEpoch] returns null. Twin of the Swift
  * `FrameRouter.readbackReportsNoAlarm`; pinned by `AlarmReadbackDecodeTest`.
@@ -9872,6 +9909,9 @@ internal fun whoop4ReadbackReportsNoAlarm(frame: ByteArray): Boolean {
             ((payload[at + 1].toLong() and 0xFFL) shl 8) or
             ((payload[at + 2].toLong() and 0xFFL) shl 16) or
             ((payload[at + 3].toLong() and 0xFFL) shl 24)
+    }
+    if (payload.size == 11 && payload[0] == 0x01.toByte()) {
+        return u32le(2)?.let { it == 0L } ?: false
     }
     if (payload.isNotEmpty() && payload[0] == 0x01.toByte()) {
         return u32le(1)?.let { it == 0L } ?: false

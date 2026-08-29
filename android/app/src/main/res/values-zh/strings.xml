@@ -807,6 +807,8 @@
     <string name="l10n_smart_alarm_screen_remind_me_to_wind_down_4839f0d0">提醒我准备入睡</string>
     <string name="l10n_smart_alarm_screen_shorten_window_5bf5b37d">缩短唤醒窗口</string>
     <string name="l10n_smart_alarm_screen_strap_wake_alarm_1828fff3">手环无声唤醒</string>
+    <string name="smart_alarm_check_strap_alarm">查看手环已存储的闹钟</string>
+    <string name="smart_alarm_check_strap_alarm_help">手环的回应会出现在手环日志和诊断导出中，并附带收到的原始字节。</string>
     <string name="l10n_smart_alarm_screen_the_earliest_noop_will_wake_you_b641a2d4">NOOP 可能会唤醒您的最早时间。</string>
     <string name="l10n_smart_alarm_screen_the_guaranteed_alarm_fires_this_long_b0c51052">如果您在这段时间内未被智能唤醒，保底闹钟将在窗口期结束时必定响起。</string>
     <string name="l10n_smart_alarm_screen_this_is_a_coarse_cue_from_d6bbabe7">这是根据心率变动做出的粗略提示，而非临床级别的睡眠阶段判断。如果手环...</string>
@@ -2529,4 +2531,8 @@
     <string name="l10n_settings_screen_once_a_day_noop_asks_github_5683aad3">NOOP 每天向 GitHub 查询一次最新版本号，如果有更新版本，就在「更新」中留下提示。不会发送任何与你有关的信息，也绝不会安装任何东西。</string>
     <string name="l10n_updates_noop_1s_is_available_05d8ef55">NOOP %1$s 可用</string>
     <string name="l10n_updates_youre_on_1s_open_settings_and_35b9e135">你当前使用 %1$s。打开「设置」并使用「检查更新」查看新增内容并下载 %2$s。</string>
+    <string name="crash_recovery_title">NOOP 意外停止</string>
+    <string name="crash_recovery_body">上次崩溃信息显示在下方。你可以复制它用于错误报告，然后再次尝试打开应用。</string>
+    <string name="crash_recovery_copy">复制错误</string>
+    <string name="crash_recovery_continue">再次打开 NOOP</string>
 </resources>

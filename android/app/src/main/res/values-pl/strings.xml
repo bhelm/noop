@@ -811,6 +811,8 @@
     <string name="l10n_smart_alarm_screen_remind_me_to_wind_down_4839f0d0">Przypomnij mi, żebym się uspokoił</string>
     <string name="l10n_smart_alarm_screen_shorten_window_5bf5b37d">Skróć okno</string>
     <string name="l10n_smart_alarm_screen_strap_wake_alarm_1828fff3">Budzik na pasek</string>
+    <string name="smart_alarm_check_strap_alarm">Sprawdź, co zapisała opaska</string>
+    <string name="smart_alarm_check_strap_alarm_help">Odpowiedź opaski pojawi się w logu i eksporcie diagnostycznym, wraz z otrzymanymi surowymi bajtami.</string>
     <string name="l10n_smart_alarm_screen_the_earliest_noop_will_wake_you_b641a2d4">Obudzi Cię najwcześniej NOOP.</string>
     <string name="l10n_smart_alarm_screen_the_guaranteed_alarm_fires_this_long_b0c51052">Gwarantowany alarm uruchomi się tak długo po najwcześniejszym momencie.</string>
     <string name="l10n_smart_alarm_screen_this_is_a_coarse_cue_from_d6bbabe7">Jest to przybliżona wskazówka na podstawie tętna, a nie kliniczny odczyt na etapie snu. Jeśli pasek</string>
@@ -2620,4 +2622,8 @@
     <string name="l10n_settings_screen_once_a_day_noop_asks_github_5683aad3">Raz dziennie NOOP pyta GitHub o numer najnowszej wersji i dodaje notatkę w Aktualizacjach, jeśli jest nowsza. Nic o tobie nie jest wysyłane i nic nigdy nie jest instalowane.</string>
     <string name="l10n_updates_noop_1s_is_available_05d8ef55">NOOP %1$s jest dostępny</string>
     <string name="l10n_updates_youre_on_1s_open_settings_and_35b9e135">Masz wersję %1$s. Otwórz Ustawienia i użyj opcji Sprawdź aktualizacje, aby zobaczyć nowości i pobrać %2$s.</string>
+    <string name="crash_recovery_title">NOOP nieoczekiwanie się zatrzymał</string>
+    <string name="crash_recovery_body">Poniżej znajduje się ostatni błąd. Możesz go skopiować do zgłoszenia, a następnie spróbować ponownie otworzyć aplikację.</string>
+    <string name="crash_recovery_copy">Kopiuj błąd</string>
+    <string name="crash_recovery_continue">Spróbuj otworzyć NOOP</string>
 </resources>
