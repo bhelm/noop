@@ -52,7 +52,7 @@ class RawImuMigrationTest {
         assertEquals(21, WhoopDatabase.MIGRATION_20_21.endVersion)
     }
 
-    @Test fun obsoleteEmptyTable_isDroppedAt35() {
+    @Test fun obsoleteBoundedCache_isDroppedAt35() {
         assertEquals(34, WhoopDatabase.MIGRATION_34_35.startVersion)
         assertEquals(35, WhoopDatabase.MIGRATION_34_35.endVersion)
     }

@@ -61,9 +61,9 @@
       "swift": ["onChangeCompat(of: live.bonded)", "rawCaptureInFlight = false"],
       "kotlin": ["LaunchedEffect(state.active, state.sessionId, live.connected)", "startGroundTruthImuCapture"]
     },
-    "raw_data_removed_with_session": {
-      "swift": ["deleteFiles(sessionId", "capturedAt >= ? AND capturedAt <= ?"],
-      "kotlin": ["deleteFiles(sessionId)", "noop-5mg-raw-$sessionId.zip"]
+    "session_files_removed_with_session": {
+      "swift": ["deleteFiles(sessionId", "removeItem(metadata)"],
+      "kotlin": ["deleteFiles(sessionId)", "eventFile(sessionId).delete()"]
     }
   }
 }

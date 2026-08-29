@@ -570,7 +570,8 @@ abstract class WhoopDatabase : RoomDatabase() {
             }
         }
 
-        /** Historical #423 schema. Known-empty deployments are cleaned up after file-backed capture lands. */
+        /** Historical #423 rolling cache. Its bounded, write-only rows are retired by MIGRATION_34_35
+         *  after session-owned IMU moves to the file-backed store. */
         internal val RAW_IMU_MIGRATION_SQL: List<String> = listOf(
             "CREATE TABLE IF NOT EXISTS `rawImuSample` (`deviceId` TEXT NOT NULL, " +
                 "`ts` INTEGER NOT NULL, `samples` BLOB NOT NULL, PRIMARY KEY(`deviceId`, `ts`))",

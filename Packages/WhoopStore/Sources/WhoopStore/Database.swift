@@ -572,8 +572,8 @@ extension WhoopStore {
         // the six wire columns (ax…az,gx…gz). Twin of the Android `rawImuSample` table (MIGRATION_20_21);
         // same column order + PK so a `.noopbak` round-trips byte-for-byte.
         //
-        // Historical schema only. Deployed installations are known not to contain usable rows; v41 removes it
-        // after the file-backed session format is installed.
+        // Historical rolling cache. Its opt-in writer retained at most 3,600 one-second rows, but no analytics,
+        // UI or export consumed them. v41 retires those legacy rows after file-backed capture replaces the cache.
         migrator.registerMigration("v28-raw-imu") { db in
             try db.create(table: "rawImuSample") { t in
                 t.column("deviceId", .text).notNull()
@@ -879,7 +879,7 @@ extension WhoopStore {
                 t.add(column: "skinTempC", .double)
             }
         }
-        // The retired opt-in cache is known empty in deployed NOOP installations; session capture uses files.
+        // Retire the bounded, write-only legacy cache. Session-owned IMU now lives in the file-backed store.
         migrator.registerMigration("v41-drop-raw-imu-sample") { db in
             try db.drop(table: "rawImuSample")
         }
