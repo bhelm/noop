@@ -641,6 +641,13 @@ def _owner_at(spans: list[tuple[int, int, str]], offset: int, fallback: str) -> 
     return max(containing, key=lambda item: item[0])[2] if containing else fallback
 
 
+def _swift_module_owner(path: str) -> str | None:
+    parts = Path(path).parts
+    if len(parts) >= 4 and parts[0] == "Packages" and parts[2] == "Sources":
+        return parts[1]
+    return None
+
+
 def _receiver_owner(header: str) -> str | None:
     name_match = re.search(r"(`?[A-Za-z_][A-Za-z0-9_]*`?)\s*$", header)
     if not name_match:
@@ -1128,7 +1135,14 @@ def parse_twin_references(
 def _resolve(reference: TwinReference, targets: list[Declaration]) -> list[Declaration]:
     matches = [decl for decl in targets if _normal_name(decl.name) == _normal_name(reference.target_name)]
     if reference.target_owner:
-        matches = [decl for decl in matches if _normal_name(decl.owner) == _normal_name(reference.target_owner)]
+        wanted = _normal_name(reference.target_owner)
+        matches = [
+            decl for decl in matches
+            if wanted in {
+                _normal_name(decl.owner),
+                _normal_name(_swift_module_owner(decl.path) or ""),
+            }
+        ]
     selector = re.search(r"\(([^)]*)\)\s*$", reference.raw_target)
     if selector:
         labels = tuple(
@@ -1213,7 +1227,11 @@ def _symbol_owners(
     snapshot = snapshot or _SourceSnapshot()
     symbols: dict[str, set[str]] = defaultdict(set)
     for item in declarations:
-        symbols[_normal_name(item.name)].update((_normal_name(item.owner), _normal_name(Path(item.path).stem)))
+        owners = {_normal_name(item.owner), _normal_name(Path(item.path).stem)}
+        module = _swift_module_owner(item.path)
+        if module:
+            owners.add(_normal_name(module))
+        symbols[_normal_name(item.name)].update(owners)
     for path in files:
         file_owner = _normal_name(path.stem)
         symbols[file_owner].add(file_owner)
@@ -1229,6 +1247,17 @@ def _symbol_owners(
         for match in declaration.finditer(masked):
             owner = _owner_at(spans, match.start(), path.stem)
             symbols[_normal_name(match.group(1))].update((_normal_name(owner), file_owner))
+        if language == "kotlin":
+            for type_match in TYPE_DECLARATION[language].finditer(masked):
+                opening = masked.find("{", type_match.end())
+                header_end = opening if opening >= 0 else masked.find("\n", type_match.end())
+                if header_end < 0:
+                    header_end = len(masked)
+                header = masked[type_match.end():header_end]
+                for property_match in re.finditer(r"\b(?:val|var)\s+([A-Za-z_][A-Za-z0-9_]*)\b", header):
+                    symbols[_normal_name(property_match.group(1))].update(
+                        (_normal_name(type_match.group(1)), file_owner)
+                    )
     return symbols
 
 
