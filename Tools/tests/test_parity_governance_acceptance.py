@@ -43,13 +43,21 @@ class RepositoryBaselineTests(unittest.TestCase):
         self.assertEqual(1, registry["schema_version"])
         self.assertNotIn("exemptions", parity_ledger._load_json(TOOLS / "parity_twin_map.json", {}))
 
-    def test_tools_workflow_runs_governance_tests_on_every_pr(self) -> None:
-        workflow = (REPOSITORY / ".github/workflows/tools-python.yml").read_text(
+    def test_core_tools_stays_unfiltered_while_governance_is_path_filtered(self) -> None:
+        core = (REPOSITORY / ".github/workflows/tools-python.yml").read_text(
             encoding="utf-8"
         )
-        self.assertIn("pull_request:\n    branches: [main]", workflow)
-        self.assertNotIn("paths:", workflow)
-        self.assertIn("unittest discover -s tests", workflow)
+        governance = (REPOSITORY / ".github/workflows/parity-governance.yml").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("pull_request:\n    branches: [main]", core)
+        self.assertNotIn("paths:", core)
+        self.assertNotIn("unittest discover -s tests", core)
+        self.assertIn("pull_request:\n    branches: [main]\n    paths:", governance)
+        self.assertIn("'Tools/parity_*.py'", governance)
+        self.assertIn("'Packages/**/*.swift'", governance)
+        self.assertIn("'android/**/*.kt'", governance)
+        self.assertIn("unittest discover -s tests", governance)
 
     def test_checked_in_inventory_and_baseline_match_current_sources(self) -> None:
         twin_map = parity_ledger._load_json(TOOLS / "parity_twin_map.json", {})

@@ -35,7 +35,7 @@ are not authority. A normal scan expands it and deep-checks every fingerprint.
 The ratchet separately materializes and scans the exact base and current trees,
 so regenerating both JSON files cannot hide a newly unpaired declaration. The ledger is
 fail-closed when invoked; repository CI enforcement is intentionally deferred to the final
-stack PR, alongside native execution and path-filtered workflow wiring.
+stack PR, alongside native execution and path-filtered ledger/ratchet invocation.
 
 Function pairs exactly equal resolved attached source claims. File pairs derive
 from those claims before constant resolution, so stale file metadata cannot
@@ -53,10 +53,12 @@ or changed debt blocks, while a proven decrease is green with a concise warning.
 No JSON regeneration or disposition cleanup is required merely to land an
 improvement.
 
-This PR is the governance foundation and executable demo: its Python self-tests
-run in the generic Tools workflow, but it does **not** gate product-source
-changes yet. PR2 adds the portable case layer, PR3 adds corpora and native
-runners, and PR4 wires product parity/differential checks into required CI.
+This PR is the governance foundation and executable demo. Its Python self-tests
+run in a dedicated workflow when governance files or Swift/Kotlin files in the
+scanner's full reference scope change; unrelated docs and assets skip that
+multi-minute suite. The workflow does **not** invoke the ledger or ratchet as a
+product-source gate yet. PR2 adds the portable case layer, PR3 adds corpora and
+native runners, and PR4 wires product parity/differential checks into required CI.
 When PR4 wires this gate into CI, that invocation must omit
 `--offline`. Every governed `issue` field must use the exact
 `owner/repository#number` form. Online validation derives the API path from
@@ -119,6 +121,6 @@ consistency is proved by independent rescanning and canonical set hashes.
 
 This foundation has no module runner, case corpus, coverage report, Gradle,
 SwiftPM, governance-gate workflow invocation, or native-test dependency. The
-existing generic Tools test workflow only discovers its Python unit tests and
-protects their count. Later layers can consume the inventory without making
-this scanner depend on their orchestration.
+path-filtered parity workflow only discovers the Python self-tests and protects
+their count. Later layers can consume the inventory without making this scanner
+depend on their orchestration.
