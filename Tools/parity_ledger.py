@@ -2655,6 +2655,8 @@ def main(argv: list[str] | None = None) -> int:
         print(f"FAIL {len(result.errors)} parity ledger scan error(s):\n")
         for error in result.errors:
             print(f"  {error.output()}")
+        noun = "error" if len(result.errors) == 1 else "errors"
+        print(f"\nBaseline not evaluated: {len(result.errors)} scan {noun}.")
         return 1
     if args.no_baseline:
         if result.findings:
