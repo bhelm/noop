@@ -1023,6 +1023,10 @@ fun broken(value: Int) = "broken ${run { Trace.suffix(value) }
         self.assertEqual(1, code)
         self.assertIn("FAIL 1 parity ledger scan error(s):", output)
         self.assertIn(errors[0], output)
+        self.assertTrue(
+            output.rstrip().endswith("Baseline not evaluated: 1 scan error."),
+            output,
+        )
 
     def test_invalid_utf8_is_a_stable_hard_error(self) -> None:
         self.write_clean_tree()

@@ -73,8 +73,8 @@ jobs:
           python3 -m unittest -v "${modules[@]}" 2>&1 | tee "$RUNNER_TEMP/out.txt"
           ran=$(grep -oE '^Ran [0-9]+ test' "$RUNNER_TEMP/out.txt" | grep -oE '[0-9]+')
           echo "collected ${ran:-0} tests"
-          if [ "${ran:-0}" -lt 103 ]; then
-            echo "::error::expected at least 103 core Tools tests, collected ${ran:-0} — discovery is broken, not the suite"
+          if [ "${ran:-0}" -lt 108 ]; then
+            echo "::error::expected at least 108 core Tools tests, collected ${ran:-0} — discovery is broken, not the suite"
             exit 1
           fi
         working-directory: Tools
@@ -85,8 +85,8 @@ jobs:
           python3 -m unittest discover -s tests -p "test_*.py" -v 2>&1 | tee "$RUNNER_TEMP/out.txt"
           ran=$(grep -oE '^Ran [0-9]+ test' "$RUNNER_TEMP/out.txt" | grep -oE '[0-9]+')
           echo "collected ${ran:-0} tests"
-          if [ "${ran:-0}" -lt 90 ]; then
-            echo "::error::expected at least 90 parity-governance tests, collected ${ran:-0} — discovery is broken, not the suite"
+          if [ "${ran:-0}" -lt 102 ]; then
+            echo "::error::expected at least 102 parity-governance tests, collected ${ran:-0} — discovery is broken, not the suite"
             exit 1
           fi
         working-directory: Tools

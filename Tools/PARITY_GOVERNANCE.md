@@ -18,6 +18,12 @@ The ledger must report no finding beyond the checked-in baseline. The ratchet
 also rescans the working tree, so editing a baseline without matching current
 sources fails closed. `--offline` skips only GitHub existence checks; it does
 not relax syntax, schema, current-tree, or exact-base checks.
+
+Scan errors are reported before baseline evaluation because unresolved or
+malformed source evidence makes the inventory untrustworthy. In that case the
+ledger ends with `Baseline not evaluated: N scan errors.`; fix the listed scan
+errors before interpreting or refreshing baseline state.
+
 For a reported debt decrease, the ledger resolves `--base` (default
 `origin/main`) once to an immutable commit and proves the current identities are
 a subset of that exact tree. A missing or shallow base fails closed.
