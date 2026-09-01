@@ -54,11 +54,12 @@ No JSON regeneration or disposition cleanup is required merely to land an
 improvement.
 
 This PR is the governance foundation and executable demo. Its Python self-tests
-run in a dedicated workflow when governance files or Swift/Kotlin files in the
-scanner's full reference scope change; unrelated docs and assets skip that
-multi-minute suite. The workflow does **not** invoke the ledger or ratchet as a
-product-source gate yet. PR2 adds the portable case layer, PR3 adds corpora and
-native runners, and PR4 wires product parity/differential checks into required CI.
+run in a dedicated workflow when the governance implementation, authority,
+tests, or workflow changes. Ordinary product-source and documentation changes
+do not repeatedly self-test the scanner. The workflow does **not** invoke the
+ledger or ratchet as a product-source gate yet. PR2 adds the portable case layer,
+PR3 adds corpora and native runners, and PR4 wires product parity/differential
+checks into required CI.
 When PR4 wires this gate into CI, that invocation must omit
 `--offline`. Every governed `issue` field must use the exact
 `owner/repository#number` form. Online validation derives the API path from
