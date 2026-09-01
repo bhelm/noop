@@ -190,6 +190,31 @@ class ParityLedgerTests(unittest.TestCase):
             any("Strand/ExternalEngine.swift::compute/1#1" == item["swift"] for item in twin_map["function_pairs"])
         )
 
+    def test_swift_package_module_qualifies_top_level_twin(self) -> None:
+        swift = self.root / "Packages/StrandAnalytics/Sources/StrandAnalytics/Summary.swift"
+        swift.parent.mkdir(parents=True, exist_ok=True)
+        swift.write_text("public func summary(_ value: Int) -> Int { value }\n")
+        self.kotlin.write_text(
+            "/** Swift twin: `StrandAnalytics.summary`. */\n"
+            "fun summary(value: Int): Int = value\n"
+        )
+
+        result = parity_ledger.scan(self.root, parity_ledger.build_twin_map(self.root))
+        self.assertFalse(any(item.rule == "dead-twin-reference" for item in result.findings))
+        self.assertEqual([], result.errors)
+
+    def test_kotlin_constructor_property_resolves_owned_twin_reference(self) -> None:
+        self.kotlin.write_text("data class LiveState(val historyReady: Boolean)\n")
+        self.swift.write_text(
+            "final class LiveState {\n"
+            "    /// Kotlin twin: `LiveState.historyReady`.\n"
+            "    var historyReady = false\n"
+            "}\n"
+        )
+
+        result = parity_ledger.scan(self.root, parity_ledger.build_twin_map(self.root))
+        self.assertFalse(any(item.rule == "dead-twin-reference" for item in result.findings))
+
     def test_android_test_reference_resolves_swift_strand_test_symbol(self) -> None:
         self.write_clean_tree()
         swift_test = self.root / "StrandTests/WorkoutSourceTests.swift"
