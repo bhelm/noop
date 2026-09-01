@@ -121,7 +121,7 @@ internal object PhysiologicalStepCycleEngine {
             val markersByOwner = LinkedHashMap<String, Map<String, Long>>()
             for (owner in candidatePriorities.map { it.first }.distinct()) {
                 val ownerComputedId = repo.computedDeviceId(owner)
-                sessionsByOwner[owner] = repo.sleepSessions(
+                sessionsByOwner[owner] = repo.sleepSessionsForDevice(
                     ownerComputedId, windowStart, nowSeconds, limit = 4_000,
                 )
                 markersByOwner[owner] = repo.metricSeries(
