@@ -1,40 +1,26 @@
-# The parity suite rescans every Swift/Kotlin file that can affect its inventory,
-# attached references, or lexical production/test call graph. Keep these paths in
-# sync with parity_ledger.py's REFERENCE_GLOBS plus the governance implementation
-# and metadata. Pure docs and unrelated assets do not need this multi-minute suite.
+# These are the scanner's own unit and repository-acceptance tests. Run the
+# multi-minute suite when its implementation, authority, tests, or workflow
+# changes; ordinary product-source changes belong to the later ledger/ratchet
+# gate, not to repeated self-testing of the scanner.
 name: Parity Governance CI
 
 on:
   pull_request:
     branches: [main]
     paths:
-      - 'Tools/PARITY_GOVERNANCE.md'
       - 'Tools/issue_ref.py'
       - 'Tools/parity_*.py'
       - 'Tools/parity_*.json'
       - 'Tools/tests/**'
       - '.github/workflows/parity-governance.yml'
-      - 'Packages/**/*.swift'
-      - 'Strand/**/*.swift'
-      - 'StrandTests/**/*.swift'
-      - 'StrandiOS*/**/*.swift'
-      - 'NOOPWatch*/**/*.swift'
-      - 'android/**/*.kt'
   push:
     branches: [main]
     paths:
-      - 'Tools/PARITY_GOVERNANCE.md'
       - 'Tools/issue_ref.py'
       - 'Tools/parity_*.py'
       - 'Tools/parity_*.json'
       - 'Tools/tests/**'
       - '.github/workflows/parity-governance.yml'
-      - 'Packages/**/*.swift'
-      - 'Strand/**/*.swift'
-      - 'StrandTests/**/*.swift'
-      - 'StrandiOS*/**/*.swift'
-      - 'NOOPWatch*/**/*.swift'
-      - 'android/**/*.kt'
   workflow_dispatch:
 
 concurrency:

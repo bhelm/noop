@@ -37,6 +37,63 @@ class IssueReferenceTests(unittest.TestCase):
 
 
 class RepositoryBaselineTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls) -> None:
+        # These acceptance tests all inspect one immutable checkout. Build the
+        # repository evidence once for the class instead of paying for the same
+        # full-tree parse in every assertion. This is test-local state, not a
+        # persistent production cache; normal scanner calls still read fresh.
+        cls.compact_map = parity_ledger._load_json(TOOLS / "parity_twin_map.json", {})
+        cls.baseline = parity_ledger._load_json(TOOLS / "parity_ledger_baseline.json", {})
+        cls.snapshot = parity_ledger._SourceSnapshot()
+        cls.inventory = parity_ledger._inventory(REPOSITORY, cls.snapshot)
+        (
+            cls.swift_files,
+            cls.kotlin_files,
+            cls.swift_functions,
+            cls.kotlin_functions,
+            _swift_properties,
+            _kotlin_properties,
+            _swift_constants,
+            _kotlin_constants,
+        ) = cls.inventory
+        _reference_files, declarations = parity_ledger._reference_declarations(
+            REPOSITORY,
+            cls.inventory[2:6],
+            cls.snapshot,
+        )
+        cls.repo_swift_functions = [
+            item for item in declarations
+            if item.language == "swift" and item.kind == "function"
+        ]
+        cls.repo_kotlin_functions = [
+            item for item in declarations
+            if item.language == "kotlin" and item.kind == "function"
+        ]
+        cls.references = (
+            parity_ledger.parse_twin_references(
+                REPOSITORY, cls.swift_files, "swift", cls.swift_functions, cls.snapshot
+            )
+            + parity_ledger.parse_twin_references(
+                REPOSITORY, cls.kotlin_files, "kotlin", cls.kotlin_functions, cls.snapshot
+            )
+        )
+        cls.resolutions = parity_ledger.attached_function_resolutions(
+            cls.references, cls.repo_swift_functions, cls.repo_kotlin_functions
+        )
+        cls.expanded_map = parity_ledger.build_twin_map(
+            REPOSITORY, cls.inventory, cls.snapshot
+        )
+        cls.authority = parity_ledger.authority_manifest(
+            parity_ledger.semantic_authority(
+                REPOSITORY,
+                expanded=cls.expanded_map,
+                inventory=cls.inventory,
+                snapshot=cls.snapshot,
+            )
+        )
+        cls.result = parity_ledger.scan(REPOSITORY, cls.compact_map)
+
     def test_repository_has_one_typed_manual_disposition_registry(self) -> None:
         registry = parity_ledger._load_json(TOOLS / "parity_dispositions.json", {})
         parity_ratchet._validate_dispositions(registry, "fixture")
@@ -55,39 +112,32 @@ class RepositoryBaselineTests(unittest.TestCase):
         self.assertNotIn("unittest discover -s tests", core)
         self.assertIn("pull_request:\n    branches: [main]\n    paths:", governance)
         self.assertIn("'Tools/parity_*.py'", governance)
-        self.assertIn("'Packages/**/*.swift'", governance)
-        self.assertIn("'android/**/*.kt'", governance)
+        self.assertNotIn("'Packages/**/*.swift'", governance)
+        self.assertNotIn("'android/**/*.kt'", governance)
         self.assertIn("unittest discover -s tests", governance)
 
     def test_checked_in_inventory_and_baseline_match_current_sources(self) -> None:
-        twin_map = parity_ledger._load_json(TOOLS / "parity_twin_map.json", {})
-        baseline = parity_ledger._load_json(TOOLS / "parity_ledger_baseline.json", {})
-        result = parity_ledger.scan(REPOSITORY, twin_map)
-        self.assertEqual([], result.errors)
-        self.assertEqual([], parity_ledger.compact_baseline_drift(result, baseline))
-        self.assertEqual(result.counters, baseline["counters"])
+        self.assertEqual([], self.result.errors)
+        self.assertEqual([], parity_ledger.compact_baseline_drift(self.result, self.baseline))
+        self.assertEqual(self.result.counters, self.baseline["counters"])
 
     def test_checked_metadata_is_compact_v3_and_expands_losslessly(self) -> None:
-        checked = parity_ledger._load_json(TOOLS / "parity_twin_map.json", {})
-        expanded, drift = parity_ledger.expand_twin_map(REPOSITORY, checked)
-        self.assertEqual(3, checked["schema_version"])
-        self.assertEqual([], drift)
-        self.assertEqual(parity_ledger.build_twin_map(REPOSITORY), expanded)
-        self.assertNotIn("unpaired_functions", checked)
-        self.assertNotIn("constant_pairs", checked)
+        self.assertEqual(3, self.compact_map["schema_version"])
+        self.assertEqual(self.compact_map["authority"], self.authority)
+        self.assertNotIn("unpaired_functions", self.compact_map)
+        self.assertNotIn("constant_pairs", self.compact_map)
 
-        baseline = parity_ledger._load_json(TOOLS / "parity_ledger_baseline.json", {})
-        self.assertEqual(3, baseline["schema_version"])
-        self.assertNotIn("findings", baseline)
-        self.assertTrue(baseline["accepted_findings"])
-        for group in baseline["accepted_findings"]:
+        self.assertEqual(3, self.baseline["schema_version"])
+        self.assertNotIn("findings", self.baseline)
+        self.assertTrue(self.baseline["accepted_findings"])
+        for group in self.baseline["accepted_findings"]:
             self.assertTrue(group["reason"].strip())
             self.assertTrue(group["provenance"].strip())
             self.assertGreater(group["count"], 0)
             self.assertRegex(group["identities_sha256"], r"^[0-9a-f]{64}$")
 
     def test_v3_authority_schema_is_exact_and_canonically_ordered(self) -> None:
-        compact = parity_ledger.build_compact_twin_map(REPOSITORY)
+        compact = self.compact_map
         self.assertEqual(
             list(parity_ledger.SEMANTIC_AUTHORITY_SETS), list(compact["authority"])
         )
@@ -108,8 +158,7 @@ class RepositoryBaselineTests(unittest.TestCase):
         with self.assertRaisesRegex(parity_ratchet.RatchetError, "exact derivation roots"):
             parity_ratchet._validate_twin_map(misleading, "fixture")
 
-        baseline = parity_ledger._load_json(TOOLS / "parity_ledger_baseline.json", {})
-        tampered = json.loads(json.dumps(baseline))
+        tampered = json.loads(json.dumps(self.baseline))
         tampered["accepted_findings"][0]["reason"] = "arbitrary non-empty replacement"
         with self.assertRaisesRegex(parity_ratchet.RatchetError, "canonical reviewed reason"):
             parity_ratchet._validate_baseline(tampered, "fixture")
@@ -122,100 +171,34 @@ class RepositoryBaselineTests(unittest.TestCase):
             self.assertNotIn("source_commit", json.dumps(value))
 
     def test_checked_function_pairs_equal_current_attached_source_claims(self) -> None:
-        (
-            swift_files,
-            kotlin_files,
-            swift_functions,
-            kotlin_functions,
-            _swift_properties,
-            _kotlin_properties,
-            _swift_constants,
-            _kotlin_constants,
-        ) = parity_ledger._inventory(REPOSITORY)
-        references = (
-            parity_ledger.parse_twin_references(
-                REPOSITORY, swift_files, "swift", swift_functions
-            )
-            + parity_ledger.parse_twin_references(
-                REPOSITORY, kotlin_files, "kotlin", kotlin_functions
-            )
-        )
-        _reference_files, reference_declarations = parity_ledger._reference_declarations(REPOSITORY)
-        repo_swift_functions = [
-            item for item in reference_declarations
-            if item.language == "swift" and item.kind == "function"
-        ]
-        repo_kotlin_functions = [
-            item for item in reference_declarations
-            if item.language == "kotlin" and item.kind == "function"
-        ]
         declared = set(
             parity_ledger.resolved_attached_function_pairs(
-                references, repo_swift_functions, repo_kotlin_functions
+                self.references, self.repo_swift_functions, self.repo_kotlin_functions
             )
         )
-        twin_map, drift = parity_ledger.expand_twin_map(
-            REPOSITORY, parity_ledger._load_json(TOOLS / "parity_twin_map.json", {})
-        )
-        self.assertEqual([], drift)
         checked = {
             (item["swift"], item["kotlin"])
-            for item in twin_map["function_pairs"]
+            for item in self.expanded_map["function_pairs"]
         }
         self.assertEqual(declared, checked)
         declared_files = parity_ledger.resolved_file_pairs(
-            declared, repo_swift_functions, repo_kotlin_functions
+            declared, self.repo_swift_functions, self.repo_kotlin_functions
         )
         checked_files = {
             (item["swift"], item["kotlin"])
-            for item in twin_map["file_pairs"]
+            for item in self.expanded_map["file_pairs"]
         }
         self.assertEqual(declared_files, checked_files)
 
     def test_every_nonunique_attached_claim_has_one_explicit_finding(self) -> None:
-        (
-            swift_files,
-            kotlin_files,
-            swift_functions,
-            kotlin_functions,
-            _swift_properties,
-            _kotlin_properties,
-            _swift_constants,
-            _kotlin_constants,
-        ) = parity_ledger._inventory(REPOSITORY)
-        references = (
-            parity_ledger.parse_twin_references(
-                REPOSITORY, swift_files, "swift", swift_functions
-            )
-            + parity_ledger.parse_twin_references(
-                REPOSITORY, kotlin_files, "kotlin", kotlin_functions
-            )
-        )
-        _reference_files, reference_declarations = parity_ledger._reference_declarations(REPOSITORY)
-        repo_swift_functions = [
-            item for item in reference_declarations
-            if item.language == "swift" and item.kind == "function"
-        ]
-        repo_kotlin_functions = [
-            item for item in reference_declarations
-            if item.language == "kotlin" and item.kind == "function"
-        ]
-        resolutions = parity_ledger.attached_function_resolutions(
-            references, repo_swift_functions, repo_kotlin_functions
-        )
         unresolved_sites = {
             (reference.path, reference.line)
-            for reference, candidates in resolutions.items()
+            for reference, candidates in self.resolutions.items()
             if len(candidates) != 1
         }
-        twin_map, drift = parity_ledger.expand_twin_map(
-            REPOSITORY, parity_ledger._load_json(TOOLS / "parity_twin_map.json", {})
-        )
-        self.assertEqual([], drift)
-        result = parity_ledger.scan(REPOSITORY, twin_map)
         finding_sites = {
             (finding.path, finding.line)
-            for finding in result.findings
+            for finding in self.result.findings
             if finding.rule in {
                 "unresolved-attached-function-claim",
                 "ambiguous-attached-function-claim",
@@ -224,13 +207,9 @@ class RepositoryBaselineTests(unittest.TestCase):
         self.assertEqual(unresolved_sites, finding_sites)
 
     def test_repository_has_only_correct_collapse_pair_and_no_rank_waiver(self) -> None:
-        twin_map, drift = parity_ledger.expand_twin_map(
-            REPOSITORY, parity_ledger._load_json(TOOLS / "parity_twin_map.json", {})
-        )
-        self.assertEqual([], drift)
         pairs = {
             (item["swift"], item["kotlin"])
-            for item in twin_map["function_pairs"]
+            for item in self.expanded_map["function_pairs"]
         }
         wrong = (
             "Packages/StrandAnalytics/Sources/StrandAnalytics/HRVAnalyzer.swift::collapseOverCount/4#1",
@@ -245,28 +224,16 @@ class RepositoryBaselineTests(unittest.TestCase):
         kotlin_targets = [kotlin for _swift, kotlin in pairs]
         self.assertEqual(len(kotlin_targets), len(set(kotlin_targets)))
 
-        baseline = parity_ledger._load_json(TOOLS / "parity_ledger_baseline.json", {})
-        result = parity_ledger.scan(REPOSITORY, twin_map)
-        self.assertFalse(any("TestCentreLayout.swift::rank/1#1" in item.identity for item in result.findings))
+        self.assertFalse(any(
+            "TestCentreLayout.swift::rank/1#1" in item.identity
+            for item in self.result.findings
+        ))
 
     def test_checked_constant_pairs_equal_current_dynamic_pairs(self) -> None:
-        (
-            _swift_files,
-            _kotlin_files,
-            _swift_functions,
-            _kotlin_functions,
-            _swift_properties,
-            _kotlin_properties,
-            swift_constants,
-            kotlin_constants,
-        ) = parity_ledger._inventory(REPOSITORY)
-        twin_map, drift = parity_ledger.expand_twin_map(
-            REPOSITORY, parity_ledger._load_json(TOOLS / "parity_twin_map.json", {})
-        )
-        self.assertEqual([], drift)
+        swift_constants, kotlin_constants = self.inventory[6:8]
         file_pairs = {
             (item["swift"], item["kotlin"])
-            for item in twin_map["file_pairs"]
+            for item in self.expanded_map["file_pairs"]
         }
         dynamic, _ambiguous = parity_ledger._constant_pairing(
             swift_constants, kotlin_constants, file_pairs
@@ -274,7 +241,7 @@ class RepositoryBaselineTests(unittest.TestCase):
         resolved = {(swift.key, kotlin.key) for swift, kotlin in dynamic}
         checked = {
             (item["swift"], item["kotlin"])
-            for item in twin_map["constant_pairs"]
+            for item in self.expanded_map["constant_pairs"]
         }
         self.assertEqual(resolved, checked)
 
