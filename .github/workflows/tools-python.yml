@@ -63,8 +63,9 @@ jobs:
           fi
         working-directory: Tools/linux-capture
 
-      # Keep independent floors for the pre-existing Tools tests and parity governance. A single total
-      # lets growth in one suite hide accidental deletion in the other.
+      # Parity governance has its own path-filtered workflow because that suite scans the repository and
+      # is intentionally much slower. Keep this core floor independent so growth in parity cannot hide
+      # accidental deletion here.
       - name: Run core Tools/ tests
         run: |
           set -o pipefail
@@ -75,18 +76,6 @@ jobs:
           echo "collected ${ran:-0} tests"
           if [ "${ran:-0}" -lt 108 ]; then
             echo "::error::expected at least 108 core Tools tests, collected ${ran:-0} — discovery is broken, not the suite"
-            exit 1
-          fi
-        working-directory: Tools
-
-      - name: Run parity-governance tests
-        run: |
-          set -o pipefail
-          python3 -m unittest discover -s tests -p "test_*.py" -v 2>&1 | tee "$RUNNER_TEMP/out.txt"
-          ran=$(grep -oE '^Ran [0-9]+ test' "$RUNNER_TEMP/out.txt" | grep -oE '[0-9]+')
-          echo "collected ${ran:-0} tests"
-          if [ "${ran:-0}" -lt 102 ]; then
-            echo "::error::expected at least 102 parity-governance tests, collected ${ran:-0} — discovery is broken, not the suite"
             exit 1
           fi
         working-directory: Tools
