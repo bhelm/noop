@@ -1318,6 +1318,22 @@ fun SettingsScreen(
                 )
             }
             SettingsRowDivider()
+            // #1839: hide the bar while scrolling down, bring it back on scrolling up. Only does anything
+            // with the overlay on, because in the slot layout the space is reserved and hiding the bar
+            // would leave an empty band — so the row is disabled rather than silently inert.
+            // Reduce Motion pins the bar visible (a bar that vanishes without animation reads as a
+            // glitch), so with it on the toggle would flip and change nothing. A switch that silently
+            // does nothing is worse than one that is plainly unavailable, so it greys out for the same
+            // reason it does without the overlay.
+            val autoHideAvailable = BottomBarStyleStore.overlay && !rememberReduceMotion()
+            SettingsFormRow(label = uiString(R.string.l10n_settings_screen_hide_bar_when_scrolling_b077d9f3)) {
+                Switch(
+                    checked = BottomBarStyleStore.autoHide,
+                    enabled = autoHideAvailable,
+                    onCheckedChange = { BottomBarStyleStore.setAutoHide(context, it) },
+                )
+            }
+            SettingsRowDivider()
             // #1821: Clock format. Sits with Language because it is an app-owned display CONVENTION, and
             // like Language it offers "System default" - which here means the device's own 12/24h switch,
             // not the region default that was silently deciding this for everyone. Twin of the Apple row.

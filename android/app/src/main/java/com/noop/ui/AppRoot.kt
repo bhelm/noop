@@ -101,9 +101,14 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.foundation.layout.calculateStartPadding
 import androidx.compose.foundation.layout.calculateEndPadding
 import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
+import androidx.compose.ui.input.nestedscroll.NestedScrollSource
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.NavHostController
@@ -277,6 +282,41 @@ internal object MoreSectionPrefs {
 }
 
 /**
+ * #1839: should the overlay bar be hidden right now?
+ *
+ * Pure so the decision is testable without Compose — the separation the #90 prototype got right.
+ *
+ * Gated on [overlay] deliberately. In the slot layout the Scaffold has RESERVED the bar's space, so
+ * translating the bar away would leave an empty band rather than handing the space back to content —
+ * visibly worse than not hiding at all. Auto-hide only makes sense over content.
+ */
+internal fun shouldHideBar(autoHide: Boolean, overlay: Boolean, scrollingDown: Boolean): Boolean =
+    autoHide && overlay && scrollingDown
+
+/**
+ * #1839: does this scroll delta change the direction, or is it noise?
+ *
+ * Returns true for "scrolling down into the page", false for up, and null when the movement is under
+ * [threshold] and should be ignored — without that, a fingertip tremor flickers the bar continuously.
+ * A NEGATIVE delta means content moved up, which is the user scrolling down.
+ */
+internal fun scrollDirectionChange(delta: Float, threshold: Float): Boolean? = when {
+    delta <= -threshold -> true
+    delta >= threshold -> false
+    else -> null
+}
+
+/**
+ * #1839: the 0..1 collapse fraction the bar's transform rides.
+ *
+ * Reduce Motion pins it to 0 — VISIBLE — rather than snapping between hidden and shown. A bar that
+ * teleports away without animation reads as a glitch, and someone who has asked for less motion is the
+ * last person who should get that. #90 snapped to 0/1 instead; keeping the bar put is the kinder reading.
+ */
+internal fun barCollapseFraction(hidden: Boolean, reduceMotion: Boolean): Float =
+    if (reduceMotion) 0f else if (hidden) 1f else 0f
+
+/**
  * #1836: which bottom-bar layout to use, snapshot-backed so the Settings toggle applies without a
  * relaunch (the same shape as `BackgroundImageStore.enabled`).
  *
@@ -308,9 +348,21 @@ object BottomBarStyleStore {
      */
     fun barHeightForContent(): Dp = if (overlay) barHeight else 0.dp
 
+    /** #1839: hide the overlay bar while scrolling down, bring it back on scrolling up. Default off. */
+    var autoHide by mutableStateOf(false)
+        private set
+
+    fun setAutoHide(ctx: Context, value: Boolean) {
+        autoHide = value
+        NoopPrefs.of(ctx.applicationContext).edit()
+            .putBoolean(NoopPrefs.KEY_BOTTOM_BAR_AUTO_HIDE, value).apply()
+    }
+
     fun load(ctx: Context) {
         overlay = NoopPrefs.of(ctx.applicationContext)
             .getBoolean(NoopPrefs.KEY_OVERLAY_BOTTOM_BAR, false)
+        autoHide = NoopPrefs.of(ctx.applicationContext)
+            .getBoolean(NoopPrefs.KEY_BOTTOM_BAR_AUTO_HIDE, false)
     }
 
     fun set(ctx: Context, value: Boolean) {
@@ -358,7 +410,40 @@ fun AppRoot(viewModel: AppViewModel = viewModel()) {
     var barHeightPx by remember { mutableIntStateOf(0) }
     val density = LocalDensity.current
     val barHeight = with(density) { barHeightPx.toDp() }
-    Box(Modifier.fillMaxSize()) {
+    // #1839: auto-hide. ONE NestedScrollConnection on the shell means every screen gets the behaviour with
+    // no per-screen wiring — scrollable children dispatch their deltas up to it. onPreScroll only flips a
+    // Boolean, and only on a movement past the threshold, so a fingertip tremor cannot flicker the bar.
+    var scrollingDown by remember { mutableStateOf(false) }
+    val reduceMotion = rememberReduceMotion()
+    val hidden = shouldHideBar(BottomBarStyleStore.autoHide, BottomBarStyleStore.overlay, scrollingDown)
+    val collapseTarget = barCollapseFraction(hidden, reduceMotion)
+    // The transform is a graphicsLayer only — GPU, per frame, NO relayout — so content never reflows as
+    // the bar comes and goes and scrolling stays smooth. (The approach #90 got right.)
+    // Held as the State, not unwrapped with `by`, ON PURPOSE. Reading a `Float` in composition would
+    // recompose this whole shell — Scaffold and NavHost included — on EVERY animation frame, which is the
+    // exact jank the graphicsLayer-only approach exists to avoid. Instead:
+    //   - the transform reads `.value` INSIDE graphicsLayer, a deferred read that updates the layer with
+    //     no recomposition at all;
+    //   - presence is a derivedStateOf, so composition is invalidated once when the bar appears or
+    //     disappears, not sixty times a second while it moves.
+    val collapseState = animateFloatAsState(
+        targetValue = collapseTarget,
+        animationSpec = tween(durationMillis = 220),
+    )
+    val barPresent by remember { derivedStateOf { collapseState.value < 1f } }
+    // Landing on a new screen with no visible way to navigate is disorienting, and the bar cannot be
+    // tapped to fix it because it is the thing that is hidden. Reset on every route change so a screen
+    // always opens with its navigation present; scrolling down again hides it as before.
+    LaunchedEffect(currentRoute) { scrollingDown = false }
+    val autoHideScroll = remember {
+        object : NestedScrollConnection {
+            override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
+                scrollDirectionChange(available.y, threshold = 3f)?.let { scrollingDown = it }
+                return Offset.Zero
+            }
+        }
+    }
+    Box(Modifier.fillMaxSize().nestedScroll(autoHideScroll)) {
         Scaffold(
             containerColor = Palette.surfaceBase,
             bottomBar = {
@@ -705,13 +790,24 @@ fun AppRoot(viewModel: AppViewModel = viewModel()) {
 
         // Drawn OVER the Scaffold, so it floats on whatever backdrop the current screen painted rather
         // than on the shell's own container colour. Same composable, same insets — only its parent moved.
-        if (BottomBarStyleStore.overlay) GlassBottomBar(
+        // `collapse < 1f` and not just `overlay`: at alpha 0 the bar is invisible but still COMPOSED, so
+        // TalkBack could focus a bar nobody can see and a tap could land on a control that is not there.
+        // Dropping it at the end of the animation removes both. Safe precisely because it is an overlay —
+        // it reserves no space, so composing or not composing it never reflows content.
+        if (BottomBarStyleStore.overlay && barPresent) GlassBottomBar(
             current = current,
             onTabSelected = { dest ->
                 if (dest.route != currentRoute) nav.navigateTopLevel(dest.route)
             },
             modifier = Modifier
                 .align(Alignment.BottomCenter)
+                .graphicsLayer {
+                    // Slide it out past its own height so the whole capsule clears the edge, and fade so
+                    // it does not read as a bar stuck half off-screen mid-animation.
+                    val c = collapseState.value      // deferred read: layer only, no recomposition
+                    translationY = c * (barHeightPx.toFloat())
+                    alpha = 1f - c
+                }
                 .onSizeChanged {
                     barHeightPx = it.height
                     BottomBarStyleStore.barHeight = with(density) { it.height.toDp() }
