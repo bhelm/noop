@@ -26,7 +26,7 @@ android {
         applicationId = "com.noop.whoop"
         minSdk = 26
         targetSdk = 34
-        versionCode = 424
+        versionCode = 425
         versionName = "11.1.1"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
