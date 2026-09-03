@@ -90,8 +90,8 @@ class SkinTempBackfillTest {
     fun theReportDistinguishesWhyANightDidNotFill() {
         val r = SkinTempBackfill.Report(candidates = 10, filled = 4, noMean = 2, noSamples = 4)
         assertEquals(10, r.examined)
-        val declined = SkinTempBackfill.Report(declinedNoAnchor = true)
-        assertEquals(0, declined.examined)
+        val declined = SkinTempBackfill.Report(candidates = 2, declined = 2)
+        assertEquals(2, declined.examined)
         assertTrue(declined.declinedNoAnchor)
     }
 
@@ -115,14 +115,14 @@ class SkinTempBackfillTest {
      */
     @Test
     fun aDeclineIsDistinguishableFromAFruitlessRun() {
-        val declined = SkinTempBackfill.Report(declinedNoAnchor = true)
+        val declined = SkinTempBackfill.Report(candidates = 3, declined = 3)
         val fruitless = SkinTempBackfill.Report(candidates = 5, noSamples = 5)
         assertTrue(declined.declinedNoAnchor)
         assertFalse(fruitless.declinedNoAnchor)
         assertEquals(0, declined.filled)
         assertEquals(0, fruitless.filled)
-        // The two differ in whether anything was looked at, which is what the caller keys on.
-        assertEquals(0, declined.examined)
+        // Both examined their nights; they differ in WHY nothing filled, which is what the log must say.
+        assertEquals(3, declined.examined)
         assertEquals(5, fruitless.examined)
     }
 
@@ -206,16 +206,65 @@ class SkinTempBackfillTest {
     fun anEmptyPageEndsTheSweep() {
         val empty = SkinTempBackfill.Report(sweepComplete = true)
         assertTrue(empty.sweepComplete)
-        assertEquals("", empty.lastDay)
+        assertEquals("", empty.lastCursor)
         assertEquals(0, empty.examined)
     }
 
-    /** The cursor is the newest day the page examined, so the next page starts strictly after it and no
-     *  night is visited twice within one sweep. */
+    /**
+     * Every candidate on a page must be accounted for by exactly one outcome.
+     *
+     * The run's log line exists to answer "why did nothing fill?". A candidates/examined pair that does
+     * not reconcile sends the reader hunting for a missing category — and declined nights were counted
+     * locally but never surfaced, so a page of un-anchored 4.0 nights reported candidates=60, examined=0
+     * and no reason at all.
+     */
     @Test
-    fun theCursorIsThePagesNewestDay() {
-        val r = SkinTempBackfill.Report(candidates = 2, filled = 1, lastDay = "2026-08-11")
-        assertEquals("2026-08-11", r.lastDay)
+    fun everyCandidateIsAccountedFor() {
+        val r = SkinTempBackfill.Report(
+            candidates = 10, filled = 2, noMean = 1, noSamples = 3, noSessions = 1, declined = 3,
+        )
+        assertEquals("candidates must reconcile with the outcomes", r.candidates, r.examined)
+    }
+
+    /** The flag is DERIVED from the count, so the two cannot drift apart. */
+    @Test
+    fun theDeclineFlagFollowsTheCount() {
+        assertFalse(SkinTempBackfill.Report(declined = 0).declinedNoAnchor)
+        assertTrue(SkinTempBackfill.Report(declined = 1).declinedNoAnchor)
+    }
+
+    /**
+     * The cursor is COMPOSITE (`day|deviceId`), not the day alone.
+     *
+     * With no device filter a single day can hold rows for several devices. A day-only cursor would skip
+     * whichever same-day row fell on the far side of a page boundary — a night silently never attempted,
+     * which is the failure mode this whole feature keeps producing.
+     */
+    @Test
+    fun theCursorCarriesTheDeviceToo() {
+        val row = com.noop.data.SkinTempBackfillRow(deviceId = "my-whoop-noop", day = "2026-08-11")
+        assertEquals("2026-08-11|my-whoop-noop", SkinTempBackfill.cursorOf(row))
+        // Two rows sharing a day produce DIFFERENT cursors, which is the whole point.
+        val other = com.noop.data.SkinTempBackfillRow(deviceId = "my-whoop", day = "2026-08-11")
+        assertTrue(SkinTempBackfill.cursorOf(row) != SkinTempBackfill.cursorOf(other))
+    }
+
+    /**
+     * A decline must not look like "the run did nothing".
+     *
+     * `declinedNoAnchor` now means SOME strap was declined, not that the run examined nothing. The caller
+     * must still advance its cursor on it — withholding the bookkeeping would freeze the sweep on page one
+     * and re-read it every tick, forever, on any install holding one un-anchored 4.0.
+     */
+    @Test
+    fun aDeclinedStrapStillLeavesUsableProgress() {
+        val r = SkinTempBackfill.Report(
+            candidates = 60, filled = 3, noSamples = 40, declined = 17,
+            lastCursor = "2026-08-11|my-whoop-noop",
+        )
+        assertTrue(r.declinedNoAnchor)
+        assertTrue("a declining run can still fill other straps' nights", r.filled > 0)
+        assertTrue("and must still hand back a cursor", r.lastCursor.isNotEmpty())
     }
 
     // MARK: re-review 4 — the backfill straddles TWO device namespaces
@@ -231,6 +280,23 @@ class SkinTempBackfillTest {
     @Test
     fun scoredRowsLiveInTheComputedNamespace() {
         assertEquals("my-whoop-noop", SkinTempBackfill.computedIdFor("my-whoop"))
+    }
+
+    /**
+     * #1855: the STRAP id a row's raw samples sit under is DERIVED FROM THE ROW, never predicted.
+     *
+     * Two releases of this backfill found nothing because they guessed the id — first the strap id for
+     * rows the engine writes under "-noop", then the active device's id for rows that may belong to
+     * another strap entirely (#1303 serial adoption, a second strap, an imported history). Both failures
+     * were silent and read as "already done".
+     */
+    @Test
+    fun theSampleIdComesOffTheRowsOwnId() {
+        assertEquals("my-whoop", SkinTempBackfill.sampleIdFor("my-whoop-noop"))
+        // An id that never carried the suffix is already a strap id.
+        assertEquals("whoop-4A2B", SkinTempBackfill.sampleIdFor("whoop-4A2B"))
+        // Round-trips with computedIdFor, so the pair cannot drift apart.
+        assertEquals("whoop-4A2B", SkinTempBackfill.sampleIdFor(SkinTempBackfill.computedIdFor("whoop-4A2B")))
     }
 
     /** Idempotent on an id that is already computed, mirroring the repository's own ownerComputed idiom —

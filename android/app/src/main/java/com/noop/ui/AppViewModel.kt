@@ -738,59 +738,68 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
      */
     private suspend fun backfillSkinTempAbsolutes(deviceId: String) {
         val prefs = NoopPrefs.of(appContext)
-        // Scored rows live in the COMPUTED namespace; raw samples under the strap id. Counting the strap
-        // id here found nothing at all, so the sweep looked finished before it began.
-        val outstanding = repository.countDaysMissingSkinTempAbsolute(
-            com.noop.analytics.SkinTempBackfill.computedIdFor(deviceId),
-        )
+        // #1855: not filtered by device. Two releases of this found nothing because they PREDICTED the id
+        // a scored row carries — the engine's "-noop" namespace, and a strap id that #1303's serial
+        // adoption can move underneath it. Each row now carries the id it actually lives under.
+        val outstanding = repository.countDaysMissingSkinTempAbsolute()
         if (outstanding == 0) return
         if (prefs.getInt(skinTempBackfillStuckKey, -1) == outstanding) return
 
         val ownerSource = RegistryDayOwnerSource(noopApp.deviceRegistry)
-        val family = ownerSource.skinTempFamily(deviceId)
-        val tolerance = ownerSource.skinTempWornToleranceSec(deviceId)
         val now = System.currentTimeMillis() / 1000
-        val anchor = if (family == com.noop.protocol.DeviceFamily.WHOOP4) {
-            // Same span the engine learns its anchor over, NOT the window being filled.
-            val scanFrom = now - 21L * 24 * 3_600
-            val windowSkin = repository.skinTempSamples(
-                deviceId, scanFrom, now, com.noop.analytics.SkinTempBackfill.STREAM_LIMIT,
-            )
-            com.noop.protocol.Whoop4SkinTemp.deviceAnchorRaw(windowSkin.map { it.raw })
-        } else {
-            null
-        }
         val cursor = prefs.getString(skinTempBackfillCursorKey, "") ?: ""
         val report = com.noop.analytics.SkinTempBackfill.run(
             repo = repository,
-            deviceId = deviceId,
-            family = family,
-            currentAnchorRaw = anchor,
-            wornToleranceSec = tolerance,
+            // Resolved per STRAP the rows actually belong to, not once from whatever device is active —
+            // converting one strap's raw register on another strap's scale is a wrong number, not a
+            // missing one.
+            deviceContext = { strapId ->
+                val family = ownerSource.skinTempFamily(strapId)
+                val anchor = if (family == com.noop.protocol.DeviceFamily.WHOOP4) {
+                    // The span the engine learns its anchor over, NOT the window being filled.
+                    val windowSkin = repository.skinTempSamples(
+                        strapId, now - 21L * 24 * 3_600, now,
+                        com.noop.analytics.SkinTempBackfill.STREAM_LIMIT,
+                    )
+                    com.noop.protocol.Whoop4SkinTemp.deviceAnchorRaw(windowSkin.map { it.raw })
+                } else {
+                    null
+                }
+                com.noop.analytics.SkinTempBackfill.DeviceContext(
+                    family = family,
+                    anchorRaw = anchor,
+                    wornToleranceSec = ownerSource.skinTempWornToleranceSec(strapId),
+                )
+            },
             nowSeconds = now,
-            afterDay = cursor,
+            afterCursor = cursor,
         )
-        // A decline records nothing: a 4.0 whose anchor resolves later must still get its backfill.
-        if (!report.declinedNoAnchor) {
-            val sweepFills = prefs.getInt(skinTempBackfillSweepFillsKey, 0) + report.filled
-            val edit = prefs.edit()
-            if (report.sweepComplete) {
-                // Every outstanding night has been visited. Start the next sweep from the top, and only
-                // stop paying for reads when the WHOLE sweep — not just its last page — found nothing.
-                edit.remove(skinTempBackfillCursorKey).remove(skinTempBackfillSweepFillsKey)
-                if (sweepFills == 0) edit.putInt(skinTempBackfillStuckKey, outstanding)
-            } else {
-                edit.putString(skinTempBackfillCursorKey, report.lastDay)
-                    .putInt(skinTempBackfillSweepFillsKey, sweepFills)
+        // The cursor ALWAYS advances. `declinedNoAnchor` now means "some strap was declined", not "the run
+        // did nothing" — withholding the bookkeeping on it would freeze the cursor and re-process page one
+        // on every tick, forever, for any install holding one un-anchored 4.0. A decline only withholds
+        // the STUCK watermark, so the sweep retries once that strap's anchor resolves.
+        val sweepFills = prefs.getInt(skinTempBackfillSweepFillsKey, 0) + report.filled
+        val edit = prefs.edit()
+        if (report.sweepComplete) {
+            // Every outstanding night has been visited. Start the next sweep from the top, and only stop
+            // paying for reads when the WHOLE sweep — not just its last page — found nothing AND nothing
+            // was declined.
+            edit.remove(skinTempBackfillCursorKey).remove(skinTempBackfillSweepFillsKey)
+            if (sweepFills == 0 && !report.declinedNoAnchor) {
+                edit.putInt(skinTempBackfillStuckKey, outstanding)
             }
-            if (report.filled > 0) edit.remove(skinTempBackfillStuckKey)
-            edit.apply()
+        } else {
+            edit.putString(skinTempBackfillCursorKey, report.lastCursor)
+                .putInt(skinTempBackfillSweepFillsKey, sweepFills)
         }
+        if (report.filled > 0) edit.remove(skinTempBackfillStuckKey)
+        edit.apply()
         ble.externalLog(
             "skinTempBackfill: page=${report.candidates} filled=${report.filled} noMean=${report.noMean} " +
                 "noSamples=${report.noSamples} noSessions=${report.noSessions} " +
+                "declined=${report.declined} " +
                 "outstanding=$outstanding sweepComplete=${report.sweepComplete} " +
-                "declined=${report.declinedNoAnchor}",
+                "sweepFills=$sweepFills",
             com.noop.testcentre.TestDomain.UNIVERSAL,
         )
     }
