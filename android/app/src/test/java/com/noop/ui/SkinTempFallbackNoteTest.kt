@@ -2,6 +2,7 @@ package com.noop.ui
 
 import com.noop.analytics.SkinTempDisplay
 import com.noop.analytics.VitalBands
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -118,6 +119,41 @@ class SkinTempFallbackNoteTest {
     fun silentWhenEveryDroppedRowWasActuallyAnAbsolute() {
         assertFalse(shouldExplainShortenedSkinTempSeries(leadsAbsolute = true, shownReadings = 12,
                                                          rowsWithEitherNumber = 12))
+    }
+
+
+    // MARK: #1850 — the preference now applies across the WINDOW
+
+    /**
+     * The reported install: Temperature selected, deltas on screen, no explanation. The cause was not the
+     * missing sentence I first added — it was that the whole screen keyed off the NEWEST row, so twenty
+     * stored temperatures lost to one recent night without. The window-wide rule is what fixes it, and
+     * the fallback note is now reserved for a window that genuinely holds none.
+     */
+    @Test
+    fun oneStoredTemperatureAnywhereMeansNoFallbackNote() {
+        assertFalse(shouldExplainSkinTempFallback(SkinTempDisplay.Kind.ABSOLUTE, leadsAbsolute = true,
+                                                  anyAbsoluteInWindow = true))
+    }
+
+    /** Only a window with NO temperature at all still explains itself. */
+    @Test
+    fun anEmptyWindowStillExplains() {
+        assertTrue(shouldExplainSkinTempFallback(SkinTempDisplay.Kind.ABSOLUTE, leadsAbsolute = false,
+                                                 anyAbsoluteInWindow = false))
+    }
+
+    /**
+     * The whole grid for the ABSOLUTE preference, so no quadrant can fall silent again. With the
+     * window-wide rule, `leadsAbsolute == anyAbsolute`, and the only speaking case is neither.
+     */
+    @Test
+    fun everyAbsolutePreferenceCaseIsAccountedFor() {
+        for (anyAbsolute in listOf(false, true)) {
+            val leads = anyAbsolute      // the window-wide rule, stated as the test's own model
+            val explains = shouldExplainSkinTempFallback(SkinTempDisplay.Kind.ABSOLUTE, leads, anyAbsolute)
+            assertEquals("leads=$leads any=$anyAbsolute", !anyAbsolute, explains)
+        }
     }
 
 }
