@@ -320,13 +320,16 @@ internal fun barCollapseFraction(hidden: Boolean, reduceMotion: Boolean): Float 
  * #1836: which bottom-bar layout to use, snapshot-backed so the Settings toggle applies without a
  * relaunch (the same shape as `BackgroundImageStore.enabled`).
  *
- * Default OFF — the shipped slot layout. The overlay is the better-looking one and the reason this change
- * exists, but it is app-shell layout no test can judge, so it ships behind a switch people can turn off if
- * a screen misbehaves rather than as the only option.
+ * Default ON as of #1841. It shipped switchable and default-off first so it could be tried without being
+ * imposed; the overlay was then confirmed on a device. The switch stays, so anyone who dislikes it — or
+ * hits a screen that misbehaves — can put the reserved-slot layout back.
+ *
+ * An explicit choice is preserved either way: `getBoolean(key, true)` returns a stored `false` for someone
+ * who turned it off, and only an install that never touched the setting picks up the new default.
  */
 object BottomBarStyleStore {
     /** True = the overlay bar (glass over the screen's own backdrop). False = the reserved slot. */
-    var overlay by mutableStateOf(false)
+    var overlay by mutableStateOf(true)
         private set
 
     /**
@@ -348,8 +351,8 @@ object BottomBarStyleStore {
      */
     fun barHeightForContent(): Dp = if (overlay) barHeight else 0.dp
 
-    /** #1839: hide the overlay bar while scrolling down, bring it back on scrolling up. Default off. */
-    var autoHide by mutableStateOf(false)
+    /** #1839: hide the overlay bar while scrolling down, bring it back on scrolling up. Default ON. */
+    var autoHide by mutableStateOf(true)
         private set
 
     fun setAutoHide(ctx: Context, value: Boolean) {
@@ -360,9 +363,9 @@ object BottomBarStyleStore {
 
     fun load(ctx: Context) {
         overlay = NoopPrefs.of(ctx.applicationContext)
-            .getBoolean(NoopPrefs.KEY_OVERLAY_BOTTOM_BAR, false)
+            .getBoolean(NoopPrefs.KEY_OVERLAY_BOTTOM_BAR, true)
         autoHide = NoopPrefs.of(ctx.applicationContext)
-            .getBoolean(NoopPrefs.KEY_BOTTOM_BAR_AUTO_HIDE, false)
+            .getBoolean(NoopPrefs.KEY_BOTTOM_BAR_AUTO_HIDE, true)
     }
 
     fun set(ctx: Context, value: Boolean) {
