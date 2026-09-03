@@ -29,31 +29,36 @@ ID**. Nothing about this touches NOOP's identity or Apple's servers on our side.
 
 ### If AltServer can't sign in with your Apple ID
 
-A failure at **step 1** — before NOOP is involved at all — usually looks like this:
+A failure at **step 1** — before NOOP is involved at all — looks like this:
 
 > **AltServer could not sign in with your Apple ID. The data is not in the correct format.**
 >
 > `NSCocoaErrorDomain 3840` · *Encountered unknown tag html on line 1*
 
-That is the same shape as the source-URL note below: something expected **structured data** and received an
-**HTML page**. AltServer asked Apple's ID service for a property list and got a web page back, so the
-parser hit `<html>` on the first line. The "malformed data byte group / invalid hex" line underneath is
-the same failure reported by the older-style parser, not a second problem.
+**This is a known AltStore bug on OS 26.2, not a problem with your setup.** It is reported upstream in
+[altstoreio/AltStore#1695](https://github.com/altstoreio/AltStore/issues/1695) and
+[#1699](https://github.com/altstoreio/AltStore/issues/1699), on macOS Tahoe 26.2 with iOS/iPadOS 26.2, and
+at the time of writing there is no maintainer fix or workaround. Nothing you can change on your machine
+resolves it.
 
-Nothing in the response reached Apple's auth service as intended, so the usual causes are between you and
-Apple rather than in your account:
+What the error means, for the record: AltServer asked Apple's ID service for a property list and received
+an **HTML page**, so the parser hit `<html>` on the first line. The "malformed data byte group / invalid
+hex" line beneath it is the same failure reported by the older-style parser, not a second fault.
 
-- **A DNS filter, content blocker or VPN** returning a block page for Apple's auth domain. The most common
-  cause, and the easiest to miss if the filtering is network-wide rather than on the machine.
-- **An out-of-date AltServer**, calling an endpoint Apple has since moved and receiving a redirect or
-  error page.
-- **Something waiting on Apple's side** — terms to accept, a rate limit, or a locked account. All of those
-  are served as HTML.
+**What actually works today:**
 
-Worth trying in this order: sign in at [appleid.apple.com](https://appleid.apple.com) in a browser to
-clear anything pending, retry with filtering and any VPN off, then update AltServer.
+- **Use [SideStore](https://sidestore.io) instead.** It is a separate implementation that does not go
+  through AltServer's Apple ID sign-in, and NOOP's source works there identically — the same URL, the same
+  auto-updates. This is the practical answer while the upstream bug is open.
+- **Install the `.ipa` directly** with any sideloader that signs on-device, if you prefer not to add a
+  source at all.
+- **Watch the issues above** if you would rather wait for AltStore itself.
 
-This is AltStore's own setup rather than anything NOOP controls — but it is the first step of the install,
+Local network filtering — a DNS blocker, a VPN, a captive portal — can produce an identical-looking error
+by returning a block page, so it is worth ruling out if you have any. But it is **not** the usual cause,
+and the two reports that prompted this note were both the upstream bug.
+
+This is AltStore's own setup rather than anything NOOP controls, but it is the first step of the install,
 so it is written down here rather than left as a dead end.
 
 ### Add NOOP as a source (recommended — auto-updates)
