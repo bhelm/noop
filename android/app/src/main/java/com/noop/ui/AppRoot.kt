@@ -1,5 +1,6 @@
 package com.noop.ui
 
+import android.content.Context
 import androidx.annotation.StringRes
 import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.animation.core.animateFloatAsState
@@ -97,6 +98,12 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.foundation.layout.calculateStartPadding
+import androidx.compose.foundation.layout.calculateEndPadding
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.NavHostController
@@ -270,6 +277,31 @@ internal object MoreSectionPrefs {
 }
 
 /**
+ * #1836: which bottom-bar layout to use, snapshot-backed so the Settings toggle applies without a
+ * relaunch (the same shape as `BackgroundImageStore.enabled`).
+ *
+ * Default OFF — the shipped slot layout. The overlay is the better-looking one and the reason this change
+ * exists, but it is app-shell layout no test can judge, so it ships behind a switch people can turn off if
+ * a screen misbehaves rather than as the only option.
+ */
+object BottomBarStyleStore {
+    /** True = the overlay bar (glass over the screen's own backdrop). False = the reserved slot. */
+    var overlay by mutableStateOf(false)
+        private set
+
+    fun load(ctx: Context) {
+        overlay = NoopPrefs.of(ctx.applicationContext)
+            .getBoolean(NoopPrefs.KEY_OVERLAY_BOTTOM_BAR, false)
+    }
+
+    fun set(ctx: Context, value: Boolean) {
+        overlay = value
+        NoopPrefs.of(ctx.applicationContext).edit()
+            .putBoolean(NoopPrefs.KEY_OVERLAY_BOTTOM_BAR, value).apply()
+    }
+}
+
+/**
  * App shell: a single [Scaffold] with a floating [GlassBottomBar] (Today · Trends · Sleep · More)
  * driving one [NavHost], mirroring the iOS RootTabView. There is NO global toolbar and no nav drawer
  * — every screen self-titles via [ScreenScaffold], and the "More" sheet (opened from the bar) reaches
@@ -294,7 +326,19 @@ fun AppRoot(viewModel: AppViewModel = viewModel()) {
     // survives the inbox sheet closing — the tap dismisses the inbox and presents this over the app.
     var showWhatsNewFromInbox by remember { mutableStateOf(false) }
 
-    run {
+    // #1836: an overlay container, not a bottomBar slot. The slot sat OUTSIDE the screen content, so a
+    // screen's own backdrop (LiquidScreenSky / BackgroundImageBackdrop) stopped where the bar began and
+    // the bar's 0.80 "glass" had nothing behind it but surfaceBase — a bar built to float rendered as a
+    // dark strip cut out of the background. As a sibling drawn OVER the Scaffold it sits on the screen's
+    // own sky, which is what the translucency was written for.
+    // #1836: the inset MEASURED, never assumed. The bar's height includes navigationBarsPadding(), which
+    // differs by roughly 24dp between gesture navigation and 3-button navigation, and changes on rotation
+    // and on a foldable unfolding. The Scaffold slot used to measure it for us; a constant here would put
+    // content behind the bar on exactly the devices the report came from. One extra layout pass at
+    // startup, then stable.
+    var barHeightPx by remember { mutableIntStateOf(0) }
+    val barHeight = with(LocalDensity.current) { barHeightPx.toDp() }
+    Box(Modifier.fillMaxSize()) {
         Scaffold(
             containerColor = Palette.surfaceBase,
             bottomBar = {
@@ -303,18 +347,38 @@ fun AppRoot(viewModel: AppViewModel = viewModel()) {
                 // top-right (balancing the avatar), so the bar is clean tabs only. "More" navigates to
                 // its own page (mirroring the iOS More tab) that reaches every grouped destination, so no
                 // destination is lost without the drawer.
-                GlassBottomBar(
-                    current = current,
-                    onTabSelected = { dest ->
-                        if (dest.route != currentRoute) nav.navigateTopLevel(dest.route)
-                    },
-                )
+                // DEFAULT path: the shipped reserved slot, unchanged. Empty only when the overlay is
+                // on, where the bar is drawn below as a sibling and the slot must reserve nothing.
+                if (!BottomBarStyleStore.overlay) {
+                    GlassBottomBar(
+                        current = current,
+                        onTabSelected = { dest ->
+                            if (dest.route != currentRoute) nav.navigateTopLevel(dest.route)
+                        },
+                    )
+                }
             },
         ) { inner ->
             NavHost(
                 navController = nav,
                 startDestination = Destination.Today.route,
-                modifier = Modifier.padding(inner),
+                // The empty slot reserves nothing, so the bar's height is added here — the one place the
+                // inset used to come from. A scrollable that later wants content to pass UNDER the glass
+                // adds this measured height to its own contentPadding instead; no shared modifier can.
+                // Slot layout: the Scaffold measured the bar into `inner`, so use it as-is.
+                // Overlay layout: the slot reserves nothing, so the bottom comes from the measured bar.
+                modifier = if (!BottomBarStyleStore.overlay) Modifier.padding(inner) else Modifier.padding(
+                    // Take the top and sides from the Scaffold, but REPLACE its bottom rather than adding
+                    // to it. Scaffold's default contentWindowInsets is WindowInsets.systemBars, so
+                    // `inner.bottom` already carries the navigation-bar inset — and the bar's measured
+                    // height carries it too, via its own navigationBarsPadding(). Adding both counted that
+                    // inset twice and left roughly a nav-bar's worth of dead space above the bar, widest
+                    // on 3-button navigation. The bar owns that inset; content just clears the bar.
+                    top = inner.calculateTopPadding(),
+                    start = inner.calculateStartPadding(LocalLayoutDirection.current),
+                    end = inner.calculateEndPadding(LocalLayoutDirection.current),
+                    bottom = barHeight,
+                ),
                 // README motion: top-level destinations crossfade (~240ms) on the calm,
                 // decelerating global easing — nothing slides or bounces between tabs. The
                 // same fade is used for back (pop) so the bar never feels jerky. Drill-ins
@@ -614,6 +678,18 @@ fun AppRoot(viewModel: AppViewModel = viewModel()) {
                 }
             }
         }
+
+        // Drawn OVER the Scaffold, so it floats on whatever backdrop the current screen painted rather
+        // than on the shell's own container colour. Same composable, same insets — only its parent moved.
+        if (BottomBarStyleStore.overlay) GlassBottomBar(
+            current = current,
+            onTabSelected = { dest ->
+                if (dest.route != currentRoute) nav.navigateTopLevel(dest.route)
+            },
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .onSizeChanged { barHeightPx = it.height },
+        )
     }
 }
 
@@ -777,10 +853,11 @@ private val barTrailingTabs = listOf(
 private fun GlassBottomBar(
     current: Destination,
     onTabSelected: (Destination) -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     val barShape = RoundedCornerShape(50)
     Box(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
             // Clear the gesture-nav bar (home indicator) first, then add breathing room so the capsule
             // floats free of the bottom edge rather than jamming against it — iOS clears the home-indicator
