@@ -1219,8 +1219,13 @@ fun VitalSignsScreen(vm: AppViewModel, onVitalClick: (String) -> Unit = {}) {
     // Read the toggle here in the composable body, NOT inside remember{} — LocalContext.current is a
     // @Composable read and is illegal inside the calculation lambda; pass the resolved value in + key on it.
     val spo2CandidateDisplay = NoopPrefs.spo2CandidateDisplay(LocalContext.current)
-    val vitals = remember(selectedMetric, days, tempUnit, spo2CandidateByDay, spo2CandidateDisplay, hrvOverCountByDay) {
-        selectedMetric?.let { vitalsFor(it, days, tempUnit, spo2CandidateByDay, spo2CandidateDisplay, hrvOverCountByDay) }.orEmpty()
+    val skinTempPreferred = UnitPrefs.skinTempPreferred(LocalContext.current)   // #1846, same rule
+    val vitals = remember(selectedMetric, days, tempUnit, spo2CandidateByDay, spo2CandidateDisplay,
+                          hrvOverCountByDay, skinTempPreferred) {
+        selectedMetric?.let {
+            vitalsFor(it, days, tempUnit, spo2CandidateByDay, spo2CandidateDisplay, hrvOverCountByDay,
+                      skinTempPreferred)   // #1846
+        }.orEmpty()
     }
 
     ScreenScaffold(
@@ -1898,9 +1903,12 @@ fun VitalDetailScreen(vm: AppViewModel, key: String) {
             seriesLoaded = true
         }
     }
+    // #1846: read the preference OUTSIDE remember (a Composable call is not allowed in its calculation)
+    // and make it a KEY, so flipping the setting rebuilds the model instead of serving a cached one.
+    val skinTempPreferred = UnitPrefs.skinTempPreferred(LocalContext.current)
     val detail = if (isSeriesBacked) seriesDetail
-    else remember(days, key, tempUnit, effortScale, spo2CandidateByDay) {
-        buildVitalDetail(days, key, tempUnit, effortScale, spo2CandidateByDay)
+    else remember(days, key, tempUnit, effortScale, spo2CandidateByDay, skinTempPreferred) {
+        buildVitalDetail(days, key, tempUnit, effortScale, spo2CandidateByDay, skinTempPreferred)
     }
     var range by remember { mutableStateOf(VitalDetailRange.MONTH) }
 
@@ -2226,6 +2234,9 @@ private fun buildVitalDetail(
     tempUnit: TemperatureUnit,
     effortScale: EffortScale = EffortScale.HUNDRED,
     spo2CandidateByDay: Map<String, Double> = emptyMap(),
+    // #1846: travels like tempUnit — read from prefs by the caller, never defaulted quietly here, so the
+    // setting cannot look wired while doing nothing.
+    skinTempPreferred: SkinTempDisplay.Kind = SkinTempDisplay.Kind.ABSOLUTE,
 ): VitalDetailModel? {
     return when (key) {
     // The Today Key-Metrics Recovery tile's drill-in: the Recovery (Charge) trend timeline, matching the
@@ -2292,9 +2303,19 @@ private fun buildVitalDetail(
         format = { it.roundToInt().toString() },
     )
     "skin" -> {
-        val latest = days.asReversed().asSequence().mapNotNull { it.skinTempDevC }.firstOrNull() ?: return null
-        val kind = SkinTempDisplay.kind(latest)
         val fahrenheit = tempUnit == TemperatureUnit.FAHRENHEIT
+        // #1844: the newest reading decides the whole screen — title, unit, chart and every row — and it
+        // leads with the measured ABSOLUTE when that night has one (the #1665 rule, applied here too).
+        // The series must follow the same choice: an absolute plotted against a history of deviations is
+        // arithmetic on two scales, so the readings come from the matching column only.
+        val newest = days.asReversed().asSequence()
+            .firstOrNull { it.skinTempC != null || it.skinTempDevC != null } ?: return null
+        val lead = SkinTempDisplay.leadReading(newest.skinTempC, newest.skinTempDevC, skinTempPreferred)
+            ?: return null
+        val leadsAbsolute = lead.kind == SkinTempDisplay.Kind.ABSOLUTE && newest.skinTempC != null
+        // Deviation-led keeps the #622 bimodal read: a CSV import writes an absolute INTO skinTempDevC, so
+        // the kind is re-derived from the value and the series partitioned to it.
+        val kind = if (leadsAbsolute) SkinTempDisplay.Kind.ABSOLUTE else SkinTempDisplay.kind(lead.value)
         val unit = SkinTempDisplay.unitSymbol(kind, fahrenheit)
         val title = if (kind == SkinTempDisplay.Kind.ABSOLUTE) {
             uiString(R.string.l10n_health_screen_skin_temperature_f59127f6)
@@ -2306,10 +2327,14 @@ private fun buildVitalDetail(
             title = title,
             unit = unit,
             color = Palette.metricAmber,
-            readings = days.mapNotNull { row ->
-                row.skinTempDevC
-                    ?.takeIf { VitalBands.isAbsoluteSkinTemp(it) == (kind == SkinTempDisplay.Kind.ABSOLUTE) }
-                    ?.let { value -> VitalReading(row.day, value, row.deviceId) }
+            readings = if (leadsAbsolute) {
+                days.mapNotNull { row -> row.skinTempC?.let { VitalReading(row.day, it, row.deviceId) } }
+            } else {
+                days.mapNotNull { row ->
+                    row.skinTempDevC
+                        ?.takeIf { VitalBands.isAbsoluteSkinTemp(it) == (kind == SkinTempDisplay.Kind.ABSOLUTE) }
+                        ?.let { value -> VitalReading(row.day, value, row.deviceId) }
+                }
             },
             format = { c -> SkinTempDisplay.numberString(c, kind, fahrenheit, decimals = 1) },
         )

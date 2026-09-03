@@ -227,6 +227,7 @@ struct TodayView: View {
     /// `MetricExplorerView`, Liquid Today): the explicit override when set, else derived from the unit
     /// system. This screen used to print a bare `%+.1f°` and was the last one ignoring the preference.
     @AppStorage(UnitPrefs.temperatureKey) private var temperatureRaw = ""
+    @AppStorage(UnitPrefs.skinTempDisplayKey) private var skinTempDisplayRaw = ""   // #1846
     private var temperatureUnit: TemperatureUnit {
         UnitPrefs.resolveTemperature(system: unitSystem, override: temperatureRaw)
     }
@@ -604,10 +605,29 @@ struct TodayView: View {
         return Repository.lastRestingHrDay(days: repo.days, todayKey: displayDay?.day ?? selectedDayKey)
     }
 
-    /// PER-FIELD skin-temperature-deviation carry — twin of `lastSpo2Day`; mirrors the Android `lastSkinTempRow`.
-    private var lastSkinTempDay: DailyMetric? {
+    /// The carry for the surfaces that LEAD WITH THE ABSOLUTE (#1844): the freshest strictly-prior row
+    /// holding EITHER skin-temp number, so a calibrating night — real temperature, no deviation yet — is
+    /// found instead of being skipped for an older deviation. Mirrors the Android `lastSkinTempReadingRow`.
+    private var lastSkinTempReadingDay: DailyMetric? {
         guard selectedDayOffset == 0 else { return nil }
-        return Repository.lastSkinTempDay(days: repo.days, todayKey: displayDay?.day ?? selectedDayKey)
+        return Repository.lastSkinTempReadingDay(days: repo.days, todayKey: displayDay?.day ?? selectedDayKey)
+    }
+
+    /// The skin-temp reading a Today surface leads with: today's row if it has either number, else the
+    /// carry. Both numbers always come off the SAME row, so an absolute is never paired with another
+    /// night's deviation.
+    private var skinTempLeadReading: SkinTempDisplay.Reading? {
+        let row = [displayDay, lastVitalsDay, lastSkinTempReadingDay]
+            .compactMap { $0 }
+            .first { $0.skinTempC != nil || $0.skinTempDevC != nil }
+        return SkinTempDisplay.leadReading(absC: row?.skinTempC, devC: row?.skinTempDevC,
+                                           prefer: skinTempPreferred)
+    }
+
+    /// The user's Settings choice (#1846), resolved from the stored raw. Absent/unrecognised reads as
+    /// `.absolute`, so an install that never opens Settings behaves exactly as before the setting existed.
+    private var skinTempPreferred: SkinTempDisplay.Kind {
+        SkinTempDisplay.Kind(rawValue: skinTempDisplayRaw) ?? .absolute
     }
 
     /// PER-FIELD respiratory carry, and the only one of these that is STALENESS-BOUNDED
@@ -2638,9 +2658,9 @@ struct TodayView: View {
             // deviation, and converts a DELTA by the scale factor alone rather than the absolute formula.
             // The card's own unit is deliberately empty — the value carries "°C" / "Δ°F" itself.
             // Same per-field carry as Blood Oxygen; both are sparse enough that an old reading is honest.
-            return Self.skinTempCardValue(
-                d?.skinTempDevC ?? lastVitalsDay?.skinTempDevC ?? lastSkinTempDay?.skinTempDevC,
-                fahrenheit: temperatureUnit == .fahrenheit)
+            // #1844: lead with the night's measured ABSOLUTE when it has one (the #1665 rule, applied
+            // here too) — a deviation with no anchor cannot be read. Deviation-only nights are unchanged.
+            return Self.skinTempCardValue(reading: skinTempLeadReading, fahrenheit: temperatureUnit == .fahrenheit)
         case .sleep:
             return sleepValue(d)
         case .steps:
@@ -3883,10 +3903,10 @@ struct TodayView: View {
             // already a "Your Cards" tile (`DashboardCard.skinTemp`), never a Key Metrics one. Reuses the
             // SAME value chain and `skinTempCardValue` formatter the "Your Cards" case above already
             // uses, so the two tiles can never disagree.
-            let skinTempValue = d?.skinTempDevC ?? lastVitalsDay?.skinTempDevC ?? lastSkinTempDay?.skinTempDevC
+            let skinTempValue = skinTempLeadReading
             StatTile(
                 label: "Skin Temp",
-                value: Self.skinTempCardValue(skinTempValue, fahrenheit: temperatureUnit == .fahrenheit),
+                value: Self.skinTempCardValue(reading: skinTempValue, fahrenheit: temperatureUnit == .fahrenheit),
                 caption: skinTempValue == nil ? Self.needsStrapCaption : "",
                 accent: skinTempValue == nil ? StrandPalette.textPrimary : StrandPalette.metricAmber,
                 sparkline: sparks["skin_temp"],
@@ -4994,6 +5014,15 @@ struct TodayView: View {
 
     /// The Skin Temp card's value, extracted so the bimodal-column decision can be unit-tested without a
     /// live view. Nil (no reading anywhere in the carry chain) reads as an em-dash rather than a number.
+    /// The Skin Temp card's value when the surface LEADS WITH THE ABSOLUTE (#1844) — the row supplies both
+    /// numbers and `SkinTempDisplay.leadReading` picks, so a night that measured a real temperature shows
+    /// one and only a night without falls back to the signed deviation. Nil (neither number anywhere in the
+    /// carry chain) reads as an em-dash. The `Double?` sibling below stays for the deviation-only callers.
+    static func skinTempCardValue(reading: SkinTempDisplay.Reading?, fahrenheit: Bool) -> String {
+        guard let reading else { return "—" }
+        return SkinTempDisplay.formatReading(reading, fahrenheit: fahrenheit)
+    }
+
     static func skinTempCardValue(_ value: Double?, fahrenheit: Bool) -> String {
         guard let value else { return "—" }
         return SkinTempDisplay.format(value, fahrenheit: fahrenheit)
