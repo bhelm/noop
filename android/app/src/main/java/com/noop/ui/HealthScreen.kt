@@ -1747,6 +1747,8 @@ private data class VitalDetailModel(
     val color: Color,
     val readings: List<VitalReading>,
     val format: (Double) -> String,
+    /** #1847: why the screen is not showing what Settings asked for. Null when it is. */
+    val fallbackNote: String? = null,
 ) {
     /** (day, value) projection the trend chart + range helpers consume — SAME order as [readings], so the
      *  chart, the header count, and the table can never drift apart. */
@@ -2059,6 +2061,14 @@ fun VitalDetailScreen(vm: AppViewModel, key: String) {
                             style = NoopType.footnote,
                             color = Palette.textTertiary,
                         )
+                        detail.fallbackNote?.let { note ->
+                            Text(
+                                text = note,
+                                style = NoopType.footnote,
+                                color = Palette.textTertiary,
+                                modifier = Modifier.padding(top = 6.dp),
+                            )
+                        }
                     }
                 }
                 SegmentedPillControl(
@@ -2317,6 +2327,23 @@ private fun buildVitalDetail(
         // the kind is re-derived from the value and the series partitioned to it.
         val kind = if (leadsAbsolute) SkinTempDisplay.Kind.ABSOLUTE else SkinTempDisplay.kind(lead.value)
         val unit = SkinTempDisplay.unitSymbol(kind, fahrenheit)
+        val skinReadings = if (leadsAbsolute) {
+            // An absolute-led series takes EVERY absolute reading, whichever column holds it. A WHOOP CSV
+            // import writes absolute °C straight into skinTempDevC (`skin_temp_celsius`, #622 bimodal), so
+            // reading skinTempC alone hid a wearer's imported temperatures from a temperature chart — and
+            // made the shortened-series note call them "a baseline difference only", which they are not.
+            // Mixing is only unsound ACROSS scales; these are the same scale.
+            days.mapNotNull { row ->
+                (row.skinTempC ?: row.skinTempDevC?.takeIf { VitalBands.isAbsoluteSkinTemp(it) })
+                    ?.let { VitalReading(row.day, it, row.deviceId) }
+            }
+        } else {
+            days.mapNotNull { row ->
+                row.skinTempDevC
+                    ?.takeIf { VitalBands.isAbsoluteSkinTemp(it) == (kind == SkinTempDisplay.Kind.ABSOLUTE) }
+                    ?.let { value -> VitalReading(row.day, value, row.deviceId) }
+            }
+        }
         val title = if (kind == SkinTempDisplay.Kind.ABSOLUTE) {
             uiString(R.string.l10n_health_screen_skin_temperature_f59127f6)
         } else {
@@ -2327,16 +2354,26 @@ private fun buildVitalDetail(
             title = title,
             unit = unit,
             color = Palette.metricAmber,
-            readings = if (leadsAbsolute) {
-                days.mapNotNull { row -> row.skinTempC?.let { VitalReading(row.day, it, row.deviceId) } }
-            } else {
-                days.mapNotNull { row ->
-                    row.skinTempDevC
-                        ?.takeIf { VitalBands.isAbsoluteSkinTemp(it) == (kind == SkinTempDisplay.Kind.ABSOLUTE) }
-                        ?.let { value -> VitalReading(row.day, value, row.deviceId) }
-                }
-            },
+            readings = skinReadings,
             format = { c -> SkinTempDisplay.numberString(c, kind, fahrenheit, decimals = 1) },
+            // #1847: Settings asked for a temperature and none of these nights has one, so the screen shows
+            // the deviation instead. Say so — silently falling back is why the setting reads as broken.
+            // Nights scored before skinTempC shipped kept only the deviation; a scoring pass refills them.
+            fallbackNote = when {
+                shouldExplainSkinTempFallback(
+                    skinTempPreferred, leadsAbsolute,
+                    anyAbsoluteInWindow = days.any { it.skinTempC != null },
+                ) ->
+                    uiString(R.string.l10n_health_screen_no_measured_temperature_for_these_nights_showing_the_differe_69d4efae)
+                // Leading with the absolute drops deviation-only nights from the series, so the reading
+                // count falls. Say why rather than letting history look like it vanished.
+                shouldExplainShortenedSkinTempSeries(
+                    leadsAbsolute = leadsAbsolute,
+                    shownReadings = skinReadings.size,
+                    rowsWithEitherNumber = days.count { it.skinTempC != null || it.skinTempDevC != null },
+                ) -> uiString(R.string.l10n_health_screen_only_nights_with_a_measured_temperature_are_shown_earlier_ni_a45140da)
+                else -> null
+            },
         )
     }
     else -> null
