@@ -16,6 +16,46 @@ import org.junit.Test
  */
 class PiiRedactionTest {
 
+    /**
+     * #1833: the serial that arrives as HEX. The event census (#1825) dumps `payload=<hex>` for every
+     * pushed event, and event 109 on a 5/MG carries the strap serial as plain ASCII inside that payload.
+     * The text rules cannot see it — they are reading hex digits — so it walked past every one of them
+     * into the log people paste into public issues. This is the exact payload from that PR's own sample.
+     */
+    @Test fun masksAWhoopSerialHiddenInsideAHexPayload() {
+        val line = "[event] 0x6D(109) payload=142e1c0001d36e3d1c12a3574242354150303533393835320000"
+        val out = redactStrapLogPii(line)
+        // "WBB5AP0539852" as hex is 5742423541503035333938353 2 — none of it may survive.
+        assertFalse("serial must not survive as hex: $out", out.contains("4242354150303533393835"))
+        assertTrue("the dump must still be recognisable", out.startsWith("[event] 0x6D(109) payload="))
+        // The non-serial bytes are the reason the dump exists — they must be untouched.
+        assertTrue("leading bytes must survive: $out", out.contains("142e1c0001d36e3d1c12a3"))
+    }
+
+    /** The rule is deliberately not keyed on `payload=`: Apple labels the same dumps `[raw …]` and the
+     *  #900 whole-frame dump has no label at all. A serial must not survive by arriving under a
+     *  different word. */
+    @Test fun masksASerialUnderAnyLabelIncludingNone() {
+        val hex = "142e1c0001d36e3d1c12a3574242354150303533393835320000"
+        for (line in listOf("[raw $hex]", "(raw $hex)", "raw frame (#900) $hex", hex)) {
+            val out = redactStrapLogPii(line)
+            assertFalse("serial survived under this label: $out", out.contains("4242354150303533393835"))
+        }
+    }
+
+    @Test fun leavesAHexPayloadWithNoSerialAlone() {
+        // The charging payloads from the same capture carry no ASCII run — they must pass through whole.
+        for (p in listOf("707d0000", "b87e0000", "00000000")) {
+            assertEquals("payload=$p", redactStrapLogPii("payload=$p"))
+        }
+    }
+
+    /** Odd-length or non-hex content must return unchanged rather than throwing — redaction failing
+     *  open would withhold the whole line ("[redaction error - line withheld]"). */
+    @Test fun malformedHexIsLeftAloneRatherThanThrowing() {
+        assertEquals("payload=zzzzzzzzz", redactStrapLogPii("payload=zzzzzzzzz"))
+    }
+
     @Test fun masksMacKeepingFirstAndLastOctet() {
         // The exact line that triggered #421 (a generic-HR strap's address being logged).
         val out = redactStrapLogPii("HR-strap: connecting to A1:B2:C3:D4:E5:F6")

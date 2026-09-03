@@ -7349,6 +7349,19 @@ class WhoopBleClient(
 
             "EVENT" -> {
                 (parsed.parsed["event"] as? String)?.let { ev ->
+                    // Test-Centre-gated census of EVERY event the strap pushes. Nothing logs event names
+                    // today, so a strap log cannot answer "does this strap emit CHARGING_ON?" or
+                    // "does it emit BATTERY_PACK_CONNECTED?" — the absence of a line proves nothing,
+                    // because no line was ever written. That blind spot is what made the charging-pill
+                    // bug and the cmd-151 dead end hard to reason about. Logs the name, whether the frame
+                    // is a replayed offload record (so a historical event is never mistaken for a live
+                    // one), and the 5/MG opaque payload hex — which is where a pack charge would live if
+                    // any event carries one. Read-only; sends nothing and decodes nothing into state.
+                    if (testCentre.active(com.noop.testcentre.TestDomain.CONNECTION)) {
+                        val payHex = parsed.parsed["event_payload_hex"] as? String
+                        log("[event] $ev${if (replayedOffload) " (replayed offload)" else ""}" +
+                            (payHex?.let { " payload=$it" } ?: ""))
+                    }
                     // Event strings are "NAME(rawValue)", e.g. "WRIST_ON(9)" (see Schema.enumName).
                     // Pure [isGestureEvent] so the gesture-vs-non-gesture routing is unit-testable (PR #577).
                     val isGesture = isGestureEvent(ev)
@@ -10969,12 +10982,54 @@ internal fun alarmReadbackLocalTime(epochSec: Long): String =
     java.text.SimpleDateFormat("EEE HH:mm zzz", java.util.Locale.US)
         .format(java.util.Date(epochSec * 1000L))
 
+/**
+ * #1833: a serial hidden inside a HEX payload. The text rules below scrub a serial that is written as
+ * text; they cannot see one that arrives as `payload=…5742423541503035…`, because the redactor is
+ * looking at hex digits, not at the ASCII those bytes decode to. Event 109 on a 5/MG carries the strap
+ * serial in plain ASCII inside its payload, so a hex dump of it walks straight past every rule here —
+ * into the log a reporter pastes into a public issue.
+ *
+ * Decode ANY long hex run, find printable ASCII stretches inside it, and if one looks like a WHOOP
+ * serial, mask THOSE BYTES back in the hex. Everything else survives untouched, which is the point: the
+ * payload is exactly where an undocumented field would be found, so blanket-truncating it would remove
+ * the reason the dump exists.
+ *
+ * Deliberately NOT keyed on `payload=` / `frame=`. Both platforms label hex differently and
+ * inconsistently — `payload=`, `frame=`, `[raw …]`, `(raw …)`, the #900 whole-frame dump — and a rule
+ * that enumerates today's labels is a rule the next diagnostic slips past. Matching the hex itself
+ * needs no maintenance. The false-positive cost is negligible: masking requires nine consecutive
+ * alphanumeric ASCII bytes, which random binary produces about once in a million runs.
+ */
+private val PII_HEX_DUMP_RE = Regex("[0-9a-fA-F]{16,}")
+/** A WHOOP serial as it appears in a payload: a leading letter then 8+ alphanumerics (e.g. WBB5AP0539852). */
+private val PII_SERIAL_IN_ASCII_RE = Regex("[A-Za-z][0-9A-Za-z]{8,}")
+
+internal fun redactHexDumpPii(hex: String): String {
+    val bytes = ArrayList<Int>(hex.length / 2)
+    var i = 0
+    while (i + 1 < hex.length) {
+        bytes.add(hex.substring(i, i + 2).toIntOrNull(16) ?: return hex)
+        i += 2
+    }
+    val ascii = StringBuilder(bytes.size)
+    for (b in bytes) ascii.append(if (b in 32..126) b.toChar() else '.')
+    var out = hex
+    for (m in PII_SERIAL_IN_ASCII_RE.findAll(ascii.toString())) {
+        // Two hex chars per byte: mask exactly the run's bytes, leaving the rest of the dump intact.
+        val start = m.range.first * 2
+        val end = (m.range.last + 1) * 2
+        out = out.substring(0, start) + "••".repeat(m.value.length) + out.substring(end)
+    }
+    return out
+}
+
 /** Mask MAC addresses and WHOOP serials in a strap-log line before it's shown/exported.
  *  TOTAL — never throws: a redaction failure returns a safe placeholder rather than leaking the raw
  *  line or crashing the caller (#453). The MAC regex captures exactly two groups (first + last octet),
  *  so the replacement references $1/$2 only. */
 internal fun redactStrapLogPii(s: String): String = try {
-    s.replace(PII_MAC_RE, "$1:••:••:••:••:$2")
+    s.replace(PII_HEX_DUMP_RE) { m -> redactHexDumpPii(m.value) }
+        .replace(PII_MAC_RE, "$1:••:••:••:••:$2")
         .replace(PII_WHOOP_SERIAL_RE, "WHOOP <serial>")
         // MAC first, deliberately: `whoop-<MAC>` is already `whoop-FD:••…` by now and cannot be mistaken
         // for an adopted id. The -noop form runs before the general one so the sibling suffix survives.
