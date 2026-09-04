@@ -2,6 +2,7 @@ package com.noop.analytics
 
 import com.noop.data.SleepSession
 import com.noop.data.StepSample
+import com.noop.data.DailyMetric
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -20,6 +21,29 @@ class StepCycleIntegrationPolicyTest {
         assertEquals(410, DayCycleIntelligenceIntegration.integratedStepValue(410, false, null))
         assertNull(DayCycleIntelligenceIntegration.integratedStepValue(410, true, null))
         assertEquals(37, DayCycleIntelligenceIntegration.integratedStepValue(410, true, 37))
+    }
+
+    @Test fun establishedCycleAppliesEveryAdditiveDailyMetricTogether() {
+        val day = "2026-09-04"
+        val result = PhysiologicalStepCycleEngine.Result(
+            cycleStepsByWakeDay = mapOf(day to 42),
+            cycleStrainByWakeDay = mapOf(day to 61.0),
+            cycleCaloriesByWakeDay = mapOf(day to 1840.0),
+            cycleWorkoutCountByWakeDay = mapOf(day to 2),
+            boundaryOnsetByWakeDay = emptyMap(), firstCycleWakeDay = day,
+            recoveredOwnerMarkerRows = emptyList(),
+        )
+
+        val updated = DayCycleIntelligenceIntegration.apply(
+            DailyMetric(deviceId = "strap-noop", day = day, steps = 1, strain = 2.0,
+                activeKcalEst = 3.0, exerciseCount = 4),
+            result, "strap-noop", mutableListOf(),
+        )
+
+        assertEquals(42, updated.steps)
+        assertEquals(61.0, updated.strain)
+        assertEquals(1840.0, updated.activeKcalEst)
+        assertEquals(2, updated.exerciseCount)
     }
 
     @Test fun warmUnchangedCycleDoesNotReadStepRowsAgain() {
