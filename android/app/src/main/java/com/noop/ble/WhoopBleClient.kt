@@ -26,6 +26,7 @@ import android.os.SystemClock
 import android.util.Log
 import com.noop.NoopApplication
 import com.noop.data.HrRow
+import com.noop.data.InsertCounts
 import com.noop.data.RrRow
 import com.noop.data.EventEntry
 import com.noop.data.StandardHrMapping
@@ -6197,6 +6198,11 @@ class WhoopBleClient(
                     // #1809: this link's inbound tally starts empty, so the epitaph on disconnect reports
                     // exactly what arrived on THIS link and never a previous session's traffic.
                     inboundFrames = 0; inboundBytes = 0; cmdChannelFrames = 0
+                    // #1635: same guarantee for the banked tally. Clearing only on teardown would be enough if
+                    // every link ended in one; a link that begins without a preceding clean teardown would
+                    // otherwise open holding the previous link's rows and report them as banked on this one.
+                    bankedHr.set(0); bankedRr.set(0); bankedGravity.set(0); bankedResp.set(0)
+                    bankedSkinTemp.set(0); bankedSpo2.set(0); bankedSteps.set(0); bankedBattery.set(0)
                     realtimeArmedThisLink = false
                     // A connect succeeded → clear the stale-bond re-pair guide UNLESS we are in a known
                     // bond-loop (#617). In that loop the strap "connects" every ~3 s before timing out
@@ -6724,6 +6730,34 @@ class WhoopBleClient(
     private var inboundFrames = 0
     private var inboundBytes = 0
     private var cmdChannelFrames = 0
+
+    // #1635: rows ACCEPTED per stream on this link, the database-side twin of the frame counters above.
+    // Cleared with them on teardown.
+    //
+    // ATOMIC, unlike those counters, because the writers are not the same. `inboundFrames` and friends are
+    // touched only from the serialized GATT callback; these are folded in from `flushLive` and
+    // `flushStandardHr`, which are two INDEPENDENT `ioScope.launch` coroutines that can run at once — the
+    // same reason `liveInsertFailuresStd` and `liveInsertFailuresRealtime` beside them are AtomicInteger.
+    // A plain `+=` there is a read-modify-write race, and the teardown read is a third thread again. Each
+    // counter stands alone (no cross-field invariant), so per-field atomicity is the whole requirement.
+    // An under-count would be worse than useless here: it reads as exactly the "banked nothing" finding
+    // this line exists to report.
+    private val bankedHr = java.util.concurrent.atomic.AtomicInteger(0)
+    private val bankedRr = java.util.concurrent.atomic.AtomicInteger(0)
+    private val bankedGravity = java.util.concurrent.atomic.AtomicInteger(0)
+    private val bankedResp = java.util.concurrent.atomic.AtomicInteger(0)
+    private val bankedSkinTemp = java.util.concurrent.atomic.AtomicInteger(0)
+    private val bankedSpo2 = java.util.concurrent.atomic.AtomicInteger(0)
+    private val bankedSteps = java.util.concurrent.atomic.AtomicInteger(0)
+    private val bankedBattery = java.util.concurrent.atomic.AtomicInteger(0)
+
+    /** Fold one persist round's accepted-row counts into the per-link tally. */
+    private fun addBanked(c: InsertCounts) {
+        bankedHr.addAndGet(c.hr); bankedRr.addAndGet(c.rr)
+        bankedGravity.addAndGet(c.gravity); bankedResp.addAndGet(c.resp)
+        bankedSkinTemp.addAndGet(c.skinTemp); bankedSpo2.addAndGet(c.spo2)
+        bankedSteps.addAndGet(c.steps); bankedBattery.addAndGet(c.battery)
+    }
     /** #1809: was realtime armed at ANY point on THIS link. Not the same thing as [realtimeArmed], which
      *  is persistent edge state: it can carry true in from a previous link, or read false at the drop
      *  after a mid-link disarm. The epitaph needs the per-link fact, which is what the Apple twin's
@@ -9051,7 +9085,7 @@ class WhoopBleClient(
         }
         if (!batch.isEmpty) {
             try {
-                repository.insert(batch, deviceId)
+                addBanked(repository.insert(batch, deviceId))
                 liveInsertFailuresRealtime.set(0)
             } catch (t: Throwable) {
                 // Re-buffer at the front so these frames retry on the next cadence (port of Collector).
@@ -9134,7 +9168,7 @@ class WhoopBleClient(
             }
         }
         try {
-            repository.insert(StreamBatch(hr = hr, rr = rr, events = contact), deviceId)
+            addBanked(repository.insert(StreamBatch(hr = hr, rr = rr, events = contact), deviceId))
             liveInsertFailuresStd.set(0)
         } catch (t: Throwable) {
             synchronized(collectorLock) {
@@ -9986,9 +10020,24 @@ class WhoopBleClient(
                 // before handleDisconnect runs and is not reassigned above, so it is valid here.
                 ended = if (intentionalDisconnect) "intentional" else "status=$status",
             ))
+            // #1635: what the DATABASE gained from the LIVE streams, beside what the radio carried. An
+            // unbonded 5/MG keeps the epitaph looking healthy — hundreds of inbound frames — while every
+            // bond-gated stream banks nothing, and that split is invisible in a single export. Live only:
+            // the offload persists through `Backfiller` and has its own accounting, so folding it in here
+            // would be double-counted in one direction and, worse, its ABSENCE reads as a fault.
+            // Guarded by the SAME `linkUpSinceMs` as the epitaph: on a failed connect attempt the counters
+            // hold the previous link's tally, and reporting them would describe a link that never existed.
+            log(ConnectionReadout.linkBankedSummary(
+                hr = bankedHr.get(), rr = bankedRr.get(),
+                gravity = bankedGravity.get(), resp = bankedResp.get(),
+                skinTemp = bankedSkinTemp.get(), spo2 = bankedSpo2.get(),
+                steps = bankedSteps.get(), battery = bankedBattery.get(),
+            ), com.noop.testcentre.TestDomain.CONNECTION)
         }
         // Clear the tally with the link, so a second teardown for the same drop cannot re-report it.
         inboundFrames = 0; inboundBytes = 0; cmdChannelFrames = 0
+        bankedHr.set(0); bankedRr.set(0); bankedGravity.set(0); bankedResp.set(0)
+        bankedSkinTemp.set(0); bankedSpo2.set(0); bankedSteps.set(0); bankedBattery.set(0)
 
         val heldSuffix = heldForLogSuffix()
         linkUpSinceMs = null

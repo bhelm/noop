@@ -302,6 +302,48 @@ public enum ConnectionReadout {
         return line
     }
 
+    /// #1635: which STREAMS banked rows on a finished link, beside `linkEpitaph`'s "did anything arrive".
+    ///
+    /// The epitaph counts frames, which is the right measure for a silent strap and the wrong one for a
+    /// strap talking over only part of its surface: an unbonded 5/MG streams heart rate and R-R over the
+    /// standard profile all night while every bond-gated stream banks nothing, and the epitaph reports
+    /// that as hundreds of healthy inbound frames. A field diagnosis had to establish the split by
+    /// exporting twice, hours apart, and diffing stored row counts by hand.
+    ///
+    /// Zero-banking streams are named rather than left to be inferred, because "gravity=0 among six other
+    /// zeros" and "gravity=0 while hr=456" read identically and mean opposite things. Counts are ROWS
+    /// ACCEPTED, so a stream arriving as duplicates reads zero and is named — correct here: the question
+    /// is what the database gained on this link.
+    ///
+    /// LIVE streams only, and the sentence says so. The history offload persists through its own path and
+    /// already has its own accounting; counting one and labelling it "this link" would make every healthy
+    /// bonded sync read as "nothing banked for: gravity" — the false alarm this line exists to prevent.
+    ///
+    /// Pure and total, and every count clamped, so it cannot become the reason a teardown path throws.
+    /// Twin of the Kotlin formatter. Apple does not emit it yet; the formatter exists so the two logs
+    /// cannot drift apart when it does.
+    /// `steps` is OPTIONAL because this platform's store does not return a step count at all — steps are
+    /// persist-only here, deliberately outside the 8-field insert tuple, while Room counts them. A
+    /// platform that cannot measure a stream must OMIT it rather than report zero: "banked nothing" is a
+    /// finding and "not measured here" is not, and printing the second as the first would put a permanent
+    /// false alarm in every Apple link's log.
+    public static func linkBankedSummary(hr: Int, rr: Int, gravity: Int, resp: Int,
+                                         skinTemp: Int, spo2: Int, steps: Int?, battery: Int) -> String {
+        var raw: [(String, Int)] = [
+            ("hr", hr), ("rr", rr), ("gravity", gravity), ("resp", resp),
+            ("skinTemp", skinTemp), ("spo2", spo2),
+        ]
+        if let steps { raw.append(("steps", steps)) }
+        raw.append(("battery", battery))
+        let pairs: [(String, Int)] = raw.map { ($0.0, max(0, $0.1)) }
+        let body = pairs.map { "\($0.0)=\($0.1)" }.joined(separator: " ")
+        let total = pairs.reduce(0) { $0 + $1.1 }
+        if total == 0 { return "banked live this link: \(body) - NOTHING was stored from the live streams" }
+        let empty = pairs.filter { $0.1 == 0 }.map { $0.0 }
+        if empty.isEmpty { return "banked live this link: \(body)" }
+        return "banked live this link: \(body) - nothing banked live for: \(empty.joined(separator: ", "))"
+    }
+
     /// #987: freshness label for the "last frame" readout row: how long ago the most recent strap frame
     /// was routed ("12s ago"), or "no frames yet" before the first one. `nowUnix` injected for testability.
     public static func lastFrameLabel(lastFrameUnix: Int?, nowUnix: Int) -> String {
