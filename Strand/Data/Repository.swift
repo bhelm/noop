@@ -403,7 +403,11 @@ final class Repository: ObservableObject {
             spo2Ir: rawSpo2FromFiller ? filler.spo2Ir : winner.spo2Ir,
             // Strap-only, like raw SpO2: an imported winner carries no absolute skin temp, so take the
             // filler's rather than let the union blank a value the strap did record (#1636).
-            skinTempC: winner.skinTempC ?? filler.skinTempC
+            skinTempC: winner.skinTempC ?? filler.skinTempC,
+            // Part of the SLEEP GROUP, not an independent column (#1801): it describes how the stage
+            // figures above were derived, so it has to come from whichever row supplied them. A plain
+            // `winner ?? filler` would caption the winner's own hypnogram with the filler's staging.
+            sleepHrOnly: sleepFromFiller ? filler.sleepHrOnly : winner.sleepHrOnly
         )
     }
 
@@ -3238,7 +3242,10 @@ private extension DailyMetric {
             avgSdnn: avgSdnn ?? fallback.avgSdnn,
             // On-device only (imports never carry it), so an imported row's nil is backfilled from the
             // computed fallback — otherwise the night's absolute would be lost. (#1636)
-            skinTempC: skinTempC ?? fallback.skinTempC
+            skinTempC: skinTempC ?? fallback.skinTempC,
+            // Same shape, same reason (#1801): only a scoring pass knows how the night was staged, so an
+            // imported row's nil takes the computed answer rather than erasing it.
+            sleepHrOnly: sleepHrOnly ?? fallback.sleepHrOnly
         )
     }
 
@@ -3268,7 +3275,11 @@ private extension DailyMetric {
             spo2Red: spo2Red,   // non-sleep field: preserved as-is (#93)
             spo2Ir: spo2Ir,
             avgSdnn: avgSdnn,   // non-sleep (HRV) field: preserved as-is
-            skinTempC: skinTempC // non-sleep (thermal) field: preserved as-is (#1636)
+            skinTempC: skinTempC, // non-sleep (thermal) field: preserved as-is (#1636)
+            // MOVES with the sleep columns, unlike the others here: it describes how the very stage
+            // figures being taken were derived, so leaving `self`'s behind would caption the source's
+            // hypnogram with the import's staging — and an import's is always nil. (#1801)
+            sleepHrOnly: source.sleepHrOnly
         )
     }
 }
