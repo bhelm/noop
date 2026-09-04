@@ -13,12 +13,17 @@ final class DayCycleRecoveryTests: XCTestCase {
             strain: nil, exerciseCount: nil, spo2Pct: nil, skinTempDevC: nil, respRateBpm: nil,
             steps: 10, activeKcalEst: nil, skinTempC: 34.2, sleepHrOnly: true)
         let result = DayCycleIntelligenceIntegration.Result(
-            stepsByWakeDay: [daily.day: 42], onsetByWakeDay: [:], firstWakeDay: daily.day,
+            stepsByWakeDay: [daily.day: 42], strainByWakeDay: [daily.day: 61],
+            caloriesByWakeDay: [daily.day: 1_840], workoutCountByWakeDay: [daily.day: 2],
+            onsetByWakeDay: [:], firstWakeDay: daily.day,
             markerUpdate: .preserve)
 
         let updated = DayCycleIntelligenceIntegration.applying(result, to: daily)
 
         XCTAssertEqual(updated.steps, 42)
+        XCTAssertEqual(updated.strain, 61)
+        XCTAssertEqual(updated.activeKcalEst, 1_840)
+        XCTAssertEqual(updated.exerciseCount, 2)
         XCTAssertEqual(updated.skinTempC, 34.2)
         XCTAssertEqual(updated.sleepHrOnly, true)
     }
@@ -69,7 +74,8 @@ final class DayCycleRecoveryTests: XCTestCase {
             candidates: [(owner: "strap", priority: 0)],
             windowStart: 1_700_000_000, now: 1_700_086_400, offsetSec: 0,
             habitualMidsleepSec: nil, ticksPerStep: 1, mode: .sleepOnset,
-            cache: DayCycleIntelligenceIntegration.Cache(), recoveryReader: reader)
+            cache: DayCycleIntelligenceIntegration.Cache(), profile: UserProfile(),
+            maxHROverride: nil, effortMethod: .edwards, recoveryReader: reader)
 
         guard case .preserve = result.markerUpdate else {
             return XCTFail("an unread marker namespace must never become an authoritative replacement")

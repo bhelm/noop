@@ -1782,6 +1782,7 @@ final class IntelligenceEngine: ObservableObject {
                 DayCycleIntelligenceIntegration.Night(
                     daily: night.daily,
                     sleeps: night.cachedSleep,
+                    workouts: night.workouts,
                     owner: resolvedScoreOwnerByDay[night.daily.day] ?? regActiveId)
             },
             editedRows: editedRows,
@@ -1794,6 +1795,9 @@ final class IntelligenceEngine: ObservableObject {
             ticksPerStep: up.stepTicksPerStep,
             mode: dayCycleMode,
             cache: dayCycleCache,
+            profile: up,
+            maxHROverride: maxHR,
+            effortMethod: effortMethodGlobal,
             trace: stepsTraceActive ? { self.diagnosticSink?($0, .steps) } : nil)
         // #299: `editsByStart` is now built PER DAY inside the scoring loop (scoped to the day each edit
         // belongs to), NOT window-wide here. sleepEditedDaily folds any edited row that isn't a twin of THIS

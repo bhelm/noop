@@ -1499,6 +1499,7 @@ object IntelligenceEngine {
             scoredNights, editedRows, resolvedScoreOwnerByDay, candidatePriorities, repo,
             tzOffsetSeconds, habitualMidsleepSec, windowStart, nowSeconds, profile.stepTicksPerStep,
             stepsTraceSink, dayCycleMode,
+            profile, maxHROverride, effortMethod,
         )
 
         for (res in scoredNights) {

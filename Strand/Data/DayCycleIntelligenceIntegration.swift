@@ -7,7 +7,7 @@ import WhoopStore
     static let onsetKey = "day_cycle_onset_ts"
     static let pageSize = 10_000
 
-    struct Night { let daily: DailyMetric; let sleeps: [CachedSleepSession]; let owner: String }
+    struct Night { let daily: DailyMetric; let sleeps: [CachedSleepSession]; let workouts: [ExerciseSession]; let owner: String }
     struct SourcedMarker: Sendable { let deviceId: String; let point: MetricPoint }
     struct BoundaryRecoveryReader {
         let sleepSessions: (String, Int, Int) async throws -> [CachedSleepSession]
@@ -19,6 +19,9 @@ import WhoopStore
     }
     struct Result {
         let stepsByWakeDay: [String: Int]
+        let strainByWakeDay: [String: Double]
+        let caloriesByWakeDay: [String: Double]
+        let workoutCountByWakeDay: [String: Int]
         let onsetByWakeDay: [String: Int]
         let firstWakeDay: String?
         let markerUpdate: MarkerUpdate
@@ -85,10 +88,12 @@ import WhoopStore
                         candidates: [(owner: String, priority: Int)], windowStart: Int,
                         now: Int, offsetSec: Int, habitualMidsleepSec: Int?, ticksPerStep: Double,
                         mode: DayCycleMode, cache: Cache,
+                        profile: UserProfile, maxHROverride: Double?, effortMethod: StrainScorer.Method,
                         recoveryReader: BoundaryRecoveryReader? = nil,
                         trace: ((String) -> Void)? = nil) async -> Result {
         guard mode == .sleepOnset else {
-            return Result(stepsByWakeDay: [:], onsetByWakeDay: [:], firstWakeDay: nil,
+            return Result(stepsByWakeDay: [:], strainByWakeDay: [:], caloriesByWakeDay: [:],
+                          workoutCountByWakeDay: [:], onsetByWakeDay: [:], firstWakeDay: nil,
                           markerUpdate: .replace(points: [], sourceIds: Array(Set(
                             candidates.map { computedId($0.owner) })).sorted()))
         }
@@ -144,7 +149,8 @@ import WhoopStore
             // Fail closed: an unread namespace is unknown, not empty. Returning no replacement source IDs
             // prevents the persistence transaction from deleting valid markers after a transient read error.
             trace?("stepsCycle status=error error=boundaryRecoveryRead")
-            return Result(stepsByWakeDay: [:], onsetByWakeDay: [:], firstWakeDay: nil,
+            return Result(stepsByWakeDay: [:], strainByWakeDay: [:], caloriesByWakeDay: [:],
+                          workoutCountByWakeDay: [:], onsetByWakeDay: [:], firstWakeDay: nil,
                           markerUpdate: .preserve)
         }
         for item in recovered {
@@ -173,10 +179,27 @@ import WhoopStore
             return (night.daily.day, "\(night.owner):\(night.daily.steps.map(String.init) ?? "nil")|\(sleeps)")
         })
         var steps: [String: Int] = [:], onsets: [String: Int] = [:]
+        var strains: [String: Double] = [:], calories: [String: Double] = [:]
+        var workoutCounts: [String: Int] = [:]
         windowLoop: for window in windows {
             guard let day = wakeDayById[window.sleepId], let fallback = ownerById[window.sleepId] else { continue }
             do {
             onsets[day] = window.onset
+            let cycleHR = (try? await store.hrSamples(
+                deviceId: fallback, from: window.onset, to: window.endExclusive, limit: 200_000)) ?? []
+            let restingHR = nights.first(where: { $0.daily.day == day })?.daily.restingHr.map(Double.init)
+                ?? StrainScorer.defaultRestingHR
+            let effectiveMaxHR = maxHROverride ?? (profile.age > 0 ? StrainScorer.tanakaHRmax(age: profile.age) : nil)
+            if let strain = StrainScorer.strain(cycleHR, maxHR: effectiveMaxHR,
+                                                restingHR: restingHR, method: effortMethod,
+                                                sex: profile.sex) { strains[day] = strain }
+            if !cycleHR.isEmpty {
+                calories[day] = Calories.estimateDayCalories(
+                    cycleHR, profile: profile, hrmax: effectiveMaxHR, restingHR: restingHR)
+            }
+            workoutCounts[day] = Set(nights.flatMap(\.workouts)
+                .filter { $0.start >= window.onset && $0.start < window.endExclusive }
+                .map { "\($0.start):\($0.end)" }).count
             var ranked = priorities; ranked[fallback] = ranked[fallback] ?? ranked.values.min() ?? 0
             var coverage: [PhysiologicalSteps.OwnerCoverage] = []
             for (owner, priority) in ranked {
@@ -264,7 +287,8 @@ import WhoopStore
         }
         let recoveredMarkers = recovered.map { SourcedMarker(deviceId: computedId($0.owner),
             point: MetricPoint(day: $0.wakeDay, key: onsetKey, value: Double($0.boundary.onset))) }
-        return Result(stepsByWakeDay: steps, onsetByWakeDay: onsets,
+        return Result(stepsByWakeDay: steps, strainByWakeDay: strains, caloriesByWakeDay: calories,
+            workoutCountByWakeDay: workoutCounts, onsetByWakeDay: onsets,
             firstWakeDay: wakeDayById.values.min(), markerUpdate: .replace(
                 points: recoveredMarkers,
                 sourceIds: Array(Set(candidates.map { computedId($0.owner) })).sorted()))
@@ -273,12 +297,15 @@ import WhoopStore
     static func applying(_ result: Result, to daily: DailyMetric) -> DailyMetric {
         let established = result.firstWakeDay.map { daily.day >= $0 } ?? false
         let steps = established ? result.stepsByWakeDay[daily.day] : daily.steps
+        let strain = established ? result.strainByWakeDay[daily.day] : daily.strain
+        let calories = established ? result.caloriesByWakeDay[daily.day] : daily.activeKcalEst
+        let workouts = established ? result.workoutCountByWakeDay[daily.day] : daily.exerciseCount
         return DailyMetric(day: daily.day, totalSleepMin: daily.totalSleepMin, efficiency: daily.efficiency,
             deepMin: daily.deepMin, remMin: daily.remMin, lightMin: daily.lightMin,
             disturbances: daily.disturbances, restingHr: daily.restingHr, avgHrv: daily.avgHrv,
-            recovery: daily.recovery, strain: daily.strain, exerciseCount: daily.exerciseCount,
+            recovery: daily.recovery, strain: strain, exerciseCount: workouts,
             spo2Pct: daily.spo2Pct, skinTempDevC: daily.skinTempDevC, respRateBpm: daily.respRateBpm,
-            steps: steps, activeKcalEst: daily.activeKcalEst, spo2Red: daily.spo2Red,
+            steps: steps, activeKcalEst: calories, spo2Red: daily.spo2Red,
             spo2Ir: daily.spo2Ir, avgSdnn: daily.avgSdnn,
             skinTempC: daily.skinTempC, sleepHrOnly: daily.sleepHrOnly)
     }

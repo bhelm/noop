@@ -151,6 +151,7 @@ import com.noop.analytics.ChargeDriverLabel
 import com.noop.analytics.ChargeDriverUnit
 import com.noop.analytics.ChargeDriverVerdict
 import com.noop.analytics.DayCycleMode
+import com.noop.analytics.DayCycleIntelligenceIntegration
 import com.noop.analytics.HydrationGoal
 import com.noop.analytics.HydrationStore
 import com.noop.analytics.ReadinessEngine
@@ -1630,7 +1631,8 @@ fun TodayScreen(
                             modifier = Modifier.fillMaxWidth().staggeredAppear(stagger),
                             verticalArrangement = Arrangement.spacedBy(8.dp),
                         ) {
-                            HeartRateTrendCard(viewModel, days, selectedDay, todayDate, displayMetric, effortScale, effortForDay)
+                            HeartRateTrendCard(viewModel, days, selectedDay, todayDate, displayMetric,
+                                effortScale, effortForDay, dayCycleMode)
                         }
                         // The three hero vitals, HRV / Resting HR / Respiratory. Carried day (#543).
                         TodaySection.RECOVERY_VITALS -> Box(modifier = Modifier.fillMaxWidth().staggeredAppear(stagger)) {
@@ -5565,6 +5567,7 @@ private fun HeartRateTrendCard(
     // #1001: the day's resolved Effort for the chart's edge badge. It read `displayMetric.strain` — the
     // daily row — so on an active morning the badge trailed the hero ring by the whole morning's load.
     effortForDay: Double? = null,
+    dayCycleMode: DayCycleMode = DayCycleMode.SLEEP_ONSET,
 ) {
     // "Today" here is the LOGICAL day (rolls at 04:00 local), so in the small hours after midnight the
     // trend keeps the evening's curve, window start at the logical day's own midnight, "since midnight"
@@ -5600,12 +5603,22 @@ private fun HeartRateTrendCard(
     val live by viewModel.live.collectAsStateWithLifecycle()
     // Re-load when the day list changes (an import updates it), when the day selector moves, and, via the
     // sync tokens, when a strap offload banks fresh HR samples for the current window. Also on first compose.
-    LaunchedEffect(days, selectedDay, today, live.lastSyncAt, live.syncChunksThisSession) {
+    LaunchedEffect(days, selectedDay, today, live.lastSyncAt, live.syncChunksThisSession, dayCycleMode) {
         val zone = ZoneId.systemDefault()
-        val start = selectedDay.atStartOfDay(zone).toEpochSecond()
+        val calendarStart = selectedDay.atStartOfDay(zone).toEpochSecond()
         val nextStart = selectedDay.plusDays(1).atStartOfDay(zone).toEpochSecond()
         val now = System.currentTimeMillis() / 1000
-        val end = if (selectedDay == today) now else (nextStart - 1)
+        val calendarEnd = if (selectedDay == today) now else (nextStart - 1)
+        val markerRows = if (dayCycleMode == DayCycleMode.SLEEP_ONSET) runCatching {
+            viewModel.repo.metricSeriesComputedUnion(
+                viewModel.activeStrapId, DayCycleIntelligenceIntegration.ONSET_KEY,
+                selectedDay.toString(), selectedDay.plusDays(1).toString(),
+            )
+        }.getOrDefault(emptyList()) else emptyList()
+        val start = markerRows.firstOrNull { it.day == selectedDay.toString() }?.value?.toLong()
+            ?: calendarStart
+        val end = markerRows.firstOrNull { it.day == selectedDay.plusDays(1).toString() }?.value?.toLong()
+            ?.minus(1L) ?: calendarEnd
         // #908: the Today HR curve reads the active strap ∪ canonical "my-whoop" union, NOT a hardcoded
         // "my-whoop". A strap re-added via the device manager banks live HR under its own fresh id, so a
         // pinned read showed the "no heart rate banked yet today" empty state. Single-WHOOP ⇒ one id ⇒ same.

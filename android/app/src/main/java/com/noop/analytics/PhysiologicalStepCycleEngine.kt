@@ -13,6 +13,9 @@ import kotlin.math.roundToLong
 internal object PhysiologicalStepCycleEngine {
     data class Result(
         val cycleStepsByWakeDay: Map<String, Int>,
+        val cycleStrainByWakeDay: Map<String, Double>,
+        val cycleCaloriesByWakeDay: Map<String, Double>,
+        val cycleWorkoutCountByWakeDay: Map<String, Int>,
         val boundaryOnsetByWakeDay: Map<String, Long>,
         val firstCycleWakeDay: String?,
         val recoveredOwnerMarkerRows: List<MetricSeriesRow>,
@@ -43,9 +46,12 @@ internal object PhysiologicalStepCycleEngine {
         stepTicksPerStep: Double,
         stepsTraceSink: ((String) -> Unit)?,
         dayCycleMode: DayCycleMode,
+        profile: UserProfile,
+        maxHROverride: Double?,
+        effortMethod: StrainScorer.Method,
     ): Result {
         if (dayCycleMode == DayCycleMode.MIDNIGHT) {
-            return Result(emptyMap(), emptyMap(), null, emptyList())
+            return Result(emptyMap(), emptyMap(), emptyMap(), emptyMap(), emptyMap(), null, emptyList())
         }
         val editedRowsByDay = editedRows.groupBy {
             AnalyticsEngine.dayString(it.endTs, tzOffsetSeconds)
@@ -180,12 +186,30 @@ internal object PhysiologicalStepCycleEngine {
         }
 
         val stepsByWakeDay = HashMap<String, Int>()
+        val strainByWakeDay = HashMap<String, Double>()
+        val caloriesByWakeDay = HashMap<String, Double>()
+        val workoutCountByWakeDay = HashMap<String, Int>()
         val windows = PhysiologicalSteps.cycleWindows(boundaries, nowSeconds)
         val allDetectedSleep = sleepContext.distinctBy { it.start to it.end }
         cache.keys.retainAll(windows.mapTo(HashSet()) { it.sleepId })
         for (window in windows) {
             val wakeDay = dayBySleepId[window.sleepId] ?: continue
             val fallbackOwner = ownerBySleepId[window.sleepId] ?: continue
+            val cycleHr = repo.hrSamplesUnion(fallbackOwner, window.onset, window.endExclusive, 200_000)
+            val restingHr = scoredNights.firstOrNull { it.daily.day == wakeDay }?.daily?.restingHr?.toDouble()
+                ?: StrainScorer.defaultRestingHR
+            val effectiveMaxHr = maxHROverride
+                ?: profile.age.takeIf { it > 0 }?.let { StrainScorer.tanakaHRmax(it.toDouble()) }
+            StrainScorer.strain(cycleHr, effectiveMaxHr, restingHr, effortMethod, profile.sex)
+                ?.let { strainByWakeDay[wakeDay] = it }
+            if (cycleHr.isNotEmpty()) {
+                caloriesByWakeDay[wakeDay] = Calories.estimateDayCalories(
+                    cycleHr, profile, effectiveMaxHr, restingHr,
+                )
+            }
+            workoutCountByWakeDay[wakeDay] = scoredNights.asSequence().flatMap { it.workouts.asSequence() }
+                .distinctBy { it.start to it.end }
+                .count { it.start >= window.onset && it.start < window.endExclusive }
             val priorities = LinkedHashMap<String, Int>()
             for ((owner, priority) in candidatePriorities) priorities[owner] = priority
             priorities.putIfAbsent(fallbackOwner, priorities.values.minOrNull() ?: 0)
@@ -298,6 +322,9 @@ internal object PhysiologicalStepCycleEngine {
 
         return Result(
             cycleStepsByWakeDay = stepsByWakeDay,
+            cycleStrainByWakeDay = strainByWakeDay,
+            cycleCaloriesByWakeDay = caloriesByWakeDay,
+            cycleWorkoutCountByWakeDay = workoutCountByWakeDay,
             boundaryOnsetByWakeDay = boundaries.mapNotNull { boundary ->
                 dayBySleepId[boundary.sleepId]?.let { it to boundary.onset }
             }.toMap(),

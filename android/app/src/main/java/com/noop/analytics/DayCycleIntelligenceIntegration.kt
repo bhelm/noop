@@ -113,6 +113,9 @@ internal object DayCycleIntelligenceIntegration {
         stepTicksPerStep: Double,
         traceSink: ((String) -> Unit)?,
         mode: DayCycleMode,
+        profile: UserProfile,
+        maxHROverride: Double?,
+        effortMethod: StrainScorer.Method,
     ): PhysiologicalStepCycleEngine.Result {
         val witnesses = scoredNights.associate { result ->
             result.daily.day to dayWitness(resolvedOwners[result.daily.day].orEmpty(), result)
@@ -120,6 +123,7 @@ internal object DayCycleIntelligenceIntegration {
         return PhysiologicalStepCycleEngine.compute(
             scoredNights, editedRows, resolvedOwners, candidatePriorities, witnesses, repo,
             tzOffsetSeconds, habitualMidsleepSec, windowStart, nowSeconds, stepTicksPerStep, traceSink, mode,
+            profile, maxHROverride, effortMethod,
         )
     }
 
@@ -133,6 +137,11 @@ internal object DayCycleIntelligenceIntegration {
         result.boundaryOnsetByWakeDay[daily.day]?.let { onset ->
             metricRows += MetricSeriesRow(computedId, daily.day, ONSET_KEY, onset.toDouble())
         }
-        return daily.copy(steps = integratedStepValue(daily.steps, established, result.cycleStepsByWakeDay[daily.day]))
+        return daily.copy(
+            steps = integratedStepValue(daily.steps, established, result.cycleStepsByWakeDay[daily.day]),
+            strain = if (established) result.cycleStrainByWakeDay[daily.day] else daily.strain,
+            activeKcalEst = if (established) result.cycleCaloriesByWakeDay[daily.day] else daily.activeKcalEst,
+            exerciseCount = if (established) result.cycleWorkoutCountByWakeDay[daily.day] else daily.exerciseCount,
+        )
     }
 }
