@@ -1,7 +1,5 @@
 package com.noop.analytics
 
-import com.noop.data.StepSample
-
 /**
  * WHOOP-style step-day boundaries. A physiological step day starts at the onset of the main sleep
  * and ends at the next main-sleep onset; the delta is still attributed to the later counter sample.
@@ -40,33 +38,6 @@ object PhysiologicalSteps {
 
     private const val MIN_MAIN_SLEEP_SECONDS = 3 * 3_600L
 
-    /**
-     * State carried between ascending database pages. [previous] is deliberately retained even when it
-     * lies before the cycle so the first in-cycle counter delta has the correct predecessor.
-     */
-    data class CycleCountState internal constructor(
-        val hasActivityClasses: Boolean,
-        val previous: StepSample?,
-        val total: Long,
-        val evaluatedDelta: Boolean,
-    )
-
-    private fun isPlausibleMainSleep(
-        block: SleepBlock,
-        tzOffsetSeconds: Long,
-        habitualMidsleepSec: Long?,
-    ): Boolean {
-        if (block.kind == SleepKind.NAP) return false
-        val onset = block.effectiveOnset
-        if (block.end <= onset) return false
-        if (block.kind == SleepKind.MAIN_SLEEP) return true
-        val midpoint = onset + (block.end - onset) / 2
-        val target = SleepStageTotals.targetMidsleepSec(habitualMidsleepSec)
-        return SleepStageTotals.circularDistanceSec(
-            SleepStageTotals.localSecOfDay(midpoint, tzOffsetSeconds),
-            target,
-        ) < SleepStageTotals.ALIGNMENT_ZERO_SEC
-    }
 
     /**
      * Apply the same user-visible main-vs-nap shape used by the sleep surfaces: only the canonical overnight
@@ -129,41 +100,6 @@ object PhysiologicalSteps {
             habitualMidsleepSec,
         ) ?: return null
         return indices.minOfOrNull { eligible[it].effectiveOnset }
-    }
-
-    /**
-     * Advance the single open cycle from newly observed sleep rows. Missing sleep and nap-only input keep
-     * [previous] unchanged. A late-arriving main sleep advances it; a stable [SleepBlock.id] applies a
-     * user-edited onset to the same boundary even when the edit moves backwards.
-     */
-    fun advanceBoundary(
-        previous: CycleBoundary?,
-        observedBlocks: List<SleepBlock>,
-        now: Long,
-        tzOffsetSeconds: Long = 0,
-        habitualMidsleepSec: Long? = null,
-    ): CycleBoundary? {
-        val eligible = observedBlocks.filter {
-            it.effectiveOnset <= now && isPlausibleMainSleep(it, tzOffsetSeconds, habitualMidsleepSec)
-        }
-        previous?.let { old ->
-            eligible.firstOrNull { it.id == old.sleepId }?.let {
-                val edited = CycleBoundary(it.id, it.effectiveOnset)
-                val newer = eligible.filter { candidate -> candidate.id != old.sleepId }
-                    .maxByOrNull { candidate -> candidate.effectiveOnset }
-                return if (newer != null && newer.effectiveOnset > edited.onset) {
-                    CycleBoundary(newer.id, newer.effectiveOnset)
-                } else {
-                    edited
-                }
-            }
-        }
-        val newest = eligible.maxByOrNull { it.effectiveOnset } ?: return previous
-        return if (previous == null || newest.effectiveOnset > previous.onset) {
-            CycleBoundary(newest.id, newest.effectiveOnset)
-        } else {
-            previous
-        }
     }
 
     /**
@@ -269,61 +205,4 @@ object PhysiologicalSteps {
             ?: now
     }
 
-    /**
-     * Sum locomotion deltas whose *later* sample lies in [onsetInclusive, endExclusive). Samples may
-     * include one predecessor before onset so a counter increment crossing the boundary is attributed
-     * correctly. Returns null only when there is not enough counter data to evaluate the cycle; an
-     * observed, flat cycle is a real zero.
-     */
-    fun stepsInCycle(
-        samples: List<StepSample>,
-        onsetInclusive: Long,
-        endExclusive: Long,
-    ): Int? {
-        if (endExclusive <= onsetInclusive) return 0
-        val sorted = samples.sortedBy { it.ts }
-        if (sorted.size < 2) return null
-        val state = accumulateCyclePage(
-            newCycleCount(StepsCounter.hasActivityClasses(sorted)),
-            sorted,
-            onsetInclusive,
-            endExclusive,
-        )
-        return finishCycleCount(state)
-    }
-
-    fun newCycleCount(hasActivityClasses: Boolean): CycleCountState =
-        CycleCountState(hasActivityClasses, previous = null, total = 0, evaluatedDelta = false)
-
-    /** Fold one ascending page into [state]. Pages may overlap at their seam; duplicate timestamps skip. */
-    fun accumulateCyclePage(
-        state: CycleCountState,
-        samples: List<StepSample>,
-        onsetInclusive: Long,
-        endExclusive: Long,
-    ): CycleCountState {
-        if (samples.isEmpty()) return state
-        var previous = state.previous
-        var total = state.total
-        var evaluated = state.evaluatedDelta
-        for (current in samples.sortedBy { it.ts }) {
-            val prior = previous
-            if (prior != null && current.ts <= prior.ts) continue
-            if (prior != null && current.ts >= onsetInclusive && current.ts < endExclusive) {
-                evaluated = true
-                val delta = (current.counter - prior.counter) and 0xFFFF
-                if (
-                    StepsCounter.shouldCountDelta(current.activityClass, state.hasActivityClasses) &&
-                    StepsCounter.isPlausibleDelta(prior.ts, current.ts, delta)
-                ) {
-                    total += delta.toLong()
-                }
-            }
-            previous = current
-        }
-        return CycleCountState(state.hasActivityClasses, previous, total, evaluated)
-    }
-
-    fun finishCycleCount(state: CycleCountState): Int? =
-        if (!state.evaluatedDelta) null else state.total.coerceAtMost(Int.MAX_VALUE.toLong()).toInt()
 }

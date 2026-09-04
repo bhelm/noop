@@ -117,34 +117,4 @@ public enum PhysiologicalSteps {
         return result
     }
 
-    /// Same later-sample attribution, class gate and plausibility gate as the Kotlin twin.
-    /// Kotlin twin: `PhysiologicalSteps.stepsInCycle`.
-    public static func stepsInCycle(_ samples: [StepSample], onsetInclusive: Int,
-                                    endExclusive: Int, sleepSessions: [SleepSession]) -> Int? {
-        guard endExclusive > onsetInclusive else { return 0 }
-        let sorted = samples.sorted { $0.ts < $1.ts }
-        let predecessor = sorted.last { $0.ts < onsetInclusive }
-        let relevant = (predecessor.map { [$0] } ?? []) + sorted.filter {
-            $0.ts >= onsetInclusive && $0.ts < endExclusive
-        }
-        guard relevant.count >= 2 else { return nil }
-        let counted = SleepAwareStepCounter.count(relevant, sleepSessions: sleepSessions)
-        var evaluated = false
-        var total = 0
-        let hasClasses = StepsCounter.hasActivityClasses(relevant)
-        for index in 1..<relevant.count {
-            let previous = relevant[index - 1], current = relevant[index]
-            guard current.ts >= onsetInclusive, current.ts < endExclusive else { continue }
-            evaluated = true
-            let delta = (current.counter - previous.counter) & 0xffff
-            guard StepsCounter.shouldCountDelta(activityClass: current.activityClass, hasActivityClasses: hasClasses),
-                  StepsCounter.isPlausibleDelta(previousTs: previous.ts, currentTs: current.ts, delta: delta)
-            else { continue }
-            let inSleep = sleepSessions.contains { current.ts >= $0.start && current.ts < $0.end }
-            if !inSleep { total += delta }
-        }
-        // SleepAware's accepted sleep/awake-gap contribution is window-scoped by the caller's samples.
-        total += counted.acceptedAwakeGapTicks + counted.acceptedSleepBoutTicks
-        return evaluated ? total : nil
-    }
 }

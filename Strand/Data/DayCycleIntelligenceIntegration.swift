@@ -279,6 +279,7 @@ import WhoopStore
             recovery: daily.recovery, strain: daily.strain, exerciseCount: daily.exerciseCount,
             spo2Pct: daily.spo2Pct, skinTempDevC: daily.skinTempDevC, respRateBpm: daily.respRateBpm,
             steps: steps, activeKcalEst: daily.activeKcalEst, spo2Red: daily.spo2Red,
-            spo2Ir: daily.spo2Ir, avgSdnn: daily.avgSdnn)
+            spo2Ir: daily.spo2Ir, avgSdnn: daily.avgSdnn,
+            skinTempC: daily.skinTempC, sleepHrOnly: daily.sleepHrOnly)
     }
 }

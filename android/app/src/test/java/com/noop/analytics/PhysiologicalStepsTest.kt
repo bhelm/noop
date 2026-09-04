@@ -1,6 +1,5 @@
 package com.noop.analytics
 
-import com.noop.data.StepSample
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Test
@@ -8,45 +7,6 @@ import java.time.LocalDateTime
 import java.time.ZoneOffset
 
 class PhysiologicalStepsTest {
-
-    private fun step(ts: Long, counter: Int, activityClass: Int? = 1) =
-        StepSample(deviceId = "my-whoop", ts = ts, counter = counter, activityClass = activityClass)
-
-    @Test fun resetsAtMainSleepOnsetButKeepsRealNightWalking() {
-        val samples = listOf(
-            step(90, 100),       // predecessor before the new physiological cycle
-            step(100, 104),      // delta belongs to the previous cycle
-            step(200, 104, 0),   // asleep/still
-            step(201, 106, 1),   // gets up and walks
-            step(202, 109, 1),
-            step(300, 112, 0),   // non-locomotion delta must still be ignored
-        )
-
-        assertEquals(5, PhysiologicalSteps.stepsInCycle(samples, onsetInclusive = 101, endExclusive = 400))
-    }
-
-    @Test fun nextMainSleepOnsetClosesTheCycle() {
-        val samples = listOf(
-            step(99, 10),
-            step(110, 12),
-            step(199, 15),
-            step(200, 18), // attributed to the next cycle because its timestamp is the boundary
-        )
-
-        assertEquals(5, PhysiologicalSteps.stepsInCycle(samples, onsetInclusive = 100, endExclusive = 200))
-    }
-
-    @Test fun emptyCycleIsZeroRatherThanMissingOnceAnOnsetExists() {
-        assertEquals(
-            0,
-            PhysiologicalSteps.stepsInCycle(
-                listOf(step(99, 10), step(120, 10)),
-                onsetInclusive = 100,
-                endExclusive = 200,
-            ),
-        )
-        assertNull(PhysiologicalSteps.stepsInCycle(emptyList(), onsetInclusive = 100, endExclusive = 200))
-    }
 
     @Test fun nextOnsetWinsAndCurrentCycleFallsBackToNow() {
         val starts = mapOf(
@@ -130,26 +90,6 @@ class PhysiologicalStepsTest {
         assertEquals(PhysiologicalSteps.SleepKind.NAP, classified["nap"])
     }
 
-    @Test fun missingSleepKeepsTheLastCycleOpenAndLateSleepAdvancesIt() {
-        val first = PhysiologicalSteps.CycleBoundary("night-a", onset = 1_000)
-
-        assertEquals(first, PhysiologicalSteps.advanceBoundary(first, emptyList(), now = 3_000))
-        assertEquals(
-            PhysiologicalSteps.CycleBoundary("night-b", onset = 2_000),
-            PhysiologicalSteps.advanceBoundary(
-                first,
-                listOf(
-                    PhysiologicalSteps.SleepBlock(
-                        onset = 2_000,
-                        end = 2_800,
-                        id = "night-b",
-                    ),
-                ),
-                now = 3_000,
-            ),
-        )
-    }
-
     @Test fun historicalWindowsHaveOnlySleepBoundariesAndKeepTheLastOneOpen() {
         assertEquals(
             listOf(
@@ -162,46 +102,6 @@ class PhysiologicalStepsTest {
                     PhysiologicalSteps.CycleBoundary("night-b", 2_000),
                 ),
                 now = 9_000,
-            ),
-        )
-    }
-
-    @Test fun napOnlyObservationCannotReplaceTheOpenCycle() {
-        val first = PhysiologicalSteps.CycleBoundary("night-a", onset = 1_000)
-
-        assertEquals(
-            first,
-            PhysiologicalSteps.advanceBoundary(
-                first,
-                listOf(
-                    PhysiologicalSteps.SleepBlock(
-                        onset = 2_000,
-                        end = 8_000,
-                        id = "long-daytime-nap",
-                    ),
-                ),
-                now = 9_000,
-                tzOffsetSeconds = 43_200,
-            ),
-        )
-    }
-
-    @Test fun editedOnsetMovesTheSameBoundaryWithoutCreatingAnotherCycle() {
-        val previous = PhysiologicalSteps.CycleBoundary("night-a", onset = 1_000)
-
-        assertEquals(
-            PhysiologicalSteps.CycleBoundary("night-a", onset = 900),
-            PhysiologicalSteps.advanceBoundary(
-                previous,
-                listOf(
-                    PhysiologicalSteps.SleepBlock(
-                        onset = 1_000,
-                        end = 2_000,
-                        id = "night-a",
-                        editedOnset = 900,
-                    ),
-                ),
-                now = 3_000,
             ),
         )
     }
@@ -278,18 +178,4 @@ class PhysiologicalStepsTest {
         )
     }
 
-    @Test fun paginatedCountCarriesItsPredecessorAcrossMoreThanTwoHundredThousandRows() {
-        val samples = (0..200_005).map { i -> step(ts = i.toLong(), counter = i and 0xFFFF) }
-        var state = PhysiologicalSteps.newCycleCount(hasActivityClasses = true)
-        samples.chunked(10_000).forEach { page ->
-            state = PhysiologicalSteps.accumulateCyclePage(
-                state,
-                page,
-                onsetInclusive = 1,
-                endExclusive = 200_006,
-            )
-        }
-
-        assertEquals(200_005, PhysiologicalSteps.finishCycleCount(state))
-    }
 }

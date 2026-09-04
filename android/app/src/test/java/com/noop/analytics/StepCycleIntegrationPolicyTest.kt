@@ -119,13 +119,11 @@ class StepCycleIntegrationPolicyTest {
             ),
         )
         fun row(owner: String, ts: Long, counter: Int) = StepSample(owner, ts, counter, activityClass = 1)
-        val aSteps = PhysiologicalSteps.stepsInCycle(
-            listOf(row("strap-a", onset, 100), row("strap-a", onset + 3, 110)), onset, bStarts,
-        )
-        val bSteps = PhysiologicalSteps.stepsInCycle(
-            listOf(row("strap-b", bStarts, 50), row("strap-b", bStarts + 2, 57)), bStarts, cycleEnd,
-        )
-        assertEquals(17, requireNotNull(aSteps) + requireNotNull(bSteps))
+        val a = SleepAwareStepCounter.Accumulator(emptyList(), hasActivityClasses = true)
+            .acceptPage(listOf(row("strap-a", onset, 100), row("strap-a", onset + 3, 110))).finish()
+        val b = SleepAwareStepCounter.Accumulator(emptyList(), hasActivityClasses = true)
+            .acceptPage(listOf(row("strap-b", bStarts, 50), row("strap-b", bStarts + 2, 57))).finish()
+        assertEquals(17, a.totalTicks + b.totalTicks)
     }
 
     @Test fun markerRewriteCleansEveryNamespaceThatRecoveryMayRead() {
