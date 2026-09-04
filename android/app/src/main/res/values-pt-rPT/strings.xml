@@ -265,8 +265,8 @@
     <string name="l10n_backup_sync_screen_replace_all_current_data_e9244799">Substituir todos os dados atuais?</string>
     <string name="l10n_backup_sync_screen_replace_all_current_data_with_label_b7799a16">Substitua todos os dados atuais por %1$s? Isto não pode ser desfeito.</string>
     <string name="l10n_backup_sync_screen_replace_this_device_s_data_with_b8679c51">Substitua os dados deste dispositivo por um dos teus cópia de seguranças. Este substitui os dados atuais, </string>
-    <string name="l10n_backup_sync_screen_restore_3cbe6d6b">Descansoaurar</string>
-    <string name="l10n_backup_sync_screen_restore_from_a_backup_c28917c6">Descansoaurar a partir de um cópia de segurança…</string>
+    <string name="l10n_backup_sync_screen_restore_3cbe6d6b">Restaurar</string>
+    <string name="l10n_backup_sync_screen_restore_from_a_backup_c28917c6">Restaurar a partir de um cópia de segurança…</string>
     <string name="l10n_backup_sync_screen_roughly_when_the_daily_backup_runs_71de04e1">Aproximadamente quando o cópia de segurança diário é executado (melhor esforço - o sistema pode deslizar um pouco).</string>
     <string name="l10n_backup_sync_screen_these_backups_are_unencrypted_too_if_53e70fe8">Estas cópias de segurança também não estão encriptadas. Se esta pasta sincronizar com o Drive, o Dropbox ou o iCloud, o ficheiro legível também vai parar lá — aponta apenas para um serviço de confiança.</string>
     <string name="l10n_backup_sync_screen_tip_a_desktop_drive_dropbox_app_2eaff1e3">Dica: uma aplicação Drive/Dropbox para desktop sincroniza automaticamente uma pasta escolhida. No telefone, guarde num </string>
@@ -979,7 +979,7 @@
     <string name="l10n_updates_inbox_screen_mark_read_3bf98fa6">Marcar como lido</string>
     <string name="l10n_updates_inbox_screen_new_6403f2b7">Novo</string>
     <string name="l10n_updates_inbox_screen_new_release_notes_and_fresh_data_1632c576">Novas notas de lançamento e novos dados chegarão aqui.</string>
-    <string name="l10n_updates_inbox_screen_restore_to_today_77c7c8e5">Descansoaurar para hoje</string>
+    <string name="l10n_updates_inbox_screen_restore_to_today_77c7c8e5">Restaurar para hoje</string>
     <string name="l10n_updates_inbox_screen_updates_c76d1807">Atualizações</string>
     <string name="l10n_updates_inbox_screen_you_re_all_caught_up_3d39c469">Está todo atualizado.</string>
     <string name="l10n_weekly_digest_card_no_readings_this_week_yet_0745a2df">Ainda não há leitura esta semana</string>
@@ -1099,7 +1099,7 @@
     <string name="l10n_app_changelog_auto_sync_health_connect_android_698f0129">Sincronização automática do Health Connect (Android)</string>
     <string name="l10n_app_changelog_background_gps_sleep_time_editing_log_7baa5d7a">GPS em segundo plano, edição durante o sono, registo antecipado e um bloco de descanso mais nítido</string>
     <string name="l10n_app_changelog_backup_controls_and_a_lighter_app_a08f0fe4">Controlos de cópia de segurança e uma aplicação mais leve</string>
-    <string name="l10n_app_changelog_backup_restore_fixed_plus_appearance_controls_d0b9c0fe">Descansoauração de cópia de segurança corrigida, além de controlos de aparência</string>
+    <string name="l10n_app_changelog_backup_restore_fixed_plus_appearance_controls_d0b9c0fe">Restauração de cópia de segurança corrigida, além de controlos de aparência</string>
     <string name="l10n_app_changelog_backup_restore_the_wrong_day_fix_ecbfd90d">Cópia de segurança e restauro, a solução para o dia errado e um centro de testes mais inteligente</string>
     <string name="l10n_app_changelog_battery_refresh_on_whoop_5_0_0304ac74">Atualização da bateria no WHOOP 5.0/MG (Mac + Android)</string>
     <string name="l10n_app_changelog_battery_responsiveness_smarter_sync_lighter_notification_e6949f3c">Bateria + capacidade de resposta: sincronização mais inteligente, notificação mais leve</string>
