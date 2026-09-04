@@ -61,6 +61,7 @@ fun SmartAlarmScreen(vm: AppViewModel) {
     val targetMinutes by vm.phoneAlarmTargetMinutes.collectAsStateWithLifecycle()
     val windowMinutes by vm.phoneAlarmWindowMinutes.collectAsStateWithLifecycle()
     val phoneAlarmWeekdays by vm.phoneAlarmWeekdays.collectAsStateWithLifecycle()
+    val phoneAlarmDayOverrides by vm.phoneAlarmDayOverrides.collectAsStateWithLifecycle()
     val buzzWhoop4 by vm.buzzWhoop4Enabled.collectAsStateWithLifecycle()
     // #536: the hint adapts to bond state — the strap can only be armed when a WHOOP 4.0 is connected.
     val liveState = vm.live.collectAsStateWithLifecycle().value
@@ -84,7 +85,23 @@ fun SmartAlarmScreen(vm: AppViewModel) {
         subtitle = "Your wake window, the strap wake-alarm, and the evening wind-down reminder, in one place.",
     ) {
         // The guaranteed-wake card always shows so the safety promise is the first thing read.
-        item { WindowCard(enabled = enabled, targetMinutes = targetMinutes, windowMinutes = windowMinutes) }
+        item {
+            // #1858: the card names a specific time ("a backup alarm is set for 04:45"), so with per-day
+            // wake times it has to show the NEXT one rather than the default — on a day whose time was
+            // moved, the default is simply the wrong number, and this card is the one thing on the screen
+            // that makes a promise. Falls back to the default when no day is reachable.
+            val nextTargetMinutes = remember(
+                targetMinutes, windowMinutes, phoneAlarmWeekdays, phoneAlarmDayOverrides,
+            ) {
+                com.noop.alarm.SmartAlarmScheduler.nextWindowStartMinutes(
+                    now = java.util.Calendar.getInstance(),
+                    weekdays = phoneAlarmWeekdays,
+                    windowMinutes = windowMinutes,
+                    defaultTarget = targetMinutes,
+                ) { phoneAlarmDayOverrides[it] ?: targetMinutes }
+            }
+            WindowCard(enabled = enabled, targetMinutes = nextTargetMinutes, windowMinutes = windowMinutes)
+        }
 
         item {
         AlarmSettingsCard {
@@ -163,6 +180,18 @@ fun SmartAlarmScreen(vm: AppViewModel) {
                     onToggle = { dow ->
                         vm.setPhoneAlarmWeekdays(toggledSmartAlarmWeekday(dow, phoneAlarmWeekdays))
                     },
+                )
+                RowDividerLocal()
+                // #1858: per-day wake times, the SAME picker and the same contract the strap alarm below
+                // has had since #554. Both alarms sit on this one screen, so one of them supporting a
+                // different time on different days and the other not is read as the feature being broken —
+                // which is exactly how it was reported ("I want 04:45 on three days and 03:30 on two
+                // others… the smart alarm basically never works").
+                AlarmDayOverridePicker(
+                    defaultMinutes = targetMinutes,
+                    enabledDays = phoneAlarmWeekdays,
+                    overrides = phoneAlarmDayOverrides,
+                    onSetOverride = { dow, minutes -> vm.setPhoneAlarmDayOverride(dow, minutes) },
                 )
             }
 
