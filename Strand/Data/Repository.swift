@@ -2594,13 +2594,16 @@ final class Repository: ObservableObject {
         guard let store = await ensureStore() else { return [] }
         let now = Int(Date().timeIntervalSince1970)
         let lo = now - days * 86_400, hi = now + 86_400
-        // UNION the active strap + canonical (and their computed siblings) so workouts banked under the
-        // canonical "my-whoop" before a re-add still show, alongside the re-added strap's live workouts.
+        // UNION every registered WHOOP + canonical (and computed siblings) so workouts banked before a
+        // re-add remain visible alongside every retained strap's live workouts.
         // De-dup identical same-source rows that appear under both union ids by natural key (the cross-SOURCE
         // dedup below only collapses strap-vs-Apple twins, not a row present in two strap namespaces).
         var rows: [WorkoutRow] = []
-        for id in importedReadIds { rows += (try? await store.workouts(deviceId: id, from: lo, to: hi, limit: 5000)) ?? [] }
-        for id in computedReadIds { rows += (try? await store.workouts(deviceId: id, from: lo, to: hi, limit: 5000)) ?? [] }
+        let rawIds = rawPhysiologyReadIds(store: store)
+        for id in rawIds { rows += (try? await store.workouts(deviceId: id, from: lo, to: hi, limit: 5000)) ?? [] }
+        for id in rawIds.map({ $0.hasSuffix("-noop") ? $0 : $0 + "-noop" }) {
+            rows += (try? await store.workouts(deviceId: id, from: lo, to: hi, limit: 5000)) ?? []
+        }
         rows += (try? await store.workouts(deviceId: "apple-health", from: lo, to: hi, limit: 5000)) ?? []
         // Imported lifting sessions (Hevy / Liftosaur) live under their own "lifting" source.
         rows += (try? await store.workouts(deviceId: "lifting", from: lo, to: hi, limit: 5000)) ?? []

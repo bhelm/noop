@@ -1858,18 +1858,19 @@ class WhoopRepository(
         return dedupSleepBlocks(ids.flatMap { dao.sleepSessions(it, from, to, limit) })
     }
 
-    /** Workouts over the read-side UNION of the active strap id AND the canonical "my-whoop" (#814 twin of
-     *  [hrSamplesUnion] / [sleepSessionsUnion]): a re-added / newly-paired strap owns "whoop-<uuid>" while
+    /** Workouts over every registered WHOOP (active first, archived retained) plus canonical "my-whoop",
+     *  matching [hrSamplesUnion] / [sleepSessionsUnion]. A re-added strap owns "whoop-<uuid>" while
      *  imports + prior data live under "my-whoop", so a read pinned to a SINGLE id strands the other's
      *  workouts — the Workouts screen then reads empty while Data Sources (which queries "my-whoop") shows
      *  them (#28). Exact-duplicate rows are dropped on the (startTs, sport) natural key, active-strap-first. */
     suspend fun workoutsUnion(deviceId: String, from: Long, to: Long, limit: Int = DEFAULT_LIMIT): List<WorkoutRow> =
-        dedupWorkoutsByKey(importedSourceIds(deviceId).flatMap { dao.workouts(it, from, to, limit) })
+        dedupWorkoutsByKey(rawWhoopSourceIds(deviceId).flatMap { dao.workouts(it, from, to, limit) })
 
     /** The COMPUTED ("-noop") twin of [workoutsUnion] for detected workouts (the engine writes detected
      *  sessions under "<importedDeviceId>-noop"), across the computed union ids. */
     suspend fun detectedWorkoutsUnion(deviceId: String, from: Long, to: Long, limit: Int = DEFAULT_LIMIT): List<WorkoutRow> =
-        dedupWorkoutsByKey(computedSourceIds(deviceId).flatMap { dao.workouts(it, from, to, limit) })
+        dedupWorkoutsByKey(rawWhoopSourceIds(deviceId).map { "$it-noop" }
+            .flatMap { dao.workouts(it, from, to, limit) })
 
     /** Cached daily metrics for the inclusive day range [from, to] (YYYY-MM-DD), oldest first. */
     suspend fun dailyMetrics(deviceId: String, from: String, to: String): List<DailyMetric> =

@@ -195,7 +195,10 @@ internal object PhysiologicalStepCycleEngine {
         for (window in windows) {
             val wakeDay = dayBySleepId[window.sleepId] ?: continue
             val fallbackOwner = ownerBySleepId[window.sleepId] ?: continue
-            val cycleHr = repo.hrSamplesUnion(fallbackOwner, window.onset, window.endExclusive, 200_000)
+            // DAO ranges are inclusive. Keep adjacent physiological cycles disjoint.
+            val cycleHr = repo.hrSamplesUnion(
+                fallbackOwner, window.onset, window.endExclusive - 1L, 200_000,
+            )
             val restingHr = scoredNights.firstOrNull { it.daily.day == wakeDay }?.daily?.restingHr?.toDouble()
                 ?: StrainScorer.defaultRestingHR
             val effectiveMaxHr = maxHROverride
@@ -207,9 +210,28 @@ internal object PhysiologicalStepCycleEngine {
                     cycleHr, profile, effectiveMaxHr, restingHr,
                 )
             }
-            workoutCountByWakeDay[wakeDay] = scoredNights.asSequence().flatMap { it.workouts.asSequence() }
-                .distinctBy { it.start to it.end }
-                .count { it.start >= window.onset && it.start < window.endExclusive }
+            // Count the persisted all-source workout union, not only analyzer-detected bouts. Repository
+            // reads are inclusive, while ownership is [onset, nextOnset).
+            val workoutEndInclusive = window.endExclusive - 1L
+            val cycleWorkouts = (
+                repo.workoutsUnion(fallbackOwner, window.onset, workoutEndInclusive, 100_000) +
+                    repo.detectedWorkoutsUnion(fallbackOwner, window.onset, workoutEndInclusive, 100_000) +
+                    listOf("apple-health", "health-connect", "lifting", "activity-file").flatMap { source ->
+                        repo.workouts(source, window.onset, workoutEndInclusive, 100_000)
+                    }
+                ).distinctBy { Triple(it.startTs, it.endTs, it.sport) }
+            val freshDetectedKeys = scoredNights.asSequence().flatMap { it.workouts.asSequence() }
+                .filter { it.start >= window.onset && it.start < window.endExclusive }
+                .filter { detected ->
+                    cycleWorkouts.none { persisted ->
+                        detected.start < persisted.endTs && persisted.startTs < detected.end
+                    }
+                }
+                .map { it.start to it.end }
+                .toList()
+            workoutCountByWakeDay[wakeDay] = (
+                cycleWorkouts.map { it.startTs to it.endTs } + freshDetectedKeys
+                ).distinct().size
             val priorities = LinkedHashMap<String, Int>()
             for ((owner, priority) in candidatePriorities) priorities[owner] = priority
             priorities.putIfAbsent(fallbackOwner, priorities.values.minOrNull() ?: 0)

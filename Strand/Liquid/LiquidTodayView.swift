@@ -418,7 +418,9 @@ struct LiquidTodayView: View {
         .liquidMediumHaptic(trigger: pullHaptic)
         // hydrationSeq joins the id so logging a drink re-reads the card immediately, the same trigger set
         // classic TodayView's reloadHydration() uses.
-        .task(id: "\(repo.refreshSeq)-\(selectedDayOffset)-\(repo.hydrationSeq)-\(hydrationEnabled)") { await load() }
+        .task(id: "\(repo.refreshSeq)-\(selectedDayOffset)-\(repo.hydrationSeq)-\(hydrationEnabled)-\(dayCycleModeRaw)") {
+            await load()
+        }
         .sheet(item: $guideSection) { section in
             NavigationStack { ScoringGuideView(initialSection: section, onClose: { guideSection = nil }) }
         }
@@ -1494,7 +1496,8 @@ struct LiquidTodayView: View {
         let cycleMarkers = dayCycleMode == .sleepOnset
             ? await repo.exploreSeries(key: DayCycleIntelligenceIntegration.onsetKey, source: "my-whoop") : []
         let from = cycleMarkers.last(where: { $0.day == selectedDayKey }).map { Int($0.value) } ?? calendarFrom
-        let to = cycleMarkers.last(where: { $0.day == nextDayKey }).map { Int($0.value) } ?? calendarTo
+        let toExclusive = cycleMarkers.last(where: { $0.day == nextDayKey }).map { Int($0.value) } ?? calendarTo
+        let to = max(from, toExclusive - 1)
 
         async let restA = repo.exploreSeries(key: "sleep_performance", source: "my-whoop")
         async let stressA = repo.series(key: "stress", source: "my-whoop")

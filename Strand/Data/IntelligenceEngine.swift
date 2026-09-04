@@ -1777,6 +1777,12 @@ final class IntelligenceEngine: ObservableObject {
         if !cycleCandidates.contains(where: { $0.owner == regActiveId }) {
             cycleCandidates.append((regActiveId, 0))
         }
+        let physiologyOwners = ([regActiveId] + regDevices.filter {
+            $0.brand.caseInsensitiveCompare("WHOOP") == .orderedSame
+        }.map(\.id) + [Repository.whoopSource]).reduce(into: [String]()) {
+            if !$0.contains($1) { $0.append($1) }
+        }
+        let cycleWorkouts = await repo.workoutRows(days: maxDays + 2)
         let physiologicalSteps = await DayCycleIntelligenceIntegration.compute(
             nights: scoredNights.map { night in
                 DayCycleIntelligenceIntegration.Night(
@@ -1788,6 +1794,8 @@ final class IntelligenceEngine: ObservableObject {
             editedRows: editedRows,
             store: store,
             candidates: cycleCandidates,
+            physiologyOwners: physiologyOwners,
+            workouts: cycleWorkouts,
             windowStart: windowStart,
             now: now,
             offsetSec: tzOffset,
@@ -1865,7 +1873,7 @@ final class IntelligenceEngine: ObservableObject {
             // off the HRV baseline state rather than a blanket `.solid`, so a thin/provisional baseline shows
             // EST. not REL. Pure presentation upstream of the UI; the score itself is unchanged.
             let chargeConf = ScoreConfidence.charge(recovery: recovery, hrvBaseline: baselines2.hrv)
-            out.append(Computed(day: daily.day, recovery: recovery, strain: night.strain,
+            out.append(Computed(day: daily.day, recovery: recovery, strain: daily.strain,
                                 sleepMin: daily.totalSleepMin, hrv: daily.avgHrv,
                                 rhr: daily.restingHr, source: source, confidence: chargeConf,
                                 drivers: drivers, skinTempRel: skinRel))

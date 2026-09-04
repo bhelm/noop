@@ -85,7 +85,8 @@ import WhoopStore
     }
 
     static func compute(nights: [Night], editedRows: [CachedSleepSession], store: WhoopStore,
-                        candidates: [(owner: String, priority: Int)], windowStart: Int,
+                        candidates: [(owner: String, priority: Int)], physiologyOwners: [String],
+                        workouts: [WorkoutRow], windowStart: Int,
                         now: Int, offsetSec: Int, habitualMidsleepSec: Int?, ticksPerStep: Double,
                         mode: DayCycleMode, cache: Cache,
                         profile: UserProfile, maxHROverride: Double?, effortMethod: StrainScorer.Method,
@@ -185,8 +186,21 @@ import WhoopStore
             guard let day = wakeDayById[window.sleepId], let fallback = ownerById[window.sleepId] else { continue }
             do {
             onsets[day] = window.onset
-            let cycleHR = (try? await store.hrSamples(
-                deviceId: fallback, from: window.onset, to: window.endExclusive, limit: 200_000)) ?? []
+            // Store ranges are inclusive. Read the active-first WHOOP + canonical union without borrowing
+            // step coverage: an HR-only device may legitimately have no step rows.
+            let hrEndInclusive = window.endExclusive - 1
+            let owners = ([fallback] + physiologyOwners).reduce(into: [String]()) {
+                if !$0.contains($1) { $0.append($1) }
+            }
+            var hrByTimestamp: [Int: HRSample] = [:]
+            if hrEndInclusive >= window.onset {
+                for owner in owners {
+                    let rows = (try? await store.hrSamples(
+                        deviceId: owner, from: window.onset, to: hrEndInclusive, limit: 200_000)) ?? []
+                    for row in rows where hrByTimestamp[row.ts] == nil { hrByTimestamp[row.ts] = row }
+                }
+            }
+            let cycleHR = hrByTimestamp.values.sorted { $0.ts < $1.ts }
             let restingHR = nights.first(where: { $0.daily.day == day })?.daily.restingHr.map(Double.init)
                 ?? StrainScorer.defaultRestingHR
             let effectiveMaxHR = maxHROverride ?? (profile.age > 0 ? StrainScorer.tanakaHRmax(age: profile.age) : nil)
@@ -197,9 +211,18 @@ import WhoopStore
                 calories[day] = Calories.estimateDayCalories(
                     cycleHR, profile: profile, hrmax: effectiveMaxHR, restingHR: restingHR)
             }
-            workoutCounts[day] = Set(nights.flatMap(\.workouts)
+            let persistedWorkoutKeys = workouts
+                .filter { $0.startTs >= window.onset && $0.startTs < window.endExclusive }
+                .map { "\($0.startTs):\($0.endTs)" }
+            let freshDetectedKeys = nights.flatMap(\.workouts)
                 .filter { $0.start >= window.onset && $0.start < window.endExclusive }
-                .map { "\($0.start):\($0.end)" }).count
+                .filter { detected in
+                    !workouts.contains { persisted in
+                        detected.start < persisted.endTs && persisted.startTs < detected.end
+                    }
+                }
+                .map { "\($0.start):\($0.end)" }
+            workoutCounts[day] = Set(persistedWorkoutKeys + freshDetectedKeys).count
             var ranked = priorities; ranked[fallback] = ranked[fallback] ?? ranked.values.min() ?? 0
             var coverage: [PhysiologicalSteps.OwnerCoverage] = []
             for (owner, priority) in ranked {

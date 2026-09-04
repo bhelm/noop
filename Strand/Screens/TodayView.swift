@@ -1481,7 +1481,8 @@ struct TodayView: View {
         }
         // Reload when the data refreshes OR the selected day changes, the HR trend and Rest score are
         // day-scoped, so navigating must re-fetch them for the newly selected window.
-        .task(id: TodayLoadKey(seq: repo.refreshSeq, offset: selectedDayOffset)) { await loadAll() }
+        .task(id: TodayLoadKey(seq: repo.refreshSeq, offset: selectedDayOffset,
+                              dayCycleMode: dayCycleModeRaw)) { await loadAll() }
         // #989: hydration writes don't bump refreshSeq, so the card needs its own triggers, a logged /
         // edited / deleted drink (hydrationSeq) and the Settings feature toggle both re-read just the two
         // hydration fields. Cheap (one metricSeries row), never re-runs the heavy loads.
@@ -4682,9 +4683,10 @@ struct TodayView: View {
             ? await repo.exploreSeries(key: DayCycleIntelligenceIntegration.onsetKey, source: "my-whoop") : []
         let windowStart = cycleMarkers.last(where: { $0.day == selectedDayKey }).map { Int($0.value) }
             ?? calendarStart
-        let windowEnd = cycleMarkers.last(where: { $0.day == nextDayKey }).map { Int($0.value) }
+        let windowEndExclusive = cycleMarkers.last(where: { $0.day == nextDayKey }).map { Int($0.value) }
             ?? calendarEnd
-        let hrPointsLocal = await repo.hrBuckets(from: windowStart, to: windowEnd, bucketSeconds: 300)
+        let windowEndInclusive = max(windowStart, windowEndExclusive - 1)
+        let hrPointsLocal = await repo.hrBuckets(from: windowStart, to: windowEndInclusive, bucketSeconds: 300)
             .map { TrendPoint(date: Date(timeIntervalSince1970: TimeInterval($0.ts)), value: $0.bpm) }
         hrPoints = hrPointsLocal
 
@@ -4694,7 +4696,7 @@ struct TodayView: View {
         // canonical UNION (like the HR curve / Effort above): a re-added strap banks its live step samples
         // under its OWN fresh id, so a read pinned to the canonical "my-whoop" would drop the icon for a
         // re-added strap (the #904/#908 family). nil (no classed sample) hides the icon.
-        let stepClassLocal = await repo.stepActivityClassLatest(from: windowStart, to: windowEnd)
+        let stepClassLocal = await repo.stepActivityClassLatest(from: windowStart, to: windowEndInclusive)
         stepActivityClassToday = stepClassLocal
 
         // #860 item 1: the launch auto-land (#605/#739 "snap to the most recent data day when today is
@@ -4715,7 +4717,7 @@ struct TodayView: View {
             let cycleOnset = dayCycleSeries.last(where: { $0.day <= selectedDayKey })
                 .map { Int($0.value.rounded()) }
             let effortStart = mode == .sleepOnset ? (cycleOnset ?? windowStart) : windowStart
-            let todayHr = await repo.hrSamples(from: effortStart, to: windowEnd)
+            let todayHr = await repo.hrSamples(from: effortStart, to: windowEndInclusive)
             let maxHR = profile.age > 0 ? StrainScorer.tanakaHRmax(age: Double(profile.age)) : nil
             let restHR = displayDay?.restingHr.map(Double.init) ?? StrainScorer.defaultRestingHR
             liveStrainLocal = StrainScorer.strain(todayHr, maxHR: maxHR, restingHR: restHR,
@@ -4727,7 +4729,7 @@ struct TodayView: View {
         // Pin the chart axis to the loaded window, today midnight→now, a past day the full 24h, so
         // a gap (e.g. a morning the strap wasn't banking) shows as empty space, not a late start.
         let newAxis = Date(timeIntervalSince1970: TimeInterval(windowStart))
-            ... Date(timeIntervalSince1970: TimeInterval(windowEnd))
+            ... Date(timeIntervalSince1970: TimeInterval(windowEndExclusive))
         // #829 - keep the HR zoom VALID across reloads. The window changes on a day step (a whole new day)
         // and, on today, each refresh nudges the end to a fresh `now`. A day step clears the zoom so the new
         // day opens at full scale; a same-day end-extension keeps the user's zoom but RE-CLAMPS it into the
@@ -4745,7 +4747,7 @@ struct TodayView: View {
         // read for a night stored as more than one block (#294). Drives the HR sleep band + the recovery
         // marker's wake anchor.
         let overlapping = await repo.allSleepSessions(days: selectedDayOffset + 2)
-            .filter { $0.endTs > windowStart && $0.startTs < windowEnd }
+            .filter { $0.endTs > windowStart && $0.startTs < windowEndExclusive }
         let habitualMidsleepSecLocal = await repo.habitualMidsleepSec()
         let sleepTodayLocal = SleepView.mainNightSpan(overlapping, habitualMidsleepSec: habitualMidsleepSecLocal)
             .map { span in
@@ -5121,6 +5123,7 @@ struct TodayView: View {
 private struct TodayLoadKey: Equatable {
     let seq: Int
     let offset: Int
+    let dayCycleMode: String
 }
 
 /// #849: an in-memory snapshot of everything `loadHistoryWide()` computes: the ~40 history-wide reads +

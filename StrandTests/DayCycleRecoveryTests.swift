@@ -72,6 +72,7 @@ final class DayCycleRecoveryTests: XCTestCase {
         let result = await DayCycleIntelligenceIntegration.compute(
             nights: [], editedRows: [], store: store,
             candidates: [(owner: "strap", priority: 0)],
+            physiologyOwners: ["strap"], workouts: [],
             windowStart: 1_700_000_000, now: 1_700_086_400, offsetSec: 0,
             habitualMidsleepSec: nil, ticksPerStep: 1, mode: .sleepOnset,
             cache: DayCycleIntelligenceIntegration.Cache(), profile: UserProfile(),
