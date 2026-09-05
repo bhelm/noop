@@ -1260,6 +1260,11 @@ public final class BLEManager: NSObject, ObservableObject {
     /// rather than on every tick of the family-rotation timer.
     private var lastBlockedConnectReason: String?
 
+    /// #1635: one `ScanAdvertisementSummary` line per SCAN, not per process — the question it answers
+    /// is only visible by comparing a scan before the strap was put in pairing mode against one after,
+    /// so `startScan` reopens it.
+    private var advertisementLogged = false
+
     /// Stable device id; matches the server's existing device for sync parity. Overridable.
     /// Seeded from the init argument, then refined once in bootstrapStore() to the device registry's
     /// active id (still "my-whoop" today) before any store writes use it — see bootstrapStore().
@@ -4623,6 +4628,7 @@ public final class BLEManager: NSObject, ObservableObject {
     /// from the already-gated `connectFromSystem` — and this method's own family-rotation timer, which
     /// cannot start a scan that one of those did not. Gating here as well would block the user's Connect.
     private func startScan(for model: WhoopModel, allowFallback: Bool) {
+        advertisementLogged = false
         cancelScanFallback()
         selectedModel = model
         reassembler = Reassembler(family: model.deviceFamily)
@@ -5349,6 +5355,36 @@ extension BLEManager: @preconcurrency CBCentralManagerDelegate {
                                advertisementData: [String: Any],
                                rssi RSSI: NSNumber) {
         let name = (advertisementData[CBAdvertisementDataLocalNameKey] as? String) ?? peripheral.name ?? "unknown"
+        // The raw name goes to the DEVICE LIST (the user's own screen, where they need to recognise
+        // their strap); only the log gets the model-only form. See LiveState.logSafeDeviceName.
+        let safeName = LiveState.logSafeDeviceName(name)
+        // #1635: what the strap ADVERTISED, once per scan. The open question there is whether a
+        // refusing strap was in pairing mode, and a strap that accepts pairing should advertise
+        // differently — but nothing recorded the advertisement, so no log could say. Structure only,
+        // never payload: see `ScanAdvertisementSummary`. Test Centre gated. CoreBluetooth exposes no AD
+        // flags byte, so that field reads `none` here and carries on the Kotlin side.
+        if !advertisementLogged, TestCentre.active(.connection) {
+            advertisementLogged = true
+            let svc = (advertisementData[CBAdvertisementDataServiceUUIDsKey] as? [CBUUID])?
+                .map { $0.uuidString.lowercased() } ?? []
+            var svcLens: [String: Int] = [:]
+            if let sd = advertisementData[CBAdvertisementDataServiceDataKey] as? [CBUUID: Data] {
+                for (k, v) in sd { svcLens[k.uuidString.lowercased()] = v.count }
+            }
+            var mfgLens: [Int: Int] = [:]
+            if let md = advertisementData[CBAdvertisementDataManufacturerDataKey] as? Data, md.count >= 2 {
+                mfgLens[Int(md[0]) | (Int(md[1]) << 8)] = md.count - 2
+            }
+            state.append(log: ScanAdvertisementSummary.line(
+                flags: nil,
+                serviceUuids: svc,
+                serviceDataLengths: svcLens,
+                manufacturerDataLengths: mfgLens,
+                txPower: (advertisementData[CBAdvertisementDataTxPowerLevelKey] as? NSNumber)?.intValue,
+                localNameLength: ScanAdvertisementSummary.localNameLength(
+                    advertisementData[CBAdvertisementDataLocalNameKey] as? String),
+                connectable: (advertisementData[CBAdvertisementDataIsConnectable] as? NSNumber)?.boolValue ?? true))
+        }
         // #716: the seeded "my-whoop" device has model "WHOOP" (no generation). Once a live scan
         // confirms which service family the strap advertises, stamp the correct model so
         // forRegistryModel returns the right DeviceFamily (fixes skin-temp ADC scale + display).
@@ -5367,10 +5403,10 @@ extension BLEManager: @preconcurrency CBCentralManagerDelegate {
         )
         if !scanDecision.shouldConnect {
             if let family = scanDecision.unsupportedFamily {
-                log("Discovered \(name) (rssi \(RSSI)) — \(family.diagnosticUnsupportedMessage)")
+                log("Discovered \(safeName) (rssi \(RSSI)) — \(family.diagnosticUnsupportedMessage)")
                 return
             }
-            log("Discovered \(name) (rssi \(RSSI)) without \(selectedModel.displayName) service — ignoring")
+            log("Discovered \(safeName) (rssi \(RSSI)) without \(selectedModel.displayName) service — ignoring")
             return
         }
         // Multi-WHOOP present-scan (Add-a-WHOOP wizard): collect the strap, do NOT auto-connect, and
@@ -5391,14 +5427,14 @@ extension BLEManager: @preconcurrency CBCentralManagerDelegate {
         // WHOOP default) this guard is skipped and the original "connect to the first discovered" path
         // below is byte-for-byte unchanged.
         if let preferred = preferredPeripheralUUID, peripheral.identifier != preferred {
-            log("Discovered \(name) (\(peripheral.identifier)) — not the preferred strap; ignoring")
+            log("Discovered \(safeName) (\(peripheral.identifier)) — not the preferred strap; ignoring")
             return
         }
         // No gate here for the same reason as `startScan`: reaching a discovery means a scan is running,
         // and a scan only runs because the user asked or because the gated system entry allowed it.
         cancelScanFallback()
         persistSelectedModel(selectedModel)
-        log("Discovered \(name) (rssi \(RSSI)) — connecting")
+        log("Discovered \(safeName) (rssi \(RSSI)) — connecting")
         central.stopScan()
         preparePeripheral(peripheral)
         central.connect(peripheral, options: nil)
@@ -6065,7 +6101,11 @@ extension BLEManager: @preconcurrency CBPeripheralDelegate {
                 helloRetryRequested = false
                 let helloSuppressed = HelloSuppressionStore.suppressed(peripheral.identifier.uuidString)
                 if !shouldSendClientHello(suppressedForDevice: helloSuppressed, userInitiated: helloUserAsked) {
-                    log("WHOOP 5/MG: CLIENT_HELLO suppressed for this strap - it was never acknowledged and the write is what drops the link. Staying on live HR (not fully paired); press Connect to try the handshake again (#1635).")
+                    // #1635: says what happened and what has actually worked, not "try again". This strap
+                    // refuses the handshake, so a retry is the one thing that cannot help - and suggesting
+                    // it invites the hammering this suppression exists to stop. Mirrors the user-facing
+                    // hint, which lost the same ending.
+                    log("WHOOP 5/MG: CLIENT_HELLO suppressed for this strap - it was never acknowledged and the write is what drops the link. Staying on live HR (not fully paired). Some straps have paired again after being put in pairing mode (tap until the LEDs flash blue) (#1635).")
                     state.pairingHint = BondRefusalGiveUp.helloSuppressedHint()
                     // The unbonded DIS attempt rides HERE and nowhere else: this is the only 5/MG state
                     // known to be stable - the handshake is off and the link is holding - and it is now

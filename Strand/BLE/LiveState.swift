@@ -831,6 +831,50 @@ public final class LiveState: ObservableObject {
         return String(out)
     }
 
+    /// Tokens that identify a MODEL rather than a person, for `logSafeDeviceName`.
+    ///
+    /// Two shapes only, both EXACT: a known vendor, product or model word, and a version number ("4.0").
+    ///
+    /// There is deliberately no letters-plus-digits pattern for model codes. One was tried and it
+    /// defeated the whole design: "[a-z]{1,4}\\d{1,3}" matches "Ryan1" and "Sam99" as readily as "H10",
+    /// so a first name with a digit passed through untouched. A pattern cannot be an allowlist - the
+    /// moment a rule describes a SHAPE rather than a known value it admits everything else of that
+    /// shape. Model codes are therefore listed one by one.
+    ///
+    /// The cost is that an unlisted device logs as "<name>" until its code is added, which is the right
+    /// direction to fail: a missing model is an inconvenience, a leaked name is not.
+    ///
+    /// Anything not on this list is DROPPED, which is the point: a naming shape nobody anticipated loses
+    /// by default. Kotlin twin: `SAFE_DEVICE_NAME_TOKEN_RE`.
+    private static let safeDeviceNameToken = try? NSRegularExpression(
+        pattern: "^(whoop|mg|polar|verity|sense|wahoo|tickr|garmin|hrm|forerunner|fenix|vantage|ignite|amazfit|huami|zepp|xiaomi|mi|band|coospo|magene|suunto|scosche|rhythm|kickr|tacx|elite|cateye|decathlon|kalenji|geonaute|h6|h7|h9|h10|h64|h808s|oh1|dual|\\d+(\\.\\d+)?)$", options: [.caseInsensitive])
+
+    /// A device name reduced to what is safe to put in a shared log: the MODEL, never the person.
+    ///
+    /// WHOOP seeds a strap's name from the account holder ("<FirstName>'s Whoop") and people rename
+    /// straps to anything at all. `redactPii` can only GUESS which words in a line are a name; here the
+    /// whole string IS the advertised name, so the safe move is an ALLOWLIST - keep the tokens known to
+    /// name a model and drop everything else. A naming shape nobody anticipated is then dropped by
+    /// default rather than needing a rule to catch it: "Ryan B's WHOOP 4.0" keeps only "WHOOP 4.0", and
+    /// "Dad's spare" keeps nothing.
+    ///
+    /// The "no name advertised" sentinel survives, because "we saw no name" and "we removed a name" are
+    /// different facts to whoever reads the log. Kotlin twin: `logSafeDeviceName`.
+    nonisolated static func logSafeDeviceName(_ name: String?) -> String {
+        let n = (name ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        if n.isEmpty || n == "unknown" { return "unknown" }
+        let tokens = n.split(whereSeparator: { $0.isWhitespace })
+        let safe = tokens.filter { tok in
+            guard let re = Self.safeDeviceNameToken else { return false }
+            let t = String(tok)
+            return re.firstMatch(in: t, range: NSRange(location: 0, length: (t as NSString).length)) != nil
+        }
+        // Say "<name>" only when something was actually removed. An unrenamed "WHOOP 4.0" or "Polar H10"
+        // carries nothing personal, and prefixing it would claim a redaction that never happened.
+        if safe.count == tokens.count { return n }
+        return safe.isEmpty ? "<name>" : "<name> " + safe.joined(separator: " ")
+    }
+
     private static let hexRunRegex = try? NSRegularExpression(pattern: "[0-9a-fA-F]{16,}")
 
     nonisolated static func redactPii(_ s: String) -> String {
@@ -874,6 +918,22 @@ public final class LiveState: ObservableObject {
         out = out.replacingOccurrences(
             of: "whoop-([A-Za-z0-9]{3})[A-Za-z0-9-]{3,}",
             with: "whoop-$1…", options: .regularExpression)
+        // The account holder's NAME, as WHOOP writes it into the advertised local name. WHOOP names a
+        // strap "<FirstName>'s Whoop" by default and the scan path logs that name on every discovery, so
+        // the shareable log (#445) we ask people to attach to public issues carried a real person's name.
+        // No rule above could see it: they key on MAC shape, "WHOOP " + digit, or a "whoop-" id.
+        //
+        // Keeps the possessive and whatever follows, so "Ryan's WHOOP 4.0" keeps the MODEL, which is
+        // diagnostic and identifies nobody. Matches the curly apostrophe because Apple platforms write
+        // U+2019 into default device names — a straight-quote-only rule would miss this platform's logs.
+        //
+        // LIMITATION, deliberate: exactly ONE token before the possessive, so "Ryan B's Whoop" keeps
+        // "Ryan". A multi-token rule cannot tell a name from the surrounding log text and would swallow
+        // "Discovered" with it. A fully custom name with no possessive stays a known gap. Kotlin twin in
+        // `redactStrapLogPii` as `PII_DEVICE_NAME_RE`.
+        out = out.replacingOccurrences(
+            of: "[\\p{L}\\p{N}_.\\-]+(['\u{2019}]s\\s+(?i:whoop))",
+            with: "<name>$1", options: .regularExpression)
         return out
     }
 
