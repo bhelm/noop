@@ -36,6 +36,7 @@ import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -76,6 +77,13 @@ fun CoachScreen(vm: CoachViewModel = viewModel()) {
     val customConnected by vm.customConnected.collectAsStateWithLifecycle()
     // Re-evaluate the gate whenever the stored key, provider, or custom-connect state changes.
     val configured = remember(keyVersion, provider, customConnected) { vm.isConfigured(context) }
+    // #1862: a question handed over by the Today launcher sheet. Consumed once — `consume()` clears it —
+    // so a recomposition cannot resend it, and only when the coach can actually send, so an unconfigured
+    // handoff degrades to showing setup rather than a failed request. Swift twin: CoachView's task.
+    LaunchedEffect(configured) {
+        val handed = CoachHandoff.consume()
+        if (handed != null && configured) vm.send(context, handed)
+    }
     // Same day-cycle gate as the liquid Today: the time-of-day sky settles behind the top content when the
     // user hasn't opted out; otherwise the scaffold paints the plain dark canvas.
     val showDayCycleBackground = remember { NoopPrefs.showDayCycleBackground(context) }
@@ -509,12 +517,13 @@ private fun ThinkingBubble() {
 
 // MARK: - Suggested prompts
 
-private val SUGGESTED_PROMPTS = listOf(
-    "How's my recovery trending this week?",
-    "Should I train hard or take it easy today?",
-    "Why might my HRV be low lately?",
-    "How can I improve my sleep?",
-)
+/**
+ * #1862: shared with the Today Coach launcher sheet — see [CoachPrompts].
+ *
+ * Two hardcoded lists would have drifted the moment either was edited, and the launcher's whole purpose
+ * is to be a shortcut INTO this screen rather than a second, subtly different Coach.
+ */
+internal val SUGGESTED_PROMPTS: List<String> get() = CoachPrompts.SUGGESTIONS
 
 @Composable
 private fun SuggestedPrompts(onPick: (String) -> Unit) {
