@@ -634,11 +634,14 @@ public enum SleepStager {
     /// as a confirmation gate on an already-detected run it is deliberately permissive, but as a primary
     /// threshold it admits over half of any window by definition. See `hrOnlyAnchorPercentile`.
     ///
-    /// `restingHR` and `avgHRV` are left NIL deliberately, and that is the whole display-only guarantee.
-    /// An HR-only night may describe itself — duration, stages, Rest — but the resting HR and HRV it
-    /// would contribute are exactly what Charge and the baselines fold in, and a baseline is the one
-    /// thing a false positive cannot be unwound from. Withholding the values is structural; a downstream
-    /// filter would be one forgotten call site away from failing open.
+    /// `restingHR` and `avgHRV` are MEASURED here and reported (#1884). They were withheld under #1801,
+    /// which treated them as inferred; they are not. Only the session BOUNDS are inferred from heart rate
+    /// — that is what `hrOnly` marks — while each RMSSD is computed over its own 5-minute window, so fuzzy
+    /// bounds change WHICH windows are included, not whether any one of them is valid. Withholding them
+    /// discarded a measured 22-25 ms and left Charge with no input at all, which is a worse error than a
+    /// slightly fuzzy one.
+    ///
+    /// The flag travels on instead, so a consumer that wants to weigh an HR-only night down still can.
     /// `public` because the app target calls it: `Strand/Data/IntelligenceEngine.swift` is the day scan,
     /// and it lives outside this package. The spine and the anchor below it stay `internal` — the tests
     /// reach them with `@testable`, and nothing outside should be building its own spine.
@@ -674,9 +677,18 @@ public enum SleepStager {
                                                     hr: hrS, rr: rrS, resp: resp)
             staged += 1
             if stages.isEmpty { continue }
+            // #1884: MEASURED, not nilled. The bounds here are inferred from heart rate, which is why
+            // `hrOnly` marks the session — but each RMSSD is computed over its own 5-minute window tagged
+            // by the stage at its centre, so fuzzy bounds change WHICH windows are included, not whether
+            // any one of them is valid. A field log showed this path computing a stable 22-25ms deepOnly
+            // and discarding it, leaving Charge unscoreable. `hrOnly` still travels with the session, so
+            // it is a quality marker now rather than a delete. Kotlin twin: `SleepStager.hrOnlySessions`.
             out.append(SleepSession(start: p.start, end: p.end,
                                     efficiency: efficiency(start: p.start, end: p.end, stages: stages),
-                                    stages: stages, restingHR: nil, avgHRV: nil, hrOnly: true))
+                                    stages: stages,
+                                    restingHR: sessionRestingHR(start: p.start, end: p.end, hr: hrS),
+                                    avgHRV: sessionAvgHRV(start: p.start, end: p.end, rr: rrS),
+                                    hrOnly: true))
         }
         traceSink?(GateTrace.hrOnlyLine(
             anchorBpm: baseline,

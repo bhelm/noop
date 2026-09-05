@@ -700,11 +700,14 @@ object SleepStager {
      * as a confirmation gate on an already-detected run it is deliberately permissive, but as a primary
      * threshold it admits over half of any window by definition. See [hrOnlyAnchorPercentile].
      *
-     * [DetectedSleep.restingHR] and [DetectedSleep.avgHRV] are left NULL deliberately, and that is the
-     * whole display-only guarantee. An HR-only night may describe itself — duration, stages, Rest — but
-     * the resting HR and HRV it would contribute are exactly what Charge and the baselines fold in, and
-     * a baseline is the one thing a false positive cannot be unwound from. Withholding the values is
-     * structural; a downstream filter would be one forgotten call site away from failing open.
+     * [DetectedSleep.restingHR] and [DetectedSleep.avgHRV] are MEASURED here and reported (#1884). They
+     * were withheld under #1801, which treated them as inferred; they are not. Only the session BOUNDS
+     * are inferred from heart rate — that is what [DetectedSleep.hrOnly] marks — while each RMSSD is
+     * computed over its own 5-minute window, so fuzzy bounds change WHICH windows are included, not
+     * whether any one of them is valid. Withholding them discarded a measured 22-25 ms and left Charge
+     * with no input at all, which is a worse error than a slightly fuzzy one.
+     *
+     * The flag travels on instead, so a consumer that wants to weigh an HR-only night down still can.
      */
     internal fun hrOnlySessions(
         hr: List<HrSample>,
@@ -754,8 +757,20 @@ object SleepStager {
                     end = p.end,
                     efficiency = efficiency(start = p.start, end = p.end, stages = stages),
                     stages = stages,
-                    restingHR = null,
-                    avgHRV = null,
+                    // #1884: MEASURED, not nulled. The bounds here are inferred from heart rate, which is
+                    // why `hrOnly` marks the session — but each RMSSD is computed over its own 5-minute
+                    // window tagged by the stage at its centre, so fuzzy bounds change WHICH windows are
+                    // included, not whether any one of them is valid. Field logs showed this path
+                    // computing wholeNight=24.04ms / deepOnly=22.44ms over 55 windows and then throwing it
+                    // away, which left Charge with `nilScore reason=missingInput` on every pass. Resting HR
+                    // is HR-derived and an HR-only night is precisely the night with plenty of HR.
+                    //
+                    // `hrOnly` still travels with the session and is persisted as `dailyMetric.sleepHrOnly`
+                    // (#1879), so it is a quality marker now rather than a delete. Its one reader today,
+                    // `TodayScreen.showsHrOnlyNote`, is gated on a vital ACTUALLY being blank, so the note
+                    // explaining the blanks retires itself on the nights this change fills in.
+                    restingHR = sessionRestingHR(start = p.start, end = p.end, hr = hrS),
+                    avgHRV = sessionAvgHRV(start = p.start, end = p.end, rr = rrS),
                     hrOnly = true,
                 )
             )
