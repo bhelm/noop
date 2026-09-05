@@ -258,9 +258,15 @@ extension WhoopStore {
                     INSERT INTO stepSample (deviceId, ts, counter, activityClass) VALUES (?, ?, ?, ?)
                     ON CONFLICT(deviceId, ts) DO NOTHING
                     """)
+                var insertedSteps = 0
+                var insertedStepTimestamps: [Int] = []
                 for s in streams.steps {
                     try stmt.execute(arguments: [deviceId, s.ts, s.counter, s.activityClass])
+                    let inserted = db.changesCount
+                    insertedSteps += inserted
+                    if inserted > 0 { insertedStepTimestamps.append(s.ts) }
                 }
+                stepDataRevision.record(deviceId: deviceId, insertedTimestamps: insertedStepTimestamps)
             }
             // Band sleep_state (#175). Persist-only, same as steps — the strap's OWN @81 high-nibble state
             // (0 wake/1 still/2 asleep/3 up), decoded and streamed but dropped at storage until now. Keyed by

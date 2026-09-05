@@ -120,6 +120,7 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.noop.BuildConfig
 import com.noop.analytics.Baselines
+import com.noop.analytics.DayCycleMode
 import com.noop.analytics.HrZoneSet
 import com.noop.analytics.HrZones
 import com.noop.analytics.UserProfile
@@ -564,6 +565,12 @@ fun SettingsScreen(
     // that feeds Charge from tonight onward; the standing analyze loop picks it up on its next pass.
     // Fixes a baseline poisoned by a bad first week (worn sick, or early nights that anchored too high).
     var showRecalibrateConfirm by remember { mutableStateOf(false) }
+
+    // Steps-estimate calibration screen (WHOOP 4.0), reached from the Profile card's "Steps estimate"
+    // tap-through. Mirrors the macOS StepsCalibrationSheet: honest explainer + current fit + a recent
+    // estimated-vs-phone table + a manual coefficient override. Full-screen Dialog like the guide above.
+    var showStepsCalibration by remember { mutableStateOf(false) }
+    var dayCycleMode by remember { mutableStateOf(NoopPrefs.dayCycleMode(context)) }
 
     // Whether the "Advanced" disclosure (experimental probes, diagnostics, raw-sensor export, Trends
     // report) is expanded. Default FALSE so a first-run user lands on the everyday sections instead of
@@ -1173,6 +1180,39 @@ fun SettingsScreen(
                 }
                 Text(
                     uiString(R.string.l10n_settings_screen_for_a_whoop_4_0_which_df865854),
+                    style = NoopType.footnote,
+                    color = Palette.textTertiary,
+                )
+            }
+        }
+
+        // --- Daily cycle ---
+        SettingsCard(
+            icon = Icons.Filled.Autorenew,
+            title = uiString(R.string.settings_day_cycle_title),
+            blurb = uiString(R.string.settings_day_cycle_description),
+        ) {
+            Column {
+                SettingsFormRow(label = uiString(R.string.settings_day_cycle_starts)) {
+                    SegmentedPillControl(
+                        items = listOf(DayCycleMode.SLEEP_ONSET, DayCycleMode.MIDNIGHT),
+                        selection = dayCycleMode,
+                        label = {
+                            if (it == DayCycleMode.SLEEP_ONSET) uiString(R.string.settings_day_cycle_sleep)
+                            else uiString(R.string.settings_day_cycle_midnight)
+                        },
+                        onSelect = {
+                            dayCycleMode = it
+                            vm.setDayCycleMode(it)
+                        },
+                    )
+                }
+                Text(
+                    text = if (dayCycleMode == DayCycleMode.SLEEP_ONSET) {
+                        uiString(R.string.settings_day_cycle_sleep_description)
+                    } else {
+                        uiString(R.string.settings_day_cycle_midnight_description)
+                    },
                     style = NoopType.footnote,
                     color = Palette.textTertiary,
                 )

@@ -262,6 +262,12 @@ interface WhoopDao : DeviceRegistryDao {
         if (provenance.isNotEmpty()) upsertScoreInputProvenance(provenance)
     }
 
+    @Query(
+        "DELETE FROM metricSeries WHERE deviceId = :deviceId AND day >= :from AND day <= :to " +
+            "AND `key` = :key"
+    )
+    suspend fun deleteMetricSeriesKeyInRange(deviceId: String, from: String, to: String, key: String)
+
     /**
      * Replace a computed scoring window atomically. If any score or provenance write fails, Room rolls
      * the whole transaction back, so an old score can never be labelled with a newer provider. VO₂max's
@@ -276,6 +282,8 @@ interface WhoopDao : DeviceRegistryDao {
         dailyMetrics: List<DailyMetric>,
         metricPoints: List<MetricSeriesRow>,
         provenance: List<ScoreInputProvenanceRow>,
+        replaceMetricKeys: List<String> = emptyList(),
+        replaceMetricSourceIds: List<String> = listOf(deviceId),
     ) {
         // #1196: a scoring pass that produced NO computed daily rows must NOT wipe the persisted window.
         // That happens transiently during a reconnect+offload storm (a pass runs over a still-incomplete
@@ -288,6 +296,9 @@ interface WhoopDao : DeviceRegistryDao {
         if (dailyMetrics.isEmpty()) return
         deleteDailyMetricsInRange(deviceId, from, to)
         deleteScoreInputProvenanceInRange(deviceId, from, to)
+        for (sourceId in replaceMetricSourceIds) {
+            for (key in replaceMetricKeys) deleteMetricSeriesKeyInRange(sourceId, from, to, key)
+        }
         upsertDailyMetrics(dailyMetrics)
         if (metricPoints.isNotEmpty()) upsertMetricSeries(metricPoints)
         if (provenance.isNotEmpty()) upsertScoreInputProvenance(provenance)
@@ -493,6 +504,54 @@ interface WhoopDao : DeviceRegistryDao {
     )
     suspend fun stepSamples(deviceId: String, from: Long, to: Long, limit: Int): List<StepSample>
 
+    /** One predecessor for a half-open physiological-cycle scan. Device-scoped by construction. */
+    @Query(
+        "SELECT * FROM stepSample WHERE deviceId = :deviceId AND ts < :onset " +
+            "ORDER BY ts DESC LIMIT 1"
+    )
+    suspend fun stepSampleBefore(deviceId: String, onset: Long): StepSample?
+
+    /** Stable activity-class mode for the complete cycle; it must never be re-decided per page. */
+    @Query(
+        "SELECT EXISTS(SELECT 1 FROM stepSample WHERE deviceId = :deviceId " +
+            "AND ts >= :onset AND ts < :endExclusive AND activityClass IS NOT NULL LIMIT 1)"
+    )
+    suspend fun hasStepActivityClasses(deviceId: String, onset: Long, endExclusive: Long): Boolean
+
+    /** PK-index seek: never aggregate-scan the whole cycle merely to find its first sample. */
+    @Query(
+        "SELECT ts FROM stepSample WHERE deviceId = :deviceId " +
+            "AND ts >= :onset AND ts < :endExclusive ORDER BY ts ASC LIMIT 1"
+    )
+    suspend fun firstStepTimestamp(
+        deviceId: String,
+        onset: Long,
+        endExclusive: Long,
+    ): Long?
+
+    /** PK-index seek paired with [firstStepTimestamp]; warm candidate coverage stays O(log n). */
+    @Query(
+        "SELECT ts FROM stepSample WHERE deviceId = :deviceId " +
+            "AND ts >= :onset AND ts < :endExclusive ORDER BY ts DESC LIMIT 1"
+    )
+    suspend fun lastStepTimestamp(
+        deviceId: String,
+        onset: Long,
+        endExclusive: Long,
+    ): Long?
+
+    /** Keyset page for [afterExclusive, endExclusive); avoids both OFFSET and the legacy 200k cap. */
+    @Query(
+        "SELECT * FROM stepSample WHERE deviceId = :deviceId AND ts > :afterExclusive " +
+            "AND ts < :endExclusive ORDER BY ts ASC LIMIT :limit"
+    )
+    suspend fun stepSamplesPage(
+        deviceId: String,
+        afterExclusive: Long,
+        endExclusive: Long,
+        limit: Int,
+    ): List<StepSample>
+
     /** The strap's OWN banked band sleep_state (#175) in [from, to], ascending. Feeds the Deep Timeline
      *  band-state track and the per-session grid the H7 re-onset confirm guard reads. */
     @Query(
@@ -583,6 +642,12 @@ interface WhoopDao : DeviceRegistryDao {
             "ORDER BY day ASC"
     )
     suspend fun dailyMetricsRange(deviceId: String, from: String, to: String): List<DailyMetric>
+
+    @Query(
+        "SELECT * FROM dailyMetric WHERE deviceId = :deviceId AND day >= :from AND day <= :to " +
+            "ORDER BY day ASC"
+    )
+    fun dailyMetricsRangeFlow(deviceId: String, from: String, to: String): Flow<List<DailyMetric>>
 
     /**
      * Delete a source's cached daily rows whose day-key is in [from, to] (inclusive, yyyy-MM-dd
@@ -689,6 +754,17 @@ interface WhoopDao : DeviceRegistryDao {
         from: String,
         to: String,
     ): List<MetricSeriesRow>
+
+    @Query(
+        "SELECT * FROM metricSeries WHERE deviceId = :deviceId AND key = :key AND day >= :from AND day <= :to " +
+            "ORDER BY day ASC"
+    )
+    fun metricSeriesFlow(
+        deviceId: String,
+        key: String,
+        from: String,
+        to: String,
+    ): Flow<List<MetricSeriesRow>>
 
     /** Distinct metric keys present for a device, sorted ascending (Swift metricKeys, v9). */
     @Query("SELECT DISTINCT key FROM metricSeries WHERE deviceId = :deviceId ORDER BY key ASC")

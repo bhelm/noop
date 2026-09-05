@@ -21,6 +21,7 @@ final class IntelligenceEngine: ObservableObject {
     /// is worth the few characters.
     static let minHrSamples = 200
 
+    private let dayCycleCache = DayCycleIntelligenceIntegration.Cache()
     private let repo: Repository
     private let profile: ProfileStore
     /// The CANONICAL id under whose `-noop` sibling this engine WRITES the computed daily rows, and from
@@ -802,6 +803,7 @@ final class IntelligenceEngine: ObservableObject {
         // #1545: the Effort TRIMP recipe, read ONCE per pass. Global (same for every day), so it folds
         // into the config signature below rather than the per-day key.
         let effortMethodGlobal = PuffinExperiment.effortMethod
+        let dayCycleMode = DayCycleMode.persisted(UserDefaults.standard.string(forKey: DayCycleMode.storageKey))
 
         // ── #1005 BATTERY: per-day reuse cache setup (see `dayScanCache`) ────────────────────────────
         // The stager toggles are read per-day inside the loop below, but they are global (same value every
@@ -854,6 +856,7 @@ final class IntelligenceEngine: ObservableObject {
             // produced under one method is stale the moment the user switches — serving it would show a
             // window of days scored by a recipe the user just turned off, with nothing to explain it.
             "\(effortMethodGlobal)",
+            dayCycleMode.rawValue,
         ].joined(separator: "|")
         // Drop the whole cache on a config change, then snapshot it into a Sendable `let` for the detached
         // loop (the engine is @MainActor; the loop can't touch `self`). The loop returns the updated cache
@@ -1761,6 +1764,49 @@ final class IntelligenceEngine: ObservableObject {
         // already staged from raw (idempotent) and for imported nights (raw never dense). This MUST run
         // before the scoring loop so the healed stages flow into Rest/recovery this same pass.
         let editedRows = await repo.selfHealEditedStages(from: windowStart, to: now)
+        var cycleCandidates: [(owner: String, priority: Int)] = regDevices
+            .map { device in
+                let priority: Int
+                if device.id == regActiveId { priority = 0 }
+                else if device.status == .archived { priority = 4 }
+                else if device.sourceKind == .activityFile { priority = 3 }
+                else if device.isImportSource { priority = 2 }
+                else { priority = 1 }
+                return (device.id, priority)
+            }
+        if !cycleCandidates.contains(where: { $0.owner == regActiveId }) {
+            cycleCandidates.append((regActiveId, 0))
+        }
+        let physiologyOwners = ([regActiveId] + regDevices.filter {
+            $0.brand.caseInsensitiveCompare("WHOOP") == .orderedSame
+        }.map(\.id) + [Repository.whoopSource]).reduce(into: [String]()) {
+            if !$0.contains($1) { $0.append($1) }
+        }
+        let cycleWorkouts = await repo.workoutRows(days: maxDays + 2)
+        let physiologicalSteps = await DayCycleIntelligenceIntegration.compute(
+            nights: scoredNights.map { night in
+                DayCycleIntelligenceIntegration.Night(
+                    daily: night.daily,
+                    sleeps: night.cachedSleep,
+                    workouts: night.workouts,
+                    owner: resolvedScoreOwnerByDay[night.daily.day] ?? regActiveId)
+            },
+            editedRows: editedRows,
+            store: store,
+            candidates: cycleCandidates,
+            physiologyOwners: physiologyOwners,
+            workouts: cycleWorkouts,
+            windowStart: windowStart,
+            now: now,
+            offsetSec: tzOffset,
+            habitualMidsleepSec: habitualMidsleepSec,
+            ticksPerStep: up.stepTicksPerStep,
+            mode: dayCycleMode,
+            cache: dayCycleCache,
+            profile: up,
+            maxHROverride: maxHR,
+            effortMethod: effortMethodGlobal,
+            trace: stepsTraceActive ? { self.diagnosticSink?($0, .steps) } : nil)
         // #299: `editsByStart` is now built PER DAY inside the scoring loop (scoped to the day each edit
         // belongs to), NOT window-wide here. sleepEditedDaily folds any edited row that isn't a twin of THIS
         // day's detected sessions in as a "manual" block, so a window-wide edit set let ONE user edit /
@@ -1805,8 +1851,9 @@ final class IntelligenceEngine: ObservableObject {
             // every night. `effectiveStartTs` (the #318 user-corrected onset) is preserved on the row.
             let dayEditedRows = Self.editedRowsForDay(editedRows, day: night.daily.day, tzOffsetSeconds: tzOffset)
             let editsByStart = Dictionary(dayEditedRows.map { ($0.startTs, $0) }, uniquingKeysWith: { a, _ in a })
-            let daily = sleepEditedDaily(night.daily, detected: night.cachedSleep, editsByStart: editsByStart,
+            var daily = sleepEditedDaily(night.daily, detected: night.cachedSleep, editsByStart: editsByStart,
                                          habitualMidsleepSec: habitualMidsleepSec)
+            daily = DayCycleIntelligenceIntegration.applying(physiologicalSteps, to: daily)
             let recovery = recomputeRecovery(daily, baselines2)
             // Charge term-breakdown trace (Group G): only when the Recovery test mode is on. Emits which
             // term moved Charge and which was nil and forced the renorm, tagged `.recovery`. The trace's
@@ -1826,7 +1873,7 @@ final class IntelligenceEngine: ObservableObject {
             // off the HRV baseline state rather than a blanket `.solid`, so a thin/provisional baseline shows
             // EST. not REL. Pure presentation upstream of the UI; the score itself is unchanged.
             let chargeConf = ScoreConfidence.charge(recovery: recovery, hrvBaseline: baselines2.hrv)
-            out.append(Computed(day: daily.day, recovery: recovery, strain: night.strain,
+            out.append(Computed(day: daily.day, recovery: recovery, strain: daily.strain,
                                 sleepMin: daily.totalSleepMin, hrv: daily.avgHrv,
                                 rhr: daily.restingHr, source: source, confidence: chargeConf,
                                 drivers: drivers, skinTempRel: skinRel))
@@ -1899,6 +1946,11 @@ final class IntelligenceEngine: ObservableObject {
                                       skinTempC: night.nightlySkin))
             if let rest = AnalyticsEngine.Rest.composite(daily: daily) {
                 restPoints.append(MetricPoint(day: daily.day, key: "sleep_performance", value: rest))
+            }
+            if let onset = physiologicalSteps.onsetByWakeDay[daily.day] {
+                restPoints.append(MetricPoint(day: daily.day,
+                                              key: DayCycleIntelligenceIntegration.onsetKey,
+                                              value: Double(onset)))
             }
             // #103: persist the SpO₂ candidate @82 nightly mean to metricSeries as "spo2_candidate" so the
             // Blood Oxygen tile can surface it as a "strap estimate (unverified)" fallback when the toggle
@@ -2104,13 +2156,29 @@ final class IntelligenceEngine: ObservableObject {
             provenanceByCell["\(point.day)\u{1F}\(point.key)"] =
                 ScoreInputProvenanceRow(day: point.day, key: point.key, sourceId: source)
         }
+        let markerKeys: [String]
+        let markerPoints: [SourcedMetricPoint]
+        let markerSources: [String]
+        switch physiologicalSteps.markerUpdate {
+        case .preserve:
+            markerKeys = []; markerPoints = []; markerSources = []
+        case let .replace(points, sourceIds):
+            markerKeys = [DayCycleIntelligenceIntegration.onsetKey]
+            markerPoints = points.map {
+                SourcedMetricPoint(deviceId: $0.deviceId, point: $0.point)
+            }
+            markerSources = sourceIds
+        }
         try? await store.persistComputedScores(
             dailyMetrics: dailies,
             metricPoints: restPoints,
             provenance: Array(provenanceByCell.values),
             deviceId: computedId,
             from: oldestDay,
-            to: newestDay
+            to: newestDay,
+            replaceMetricKeys: markerKeys,
+            additionalMetricPoints: markerPoints,
+            replaceMetricSourceIds: markerSources
         )
 
         // Now evict only the STALE computed rows in the window , those a prior (e.g. UTC-keyed) run left

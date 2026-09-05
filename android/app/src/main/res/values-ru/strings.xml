@@ -2555,4 +2555,11 @@
         <item quantity="other">%1$s тренировки</item>
     </plurals>
     <string name="l10n_today_screen_this_night_was_staged_from_heart_rate_4d0f1f9b">Эта ночь определена только по пульсу, без записанного движения, поэтому вариабельность сердечного ритма и пульс в покое измерить не удалось. Обычная причина — ремешок, сопряжённый не полностью.</string>
+    <string name="settings_day_cycle_title">Суточный цикл</string>
+    <string name="settings_day_cycle_description">Выберите, когда начинается новый отсчёт шагов и текущей нагрузки. Дневной сон не начинает новый день.</string>
+    <string name="settings_day_cycle_starts">Начало дня</string>
+    <string name="settings_day_cycle_sleep">Основной сон</string>
+    <string name="settings_day_cycle_midnight">00:00</string>
+    <string name="settings_day_cycle_sleep_description">По умолчанию цикл начинается с обнаруженного основного сна. Если данные о сне отсутствуют или ненадёжны, используется местная полночь.</string>
+    <string name="settings_day_cycle_midnight_description">Используется обычный местный календарный день с 00:00 до 00:00.</string>
 </resources>

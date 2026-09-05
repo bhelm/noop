@@ -190,6 +190,7 @@ struct SettingsView: View {
     @AppStorage(UnitPrefs.hrvWindowKey) private var hrvWindowRaw = HrvWindow.whole.rawValue
     // Live-HR Live Activity (Lock Screen + Dynamic Island), iOS only (#336). Default on.
     @AppStorage(UnitPrefs.liveActivityKey) private var liveActivityEnabled = true
+    @AppStorage(DayCycleMode.storageKey) private var dayCycleModeRaw = DayCycleMode.sleepOnset.rawValue
     // Alternate app icon (iOS only) — false = Titanium (primary AppIcon), true = Blue Titanium
     // ("AppIcon-Navy"). Display-only preference; the live switch goes through setAlternateIconName.
     @AppStorage("appIcon.alt") private var useNavyIcon = false
@@ -537,6 +538,27 @@ struct SettingsView: View {
                         }
                     }
                 }
+                rowDivider
+                FormRow(label: "Day cycle") {
+                    Picker("Day starts", selection: Binding(
+                        get: { DayCycleMode.persisted(dayCycleModeRaw) },
+                        set: { mode in
+                            dayCycleModeRaw = mode.rawValue
+                            Task { await model.intelligence.analyzeRecent(); await model.repo.refresh() }
+                        }
+                    )) {
+                        Text("Main sleep").tag(DayCycleMode.sleepOnset)
+                        Text("00:00").tag(DayCycleMode.midnight)
+                    }
+                    .labelsHidden()
+                    .pickerStyle(.menu)
+                }
+                Text(dayCycleModeRaw == DayCycleMode.midnight.rawValue
+                     ? "Uses a conventional local calendar day from 00:00 to 00:00."
+                     : "Default. Steps and in-progress Effort restart at the beginning of detected main sleep. Naps do not start a new day; missing sleep falls back to local midnight.")
+                    .font(StrandFont.footnote)
+                    .foregroundStyle(StrandPalette.textTertiary)
+                    .fixedSize(horizontal: false, vertical: true)
                 rowDivider
                 // Step calibration (#139/#132): daily steps = @57 counter ticks ÷ this divisor.
                 // 1.0 = raw pass-through until the true 5/MG tick rate is known. The divisor goes

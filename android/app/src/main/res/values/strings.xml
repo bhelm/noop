@@ -2697,4 +2697,11 @@
     <string name="l10n_health_screen_no_measured_temperature_for_these_nights_showing_the_differe_69d4efae">No measured temperature for these nights — showing the difference from your baseline. A sync re-scores recent nights and fills it in.</string>
     <string name="l10n_health_screen_only_nights_with_a_measured_temperature_are_shown_the_others_b6f7c45b">Only nights with a measured temperature are shown; the others recorded a baseline difference only.</string>
     <string name="l10n_today_screen_this_night_was_staged_from_heart_rate_4d0f1f9b">This night was staged from heart rate alone, with no motion recorded, so HRV and resting heart rate could not be measured. A strap that is not fully paired is the usual cause.</string>
+    <string name="settings_day_cycle_title">Day cycle</string>
+    <string name="settings_day_cycle_description">Choose when steps and in-progress Effort start over. Naps never start a new day.</string>
+    <string name="settings_day_cycle_starts">Day starts</string>
+    <string name="settings_day_cycle_sleep">Main sleep</string>
+    <string name="settings_day_cycle_midnight">00:00</string>
+    <string name="settings_day_cycle_sleep_description">Default. The cycle follows the beginning of your detected main sleep. Before a main sleep is detected, local midnight is used.</string>
+    <string name="settings_day_cycle_midnight_description">Uses a conventional local calendar day from 00:00 to 00:00.</string>
 </resources>

@@ -317,11 +317,17 @@ data class InsertCounts(
     val gravity: Int = 0,
 )
 
+data class StepTimestampCoverage(val firstTs: Long?, val lastTs: Long?)
+
+internal fun newlyInsertedStepTimestamps(timestamps: List<Long>, rowIds: List<Long>): List<Long> =
+    timestamps.zip(rowIds).mapNotNull { (ts, id) -> ts.takeIf { id != -1L } }
+
 /** Monotonic event revisions for Test Centre repository-backed readouts. Counts move only after Room
  * reports at least one newly inserted relevant row; duplicate/no-op inserts leave them unchanged. */
 internal data class ReadoutDataRevisions(
     val sleepSamples: Long = 0,
     val battery: Long = 0,
+    val steps: Long = 0,
 )
 
 internal fun advanceReadoutDataRevisions(
@@ -330,7 +336,34 @@ internal fun advanceReadoutDataRevisions(
 ): ReadoutDataRevisions = current.copy(
     sleepSamples = current.sleepSamples + if (inserted.hr > 0 || inserted.gravity > 0) 1 else 0,
     battery = current.battery + if (inserted.battery > 0) 1 else 0,
+    steps = current.steps + if (inserted.steps > 0) 1 else 0,
 )
+
+/** Process-local because the cycle cache is process-local too; keyed by device and UTC day. */
+internal class StepDataRevisionIndex {
+    private val utcDaySeconds = 86_400L
+    private var nextRevision = 0L
+    private val byOwnerDay = HashMap<Pair<String, Long>, Long>()
+
+    @Synchronized
+    fun record(deviceId: String, stepTimestamps: List<Long>, insertedRows: Int) {
+        if (insertedRows <= 0) return
+        nextRevision++
+        for (ts in stepTimestamps) {
+            byOwnerDay[deviceId to Math.floorDiv(ts, utcDaySeconds)] = nextRevision
+        }
+    }
+
+    @Synchronized
+    fun signature(deviceId: String, onset: Long, endExclusive: Long): String {
+        if (endExclusive <= onset) return ""
+        val first = Math.floorDiv(onset, utcDaySeconds)
+        val last = Math.floorDiv(endExclusive - 1L, utcDaySeconds)
+        return (first..last).joinToString(",") { day ->
+            "$day:${byOwnerDay[deviceId to day] ?: 0L}"
+        }
+    }
+}
 
 /**
  * A compact snapshot of how much history each source holds, for the Data Sources "Freshness
@@ -408,6 +441,7 @@ class WhoopRepository(
     val batteryRevision: StateFlow<Long> = _batteryRevision.asStateFlow()
     private val readoutRevisionLock = Any()
     private var readoutRevisions = ReadoutDataRevisions()
+    private val stepRevisionIndex = StepDataRevisionIndex()
 
     constructor(db: WhoopDatabase) : this(
         dao = db.whoopDao(),
@@ -467,7 +501,7 @@ class WhoopRepository(
     ): InsertCounts {
         if (streams.isEmpty) return InsertCounts()
 
-        val counts = transactor.run {
+        val result = transactor.run {
             insertWithinTransaction(
                 streams = streams,
                 deviceId = deviceId,
@@ -475,7 +509,9 @@ class WhoopRepository(
                 v18AuxPruneEveryRows = v18AuxPruneEveryRows,
             )
         }
+        val counts = result.counts
         publishReadoutRevisions(counts)
+        stepRevisionIndex.record(deviceId, result.insertedStepTimestamps, counts.steps)
         return counts
     }
 
@@ -488,13 +524,22 @@ class WhoopRepository(
         }
     }
 
+    /** Bounded process-local cache witness; duplicate rows do not advance because InsertCounts is zero. */
+    fun stepDataRevisionSignature(deviceId: String, onset: Long, endExclusive: Long): String =
+        stepRevisionIndex.signature(deviceId, onset, endExclusive)
+
     /** All DAO writes for one decoded chunk share the Room transaction opened by [insert]. */
+    private data class InsertResult(
+        val counts: InsertCounts,
+        val insertedStepTimestamps: List<Long>,
+    )
+
     private suspend fun insertWithinTransaction(
         streams: StreamBatch,
         deviceId: String,
         v18AuxRetentionRows: Int,
         v18AuxPruneEveryRows: Int,
-    ): InsertCounts {
+    ): InsertResult {
         val hrIds = if (streams.hr.isEmpty()) emptyList() else
             dao.insertHr(streams.hr.map { HrSample(deviceId, it.ts, it.bpm) })
         val rrIds = if (streams.rr.isEmpty()) emptyList() else
@@ -584,7 +629,7 @@ class WhoopRepository(
         }
 
         // OnConflictStrategy.IGNORE returns -1 for skipped (already-present) rows; count the inserts.
-        return InsertCounts(
+        val counts = InsertCounts(
             hr = hrIds.countInserted() + ppgHrIds.countInserted(),
             rr = rrIds.countInserted(),
             events = evIds.countInserted(),
@@ -594,6 +639,10 @@ class WhoopRepository(
             steps = stepIds.countInserted(),
             resp = respIds.countInserted(),
             gravity = gravIds.countInserted(),
+        )
+        return InsertResult(
+            counts,
+            newlyInsertedStepTimestamps(streams.steps.map { it.ts }, stepIds),
         )
     }
 
@@ -630,9 +679,30 @@ class WhoopRepository(
         dailyMetrics: List<DailyMetric>,
         metricPoints: List<MetricSeriesRow>,
         provenance: List<ScoreInputProvenanceRow>,
+        replaceMetricKeys: List<String> = emptyList(),
+        replaceMetricSourceIds: List<String> = listOf(deviceId),
     ) = dao.replaceComputedScoreWindow(
-        deviceId, from, to, dailyMetrics, metricPoints, provenance
+        deviceId, from, to, dailyMetrics, metricPoints, provenance,
+        replaceMetricKeys, replaceMetricSourceIds,
     )
+
+    /** Computed-only daily rows; unlike daysMerged this can never substitute imported/calendar steps. */
+    suspend fun computedDailyUnion(activeStrapId: String, from: String, to: String): List<DailyMetric> =
+        unionByDay(computedSourceIds(activeStrapId).map { dao.dailyMetricsRange(it, from, to) })
+
+    fun computedDailyUnionFlow(activeStrapId: String, from: String, to: String): Flow<List<DailyMetric>> =
+        unionDaysFlow(computedSourceIds(activeStrapId).map { dao.dailyMetricsRangeFlow(it, from, to) })
+
+    fun metricSeriesComputedUnionFlow(
+        activeStrapId: String,
+        key: String,
+        from: String,
+        to: String,
+    ): Flow<List<MetricSeriesRow>> {
+        val flows = computedSourceIds(activeStrapId).map { dao.metricSeriesFlow(it, key, from, to) }
+        return if (flows.size == 1) flows[0]
+        else combine(flows) { rows -> mergeComputedSeriesUnion(rows.toList()) }
+    }
 
     suspend fun scoreInputSource(deviceId: String, day: String, key: String): String? =
         dao.scoreInputSource(deviceId, day, key)
@@ -1180,6 +1250,25 @@ class WhoopRepository(
 
     suspend fun stepSamples(deviceId: String, from: Long, to: Long, limit: Int = DEFAULT_LIMIT) =
         dao.stepSamples(deviceId, from, to, limit)
+
+    suspend fun stepSampleBefore(deviceId: String, onset: Long): StepSample? =
+        dao.stepSampleBefore(deviceId, onset)
+
+    suspend fun hasStepActivityClasses(deviceId: String, onset: Long, endExclusive: Long): Boolean =
+        dao.hasStepActivityClasses(deviceId, onset, endExclusive)
+
+    suspend fun stepTimestampCoverage(deviceId: String, onset: Long, endExclusive: Long): StepTimestampCoverage =
+        StepTimestampCoverage(
+            firstTs = dao.firstStepTimestamp(deviceId, onset, endExclusive),
+            lastTs = dao.lastStepTimestamp(deviceId, onset, endExclusive),
+        )
+
+    suspend fun stepSamplesPage(
+        deviceId: String,
+        afterExclusive: Long,
+        endExclusive: Long,
+        limit: Int,
+    ): List<StepSample> = dao.stepSamplesPage(deviceId, afterExclusive, endExclusive, limit)
 
     /**
      * The strap's OWN band sleep_state samples (#175) in [from, to] as (ts, state) pairs, ascending. Feeds
@@ -1769,18 +1858,19 @@ class WhoopRepository(
         return dedupSleepBlocks(ids.flatMap { dao.sleepSessions(it, from, to, limit) })
     }
 
-    /** Workouts over the read-side UNION of the active strap id AND the canonical "my-whoop" (#814 twin of
-     *  [hrSamplesUnion] / [sleepSessionsUnion]): a re-added / newly-paired strap owns "whoop-<uuid>" while
+    /** Workouts over every registered WHOOP (active first, archived retained) plus canonical "my-whoop",
+     *  matching [hrSamplesUnion] / [sleepSessionsUnion]. A re-added strap owns "whoop-<uuid>" while
      *  imports + prior data live under "my-whoop", so a read pinned to a SINGLE id strands the other's
      *  workouts — the Workouts screen then reads empty while Data Sources (which queries "my-whoop") shows
      *  them (#28). Exact-duplicate rows are dropped on the (startTs, sport) natural key, active-strap-first. */
     suspend fun workoutsUnion(deviceId: String, from: Long, to: Long, limit: Int = DEFAULT_LIMIT): List<WorkoutRow> =
-        dedupWorkoutsByKey(importedSourceIds(deviceId).flatMap { dao.workouts(it, from, to, limit) })
+        dedupWorkoutsByKey(rawWhoopSourceIds(deviceId).flatMap { dao.workouts(it, from, to, limit) })
 
     /** The COMPUTED ("-noop") twin of [workoutsUnion] for detected workouts (the engine writes detected
      *  sessions under "<importedDeviceId>-noop"), across the computed union ids. */
     suspend fun detectedWorkoutsUnion(deviceId: String, from: Long, to: Long, limit: Int = DEFAULT_LIMIT): List<WorkoutRow> =
-        dedupWorkoutsByKey(computedSourceIds(deviceId).flatMap { dao.workouts(it, from, to, limit) })
+        dedupWorkoutsByKey(rawWhoopSourceIds(deviceId).map { "$it-noop" }
+            .flatMap { dao.workouts(it, from, to, limit) })
 
     /** Cached daily metrics for the inclusive day range [from, to] (YYYY-MM-DD), oldest first. */
     suspend fun dailyMetrics(deviceId: String, from: String, to: String): List<DailyMetric> =

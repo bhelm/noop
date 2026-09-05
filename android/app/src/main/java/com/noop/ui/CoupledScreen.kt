@@ -91,14 +91,6 @@ fun CoupledScreen(
     val today by vm.today.collectAsStateWithLifecycle()
     val days by vm.recentDays.collectAsStateWithLifecycle()
 
-    // #614: the Workouts stat must match the Workouts screen, not DailyMetric.exerciseCount (which counts
-    // only strap-DETECTED bouts — a Health-Connect import with auto-detect off read as 0 while the Workouts
-    // screen showed it). vm.workouts is the SAME deduped, dismissed-filtered, all-source list the Workouts
-    // screen renders; loadWorkouts() isn't triggered by opening Coupled, so kick it here (idempotent,
-    // mirrors InsightsScreen).
-    LaunchedEffect(Unit) { vm.loadWorkouts() }
-    val allWorkouts by vm.workouts.collectAsStateWithLifecycle()
-
     // Last night's sleep sessions (imported + computed-only), the SAME resolution SleepScreen uses, keyed on
     // `days` so a sync/import reloads. Only needed for the bed-wake span footnote.
     var sleeps by remember { mutableStateOf<List<SleepSession>>(emptyList()) }
@@ -144,14 +136,8 @@ fun CoupledScreen(
         resolveTodayRow(days, logicalKey, localKey) ?: today
     }
     val todayKey = todayRow?.day ?: logicalKey
-    // #614: count TODAY's workouts by their START's logical day (the SAME 04:00-rollover key DailyMetric.day
-    // uses), so the Coupled stat equals the Workouts overview for today.
-    val workoutsToday = remember(allWorkouts, todayKey) {
-        allWorkouts.count {
-            logicalDay(java.time.Instant.ofEpochSecond(it.startTs).atZone(java.time.ZoneId.systemDefault()))
-                .toString() == todayKey
-        }
-    }
+    // Materialized from the same all-source physiological cycle as Effort, calories, HR, and steps.
+    val workoutsToday = todayRow?.exerciseCount ?: 0
     val context = LocalContext.current
     val hrvEpoch = remember { NoopPrefs.of(context).getLong(Baselines.hrvBaselineEpochKey, 0L).toDouble() }
     // #1458: carry through the SAME helper Today uses, not a local re-derivation. The local copy was
@@ -239,7 +225,7 @@ fun CoupledScreen(
             dayStrain21 = dayStrain21,
             recovery = recovery,
             calories = todayRow?.activeKcalEst,
-            workouts = workoutsToday,   // #614: real workout count (all sources), not exerciseCount
+            workouts = workoutsToday,
         )
         SleepCard(
             sleepPerformance = sleepPerformance,
