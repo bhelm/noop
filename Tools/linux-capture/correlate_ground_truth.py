@@ -29,6 +29,7 @@ import struct
 import sys
 import zipfile
 
+from capture_io import configure_utf8_stdio
 import whoop_frame as wf
 
 # --- Ground-truth CSV loading ----------------------------------------------------------------------
@@ -344,4 +345,5 @@ def main():
 
 
 if __name__ == "__main__":
+    configure_utf8_stdio()
     main()

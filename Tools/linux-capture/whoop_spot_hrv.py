@@ -27,6 +27,7 @@ import sqlite3
 from collections import Counter
 from statistics import median, pstdev
 
+from capture_io import configure_utf8_stdio
 
 # ---------------------------------------------------------------- validated DSP (pure)
 
@@ -185,4 +186,5 @@ def _run(args, con):
 
 
 if __name__ == "__main__":
+    configure_utf8_stdio()
     raise SystemExit(main())

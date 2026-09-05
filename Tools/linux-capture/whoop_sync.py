@@ -61,8 +61,9 @@ import subprocess
 import sys
 import time
 
-import whoop_frame as wf
 import decode_features
+import whoop_frame as wf
+from capture_io import configure_utf8_stdio
 
 # `bleak` is imported lazily inside the BLE functions (run/_acquire) so this module's frame helpers,
 # Family, and WhoopDB can be imported and unit-tested with no third-party deps (like test_whoop_frame).
@@ -202,11 +203,15 @@ class WhoopDB:
     def __init__(self, path):
         os.makedirs(os.path.dirname(os.path.abspath(path)) or ".", exist_ok=True)
         self.db = sqlite3.connect(path, check_same_thread=False)
-        self.db.executescript(SCHEMA)
-        decode_features.apply_schema(self.db)
-        self.db.execute("PRAGMA journal_mode=WAL")
-        self.db.execute("PRAGMA synchronous=FULL")
-        self.db.commit()
+        try:
+            self.db.executescript(SCHEMA)
+            decode_features.apply_schema(self.db)
+            self.db.execute("PRAGMA journal_mode=WAL")
+            self.db.execute("PRAGMA synchronous=FULL")
+            self.db.commit()
+        except BaseException:
+            self.db.close()
+            raise
 
     def close(self):
         self.db.close()
@@ -690,9 +695,8 @@ async def _realtime_session(client, s, db, fam, args, stop_all, deadline):
     return outcome["v"], s.committed - start
 
 
-async def run_realtime(args):
-    with WhoopDB(args.db) as db:
-        return await _run_realtime(args, db)
+async def run_realtime(args, db):
+    return await _run_realtime(args, db)
 
 
 async def _run_realtime(args, db):
@@ -764,9 +768,8 @@ async def _run_realtime(args, db):
         print(f"  decode skipped ({e}); run `whoop_sync.py decode --db {args.db}`.", flush=True)
 
 
-async def run(args):
-    with WhoopDB(args.db) as db:
-        return await _run(args, db)
+async def run(args, db):
+    return await _run(args, db)
 
 
 async def _run(args, db):
@@ -997,12 +1000,14 @@ def main():
 
     if cmd == "sync":
         try:
-            asyncio.run(run(args))
+            with WhoopDB(args.db) as db:
+                asyncio.run(run(args, db))
         except KeyboardInterrupt:
             pass
     elif cmd == "realtime":
         try:
-            asyncio.run(run_realtime(args))
+            with WhoopDB(args.db) as db:
+                asyncio.run(run_realtime(args, db))
         except KeyboardInterrupt:
             pass
     elif cmd == "export":
@@ -1045,4 +1050,5 @@ def main():
 
 
 if __name__ == "__main__":
+    configure_utf8_stdio()
     main()

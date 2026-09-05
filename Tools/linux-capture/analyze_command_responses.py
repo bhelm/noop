@@ -11,6 +11,7 @@ math as the 4.0 `command_response` post-hook so we can confirm the +4 hypothesis
 import json
 import sys
 
+from capture_io import configure_utf8_stdio
 import whoop_frame as wf
 
 # Response command numbers (CommandNumber enum) → human name.
@@ -68,4 +69,5 @@ def main():
 
 
 if __name__ == "__main__":
+    configure_utf8_stdio()
     main()

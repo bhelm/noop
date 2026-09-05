@@ -23,6 +23,7 @@ import json
 import struct
 import sys
 
+from capture_io import configure_utf8_stdio
 import whoop_frame as wf
 
 # --- HCI log container parsing ---------------------------------------------------------------------
@@ -309,4 +310,5 @@ def main():
 
 
 if __name__ == "__main__":
+    configure_utf8_stdio()
     main()

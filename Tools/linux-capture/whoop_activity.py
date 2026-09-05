@@ -151,6 +151,8 @@ import argparse
 import json
 import datetime as _dt
 
+from capture_io import configure_utf8_stdio
+
 DEFAULT_DB = "captures/whoop4.db"
 
 
@@ -235,4 +237,5 @@ def main(argv=None):
 
 
 if __name__ == "__main__":
+    configure_utf8_stdio()
     main()

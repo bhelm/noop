@@ -26,6 +26,8 @@ import struct
 import sys
 from collections import Counter
 
+from capture_io import configure_utf8_stdio
+
 WAVE_START, WAVE_END = 27, 75          # 24 LE-i16 samples per record
 SAMPLE_RATE_HZ = 24                     # 24 samples/record, 1 record/second
 
@@ -103,4 +105,5 @@ def main():
 
 
 if __name__ == "__main__":
+    configure_utf8_stdio()
     main()

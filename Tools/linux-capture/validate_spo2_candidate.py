@@ -81,6 +81,7 @@ import zipfile
 from datetime import datetime, timezone
 from typing import Dict, Iterable, List, Optional, Sequence, Tuple
 
+from capture_io import configure_utf8_stdio
 import whoop_activity as wa
 import whoop_frame as wf
 
@@ -151,13 +152,6 @@ NOMINAL_DUTY_WINDOW_S = 30
 MIN_DISTINCT_INBAND = 5
 MIN_INBAND_STDEV = 0.5
 
-
-def configure_utf8_stdio() -> None:
-    """Keep Unicode diagnostics printable when the host defaults to a legacy code page."""
-    for stream in (sys.stdout, sys.stderr):
-        reconfigure = getattr(stream, "reconfigure", None)
-        if callable(reconfigure):
-            reconfigure(encoding="utf-8")
 
 # English + localized cycle headers → canonical keys (mirrors StrandImport HeaderNorm subset).
 HEADER_ALIASES = {
