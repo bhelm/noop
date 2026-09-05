@@ -747,7 +747,7 @@ final class IntelligenceEngine: ObservableObject {
         // and the Sleep tab resolve to the identical block. (#547)
         let (habitualMidsleepSec, nightlyHours) = await Self.computeHabitualSleep(
             store: store, importedId: deviceId, computedId: deviceId + "-noop",
-            windowStart: nowLocalMidnight - maxDays * 86_400 - 30 * 3_600,
+            windowStart: nowLocalMidnight - maxDays * 86_400 - StreamReadCap.lookbackSeconds,
             windowEnd: now, offsetSec: tzOffset)
         // Wave 0 (SL1/T1): personal sleep REGULARITY + population-anchored NEED, computed ONCE from the
         // trailing per-night durations and threaded to every analyzeDay below (mirrors the midsleep
@@ -883,7 +883,7 @@ final class IntelligenceEngine: ObservableObject {
             var skippedSleepDays: [(day: String, hrSamples: Int)] = []
             // #938: the WHOOP 4.0 ADC offset is per-device, not per-night. Learn one anchor per owner
             // from the whole scan window and reuse it for every night so cross-night deviations survive.
-            let skinAnchorScanFrom = nowLocalMidnight - (maxDays - 1) * 86_400 - 30 * 3_600
+            let skinAnchorScanFrom = nowLocalMidnight - (maxDays - 1) * 86_400 - StreamReadCap.lookbackSeconds
             let skinAnchorScanTo = nowLocalMidnight + 18 * 3_600
             var skinAnchorByOwner: [String: Double] = [:]
             var skinAnchorResolvedOwners = Set<String>()
@@ -907,24 +907,27 @@ final class IntelligenceEngine: ObservableObject {
             // planner cannot prove safe falls back to exactly the read that shipped before them. HR and
             // R-R only: the other eight streams are thousands of rows against these two's tens of
             // thousands, so this is nearly all of the win for two call sites of blast radius.
-            // ONE binding, used as both the read cap and the window's truncation threshold. They must be
-            // the same number: the window declines to slice a read that came back at the cap, because
-            // `ORDER BY ts ASC LIMIT` drops the NEWEST rows. Were the two to drift apart, a truncated read
-            // would stop being recognised and the buffer would be sliced while missing its tail — wrong
-            // scoring inputs, silently. The Kotlin twin cannot drift because it uses `STREAM_LIMIT` for
-            // both; this is the same guarantee spelled locally.
-            let streamLimit = 200_000
-            let hrWindow = SlidingStreamWindow<HRSample>(tsOf: { $0.ts }, limit: streamLimit) { o, f, t in
-                try? await store.hrSamples(deviceId: o, from: f, to: t, limit: streamLimit)
+            // Each window's read cap and its truncation threshold must be the SAME number: the window
+            // declines to slice a read that came back at the cap, because `ORDER BY ts ASC LIMIT` drops the
+            // NEWEST rows. Were the two to drift apart, a truncated read would stop being recognised and the
+            // buffer would be sliced while missing its tail — wrong scoring inputs, silently. Passing one
+            // `StreamReadCap` value into both slots below keeps that guarantee per stream.
+            //
+            // #1538: the two streams no longer share ONE cap. 200,000 was sized for HR (a full 54h window is
+            // ~194,400 rows, 3% under) and silently truncated R-R, which is per-BEAT and runs to 233k-389k
+            // over the same window. A field capture showed `rr[... truncated=10]` — ten nights scored on R-R
+            // missing its tail. See `StreamReadCap` for the arithmetic.
+            let hrWindow = SlidingStreamWindow<HRSample>(tsOf: { $0.ts }, limit: StreamReadCap.hr) { o, f, t in
+                try? await store.hrSamples(deviceId: o, from: f, to: t, limit: StreamReadCap.hr)
             }
-            let rrWindow = SlidingStreamWindow<RRInterval>(tsOf: { $0.ts }, limit: streamLimit) { o, f, t in
-                try? await store.rrIntervals(deviceId: o, from: f, to: t, limit: streamLimit)
+            let rrWindow = SlidingStreamWindow<RRInterval>(tsOf: { $0.ts }, limit: StreamReadCap.rr) { o, f, t in
+                try? await store.rrIntervals(deviceId: o, from: f, to: t, limit: StreamReadCap.rr)
             }
             for offset in 0..<maxDays {
                 let dayStart = nowLocalMidnight - offset * 86_400
                 let day = AnalyticsEngine.dayString(dayStart, offsetSec: tzOffset)
                 // Read a generous window around the night that ends on `day`; the stager finds the span.
-                let from = dayStart - 30 * 3_600
+                let from = dayStart - StreamReadCap.lookbackSeconds
                 // Sleep read-window END — see `sleepReadWindowEnd`.
                 let to = Self.sleepReadWindowEnd(dayStart: dayStart,
                                                  nowLocalMidnight: nowLocalMidnight,
@@ -1023,7 +1026,8 @@ final class IntelligenceEngine: ObservableObject {
                                                              limit: 200_000)) ?? []
                 let resp = OuraRespScale.forScoring(respRows, deviceId: owner)
                 let vendorResp = OuraRespScale.forVendorRate(respRows, deviceId: owner)
-                let grav = (try? await store.gravitySamples(deviceId: owner, from: from, to: to, limit: 200_000)) ?? []
+                let grav = (try? await store.gravitySamples(deviceId: owner, from: from, to: to,
+                                                            limit: StreamReadCap.gravity)) ?? []
                 let steps = (try? await store.stepSamples(deviceId: owner, from: from, to: to, limit: 200_000)) ?? []
                 let skin = (try? await store.skinTempSamples(deviceId: owner, from: from, to: to, limit: 200_000)) ?? []
                 // #93: WHOOP 4.0 raw SpO2 PPG samples for the night; analyzeDay banks the nightly red/IR ADC
@@ -1731,7 +1735,7 @@ final class IntelligenceEngine: ObservableObject {
         // re-labelled rows (both written under `deviceId`), and apple-health carries Health imports ,
         // a detected bout overlapping ANY of them is skipped below. Port of the Android dedup block.
         // (`computedId` is bound once above, before the off-actor scan loop.)
-        let windowStart = now - maxDays * 86_400 - 30 * 3_600
+        let windowStart = now - maxDays * 86_400 - StreamReadCap.lookbackSeconds
         var realWorkouts = (try? await store.workouts(deviceId: deviceId, from: windowStart,
                                                        to: now, limit: 100_000)) ?? []
         realWorkouts += (try? await store.workouts(deviceId: "apple-health", from: windowStart,
