@@ -146,7 +146,7 @@ class Capture:
         if not self.records:
             return
         tmp = self.out_path + ".tmp"
-        with open(tmp, "w") as f:
+        with open(tmp, "w", encoding="utf-8") as f:
             json.dump(self.records, f, indent=1)
         import os
         os.replace(tmp, self.out_path)

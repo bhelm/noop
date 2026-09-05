@@ -301,7 +301,7 @@ def main():
                    help="restrict to one record type byte, e.g. 0x2f")
     args = p.parse_args()
 
-    with open(args.capture) as f:
+    with open(args.capture, encoding="utf-8") as f:
         records = json.load(f)
     rows = load_ground_truth(args.export)
     if not rows:

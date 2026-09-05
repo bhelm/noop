@@ -45,7 +45,8 @@ def main():
     if len(sys.argv) < 2:
         print(__doc__)
         return
-    data = json.load(open(sys.argv[1]))
+    with open(sys.argv[1], encoding="utf-8") as f:
+        data = json.load(f)
     seen = {}
     for r in data:
         h = bytes.fromhex(r["hex"])

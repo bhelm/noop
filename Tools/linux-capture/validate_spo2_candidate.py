@@ -151,6 +151,14 @@ NOMINAL_DUTY_WINDOW_S = 30
 MIN_DISTINCT_INBAND = 5
 MIN_INBAND_STDEV = 0.5
 
+
+def configure_utf8_stdio() -> None:
+    """Keep Unicode diagnostics printable when the host defaults to a legacy code page."""
+    for stream in (sys.stdout, sys.stderr):
+        reconfigure = getattr(stream, "reconfigure", None)
+        if callable(reconfigure):
+            reconfigure(encoding="utf-8")
+
 # English + localized cycle headers → canonical keys (mirrors StrandImport HeaderNorm subset).
 HEADER_ALIASES = {
     # English (official export; lowercase after norm)
@@ -467,7 +475,7 @@ def load_frame_records(path: str, *, device_id: int = 2) -> List[dict]:
             )
         return [{"hex": r[0]} for r in rows]
 
-    with open(path) as f:
+    with open(path, encoding="utf-8") as f:
         capture = json.load(f)
     if not isinstance(capture, list):
         raise SystemExit(f"{path}: expected a JSON list of frame records, or a whoop_sync.py .db")
@@ -1205,7 +1213,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     results: List[dict] = []
 
     if args.batch:
-        with open(args.batch) as f:
+        with open(args.batch, encoding="utf-8") as f:
             batch = json.load(f)
         if not isinstance(batch, list) or not batch:
             print("batch file must be a non-empty JSON list", file=sys.stderr)
@@ -1253,4 +1261,5 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
 
 
 if __name__ == "__main__":
+    configure_utf8_stdio()
     sys.exit(main())

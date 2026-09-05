@@ -9,6 +9,7 @@ verified whoop5 offsets minus 4, and match the on-hardware HISTORY_END the strap
 """
 
 import os
+import sqlite3
 import tempfile
 import unittest
 
@@ -98,6 +99,26 @@ class WhoopDBTests(unittest.TestCase):
         self.tmp = tempfile.mkdtemp()
         self.db = ws.WhoopDB(os.path.join(self.tmp, "t.db"))
 
+    def tearDown(self):
+        self.db.close()
+
+    def test_context_manager_closes_on_normal_exit(self):
+        path = os.path.join(self.tmp, "normal.db")
+        with ws.WhoopDB(path) as db:
+            con = db.db
+            con.execute("SELECT 1")
+        with self.assertRaises(sqlite3.ProgrammingError):
+            con.execute("SELECT 1")
+
+    def test_context_manager_closes_on_exception(self):
+        path = os.path.join(self.tmp, "error.db")
+        with self.assertRaisesRegex(RuntimeError, "boom"):
+            with ws.WhoopDB(path) as db:
+                con = db.db
+                raise RuntimeError("boom")
+        with self.assertRaises(sqlite3.ProgrammingError):
+            con.execute("SELECT 1")
+
     def _frame(self, hexstr, t=47, unix=1000, hr=60):
         return (1, "61080005", t, unix, hr, hexstr)   # (recv_ms, char, inner_type, unix, hr, hex)
 
@@ -138,7 +159,7 @@ class WhoopDBTests(unittest.TestCase):
         out = os.path.join(self.tmp, "o.json")
         n = self.db.export_json(did, out, only_type=47)
         self.assertEqual(n, 1)
-        with open(out) as f:
+        with open(out, encoding="utf-8") as f:
             recs = json.load(f)
         self.assertEqual(recs[0]["hex"], "aa01")
 
@@ -156,6 +177,9 @@ class DecodeWiringTests(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.mkdtemp()
         self.db = ws.WhoopDB(os.path.join(self.tmp, "t.db"))
+
+    def tearDown(self):
+        self.db.close()
 
     def _frame(self, hexstr, t=47, unix=1000, hr=60):
         return (1, "61080005", t, unix, hr, hexstr)   # (recv_ms, char, inner_type, unix, hr, hex)

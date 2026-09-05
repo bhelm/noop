@@ -164,7 +164,8 @@ def load_corpus(argv):
         print("No corpus given — running the DEMO on the bundled resting frames (which cannot pin the\n"
               "span; that is the point). Build a real corpus (--template) with a HR ≠ 60.\n")
         return [BUNDLED_RESTING]
-    return json.load(open(paths[0]))
+    with open(paths[0], encoding="utf-8") as f:
+        return json.load(f)
 
 
 def analyze(corpus):

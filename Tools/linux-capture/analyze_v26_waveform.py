@@ -56,7 +56,8 @@ def acf(x, lag):
 
 def main():
     path = sys.argv[1] if len(sys.argv) > 1 else "capture_hist_ack.json"
-    frames = [bytes.fromhex(c["hex"]) for c in json.load(open(path))]
+    with open(path, encoding="utf-8") as f:
+        frames = [bytes.fromhex(c["hex"]) for c in json.load(f)]
     v26 = [r for r in frames if len(r) == 88 and r[8] == 47 and r[9] == 26]
     v18 = [r for r in frames if len(r) == 124 and r[8] == 47 and r[9] == 18]
     if not v26:
