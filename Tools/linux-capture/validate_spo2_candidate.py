@@ -1153,6 +1153,7 @@ def format_postable(results: Sequence[dict]) -> str:
 # --- CLI -------------------------------------------------------------------------------------------
 
 def main(argv: Optional[Sequence[str]] = None) -> int:
+    configure_utf8_stdio()
     p = argparse.ArgumentParser(
         description="Validate WHOOP 5/MG v18 spo2_candidate_82 against a CSV export (#103)."
     )
@@ -1255,5 +1256,4 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
 
 
 if __name__ == "__main__":
-    configure_utf8_stdio()
     sys.exit(main())
