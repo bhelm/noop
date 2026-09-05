@@ -443,6 +443,11 @@ class WhoopBleClient(
      * ("my-whoop") — which matches the Swift default and the rest of the Android app, so behaviour
      * is unchanged today while the registry takes over as the single source of the active id.
      *
+     * `@Volatile` because #1881 added a SECOND cross-thread writer: [adoptSourceIdentity] resolves the
+     * connected strap's row on [ioScope] (the Room registry read is `suspend`) and re-points from there,
+     * while the persist sites read this on the BLE handler thread. Without it that thread could keep
+     * reading the pre-connect value and file the link's rows under the wrong device — the exact bug.
+     *
      * MUTABLE (multi-WHOOP, MW-3): [setActiveDeviceId] re-points it so a WHOOP→WHOOP switch attributes
      * new samples to the newly-active WHOOP immediately, without waiting for a relaunch. The single-WHOOP
      * path NEVER reassigns it (the coordinator only calls [setActiveDeviceId] for a non-legacy WHOOP), so
@@ -450,6 +455,7 @@ class WhoopBleClient(
      * sites + the analyze pass read this field directly; the [Backfiller] captured its own copy at
      * construction, so [setActiveDeviceId] re-points that too (see there).
      */
+    @Volatile
     private var deviceId: String = DEFAULT_DEVICE_ID,
     /** Durable trim-cursor store for the offload safe-trim watermark (see [Backfiller]). */
     private val cursorStore: TrimCursorStore = PrefsTrimCursorStore(context),
@@ -3427,6 +3433,11 @@ class WhoopBleClient(
 
     @SuppressLint("MissingPermission")
     private fun connectInternal(model: WhoopModel, userInitiated: Boolean) {
+        // #1881: only the SYSTEM path is gated. This class already draws that line — `connect()` is the
+        // user's explicit Connect button, `connectFromSystem()` is every automatic path — and the report's
+        // complaint is only ever about NOOP acting on its own. Gating both would have made the Connect
+        // button silently dead while DevicesScreen showed a "Reconnecting…" toast.
+        if (!userInitiated && !whoopConnectAllowed("connect-from-system")) return
         intentionalDisconnect = false
         // #1635: an explicit Connect is the user saying "try the handshake again" — the documented way out
         // of hello suppression, and the reason suppression is never a permanent verdict. Consumed by the
@@ -3513,7 +3524,7 @@ class WhoopBleClient(
                 scanning = false, whoop5Detected = false,
                 statusNote = "Connecting to your ${WhoopModel.WHOOP5_MG.displayName}…",
             ) }
-            connectToDevice(direct)
+            connectToDevice(direct, alreadyAuthorised = userInitiated)
             bondedDirectAttempt = true   // after connectToDevice: reset() must not clear it
             return
         }
@@ -3528,6 +3539,11 @@ class WhoopBleClient(
      * the fallback and the not-found timeout. Port of macOS BLEManager.startScan(for:allowFallback:).
      */
     @SuppressLint("MissingPermission")
+    /**
+     * No gate here, deliberately: the only callers are [connectInternal] — which gates the system path —
+     * and this method's own family-rotation timeout, which cannot start a scan that one of those did not.
+     * Gating here as well would block the user's explicit Connect.
+     */
     private fun startScan(model: WhoopModel, allowFallback: Boolean) {
         handler.removeCallbacks(scanFallbackRunnable)
         // Defensive: the normal auto-connect scan is NEVER a present-scan. Clearing the flag here means a
@@ -3839,6 +3855,99 @@ class WhoopBleClient(
         if (id.isEmpty()) return
         deviceId = id
         backfiller.deviceId = id
+    }
+
+    /**
+     * Whether a WHOOP is the device the user actually selected (#1881). FAIL-OPEN: `true` unless
+     * something positively says otherwise, so the single-WHOOP path and every unknown state behave
+     * exactly as before — a wrong `false` here would stop the strap connecting for everyone.
+     *
+     * The DURABLE form of the coordinator's [SourceCoordinator] `stopWhoop`. That call is edge-triggered,
+     * fired once on the WHOOP -> other-source transition, while the WHOOP flow has system-driven entry
+     * points that consult nobody — [onBluetoothRadioOn] above all, which every radio toggle reaches and
+     * which explicitly clears `intentionalDisconnect` before reconnecting. Swift twin: `BLEManager`.
+     */
+    @Volatile
+    private var whoopIsActiveDevice = true
+
+    /** The last entry point [whoopConnectAllowed] turned away, so a rotation timer cannot flood the log. */
+    private var lastBlockedConnectReason: String? = null
+
+    /**
+     * Record whether a WHOOP is the active device (#1881). Called from the SAME closures the
+     * [SourceCoordinator] already uses to stop and start the WHOOP, so it inherits their semantics —
+     * including any deliberate exception that calls neither.
+     */
+    fun setWhoopIsActiveDevice(active: Boolean) {
+        if (whoopIsActiveDevice == active) return
+        whoopIsActiveDevice = active
+        log(
+            if (active) "WHOOP is the active device again — scanning and reconnecting are allowed"
+            else "WHOOP is no longer the active device — not scanning or connecting until it is again (#1881)"
+        )
+    }
+
+    /** The one gate every WHOOP scan/connect entry point passes through (#1881). Swift twin: `BLEManager`. */
+    private fun whoopConnectAllowed(reason: String): Boolean {
+        if (whoopIsActiveDevice) return true
+        // The flag is a CACHE of a registry fact, and the registry is the authority. Re-validate so the
+        // gate can never latch: it is set from the coordinator's stop/start closures and seeded at
+        // startup, and if those ever disagree a stale `false` would stop the strap connecting for the
+        // whole session.
+        //
+        // Asynchronously, unlike the Swift twin's inline read: the Room registry is `suspend` and this
+        // runs on the BLE handler thread, where `runBlocking` would be a worse bug than the one it fixes.
+        // So the re-validation lands for the NEXT attempt rather than this one — which is enough, because
+        // every caller here retries (the family rotation, the reconnect backoff, the radio-on re-arm).
+        revalidateWhoopIsActive()
+        if (lastBlockedConnectReason != reason) {
+            lastBlockedConnectReason = reason
+            log("Not connecting the WHOOP ($reason): a different device is active (#1881)")
+        }
+        return false
+    }
+
+    /** Re-read whether a WHOOP is active and un-block the gate if it is. See [whoopConnectAllowed]. */
+    private fun revalidateWhoopIsActive() {
+        val registry = (context.applicationContext as? com.noop.NoopApplication)?.deviceRegistry ?: return
+        ioScope.launch {
+            val activeId = runCatching { registry.activeDeviceId() }.getOrNull() ?: return@launch
+            val rows = runCatching { registry.all() }.getOrNull() ?: return@launch
+            val row = rows.firstOrNull { it.id == activeId }
+            if (row == null || SourceIdentity.isWhoop(row)) setWhoopIsActiveDevice(true)
+        }
+    }
+
+    /**
+     * Attribute this connection to the strap that ACTUALLY connected, not to whatever device is active
+     * (#1881). Resolves the registry row whose `peripheralId` matches [address] and re-points [deviceId]
+     * and the in-flight [Backfiller] to it.
+     *
+     * Async because the Room registry read is `suspend` (the Swift twin is synchronous GRDB and does this
+     * inline in `didConnect`). The window is between STATE_CONNECTED and the first persisted sample —
+     * service discovery, notification subscription and the strap's first response all sit inside it — so
+     * a row is not expected to land first; if one ever did it would carry the previous id.
+     *
+     * Conservative by construction: only ever moves the id to a row that is BOTH a WHOOP and matched by
+     * address. No registry, no match (the legacy single-WHOOP row before it has adopted an address), a
+     * non-WHOOP match, or an id already correct all leave it alone.
+     *  - the matched row is already the current id -> no write.
+     *
+     * Known narrow residual: the disconnect path flushes buffered live rows best-effort, and the persist
+     * sites read [deviceId] at PERSIST time — so a flush still in flight when the next link re-points the
+     * id would attribute the previous link's tail to the new strap. It needs a re-point to happen at all,
+     * which only occurs when the resolved row differs from the current id: never on a settled
+     * single-WHOOP install. Swift twin carries the same note.
+     */
+    private fun adoptSourceIdentity(address: String?) {
+        val addr = address ?: return
+        val registry = (context.applicationContext as? com.noop.NoopApplication)?.deviceRegistry ?: return
+        ioScope.launch {
+            val rows = runCatching { registry.all() }.getOrNull() ?: return@launch
+            val resolved = SourceIdentity.resolve(addr, rows, deviceId) ?: return@launch
+            log("Attributing this link to $resolved — the strap that connected, not the active device (#1881)")
+            setActiveDeviceId(resolved)
+        }
     }
 
     /**
@@ -5521,7 +5630,7 @@ class WhoopBleClient(
             _state.update { it.copy(statusNote = "Found $name, connecting…") }
             // Port of didDiscover: stop scanning, then connect to this peripheral.
             stopScan()
-            connectToDevice(device)
+            connectToDevice(device, alreadyAuthorised = true)   // #1881: a scan result is already authorised
         }
 
         override fun onScanFailed(errorCode: Int) {
@@ -6119,7 +6228,21 @@ class WhoopBleClient(
     }
 
     @SuppressLint("MissingPermission")
-    private fun connectToDevice(device: BluetoothDevice, autoConnect: Boolean = false) {
+    private fun connectToDevice(
+        device: BluetoothDevice,
+        autoConnect: Boolean = false,
+        /**
+         * #1881: true when the decision to connect was ALREADY authorised upstream — the user's explicit
+         * Connect, or a scan result, which can only exist because a gated-or-user scan is running. Every
+         * other caller is automatic (the radio-on re-arm, the reconnect backoff, launch auto-reconnect
+         * #67) and defaults to false, which is what the gate is for.
+         *
+         * Threaded rather than gated once upstream because, unlike Swift, these callers do NOT all funnel
+         * through a single system entry point.
+         */
+        alreadyAuthorised: Boolean = false,
+    ) {
+        if (!alreadyAuthorised && !whoopConnectAllowed("connect-to-device")) return
         // Reset per-connection state (mirrors the Swift flags cleared on connect/disconnect).
         reset()
         // Remember the device so a later dropout can reconnect straight to it (#61).
@@ -6182,6 +6305,9 @@ class WhoopBleClient(
                     // #1030 (ryanbr): a real link is up — cancel any pending involuntary reconnect so a
                     // stale backoff timer can't fire and reset+close this connection.
                     cancelPendingReconnect()
+                    // #1881: attribute this link to the strap that actually connected, before anything
+                    // persists. Swift twin: `BLEManager.didConnect` -> `adoptSourceIdentity(for:)`.
+                    adoptSourceIdentity(runCatching { g.device?.address }.getOrNull())
                     // A successful connect clears the reconnect backoff — the next involuntary drop starts
                     // the 3,6,12…s schedule afresh (iOS didConnect: failedConnectAttempts=0, #48). Reset
                     // IMMEDIATELY, not behind a survival dwell: a band the OS holds bonded/ACL-connected
