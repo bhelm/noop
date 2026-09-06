@@ -485,6 +485,32 @@ object IntelligenceEngine {
         flagSet()
     }
 
+    // The per-day reuse key's own two store reads, lifted out of [analyzeRecentOnCpu]'s body so that
+    // single coroutine state machine stays inside the JVM method-size budget the Jacoco-instrumented
+    // build asserts. Behaviour is unchanged: the HR fingerprint is read first, the other scored streams
+    // second, over the same window, and the caller awaits this exactly where the inline assembly stood.
+    private suspend fun dayReuseCacheKey(
+        repo: WhoopRepository,
+        owner: String,
+        from: Long,
+        to: Long,
+        skinAnchorRaw: Double?,
+        hrvWindowDetail: Boolean,
+    ): String {
+        val (fpCount, fpMaxTs) = repo.hrFingerprintWindow(owner, from, to)
+        return AnalyzeRecentDayCache.cacheKey(
+            owner, fpCount, fpMaxTs, skinAnchorRaw,
+            // #29: the OTHER scored streams for this night. Without it a night whose R-R (or
+            // resp/SpO2) landed after its HR keys identically to the HR-only scan it was scored
+            // from, and the HRV-less result is re-served for the rest of the process — a
+            // user-initiated refresh included, since that only bypasses the whole-pass watermark
+            // gate, never this one. Both reads are index-only aggregates over the same
+            // (deviceId, ts) keys; a miss costs the full stream reads this gate exists to skip.
+            streams = repo.dayStreamFingerprint(owner, from, to),
+            hrvWindowDetail = hrvWindowDetail,
+        )
+    }
+
     private suspend fun analyzeRecentOnCpu(
         repo: WhoopRepository,
         profile: UserProfile = UserProfile(),
@@ -806,16 +832,8 @@ object IntelligenceEngine {
                     Whoop4SkinTemp.deviceAnchorRaw(windowSkin.map { it.raw })?.let { skinAnchorByOwner[owner] = it }
                     skinAnchorResolvedOwners.add(owner)
                 }
-                val (fpCount, fpMaxTs) = repo.hrFingerprintWindow(owner, from, to)
-                val key = AnalyzeRecentDayCache.cacheKey(
-                    owner, fpCount, fpMaxTs, skinAnchorByOwner[owner],
-                    // #29: the OTHER scored streams for this night. Without it a night whose R-R (or
-                    // resp/SpO2) landed after its HR keys identically to the HR-only scan it was scored
-                    // from, and the HRV-less result is re-served for the rest of the process — a
-                    // user-initiated refresh included, since that only bypasses the whole-pass watermark
-                    // gate, never this one. Both reads are index-only aggregates over the same
-                    // (deviceId, ts) keys; a miss costs the full stream reads this gate exists to skip.
-                    streams = repo.dayStreamFingerprint(owner, from, to),
+                val key = dayReuseCacheKey(
+                    repo, owner, from, to, skinAnchorByOwner[owner],
                     // #1575: `&& hrvTraceSink != null` matters. With the HRV trace OFF no detail line
                     // is ever produced, so the flag describes nothing — but it would still flip at
                     // midnight and invalidate yesterday, charging EVERY user an extra day's re-score to
