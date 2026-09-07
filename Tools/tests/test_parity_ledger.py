@@ -151,6 +151,55 @@ class ParityLedgerTests(unittest.TestCase):
         self.assertIn("android/app/src/main/java/com/noop/analytics/Engine.kt", output)
         self.assertIn("aFreshlyInventedOneSidedHelper/1#1", output)
 
+    def test_compact_authority_drift_uses_declaration_inventory_for_new_functions(self) -> None:
+        self.write_clean_tree()
+        self.swift.write_text(
+            self.swift.read_text().replace(
+                "    public static let sampleLimit = 3\n",
+                """    public static func existingOneSided(_ value: Int) -> Int {
+        value
+    }
+    public static let sampleLimit = 3
+""",
+            )
+        )
+        self.mark_current_tree_as_origin_main()
+        compact = parity_ledger.build_compact_twin_map(self.root)
+        baseline = self.baseline_for(compact)
+
+        self.swift.write_text(
+            self.swift.read_text().replace(
+                """    public static func existingOneSided(_ value: Int) -> Int {
+        value
+    }
+""",
+                "    public static func existingOneSided(_ value: Int) -> Int { value }\n",
+            ).replace(
+                "    public static let sampleLimit = 3\n",
+                """    /// Kotlin twin: `Engine.claimedHelper`.
+    public static func claimedHelper(_ value: Int) -> Int { value }
+    public static let sampleLimit = 3
+""",
+            )
+        )
+        self.kotlin.write_text(
+            self.kotlin.read_text().replace(
+                "    const val SAMPLE_LIMIT = 3\n",
+                """    fun claimedHelper(value: Int): Int = value
+    const val SAMPLE_LIMIT = 3
+""",
+            )
+            + "\nfun genuinelyNewOneSided(value: Int): Int = value\n"
+        )
+
+        code, output = self.run_cli(compact, baseline)
+
+        self.assertEqual(1, code)
+        self.assertIn("add-unpaired-function", output)
+        self.assertIn("genuinelyNewOneSided/1#1", output)
+        self.assertNotIn("add-unpaired-function: new one-sided swift function", output)
+        self.assertNotIn("existingOneSided/1#1", output)
+
     def test_protocol_and_oura_source_pairs_are_in_inventory_scope(self) -> None:
         self.assertIn("Packages/WhoopProtocol/Sources/**/*.swift", parity_ledger.SWIFT_GLOBS)
         self.assertIn("Packages/OuraProtocol/Sources/**/*.swift", parity_ledger.SWIFT_GLOBS)

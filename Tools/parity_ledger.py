@@ -1553,8 +1553,10 @@ def authority_manifest(sets: dict[str, list[str]]) -> dict[str, dict[str, object
     }
 
 
-def _working_tree_added_lines(root: Path) -> dict[str, set[int]]:
-    """Return branch/worktree additions for actionable local diagnostics."""
+def _base_semantic_state(
+    root: Path,
+) -> tuple[dict[str, list[str]], set[tuple[str, str, str, int]]] | None:
+    """Return semantic sets and function identities from the comparison base."""
     try:
         try:
             base = subprocess.check_output(
@@ -1565,38 +1567,48 @@ def _working_tree_added_lines(root: Path) -> dict[str, set[int]]:
             ).strip()
         except subprocess.CalledProcessError:
             base = "HEAD"
-        output = subprocess.check_output(
-            ["git", "diff", "--no-ext-diff", "--unified=0", base, "--"],
+        archive = subprocess.check_output(
+            ["git", "archive", "--format=tar", base],
             cwd=root,
-            text=True,
             stderr=subprocess.DEVNULL,
         )
-    except (OSError, subprocess.CalledProcessError):
-        return {}
-    added: dict[str, set[int]] = defaultdict(set)
-    path: str | None = None
-    for line in output.splitlines():
-        if line.startswith("+++ b/"):
-            path = line[6:]
-            continue
-        if not line.startswith("@@ ") or path is None:
-            continue
-        match = re.search(r"\+(\d+)(?:,(\d+))?", line)
-        if match is None:
-            continue
-        start = int(match.group(1))
-        count = int(match.group(2) or "1")
-        added[path].update(range(start, start + count))
-    return added
+        with tempfile.TemporaryDirectory() as directory:
+            base_root = Path(directory)
+            with tarfile.open(fileobj=io.BytesIO(archive), mode="r:") as bundle:
+                bundle.extractall(base_root, filter="data")
+            inventory = _inventory(base_root)
+            expanded = build_twin_map(base_root, inventory)
+            semantic_sets = semantic_authority(
+                base_root, expanded=expanded, inventory=inventory
+            )
+    except (OSError, subprocess.CalledProcessError, tarfile.TarError, TypeError,
+            _InvalidSourceEncoding):
+        return None
+    function_identities = {
+        (declaration.language, declaration.owner, declaration.name, declaration.arity)
+        for declaration in [*inventory[2], *inventory[3]]
+    }
+    return semantic_sets, function_identities
+
+
+def _authority_change_requires_refresh(
+    section: str,
+    base_sets: dict[str, list[str]],
+    current_sets: dict[str, list[str]],
+) -> bool:
+    before = set(base_sets[section])
+    after = set(current_sets[section])
+    if section.startswith("unpaired_"):
+        return not after.issubset(before)
+    return not before.issubset(after)
 
 
 def _new_unpaired_diagnostics(
-    root: Path,
     semantic_sets: dict[str, list[str]],
     declarations: Iterable[Declaration],
+    base_functions: set[tuple[str, str, str, int]],
 ) -> list[Finding]:
     """Name locally added one-sided declarations while compact authority is stale."""
-    added = _working_tree_added_lines(root)
     unpaired = set(semantic_sets["unpaired_functions"])
     return [
         _finding(
@@ -1608,7 +1620,12 @@ def _new_unpaired_diagnostics(
         )
         for declaration in declarations
         if f"{declaration.language}\0{declaration.key}" in unpaired
-        and declaration.line in added.get(declaration.path, set())
+        and (
+            declaration.language,
+            declaration.owner,
+            declaration.name,
+            declaration.arity,
+        ) not in base_functions
     ]
 
 
@@ -1918,9 +1935,20 @@ def scan(root: Path, twin_map: dict) -> ScanResult:
                 key for key in SEMANTIC_AUTHORITY_SETS
                 if not isinstance(checked, dict) or checked.get(key) != current[key]
             ]
+            base_state = _base_semantic_state(root) if authority_drift else None
+            if base_state is not None:
+                base_sets, base_functions = base_state
+                authority_drift = [
+                    section for section in authority_drift
+                    if _authority_change_requires_refresh(
+                        section, base_sets, semantic_sets
+                    )
+                ]
             twin_map = expanded
         else:
             authority_drift = []
+            base_state = None
+            base_functions = set()
             semantic_sets = {}
         (
             sw_files,
@@ -1953,9 +1981,11 @@ def scan(root: Path, twin_map: dict) -> ScanResult:
         )
         for section in authority_drift
     ]
-    if "unpaired_functions" in authority_drift:
+    if "unpaired_functions" in authority_drift and base_state is not None:
         findings.extend(
-            _new_unpaired_diagnostics(root, semantic_sets, [*sw_funcs, *kt_funcs])
+            _new_unpaired_diagnostics(
+                semantic_sets, [*sw_funcs, *kt_funcs], base_functions
+            )
         )
     errors: list[ScanError] = []
     findings.extend(

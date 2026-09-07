@@ -98,8 +98,14 @@ Generation computes state; it never approves it. Refresh writes candidates,
 runs the identity-set ratchet against the exact base, and restores both snapshots
 on failure. There is no accept/force switch, and the generator never creates or
 edits `parity_dispositions.json`.
+Deleting a paired duplicate is fail-closed derived-snapshot drift that requires
+this guarded refresh flow by design.
 
 For a new one-sided declaration, choose explicitly:
+
+The `add-unpaired-function` diagnostic defines "new" by absence of the
+platform-qualified owner, name, and arity from the base declaration inventory,
+not by a changed source line.
 
 1. Implement and test its Swift/Kotlin twin (required for shared bug fixes and
    final shared features).
