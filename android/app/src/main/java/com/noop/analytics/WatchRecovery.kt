@@ -71,9 +71,10 @@ object WatchRecovery {
         // doesn't carry them here) -> RecoveryScorer renormalises to HRV + RHR. RHR is optional: the term
         // needs BOTH today's reading AND a usable personal RHR baseline. An empty or all-implausible RHR
         // history folds to foldHistory's synthetic midpoint (the config's min/max mean, e.g. 75 bpm), which
-        // is nobody's resting HR — scoring against it would move Charge on a fabricated baseline. Same
-        // `usable ? state : null` gate the strap Charge surfaces already apply; without a usable RHR
-        // baseline we fall back to the HRV-only path, exactly as when today's reading is missing.
+        // is nobody's resting HR — scoring against it would move Charge on a fabricated baseline. Mirrors
+        // the `usable ? state : nil` gate the macOS Charge driver breakdown applies (Swift TodayView /
+        // CoupledView); without a usable RHR baseline we fall back to the HRV-only path, exactly as when
+        // today's reading is missing.
         val recovery = RecoveryScorer.recovery(
             hrv = todayHrv,
             rhr = todayRhr?.toDouble() ?: rhrBase.baseline,

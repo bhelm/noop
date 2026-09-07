@@ -144,6 +144,9 @@ final class WatchRecoveryTests: XCTestCase {
         XCTAssertNotNil(withRHR.recovery)
         XCTAssertNotNil(hrvOnly.recovery)
         XCTAssertEqual(withRHR.recovery!, hrvOnly.recovery!, accuracy: 1e-12)
+        // The same literal the Kotlin twin pins, so the oracle guards BOTH directions: a Swift-side
+        // drift would break here rather than silently diverging from Android.
+        XCTAssertEqual(withRHR.recovery!, 57.932425214874954, accuracy: 1e-12)
     }
 
     // An RHR history that is entirely out of physiological range accepts no night at all, so its
