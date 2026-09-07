@@ -34,8 +34,6 @@ class TrimCursorCommitDurabilityTest {
             thrown = t
         }
         assertTrue("a commit() that returned false must surface as a throw, got $thrown", thrown != null)
-        // And nothing durable was written, so the next session must re-offer the chunk.
-        assertNull(runBlocking { store.get(Backfiller.STRAP_TRIM_CURSOR) })
     }
 
     /** Storage-full surfacing as an exception from the editor stays an exception (guard still fires). */
@@ -101,10 +99,11 @@ class TrimCursorCommitDurabilityTest {
             override fun clear(): SharedPreferences.Editor { prefs.map.clear(); return this }
             override fun commit(): Boolean {
                 if (prefs.commitThrows) throw java.io.IOException("simulated storage failure")
-                // A failed commit leaves the store untouched, exactly like the platform does.
-                if (!prefs.commitResult) return false
+                // The platform commits to the in-memory map FIRST and returns only the disk-write
+                // result, so a false commit is still visible to an in-process get(); only durability
+                // across a restart is lost. Model that: apply, then report the failure.
                 flush()
-                return true
+                return prefs.commitResult
             }
             override fun apply() { flush() }
             private fun flush() {
