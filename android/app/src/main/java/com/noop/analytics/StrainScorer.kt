@@ -340,7 +340,8 @@ object StrainScorer {
 
     /**
      * Map accumulated TRIMP onto [0, 100] via 100 × ln(TRIMP+1) / ln(D), 2 dp.
-     * TRIMP ≤ 0 → 0, and D ≤ 1 (or NaN) → 0, being outside the map's domain (#36).
+     * TRIMP ≤ 0 → 0, and D ≤ 1 (or NaN) → 0, being outside the map's domain (#36). The output is
+     * unbounded as D → 1⁺ — an upper clamp is tracked separately (#12).
      *
      * The default D is **Edwards'**. A Banister TRIMP passed here without an explicit denominator is
      * scored against the wrong ceiling and reads low — prefer [strain], which resolves the method's own

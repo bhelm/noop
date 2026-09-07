@@ -27,9 +27,24 @@ final class StrainDenominatorDomainTests: XCTestCase {
 
     /// Just above the boundary the score is enormous but finite, and it must stay a Double on both
     /// platforms — this is the value Kotlin's `roundToLong()` clipped to Long.MAX / 100.
+    ///
+    /// Loosely toleranced on purpose: ln(1 + 2⁻⁵²) is ~2.2e-16, so a 1-ulp difference between
+    /// Darwin's and glibc's `log` moves the quotient by ~±30 absolute. Linux/glibc observes exactly
+    /// 3.1216573840826803e+17; the assertion checks the magnitude, not the last bits.
     func testDenominatorJustAboveOneStaysFinite() {
         let s = StrainScorer.trimpToStrain(1, denominator: 1.0000000000000002)
         XCTAssertTrue(s.isFinite)
-        XCTAssertEqual(s, 3.1216573840826803e+17, accuracy: 0)
+        XCTAssertEqual(s, 3.1216573840826803e+17, accuracy: 1e4)
+    }
+
+    /// Non-finite TRIMP propagates rather than being caught by the domain guard — the guard is about
+    /// D, not TRIMP. Both platforms agree here only because Kotlin no longer rounds through Long
+    /// (`roundToLong()` mapped +∞ to Long.MAX), so pin it (#36).
+    func testNonFiniteTrimpPropagates() {
+        let inf = StrainScorer.trimpToStrain(.infinity, denominator: 7201)
+        XCTAssertFalse(inf.isFinite)
+        XCTAssertFalse(inf.isNaN)
+        XCTAssertGreaterThan(inf, 0)
+        XCTAssertTrue(StrainScorer.trimpToStrain(.nan, denominator: 7201).isNaN)
     }
 }

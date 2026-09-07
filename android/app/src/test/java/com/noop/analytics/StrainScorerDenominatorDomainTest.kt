@@ -51,11 +51,30 @@ class StrainScorerDenominatorDomainTest {
     /**
      * Just above the boundary the score is enormous but finite, and it must stay a Double on both
      * platforms — this is the value `roundToLong()` clipped to Long.MAX / 100.
+     *
+     * Loosely toleranced on purpose: ln(1 + 2⁻⁵²) is ~2.2e-16, so a 1-ulp difference between the
+     * JVM's and Darwin's `log` moves the quotient by ~±30 absolute. Linux observes exactly
+     * 3.1216573840826803e+17 on both sides; the assertion checks the magnitude, not the last bits.
      */
     @Test
     fun `denominator just above one stays finite`() {
         val s = StrainScorer.trimpToStrain(1.0, 1.0000000000000002)
         assertTrue(s.isFinite())
-        assertEquals(3.1216573840826803e+17, s, 0.0)
+        assertEquals(3.1216573840826803e+17, s, 1e4)
+    }
+
+    /**
+     * Non-finite TRIMP propagates rather than being caught by the domain guard — the guard is about
+     * D, not TRIMP. Both platforms agree here only because this side no longer rounds through Long
+     * (`roundToLong()` mapped +∞ to Long.MAX), so pin it (#36). Swift oracle, same formula:
+     * `inf|7201.0|inf`, `nan|7201.0|nan`.
+     */
+    @Test
+    fun `non-finite trimp propagates`() {
+        val inf = StrainScorer.trimpToStrain(Double.POSITIVE_INFINITY, 7201.0)
+        assertTrue(!inf.isFinite())
+        assertTrue(!inf.isNaN())
+        assertTrue(inf > 0)
+        assertTrue(StrainScorer.trimpToStrain(Double.NaN, 7201.0).isNaN())
     }
 }
