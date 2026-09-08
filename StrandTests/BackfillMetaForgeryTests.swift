@@ -147,7 +147,7 @@ final class BackfillMetaForgeryTests: XCTestCase {
     /// either it refuses the acknowledgement and the offload stops, or it trims on an altered block.
     /// Both outcomes are the permanent data loss this whole change exists to prevent, arriving through
     /// the fix rather than the bug.
-    func testTheWhoop4AcknowledgementBlockIsEightBytesAndReachesIntoTheTrailer() {
+    @MainActor func testTheWhoop4AcknowledgementBlockIsEightBytesAndReachesIntoTheTrailer() {
         let frame = historyEndFrame()
         XCTAssertEqual(frame.count, 25, "precondition: the real HISTORY_END size the exemption is about")
         let declared = Int(frame[1]) | (Int(frame[2]) << 8)
@@ -162,7 +162,7 @@ final class BackfillMetaForgeryTests: XCTestCase {
 
     /// The 5/MG twin of the same slice (frame[21…29]), so a later tidy-up cannot narrow one family
     /// while the other keeps working.
-    func testTheWhoop5AcknowledgementBlockIsAlsoEightBytes() {
+    @MainActor func testTheWhoop5AcknowledgementBlockIsAlsoEightBytes() {
         let frame = puffinCommandFrame(cmd: 2, seq: 0,
                                        payload: [UInt8](repeating: 7, count: 20), type: 49)
         XCTAssertGreaterThanOrEqual(frame.count, 29, "precondition: long enough to hold the block")
@@ -173,7 +173,7 @@ final class BackfillMetaForgeryTests: XCTestCase {
 
     /// The guard the exemption does keep: a frame too short to hold the block yields nil rather than a
     /// short read. Not-enough-bytes is a different answer from four-bytes-because-we-clamped.
-    func testAFrameTooShortForTheBlockYieldsNilRatherThanAShortRead() {
+    @MainActor func testAFrameTooShortForTheBlockYieldsNilRatherThanAShortRead() {
         XCTAssertNil(Backfiller.endData(from: frameFromPayload([], type: 49, seq: 0, cmd: 2),
                                         family: .whoop4))
     }
