@@ -1,7 +1,7 @@
 import XCTest
 @testable import StrandAnalytics
 
-/// Domain of the log map's denominator D (#36).
+/// Log-map denominator behavior outside the map's domain.
 ///
 /// D ≤ 1 has no ln-based score: ln(1) = 0 divides to ±∞, ln(D) < 0 below 1 flips the sign, and ln(D)
 /// is NaN at or below 0. Before the guard, Swift returned `+Inf` for D = 1 while Kotlin's
@@ -39,7 +39,7 @@ final class StrainDenominatorDomainTests: XCTestCase {
 
     /// Non-finite TRIMP propagates rather than being caught by the domain guard — the guard is about
     /// D, not TRIMP. Both platforms agree here only because Kotlin no longer rounds through Long
-    /// (`roundToLong()` mapped +∞ to Long.MAX), so pin it (#36).
+    /// (`roundToLong()` mapped +∞ to Long.MAX), so pin the non-finite propagation behavior.
     func testNonFiniteTrimpPropagates() {
         let inf = StrainScorer.trimpToStrain(.infinity, denominator: 7201)
         XCTAssertFalse(inf.isFinite)

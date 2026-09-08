@@ -291,8 +291,8 @@ public enum StrainScorer {
     // MARK: - Logarithmic map
 
     /// Map accumulated TRIMP onto [0, 100] via 100 × ln(TRIMP+1) / ln(D), 2 dp.
-    /// TRIMP ≤ 0 → 0, and D ≤ 1 (or NaN) → 0, being outside the map's domain (#36). The output is
-    /// unbounded as D → 1⁺ — an upper clamp is tracked separately (#12).
+    /// TRIMP ≤ 0 → 0, and D ≤ 1 (or NaN) → 0, being outside the map's domain. The output is
+    /// unbounded as D → 1⁺ — an upper clamp is tracked separately.
     ///
     /// The default D is **Edwards'**. A Banister TRIMP passed here without an explicit denominator is
     /// scored against the wrong ceiling and reads low — prefer `strain(…)`, which resolves the
@@ -302,7 +302,7 @@ public enum StrainScorer {
         // D ≤ 1 (and NaN) is outside the map's domain: ln(1) = 0 divides to ±∞, ln(D) < 0 below 1
         // flips the sign, and ln(D) is NaN at or below 0. Out-of-domain D is no score, like
         // TRIMP ≤ 0 — before this guard D = 1 returned +Inf here and a saturated 9.2e16 on Android
-        // for the same input (#36). The default 7201 is unaffected.
+        // for the same input (the denominator-domain fix). The default 7201 is unaffected.
         guard denominator > 1 else { return 0 }
         let value = maxStrain * log(trimp + 1.0) / log(denominator)
         return (value * 100).rounded() / 100

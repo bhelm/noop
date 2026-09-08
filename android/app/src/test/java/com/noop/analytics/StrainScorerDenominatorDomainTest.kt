@@ -5,7 +5,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * Domain of the log map's denominator D (#36), against the compiled Swift twin.
+ * Log-map denominator behavior outside the map's domain, against the compiled Swift twin.
  *
  * D ≤ 1 has no ln-based score: ln(1) = 0 divides to ±∞, ln(D) < 0 below 1 flips the sign, and ln(D)
  * is NaN at or below 0. Before the guard, Swift returned `+Inf` for D = 1 while this side's
@@ -66,7 +66,8 @@ class StrainScorerDenominatorDomainTest {
     /**
      * Non-finite TRIMP propagates rather than being caught by the domain guard — the guard is about
      * D, not TRIMP. Both platforms agree here only because this side no longer rounds through Long
-     * (`roundToLong()` mapped +∞ to Long.MAX), so pin it (#36). Swift oracle, same formula:
+     * (`roundToLong()` mapped +∞ to Long.MAX), so pin the non-finite propagation behavior. Swift
+     * oracle, same formula:
      * `inf|7201.0|inf`, `nan|7201.0|nan`.
      */
     @Test
