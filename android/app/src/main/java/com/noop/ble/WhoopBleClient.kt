@@ -6700,7 +6700,7 @@ class WhoopBleClient(
                     // stale backoff timer can't fire and reset+close this connection.
                     cancelPendingReconnect()
                     // #1881: attribute this link to the strap that actually connected, before anything
-                    // persists. Swift twin: `BLEManager.didConnect` -> `adoptSourceIdentity(for:)`.
+                    // persists. Swift twin: `BLEManager.centralManager(_:didConnect:)` -> `adoptSourceIdentity(for:)`.
                     adoptSourceIdentity(runCatching { g.device?.address }.getOrNull())
                     // A successful connect clears the reconnect backoff — the next involuntary drop starts
                     // the 3,6,12…s schedule afresh (iOS didConnect: failedConnectAttempts=0, #48). Reset
