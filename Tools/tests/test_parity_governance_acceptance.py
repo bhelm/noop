@@ -100,18 +100,48 @@ class RepositoryBaselineTests(unittest.TestCase):
         self.assertEqual(1, registry["schema_version"])
         self.assertNotIn("exemptions", parity_ledger._load_json(TOOLS / "parity_twin_map.json", {}))
 
-    def test_core_tools_stays_unfiltered_while_governance_is_path_filtered(self) -> None:
+    def test_core_tools_filter_covers_every_governance_tool_path(self) -> None:
         core = (REPOSITORY / ".github/workflows/tools-python.yml").read_text(
             encoding="utf-8"
         )
         governance = (REPOSITORY / ".github/workflows/parity-governance.yml").read_text(
             encoding="utf-8"
         )
-        self.assertIn("pull_request:\n    branches: [main]", core)
-        self.assertNotIn("paths:", core)
+        self.assertIn("pull_request:\n    branches: [main]\n    paths:", core)
+        core_paths = [
+            line.strip()[3:-1]
+            for line in core.splitlines()
+            if line.startswith("      - '")
+        ]
+        self.assertEqual(
+            ["Tools/**", ".github/workflows/tools-python.yml"] * 2,
+            core_paths,
+        )
         self.assertNotIn("unittest discover -s tests", core)
         self.assertIn("pull_request:\n    branches: [main]\n    paths:", governance)
-        self.assertIn("'Tools/parity_*.py'", governance)
+        governance_paths = [
+            line.strip()[3:-1]
+            for line in governance.splitlines()
+            if line.startswith("      - '")
+        ]
+        self.assertEqual(
+            [
+                "Tools/issue_ref.py",
+                "Tools/parity_*.py",
+                "Tools/parity_*.json",
+                "Tools/tests/**",
+                ".github/workflows/parity-governance.yml",
+            ] * 2,
+            governance_paths,
+        )
+        self.assertIn("Tools/**", core_paths)
+        self.assertTrue(
+            all(
+                path.startswith("Tools/")
+                for path in governance_paths
+                if not path.startswith(".github/")
+            )
+        )
         self.assertNotIn("'Packages/**/*.swift'", governance)
         self.assertNotIn("'android/**/*.kt'", governance)
         self.assertIn("unittest discover -s tests", governance)
