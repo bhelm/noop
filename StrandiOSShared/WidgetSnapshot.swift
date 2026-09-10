@@ -73,7 +73,8 @@ public struct WidgetSnapshot: Codable, Equatable {
         return stressSeries
     }
 
-    /// Days since the epoch on the LOCAL calendar, the twin of Kotlin's `LocalDate.toEpochDay()`.
+    /// Days since the epoch on the LOCAL calendar, corresponding to Kotlin's
+    /// `LocalDate.toEpochDay()` built-in.
     ///
     /// Counted by the calendar rather than by dividing the day's start by 86 400. That arithmetic is
     /// wrong on a DST day and measurably so: walking a year of local noons, `Europe/London` produces

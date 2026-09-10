@@ -10,7 +10,8 @@ import com.noop.data.SecurePrefs
  * Typed rather than left as a bare exception because the message it carries tells the wearer to check
  * the key, and until the UI can recognise this case it has nowhere to send them: the coach shows the
  * chat once ANY key is stored, and a wrong key is still a stored key. The alternative, matching on the
- * message text, stops working in every locale but English. Twin of Swift `AICoachError.badKey`.
+ * message text, stops working in every locale but English. This corresponds to the Swift
+ * `AICoachError.badKey` enum case.
  */
 class AiKeyRejectedException(message: String) : Exception(message)
 
