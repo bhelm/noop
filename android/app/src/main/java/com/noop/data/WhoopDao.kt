@@ -5,6 +5,7 @@ import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import androidx.room.Transaction
+import androidx.room.Update
 import androidx.room.Upsert
 import kotlinx.coroutines.flow.Flow
 
@@ -290,6 +291,14 @@ interface WhoopDao : DeviceRegistryDao {
     @Upsert
     suspend fun upsertSleepSessions(rows: List<SleepSession>)
 
+    /** Exact row read for the repository's transactional sleep-cache replacement guard (#1976). */
+    @Query("SELECT * FROM sleepSession WHERE deviceId = :deviceId AND startTs = :startTs")
+    suspend fun sleepSession(deviceId: String, startTs: Long): SleepSession?
+
+    /** Update an existing row after [SleepSessionUpsertPolicy] has preserved its protected fields. */
+    @Update
+    suspend fun updateSleepSession(row: SleepSession): Int
+
     /** Remove one sleep session by its full primary key (deviceId, startTs) — used by the
      *  bed/wake-time edit, which deletes then re-inserts because startTs is part of the PK. */
     @Query("DELETE FROM sleepSession WHERE deviceId = :deviceId AND startTs = :startTs")
@@ -329,8 +338,8 @@ interface WhoopDao : DeviceRegistryDao {
      * v18 (H8): write the per-epoch motion magnitudes (compact JSON array) for one session, banked beside
      * `stagesJSON` on the same row. Keyed by the IMMUTABLE detected key (deviceId, startTs). `null` clears
      * the column (no series). Port of iOS WhoopStore.persistSessionMotion (the repository encodes the array).
-     * Returns rows changed (0 when no such session). Targeted UPDATE so the @Upsert recompute/import path —
-     * which never names this column — preserves it. */
+     * Returns rows changed (0 when no such session). Targeted UPDATE owns this column;
+     * [SleepSessionUpsertPolicy] preserves it through recompute/import refreshes. */
     @Query(
         "UPDATE sleepSession SET motionJSON = :json WHERE deviceId = :deviceId AND startTs = :sessionStart"
     )

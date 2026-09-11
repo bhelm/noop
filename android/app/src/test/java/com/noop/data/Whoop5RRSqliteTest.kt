@@ -78,9 +78,14 @@ class Whoop5RRSqliteTest {
                     (args[0] as List<*>).filterIsInstance<SleepSession>().forEach { sleeps[it.deviceId to it.startTs] = it }
                     Unit
                 }
+                "sleepSession" -> sleeps[(args[0] as String) to (args[1] as Long)]
                 "insertSleepSession" -> {
                     val row = args[0] as SleepSession
                     if (sleeps.putIfAbsent(row.deviceId to row.startTs, row) == null) 1L else -1L
+                }
+                "updateSleepSession" -> {
+                    val row = args[0] as SleepSession
+                    if (sleeps.replace(row.deviceId to row.startTs, row) != null) 1 else 0
                 }
                 "replaceComputedScoreWindow" -> {
                     (args[3] as List<*>).filterIsInstance<DailyMetric>().forEach { days[it.deviceId to it.day] = it }
