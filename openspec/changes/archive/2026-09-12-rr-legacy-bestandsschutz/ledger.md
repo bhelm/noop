@@ -54,6 +54,8 @@ Worktree wt-rr-legacy-bestandsschutz, Branch feature/rr-legacy-bestandsschutz, a
 | 2026-09-12 01:41 CEST | Abschlussreview, gpt-5.6-sol | high | 1A verbraucht: 0 P0, 1 P1, 2 P2; Swift-Nebenwirkung auf Wochenableitungen bestätigt |
 | 2026-09-12 01:48 CEST | Implementer, gpt-5.6-sol | high | P1 korrigiert; separater Swift-Persistenzpfad, Quellvertrag rot vor und grün nach Fix, Android-Regressionslauf grün |
 | 2026-09-12 01:49 CEST | Codex-Orchestrator, Session-Modell | hoch | Fix integriert; Quellvertrag 2/2 grün, gebundener Android-Rerun 23/23 grün; 0A verbleibt |
+| 2026-09-12 02:00 CEST | Codex-Orchestrator, Session-Modell | hoch | Draft-Pull-Request veröffentlicht; Realbackup, Hardware und Apple-Ausführung ausdrücklich als ungetestet markiert |
+| 2026-09-12 02:01 CEST | Codex-Orchestrator, Session-Modell | hoch | Öffentlicher Testaufruf im bestehenden Issue veröffentlicht; Reporter angesprochen, Datenschutzgrenze genannt |
 
 ## Finding Ledger
 
@@ -74,3 +76,9 @@ Worktree wt-rr-legacy-bestandsschutz, Branch feature/rr-legacy-bestandsschutz, a
 
 - Registriert: Paket-Worktree `/root/whoop/wt-rr-legacy-bestandsschutz-crossplatform` und Branch `bau/rr-legacy-bestandsschutz-crossplatform` nach erfolgreicher Integration entfernbar.
 - Paket-Worktree nach Integration bereinigt; Feature-Worktree bleibt für Pull Request und Übergabe erhalten.
+
+## Externe Übergabe
+
+- Draft-Pull-Request: https://github.com/ryanbr/noop/pull/2115
+- Testaufruf: https://github.com/ryanbr/noop/issues/2101#issuecomment-5641963221
+- Kein Release und keine Store-Veröffentlichung durchgeführt.
