@@ -110,6 +110,7 @@ Risikoklasse: high — sichtbarer Laufzeit- und Paritätsvertrag über Android u
 | 2026-09-11 | r3 | Zulässiger Fixpass innerhalb der bestehenden P1–P4-Verantwortungen | Delta-P1 geschlossen; Fixpass unreviewed, keine weitere Reviewrunde |
 | 2026-09-12 | r3 | Bewusste Nutzerfreigabe an Plan-Commit \`27d3a5531ba0a23d5140a371681db9d412b6aa89\` gebunden | Umfang, E1–E4, Acceptance-Matrix und Ausführungsgrenzen freigegeben; \`approval.md\` erstellt |
 | 2026-09-12 | r3 | Ausführung im Codex-Orchestrator-Modus; Legacy-Kampagne mit verbrauchtem Planreview und ohne verbleibende P/A/I-Ausgaben; Aufzeichnung inaktiv | Preflight für den gebundenen Plan-Commit bestanden; Arbeitsort und Paketgrenzen bestätigt |
+| 2026-09-12 | r3 | P1 durch einen nativen Codex-Implementierer mit angefordertem Modell `gpt-5.6-sol`, Aufwand high, im isolierten Paket-Worktree umgesetzt und seriell integriert | Fünf P1-Dateien im erlaubten Umfang; Kotlin-Rot/Grün und integrierter Clean-Test belegt; Swift-Runner und zwei basisgebundene Guards offen |
 
 ## Evidence
 
@@ -120,7 +121,10 @@ Risikoklasse: high — sichtbarer Laufzeit- und Paritätsvertrag über Android u
 | Delta planning review | proven | drei unabhängige Berichte auf r2; 5 bestätigte deduplizierte P1, kein P0 |
 | Post-cap fix pass | unproven | r3 schließt die Delta-Funde ohne weitere Reviewrunde; Status `fix pass unreviewed` |
 | Product tests/builds | unproven | erst nach Planfreigabe in P1–P4 |
+| P1 Kotlin oracle red/green | proven | `validation/schritte-verdichtung-p1/02-kotlin-red.log`; integrierter Clean-Lauf `:app:testFullDebugUnitTest --tests com.noop.analytics.StepsDetailDensityTest`: BUILD SUCCESSFUL |
+| P1 Swift oracle | unproven | Test liest das Android-Fixture; lokaler Versuch in `validation/schritte-verdichtung-p1/01-swift-red.log` scheitert an fehlendem Swift-Toolchain |
+| P1 parity governance | unproven | Ledger-Scan ohne neue Findings; Refresh und Offline-Ratchet durch bestehende `origin/main`-Autoritätsabweichung blockiert, abgeleitete Dateien unverändert |
 
 ## Cleanup record
 
-Keine Spike-, Build- oder temporären Produktionsartefakte erzeugt. Feature-Worktree bleibt für Review und mögliche Freigabe bestehen.
+P1-Paket-Worktree `/root/whoop/wt-schritte-verdichtung-p1` und Branch `bau/schritte-verdichtung-p1` nach Integration zur späteren ledger-gesteuerten Bereinigung registriert. Feature-Worktree bleibt bestehen.
