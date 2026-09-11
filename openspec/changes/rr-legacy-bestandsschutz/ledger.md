@@ -51,6 +51,17 @@ Worktree wt-rr-legacy-bestandsschutz, Branch feature/rr-legacy-bestandsschutz, a
 | 2026-09-12 01:05 CEST | Codex-Orchestrator, Session-Modell | hoch | Ausführungs-Preflight für r1 bestanden; Hostmodus Codex, Paket 1, Basis laut Arbeitsort, Skills-Stand d343278; 1A verbleibt |
 | 2026-09-12 01:32 CEST | Implementer, gpt-5.6-sol | high | Paket integriert; Android rot vor Fix, danach gezielte Engine-, Store-, Schema-, Transaktions- und Bytecode-Prüfungen grün |
 | 2026-09-12 01:33 CEST | Codex-Orchestrator, Session-Modell | hoch | Integrator-Smoke auf integriertem Stand grün; 43 Android-Tests über fünf betroffene Klassen, Swift lokal nicht verfügbar |
+| 2026-09-12 01:41 CEST | Abschlussreview, gpt-5.6-sol | high | 1A verbraucht: 0 P0, 1 P1, 2 P2; Swift-Nebenwirkung auf Wochenableitungen bestätigt |
+| 2026-09-12 01:48 CEST | Implementer, gpt-5.6-sol | high | P1 korrigiert; separater Swift-Persistenzpfad, Quellvertrag rot vor und grün nach Fix, Android-Regressionslauf grün |
+| 2026-09-12 01:49 CEST | Codex-Orchestrator, Session-Modell | hoch | Fix integriert; Quellvertrag 2/2 grün, gebundener Android-Rerun 23/23 grün; 0A verbleibt |
+
+## Finding Ledger
+
+| ID | Severity | Claim | Evidence/reproduction | Affected scenario/section | Status | Resolution | Verification |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| F1 | P1 | Swift ließ geschütztes HRV in Vitality/Body-Age einfließen, Android nicht. | Abschlussreview zeigte mutierte Arbeitsliste vor Wochenableitungen; Quellvertrag reproduzierte den Unterschied rot. | Vorhandener Snapshot bleibt erhalten; Plattformparität | resolved | Geschützte Swift-Tageswerte auf separate Persistenz-/Ausgabekopie begrenzt. | Quellvertrag 2/2 grün; Android 23/23 grün |
+| F2 | P2 | Swift-App-Code konnte lokal nicht kompiliert oder ausgeführt werden. | Linux-Host ohne Swift/Xcode. | Gesamte Apple-Lieferung | accepted risk | Pull Request verlangt CI/macOS-Nachweis und nennt Hardware-/Realbackup-Pfad ungetestet. | Offen bis PR-CI/Nutzertest |
+| F3 | P2 | Kein kombinierter E2E-Test für Alias nach Re-Pairing an DST-Grenze. | Store-/Scorer-Teiltests decken Signale getrennt ab. | Fenster- und Owner-Auflösung | accepted risk | Kein Scope-Ausbau; bestehende exakte Prädikate und fester Offset bleiben maßgeblich. | Revisit bei CI- oder Nutzertestabweichung |
 
 ## Grenzen
 
@@ -62,4 +73,4 @@ Worktree wt-rr-legacy-bestandsschutz, Branch feature/rr-legacy-bestandsschutz, a
 ## Cleanup
 
 - Registriert: Paket-Worktree `/root/whoop/wt-rr-legacy-bestandsschutz-crossplatform` und Branch `bau/rr-legacy-bestandsschutz-crossplatform` nach erfolgreicher Integration entfernbar.
-- Noch offen: Paket-Worktree bereinigen, Feature-Worktree nach Übergabe erhalten.
+- Paket-Worktree nach Integration bereinigt; Feature-Worktree bleibt für Pull Request und Übergabe erhalten.
