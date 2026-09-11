@@ -1342,6 +1342,17 @@ class WhoopRepository(
     suspend fun firstRecordedRrTs(deviceId: String): Long? =
         dao.firstRecordedRrTs(deviceId)
 
+    /** True only when strict WHOOP 5 policy withheld unlabelled legacy beats in this exact scoring window. */
+    suspend fun legacyWhoop5RrWithheld(
+        deviceId: String,
+        from: Long,
+        to: Long,
+        unlabelledAliasOfWhoop5: Boolean = false,
+    ): Boolean = transactor.run {
+        isWhoop5RrSource(deviceId, unlabelledAliasOfWhoop5) &&
+            dao.legacyWhoop5RrWithheld(deviceId, from, to)
+    }
+
     /** Diagnostic export keeps all WHOOP transports and legacy values without scoring selection.
      * Existing quarantine and Oura SpO2-IBI exclusions still apply. */
     suspend fun rawRrIntervalsForDevice(deviceId: String, from: Long, to: Long,
