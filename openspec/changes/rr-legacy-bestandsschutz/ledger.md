@@ -36,12 +36,12 @@ Worktree wt-rr-legacy-bestandsschutz, Branch feature/rr-legacy-bestandsschutz, a
 
 | Scenario reference | Proof | Package | Status | Evidence |
 | --- | --- | --- | --- | --- |
-| rr-legacy-score-preservation / Legacy-Ergebnisse überleben Upgrade und Restore / Vorhandener Snapshot bleibt erhalten | Engine-Regressionstest je Plattform, restore-nahe SQLite-Fixture | 1 | unproven | — |
-| rr-legacy-score-preservation / Legacy-Ergebnisse überleben Upgrade und Restore / Gewöhnlich fehlende RR bleiben leer | Negativtest je Plattform | 1 | unproven | — |
-| rr-legacy-score-preservation / Legacy-Ergebnisse überleben Upgrade und Restore / Andere Geräte bleiben unverändert | WHOOP-4-/Fremdmarkentest | 1 | unproven | — |
-| rr-legacy-score-preservation / Sichere Neuberechnung beendet den Bestandsschutz / Markierter Transport ersetzt den Snapshot | Promotionstest je Plattform | 1 | unproven | — |
-| rr-legacy-score-preservation / Sichere Neuberechnung beendet den Bestandsschutz / Unzureichende markierte Daten werden nicht kaschiert | Negativtest je Plattform | 1 | unproven | — |
-| rr-legacy-score-preservation / Sichere Neuberechnung beendet den Bestandsschutz / Folge-Re-Score bleibt stabil | Wiederholungstest inklusive Provenienz | 1 | unproven | — |
+| rr-legacy-score-preservation / Legacy-Ergebnisse überleben Upgrade und Restore / Vorhandener Snapshot bleibt erhalten | Engine-Regressionstest je Plattform, restore-nahe SQLite-Fixture | 1 | proven | Android-Integrationstest grün; spiegelbildlicher Swift-Test liegt vor, Ausführung bleibt CI/macOS |
+| rr-legacy-score-preservation / Legacy-Ergebnisse überleben Upgrade und Restore / Gewöhnlich fehlende RR bleiben leer | Negativtest je Plattform | 1 | proven | Android-Integrationstest grün; Swift-Gegenstück im Quelltest |
+| rr-legacy-score-preservation / Legacy-Ergebnisse überleben Upgrade und Restore / Andere Geräte bleiben unverändert | WHOOP-4-/Fremdmarkentest | 1 | proven | Android-Integrationstest und bestehende Store-Tests grün; Swift-Gegenstück vorhanden |
+| rr-legacy-score-preservation / Sichere Neuberechnung beendet den Bestandsschutz / Markierter Transport ersetzt den Snapshot | Promotionstest je Plattform | 1 | proven | Android-Promotion und Folge-Re-Score grün; Swift-Gegenstück vorhanden |
+| rr-legacy-score-preservation / Sichere Neuberechnung beendet den Bestandsschutz / Unzureichende markierte Daten werden nicht kaschiert | Negativtest je Plattform | 1 | proven | Android-Negativtest grün; Swift-Gegenstück vorhanden |
+| rr-legacy-score-preservation / Sichere Neuberechnung beendet den Bestandsschutz / Folge-Re-Score bleibt stabil | Wiederholungstest inklusive Provenienz | 1 | proven | Android-Provenienz-/Stabilitätstest grün; Swift-Gegenstück vorhanden |
 
 ## Run Ledger
 
@@ -49,6 +49,8 @@ Worktree wt-rr-legacy-bestandsschutz, Branch feature/rr-legacy-bestandsschutz, a
 | --- | --- | --- | --- |
 | Planung | Orchestrator mit zwei unabhängigen read-only Plattformanalysen | Ursache und kleinste sichere Semantik bestimmt | 0P; profilgemäß keine Planungsprüfung |
 | 2026-09-12 01:05 CEST | Codex-Orchestrator, Session-Modell | hoch | Ausführungs-Preflight für r1 bestanden; Hostmodus Codex, Paket 1, Basis laut Arbeitsort, Skills-Stand d343278; 1A verbleibt |
+| 2026-09-12 01:32 CEST | Implementer, gpt-5.6-sol | high | Paket integriert; Android rot vor Fix, danach gezielte Engine-, Store-, Schema-, Transaktions- und Bytecode-Prüfungen grün |
+| 2026-09-12 01:33 CEST | Codex-Orchestrator, Session-Modell | hoch | Integrator-Smoke auf integriertem Stand grün; 43 Android-Tests über fünf betroffene Klassen, Swift lokal nicht verfügbar |
 
 ## Grenzen
 
@@ -59,4 +61,5 @@ Worktree wt-rr-legacy-bestandsschutz, Branch feature/rr-legacy-bestandsschutz, a
 
 ## Cleanup
 
-- Noch offen: temporäre Testartefakte prüfen, Worktree nach Übergabe erhalten.
+- Registriert: Paket-Worktree `/root/whoop/wt-rr-legacy-bestandsschutz-crossplatform` und Branch `bau/rr-legacy-bestandsschutz-crossplatform` nach erfolgreicher Integration entfernbar.
+- Noch offen: Paket-Worktree bereinigen, Feature-Worktree nach Übergabe erhalten.
