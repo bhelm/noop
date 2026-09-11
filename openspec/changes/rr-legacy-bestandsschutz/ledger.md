@@ -48,6 +48,7 @@ Worktree wt-rr-legacy-bestandsschutz, Branch feature/rr-legacy-bestandsschutz, a
 | Phase | Rolle | Ergebnis | Budgetwirkung |
 | --- | --- | --- | --- |
 | Planung | Orchestrator mit zwei unabhängigen read-only Plattformanalysen | Ursache und kleinste sichere Semantik bestimmt | 0P; profilgemäß keine Planungsprüfung |
+| 2026-09-12 01:05 CEST | Codex-Orchestrator, Session-Modell | hoch | Ausführungs-Preflight für r1 bestanden; Hostmodus Codex, Paket 1, Basis laut Arbeitsort, Skills-Stand d343278; 1A verbleibt |
 
 ## Grenzen
 
