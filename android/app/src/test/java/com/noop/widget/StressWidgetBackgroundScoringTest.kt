@@ -5,6 +5,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import java.io.File
 
 /**
  * The stress widget's two blank states, and the gate that stops it staying blank.
@@ -19,6 +20,27 @@ import org.junit.Test
  */
 class StressWidgetBackgroundScoringTest {
     private val interval = 15L * 60L * 1000L
+
+    @Test
+    fun foregroundProducerChecksPlacementBeforeScoring() {
+        var root = File(System.getProperty("user.dir") ?: ".").canonicalFile
+        var source: String? = null
+        repeat(4) {
+            val candidate = File(root, "android/app/src/main/java/com/noop/ui/AppViewModel.kt")
+            if (candidate.isFile && source == null) source = candidate.readText()
+            root = root.parentFile ?: root
+        }
+        val viewModel = source
+            ?: error("AppViewModel.kt not found - this test must not pass by default")
+        val foregroundProducer = Regex(
+            """val\s+stressCurve\s*=\s*if\s*\(WidgetSnapshotStore\.hasStressWidget\(appContext\)\)\s*\{\s*com\.noop\.widget\.StressWidgetProducer\.todayCurve"""
+        )
+
+        assertTrue(
+            "AppViewModel must check for a placed stress widget before reading the day",
+            foregroundProducer.containsMatchIn(viewModel),
+        )
+    }
 
     @Test
     fun theFirstTickAfterLaunchScores() {
