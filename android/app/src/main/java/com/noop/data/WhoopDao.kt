@@ -129,6 +129,14 @@ internal const val FIRST_SCORABLE_WHOOP5_RR_SQL =
 internal const val HAS_WHOOP5_RR_SOURCE_SQL =
     "SELECT EXISTS(SELECT 1 FROM rrInterval WHERE deviceId = :deviceId AND srcChannel IN (5, 6, 7))"
 
+internal const val LEGACY_WHOOP5_RR_WITHHELD_SQL =
+    "SELECT EXISTS(SELECT 1 FROM rrInterval WHERE deviceId = :deviceId " +
+        "AND ts >= :from AND ts <= :to AND srcChannel IS NULL " +
+        "AND (tsSuspect IS NULL OR tsSuspect <> 1)) " +
+        "AND NOT EXISTS(SELECT 1 FROM rrInterval WHERE deviceId = :deviceId " +
+        "AND ts >= :from AND ts <= :to AND srcChannel IN " + SCORABLE_WHOOP5_CHANNELS + " " +
+        "AND (tsSuspect IS NULL OR tsSuspect <> 1))"
+
 internal const val PROMOTE_WHOOP5_RR_SOURCE_SQL =
     "UPDATE rrInterval SET srcChannel = :source, ord = :ord " +
     "WHERE deviceId = :deviceId AND ts = :ts AND rrMs = :rrMs AND seq = :seq " +
@@ -596,6 +604,10 @@ interface WhoopDao : DeviceRegistryDao {
 
     @Query(HAS_WHOOP5_RR_SOURCE_SQL)
     suspend fun hasWhoop5RrSource(deviceId: String): Boolean
+
+    /** Exact-window twin of Swift `legacyWhoop5RRWithheld`; source-family gating stays in Repository. */
+    @Query(LEGACY_WHOOP5_RR_WITHHELD_SQL)
+    suspend fun legacyWhoop5RrWithheld(deviceId: String, from: Long, to: Long): Boolean
 
     /** Nullable because MIN over no rows is SQL NULL: a device with nothing scorable yet. */
     @Query(FIRST_SCORABLE_WHOOP5_RR_SQL)
