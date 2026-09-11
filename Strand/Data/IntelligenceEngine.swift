@@ -2323,11 +2323,12 @@ final class IntelligenceEngine: ObservableObject {
         // Apply the exact pair only after current-score traces and derived series were produced from the
         // current inputs. A legacy snapshot must not masquerade as a value recalculated against today's
         // baselines; it only protects the two persisted/displayed cells from a destructive nil overwrite.
-        for index in dailies.indices {
-            let fresh = dailies[index]
+        var persistedDailies = dailies
+        for index in persistedDailies.indices {
+            let fresh = persistedDailies[index]
             guard let snapshot = legacySnapshots[fresh.day], fresh.avgHrv == nil,
                   (fresh.totalSleepMin ?? 0) > 0 else { continue }
-            dailies[index] = fresh.with(avgHrv: snapshot.avgHrv, recovery: snapshot.recovery)
+            persistedDailies[index] = fresh.with(avgHrv: snapshot.avgHrv, recovery: snapshot.recovery)
             appliedLegacySnapshots[fresh.day] = snapshot
         }
         for index in out.indices {
@@ -2349,7 +2350,7 @@ final class IntelligenceEngine: ObservableObject {
         // resolver override). Persist scores + provenance atomically so a failed write can never label an
         // older score with a newer provider. The last row for a duplicate day wins, matching the upsert.
         var provenanceByCell: [String: ScoreInputProvenanceRow] = [:]
-        for daily in dailies {
+        for daily in persistedDailies {
             guard let source = resolvedScoreOwnerByDay[daily.day] else { continue }
             if daily.recovery != nil {
                 if let snapshot = appliedLegacySnapshots[daily.day] {
@@ -2386,7 +2387,7 @@ final class IntelligenceEngine: ObservableObject {
             markerSources = sourceIds
         }
         try? await store.persistComputedScores(
-            dailyMetrics: dailies,
+            dailyMetrics: persistedDailies,
             metricPoints: restPoints,
             provenance: Array(provenanceByCell.values),
             deviceId: computedId,
@@ -2408,8 +2409,8 @@ final class IntelligenceEngine: ObservableObject {
         // covers the window, so eviction runs exactly as before; `persistComputedScores` is guarded the
         // same way, so an empty pass leaves the persisted window untouched. Twin of the Android
         // WhoopDao.replaceComputedScoreWindow empty guard.
-        if !dailies.isEmpty {
-            let freshKeys = Set(dailies.map { $0.day })
+        if !persistedDailies.isEmpty {
+            let freshKeys = Set(persistedDailies.map { $0.day })
             let existingWindow = (try? await store.dailyMetrics(deviceId: computedId, from: oldestDay, to: newestDay)) ?? []
             for stale in existingWindow where !freshKeys.contains(stale.day) {
                 _ = try? await store.deleteDailyMetrics(deviceId: computedId, from: stale.day, to: stale.day)
