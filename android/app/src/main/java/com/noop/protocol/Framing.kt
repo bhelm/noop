@@ -242,7 +242,8 @@ enum class FrameRejectReason {
 /**
  * The structural lower bounds a frame must clear before any of its bytes are read as fields.
  *
- * WHOOP 4.0: `[SOF][len u16][crc8][type][seq][cmd] + >=1 payload byte + [crc32 u32]` = 11 bytes.
+ * WHOOP 4.0: `[SOF][len u16][crc8][type][seq][cmd] + [crc32 u32]` = 11 bytes. The zero-payload
+ * metadata frames at this bound are valid and intentional; the minimum preserves the old `length >= 7` rule.
  * WHOOP 5.0/MG: `[SOF][fmt][declLen u16][hdr u16][crc16 u16] + >=1 payload byte + [crc32 u32]` = 13.
  * The smallest real frame in the project's captures is exactly 11 bytes (WHOOP 4.0) and 124 bytes
  * (WHOOP 5.0/MG), so neither bound rejects a recorded frame. Twin of the Swift `FrameLimits`.
