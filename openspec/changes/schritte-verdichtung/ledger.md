@@ -108,6 +108,8 @@ Risikoklasse: high — sichtbarer Laufzeit- und Paritätsvertrag über Android u
 | 2026-09-11 | r2 | Quellenbehauptungen verifiziert und bestätigte P1 planweit geschlossen | semantische Revision vollständig; drei Delta-Linsen ausstehend |
 | 2026-09-11 | r2 | Drei unabhängige Delta-Linsen: Produkt/Akzeptanz, Architektur/Risiko, Lieferung/Nachweis; angeforderte Modelle native Codex `gpt-5.6-luna`, Aufwand high | 5 deduplizierte P1, kein P0; Reviewbudget ausgeschöpft |
 | 2026-09-11 | r3 | Zulässiger Fixpass innerhalb der bestehenden P1–P4-Verantwortungen | Delta-P1 geschlossen; Fixpass unreviewed, keine weitere Reviewrunde |
+| 2026-09-12 | r3 | Bewusste Nutzerfreigabe an Plan-Commit \`27d3a5531ba0a23d5140a371681db9d412b6aa89\` gebunden | Umfang, E1–E4, Acceptance-Matrix und Ausführungsgrenzen freigegeben; \`approval.md\` erstellt |
+| 2026-09-12 | r3 | Ausführung im Codex-Orchestrator-Modus; Legacy-Kampagne mit verbrauchtem Planreview und ohne verbleibende P/A/I-Ausgaben; Aufzeichnung inaktiv | Preflight für den gebundenen Plan-Commit bestanden; Arbeitsort und Paketgrenzen bestätigt |
 
 ## Evidence
 
