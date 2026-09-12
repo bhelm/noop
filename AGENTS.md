@@ -219,6 +219,9 @@ Swift, you MUST build the app yourself: `xcodebuild … build` locally, or run `
 ## PR & commit conventions
 
 - **One concern per PR.** Keep a protocol change, a schema migration, and a UI change separate.
+- **Leave issue closure to maintainers.** Reference related issues neutrally with `Refs #N`.
+  Avoid GitHub auto-closing keyword + issue references in PR descriptions and comments, including
+  quoted text; maintainers decide when a report is resolved and its issue can be closed.
 - **Show your verification.** BLE → what you tested on hardware. Analytics → the method + a test.
   UI → confirms design tokens only. App-target Swift → that you compiled the app (CI won't).
 - **Keep generated artifacts out of git** (`Strand.xcodeproj/`, `build/`, `.build/`, `*.app`,
