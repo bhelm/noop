@@ -115,6 +115,7 @@ Risikoklasse: high — sichtbarer Laufzeit- und Paritätsvertrag über Android u
 | 2026-09-12 | r3 | P4 lokale Integration und Gates ausgeführt | Android Unit-Suite und Full-Debug-Build grün; Parity-Ledger grün; Refresh/Ratchet an bestehender Basisautorität blockiert; Apple-Runner fehlt |
 | 2026-09-12 | r3 | Autorisierte externe Apple-Gates auf dem veröffentlichten Feature-Branch ausgeführt | macOS-App und StrandTests, iOS-Simulator-Build sowie Swift-Pakete einschließlich StrandAnalytics grün |
 | 2026-09-12 | r3 | Autorisierter Apple-Rotnachweis gegen P1-Vorzustand mit ausschließlich neuem P3-Test ausgeführt | macOS-App baut; Testschritt scheitert erwartungsgemäß vor P3, während derselbe Test auf integriertem Inhalt grün ist |
+| 2026-09-12 | r3 | Abschlussgate und Archivierung | Alle Acceptance-Zeilen proven; OpenSpec-Archivvalidierung erfolgreich; keine offene P0/P1 |
 
 ## Evidence
 
@@ -133,6 +134,10 @@ Risikoklasse: high — sichtbarer Laufzeit- und Paritätsvertrag über Android u
 | P3/P4 Apple native | proven | GitHub App-Build auf ausgeliefertem Inhalt: macOS-App und StrandTests sowie iOS-Simulator-Build erfolgreich; Swift-Packages-CI ebenfalls erfolgreich |
 | P3 Apple red/green | proven | Temporärer CI-Rotlauf scheitert im Strand-Testschritt gegen den P1-Vorzustand; derselbe Test ist im Feature-CI grün |
 | P4 scope/security/rollback | proven | Diff enthält nur freigegebene Analytics-, Detail- und Testpfade; kein Schema, Store, Import, Netzwerk, Berechtigung oder Telemetriepfad; Rollback gemeinsam über die drei Paket-Merges |
+| Apple delivered CI | proven | https://github.com/bhelm/noop/actions/runs/34659323410 — macOS-App/StrandTests und iOS-Simulator-Build erfolgreich |
+| Swift packages CI | proven | https://github.com/bhelm/noop/actions/runs/34659727426 — StrandAnalytics und weitere Paketjobs erfolgreich |
+| Apple red CI | proven | https://github.com/bhelm/noop/actions/runs/34683704697 — erwarteter Strand-Testfehler gegen P1-Vorzustand |
+| Durable decision record | proven | Keine projektbezogene OKF-Wissensbasis gefunden; archiviertes `design.md` ist der dauerhafte Entscheidungsnachweis |
 
 ## Cleanup record
 
