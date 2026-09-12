@@ -219,6 +219,9 @@ Swift, you MUST build the app yourself: `xcodebuild … build` locally, or run `
 ## PR & commit conventions
 
 - **One concern per PR.** Keep a protocol change, a schema migration, and a UI change separate.
+- **Use English for all repository-facing text:** PR titles and descriptions, commit messages,
+  issues, review comments, documentation, and code comments. App translations remain in their
+  intended target languages.
 - **Leave issue closure to maintainers.** Reference related issues neutrally with `Refs #N`.
   Avoid GitHub auto-closing keyword + issue references in PR descriptions and comments, including
   quoted text; maintainers decide when a report is resolved and its issue can be closed.
