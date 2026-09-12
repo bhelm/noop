@@ -142,13 +142,13 @@ final class Whoop5RRStoreTests: XCTestCase {
                        "legacy rows outside the exact read window cannot protect a score")
         try await s.dbWriter.write { db in
             try db.execute(sql: "UPDATE rrInterval SET tsSuspect = 1 WHERE deviceId = ? AND ts = 100",
-                           arguments: [id])
+                           arguments: [self.id])
         }
         let quarantined = try await s.legacyWhoop5RRWithheld(deviceId: id, from: 100, to: 200)
         XCTAssertFalse(quarantined, "quarantined rows are excluded exactly like the scoring read")
         try await s.dbWriter.write { db in
             try db.execute(sql: "UPDATE rrInterval SET tsSuspect = NULL WHERE deviceId = ? AND ts = 100",
-                           arguments: [id])
+                           arguments: [self.id])
         }
 
         _ = try await s.insert(Streams(rr: [RRInterval(ts: 150, rrMs: 990,
