@@ -141,4 +141,4 @@ Risikoklasse: high — sichtbarer Laufzeit- und Paritätsvertrag über Android u
 
 ## Cleanup record
 
-P1–P3-Paket-Worktrees `/root/whoop/wt-schritte-verdichtung-p1`, `/root/whoop/wt-schritte-verdichtung-p2`, `/root/whoop/wt-schritte-verdichtung-p3` und ihre `bau/`-Branches sowie Rotnachweis-Worktree `/root/whoop/wt-schritte-verdichtung-p3-red`, lokaler und entfernter Validierungsbranch nach Integration zur ledger-gesteuerten Bereinigung registriert. Feature-Worktree bleibt bestehen.
+P1–P3-Paket-Worktrees und ihre `bau/`-Branches wurden nach Integration entfernt. Der Rotnachweis-Worktree sowie sein lokaler und entfernter Validierungsbranch wurden nach belegtem CI-Ergebnis entfernt. Der Feature-Worktree bleibt bestehen; die externen CI-Läufe und der veröffentlichte Feature-Branch bleiben als Nachweis erhalten.
