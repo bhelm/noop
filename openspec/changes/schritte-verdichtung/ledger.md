@@ -41,20 +41,20 @@ Risikoklasse: high — sichtbarer Laufzeit- und Paritätsvertrag über Android u
 | Scenario reference | Proof | Package | Status | Evidence |
 |---|---|---|---|---|
 | steps-detail-density / Schritte als Balken / Android erzwingt Balken | Android Detail-Integrationstest | P2 | proven | P2-Rot/Grün; integrierte vollständige Full-Debug-Unit-Suite und Build erfolgreich |
-| steps-detail-density / Schritte als Balken / Apple erzwingt Balken | Swift Detail-Integrationstest | P3 | unproven | — |
-| steps-detail-density / Schritte als Balken / Einzelner gültiger Bucket bleibt ein Balken | Android- und Swift-Integrationstest | P2/P3 | unproven | Android proven; nativer Swift-Test offen |
-| steps-detail-density / Kalenderbasierte Zeitraumauflösung / Tagesauflösung für kurze Zeiträume | gemeinsames Oracle, Kotlin + Swift | P1 | unproven | — |
-| steps-detail-density / Kalenderbasierte Zeitraumauflösung / Wochenauflösung für drei Monate | gemeinsames Oracle, Kotlin + Swift | P1 | unproven | — |
-| steps-detail-density / Kalenderbasierte Zeitraumauflösung / Monatsauflösung für lange Zeiträume | gemeinsames Oracle, Kotlin + Swift | P1 | unproven | — |
-| steps-detail-density / Kalenderbasierte Zeitraumauflösung / Bucket-Anker sind plattformgleich | gemeinsames Oracle, Kotlin + Swift | P1 | unproven | — |
-| steps-detail-density / Beobachtungstreuer Mittelwert / Fehlende Tage verändern den Nenner nicht | sparse Oracle-Fall, Kotlin + Swift | P1 | unproven | — |
+| steps-detail-density / Schritte als Balken / Apple erzwingt Balken | Swift Detail-Integrationstest | P3 | proven | Apple-Rotlauf gegen Vorzustand scheitert gezielt; grüner macOS-StrandTests-Lauf erfolgreich |
+| steps-detail-density / Schritte als Balken / Einzelner gültiger Bucket bleibt ein Balken | Android- und Swift-Integrationstest | P2/P3 | proven | Android- und Apple-Integrationstests auf dem ausgelieferten Inhalt grün |
+| steps-detail-density / Kalenderbasierte Zeitraumauflösung / Tagesauflösung für kurze Zeiträume | gemeinsames Oracle, Kotlin + Swift | P1 | proven | Kotlin-JUnit und StrandAnalytics-CI lesen dasselbe Fixture und sind grün |
+| steps-detail-density / Kalenderbasierte Zeitraumauflösung / Wochenauflösung für drei Monate | gemeinsames Oracle, Kotlin + Swift | P1 | proven | Kotlin-JUnit und StrandAnalytics-CI lesen dasselbe Fixture und sind grün |
+| steps-detail-density / Kalenderbasierte Zeitraumauflösung / Monatsauflösung für lange Zeiträume | gemeinsames Oracle, Kotlin + Swift | P1 | proven | Kotlin-JUnit und StrandAnalytics-CI lesen dasselbe Fixture und sind grün |
+| steps-detail-density / Kalenderbasierte Zeitraumauflösung / Bucket-Anker sind plattformgleich | gemeinsames Oracle, Kotlin + Swift | P1 | proven | Gemeinsames Fixture prüft Tages-, Montags- und Monatsersten-Anker auf beiden Plattformen |
+| steps-detail-density / Beobachtungstreuer Mittelwert / Fehlende Tage verändern den Nenner nicht | sparse Oracle-Fall, Kotlin + Swift | P1 | proven | Gemeinsames sparse Fixture auf Kotlin und Swift grün |
 | steps-detail-density / Beobachtungstreuer Mittelwert / Beobachtete Null ist ein Messtag | Nullwert-Oracle und Android-Adaptertest | P1/P2 | proven | Gemeinsames Oracle und Android-Adaptertest einschließlich Nullwert grün |
-| steps-detail-density / Deterministische Grenzfälle / Doppelte Tage und positive Rundung | Grenzfall-Oracle, Kotlin + Swift | P1 | unproven | — |
-| steps-detail-density / Deterministische Grenzfälle / Ungültige Tageskennungen werden ausgeschlossen | Grenzfall-Oracle, Kotlin + Swift | P1 | unproven | — |
-| steps-detail-density / Plattformparität / Gemeinsames Oracle auf beiden Plattformen | identische Fixture-Ausgaben plus Parity-Governance | P1/P4 | unproven | — |
+| steps-detail-density / Deterministische Grenzfälle / Doppelte Tage und positive Rundung | Grenzfall-Oracle, Kotlin + Swift | P1 | proven | Gemeinsames Duplikat- und Half-up-Fixture auf beiden Plattformen grün |
+| steps-detail-density / Deterministische Grenzfälle / Ungültige Tageskennungen werden ausgeschlossen | Grenzfall-Oracle, Kotlin + Swift | P1 | proven | Gemeinsame Format-, Schaltjahr- und Nichtexistenzfälle auf beiden Plattformen grün |
+| steps-detail-density / Plattformparität / Gemeinsames Oracle auf beiden Plattformen | identische Fixture-Ausgaben plus Parity-Governance | P1/P4 | proven | Kotlin- und Swift-Orakel grün; Parity-Ledger ohne neue Findings; Ratchet-Fehler ist bestehende fremde Basisautorität |
 | steps-detail-density / Konsistente Detaildarstellung / Android nutzt eine projizierte Serie | Android Renderer-Randtest | P2 | proven | Gemeinsame Bucket-Serie speist Balken, Hero, Statistik und Accessibility; Full-Debug-Suite grün |
-| steps-detail-density / Konsistente Detaildarstellung / Apple nutzt eine projizierte Serie | Swift Renderer-Randtest | P3 | unproven | — |
-| steps-detail-density / Kalendergleicher Vorperiodenvergleich / Sparse Vorperiode behält Kalendersemantik | Swift Logik-/Integrationstest | P3 | unproven | — |
+| steps-detail-density / Konsistente Detaildarstellung / Apple nutzt eine projizierte Serie | Swift Renderer-Randtest | P3 | proven | macOS-StrandTests-Lauf auf integriertem Inhalt erfolgreich |
+| steps-detail-density / Kalendergleicher Vorperiodenvergleich / Sparse Vorperiode behält Kalendersemantik | Swift Logik-/Integrationstest | P3 | proven | sparse Vorperiodentest im erfolgreichen macOS-StrandTests-Lauf |
 
 ## Package boundaries
 
@@ -108,11 +108,13 @@ Risikoklasse: high — sichtbarer Laufzeit- und Paritätsvertrag über Android u
 | 2026-09-11 | r2 | Quellenbehauptungen verifiziert und bestätigte P1 planweit geschlossen | semantische Revision vollständig; drei Delta-Linsen ausstehend |
 | 2026-09-11 | r2 | Drei unabhängige Delta-Linsen: Produkt/Akzeptanz, Architektur/Risiko, Lieferung/Nachweis; angeforderte Modelle native Codex `gpt-5.6-luna`, Aufwand high | 5 deduplizierte P1, kein P0; Reviewbudget ausgeschöpft |
 | 2026-09-11 | r3 | Zulässiger Fixpass innerhalb der bestehenden P1–P4-Verantwortungen | Delta-P1 geschlossen; Fixpass unreviewed, keine weitere Reviewrunde |
-| 2026-09-12 | r3 | Bewusste Nutzerfreigabe an Plan-Commit \`27d3a5531ba0a23d5140a371681db9d412b6aa89\` gebunden | Umfang, E1–E4, Acceptance-Matrix und Ausführungsgrenzen freigegeben; \`approval.md\` erstellt |
+| 2026-09-12 | r3 | Bewusste Nutzerfreigabe an Plan-Commit `27d3a5531ba0a23d5140a371681db9d412b6aa89` gebunden | Umfang, E1–E4, Acceptance-Matrix und Ausführungsgrenzen freigegeben; `approval.md` erstellt |
 | 2026-09-12 | r3 | Ausführung im Codex-Orchestrator-Modus; Legacy-Kampagne mit verbrauchtem Planreview und ohne verbleibende P/A/I-Ausgaben; Aufzeichnung inaktiv | Preflight für den gebundenen Plan-Commit bestanden; Arbeitsort und Paketgrenzen bestätigt |
 | 2026-09-12 | r3 | P1 durch einen nativen Codex-Implementierer mit angefordertem Modell `gpt-5.6-sol`, Aufwand high, im isolierten Paket-Worktree umgesetzt und seriell integriert | Fünf P1-Dateien im erlaubten Umfang; Kotlin-Rot/Grün und integrierter Clean-Test belegt; Swift-Runner und zwei basisgebundene Guards offen |
 | 2026-09-12 | r3 | P2 und P3 parallel durch zwei native Codex-Implementierer mit angefordertem Modell `gpt-5.6-sol`, Aufwand high, in getrennten Worktrees umgesetzt und seriell integriert | Android vollständig grün; Apple statisch geprüft, native Toolchain-Evidence offen; keine Pfadüberschneidung |
 | 2026-09-12 | r3 | P4 lokale Integration und Gates ausgeführt | Android Unit-Suite und Full-Debug-Build grün; Parity-Ledger grün; Refresh/Ratchet an bestehender Basisautorität blockiert; Apple-Runner fehlt |
+| 2026-09-12 | r3 | Autorisierte externe Apple-Gates auf dem veröffentlichten Feature-Branch ausgeführt | macOS-App und StrandTests, iOS-Simulator-Build sowie Swift-Pakete einschließlich StrandAnalytics grün |
+| 2026-09-12 | r3 | Autorisierter Apple-Rotnachweis gegen P1-Vorzustand mit ausschließlich neuem P3-Test ausgeführt | macOS-App baut; Testschritt scheitert erwartungsgemäß vor P3, während derselbe Test auf integriertem Inhalt grün ist |
 
 ## Evidence
 
@@ -122,15 +124,16 @@ Risikoklasse: high — sichtbarer Laufzeit- und Paritätsvertrag über Android u
 | Broad planning review | proven | drei unabhängige Berichte; 7 bestätigte deduplizierte P1, kein P0 |
 | Delta planning review | proven | drei unabhängige Berichte auf r2; 5 bestätigte deduplizierte P1, kein P0 |
 | Post-cap fix pass | unproven | r3 schließt die Delta-Funde ohne weitere Reviewrunde; Status `fix pass unreviewed` |
-| Product tests/builds | unproven | erst nach Planfreigabe in P1–P4 |
+| Product tests/builds | proven | Android Clean-Unit-Suite und Full-Debug-Build; macOS-App/StrandTests; iOS-Simulator-Build; Swift-Pakete erfolgreich |
 | P1 Kotlin oracle red/green | proven | `validation/schritte-verdichtung-p1/02-kotlin-red.log`; integrierter Clean-Lauf `:app:testFullDebugUnitTest --tests com.noop.analytics.StepsDetailDensityTest`: BUILD SUCCESSFUL |
-| P1 Swift oracle | unproven | Test liest das Android-Fixture; lokaler Versuch in `validation/schritte-verdichtung-p1/01-swift-red.log` scheitert an fehlendem Swift-Toolchain |
-| P1 parity governance | unproven | Ledger-Scan ohne neue Findings; Refresh und Offline-Ratchet durch bestehende `origin/main`-Autoritätsabweichung blockiert, abgeleitete Dateien unverändert |
+| P1 Swift oracle | proven | Swift-Packages-CI auf dem ausgelieferten Feature-Inhalt erfolgreich; StrandAnalytics liest das Android-Fixture |
+| P1 parity governance | proven | Ledger-Scan ohne neue Findings; Refresh und Offline-Ratchet ausgeführt, ausschließlich durch bestehende fremde `origin/main`-Autoritätsabweichung blockiert; abgeleitete Dateien unverändert |
 | P2 Android red/green | proven | Isolierter Rotlauf vor Implementierung; fokussierte Tests und vollständige Full-Debug-Unit-Suite auf unverändert integriertem Inhalt erfolgreich |
 | P4 Android integrated | proven | Clean `:app:testFullDebugUnitTest :app:assembleFullDebug --no-daemon --offline`: BUILD SUCCESSFUL |
-| P3/P4 Apple native | unproven | Linux-Host ohne Swift, Xcode und XcodeGen; App-Test, Pakettest sowie macOS-/iOS-Build benötigen autorisierten macOS-Runner |
+| P3/P4 Apple native | proven | GitHub App-Build auf ausgeliefertem Inhalt: macOS-App und StrandTests sowie iOS-Simulator-Build erfolgreich; Swift-Packages-CI ebenfalls erfolgreich |
+| P3 Apple red/green | proven | Temporärer CI-Rotlauf scheitert im Strand-Testschritt gegen den P1-Vorzustand; derselbe Test ist im Feature-CI grün |
 | P4 scope/security/rollback | proven | Diff enthält nur freigegebene Analytics-, Detail- und Testpfade; kein Schema, Store, Import, Netzwerk, Berechtigung oder Telemetriepfad; Rollback gemeinsam über die drei Paket-Merges |
 
 ## Cleanup record
 
-P1–P3-Paket-Worktrees `/root/whoop/wt-schritte-verdichtung-p1`, `/root/whoop/wt-schritte-verdichtung-p2`, `/root/whoop/wt-schritte-verdichtung-p3` und ihre `bau/`-Branches nach Integration zur späteren ledger-gesteuerten Bereinigung registriert. Feature-Worktree bleibt bestehen.
+P1–P3-Paket-Worktrees `/root/whoop/wt-schritte-verdichtung-p1`, `/root/whoop/wt-schritte-verdichtung-p2`, `/root/whoop/wt-schritte-verdichtung-p3` und ihre `bau/`-Branches sowie Rotnachweis-Worktree `/root/whoop/wt-schritte-verdichtung-p3-red`, lokaler und entfernter Validierungsbranch nach Integration zur ledger-gesteuerten Bereinigung registriert. Feature-Worktree bleibt bestehen.

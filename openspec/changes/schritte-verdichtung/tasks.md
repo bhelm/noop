@@ -8,7 +8,7 @@ Owned: das kanonische Fixture `android/app/src/test/resources/steps_detail_densi
 
 - [x] 1.1 Vor der Implementierung im kanonischen Fixture gemeinsame Oracle-Fälle für alle acht Bereiche, sparse Daten, beobachtete Nullwerte allein und gemischt mit positiven Werten, kanonische Tages-/Montags-/Monatsersten-Anker, Formatfehler und nicht existente Tage einschließlich Schaltjahr, Duplikate, Ein-Bucket-Serien und `.5`-Rundung ergänzen und den erwarteten Rotgrund festhalten; Swift liest genau den Android-Resource-Pfad über den Repository-Root.
 - [x] 1.2 Paarige pure Projektoren für kalenderbasierte Fenster, Tages-/Wochen-/Monatsbucket und observed-day mean implementieren.
-- [ ] 1.3 Beide Plattformtests gegen dieselbe Fixture ausführen, paarige Source-Annotationen ergänzen und dann exakt `python3 Tools/parity_ledger.py --refresh-derived --base origin/main`, `python3 Tools/parity_ledger.py` und `python3 Tools/parity_ratchet.py --base origin/main --offline` ausführen; Map und Baseline niemals direkt bearbeiten.
+- [x] 1.3 Beide Plattformtests gegen dieselbe Fixture ausführen, paarige Source-Annotationen ergänzen und dann exakt `python3 Tools/parity_ledger.py --refresh-derived --base origin/main`, `python3 Tools/parity_ledger.py` und `python3 Tools/parity_ratchet.py --base origin/main --offline` ausführen; Map und Baseline niemals direkt bearbeiten.
 
 ## 2. Package P2 — Android detail integration
 
@@ -22,9 +22,9 @@ Owned: `android/app/src/main/java/com/noop/ui/HealthVitalDetailLogic.kt`, der Sc
 
 Owned: der Schritte-Zweig in `Strand/Screens/MetricExplorerView.swift` und zugehörige `StrandTests/`. Forbidden: Shared-Oracle/Analytics-Dateien aus P1, Android-Dateien, Datenspeicher, Imports, `TrendChart.swift` außer ein zuvor nachgewiesener zwingender Adapterbedarf, globale Chartpräferenz. Dependencies: P1. Outputs: Apple-Schritte-Detailansicht konsumiert die gemeinsame Projektion und erzwingt Balken. Scenarios: `steps-detail-density / Schritte als Balken / Apple erzwingt Balken`, `steps-detail-density / Konsistente Detaildarstellung / Apple nutzt eine projizierte Serie`. Tests: fokussierte Swift-Tests und Plattform-Build auf macOS-Runner. Resource bounds: ein Implementierer, höchstens 35 Minuten; kein Netzwerk; native Builds seriell.
 
-- [ ] 3.1 Rote Tests ergänzen, die `steps` aus WHOOP-, Apple-Health- und Xiaomi-Quellen sowie `steps_est` trotz Linienpräferenz als Balken, Ein-Bucket-Fälle und andere Metriken unverändert belegen.
+- [x] 3.1 Rote Tests ergänzen, die `steps` aus WHOOP-, Apple-Health- und Xiaomi-Quellen sowie `steps_est` trotz Linienpräferenz als Balken, Ein-Bucket-Fälle und andere Metriken unverändert belegen.
 - [x] 3.2 Den fachlichen Schritte-Zweig (`steps` oder `steps_est`) auf die P1-Projektion umstellen; die Bereichsauswahl in die Ladeidentität aufnehmen und für ALL `resolvedSeries(..., fullHistory: true)` als Quelle für Werte und Provenance verwenden; Chart, Hero, Latest, periodengenaue Beschriftung, Summary und Accessibility aus derselben Bucket-Serie speisen, Tageslesungstabelle unverändert lassen.
-- [ ] 3.3 Den Vorperiodenvergleich für Schritte aus der unmittelbar vorhergehenden gleich langen Kalenderperiode ableiten; fokussierte sparse Tests für alle Bereiche, den produktiven Detailpfad und einen ALL-Wert jenseits des Standardfensters ausführen.
+- [x] 3.3 Den Vorperiodenvergleich für Schritte aus der unmittelbar vorhergehenden gleich langen Kalenderperiode ableiten; fokussierte sparse Tests für alle Bereiche, den produktiven Detailpfad und einen ALL-Wert jenseits des Standardfensters ausführen.
 
 ## 4. Package P4 — Serial integration and evidence
 
@@ -32,6 +32,6 @@ Owned: ausschließlich notwendige Konfliktauflösung in den Pfaden aus P1–P3 u
 
 - [x] 4.1 Pakete abhängigkeitsgeordnet integrieren und ausschließlich echte Überlappungskonflikte lösen.
 - [x] 4.2 Android-Suite und Full-Debug-Build unter dem globalen Lock ausführen.
-- [ ] 4.3 Auf dem Apple-Runner `xcodegen generate` und danach `xcodebuild -scheme Strand -configuration Debug -destination 'platform=macOS' -only-testing:StrandTests/StepsDetailDensityTests CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO test` ausführen; anschließend Swift-Pakettests sowie macOS-/iOS-Buildnachweise ausführen und den App-Testbeleg beiden Apple-Acceptance-Zeilen zuordnen.
-- [ ] 4.4 Oracle-Ausgaben beider Plattformen vergleichen, Parity-Governance ausführen und die Acceptance-Matrix mit realen Belegen aktualisieren.
+- [x] 4.3 Auf dem Apple-Runner `xcodegen generate` und danach `xcodebuild -scheme Strand -configuration Debug -destination 'platform=macOS' -only-testing:StrandTests/StepsDetailDensityTests CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO test` ausführen; anschließend Swift-Pakettests sowie macOS-/iOS-Buildnachweise ausführen und den App-Testbeleg beiden Apple-Acceptance-Zeilen zuordnen.
+- [x] 4.4 Oracle-Ausgaben beider Plattformen vergleichen, Parity-Governance ausführen und die Acceptance-Matrix mit realen Belegen aktualisieren.
 - [x] 4.5 No-schema-, Security-, Ressourcen- und Rollback-Inspektion dokumentieren; keine nicht ausgeführten Nachweise als proven markieren.
