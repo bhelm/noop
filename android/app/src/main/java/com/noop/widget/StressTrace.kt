@@ -163,18 +163,57 @@ object StressTrace {
     }
 
     /**
-     * X positions of the hours masked as movement, for the faint marks along the base.
+     * The moving hours grouped into CONTIGUOUS x ranges, for the marks along the base (#2106).
      *
-     * Returned as bare X centres rather than as spans: the mark's thickness is a drawing decision and
-     * belongs to the renderer, while WHERE the moving hours were is a fact about the day.
+     * A run rather than a mark per hour, because a run says which STRETCH of the day was masked, and
+     * that is what a reader needs when they are looking at a hole in the trace and trying to work out
+     * what put it there. The reason it matters was reported rather than theorised: a wearer saw the
+     * gaps, read the evenly spaced marks along the zero line as axis ticks, concluded the data itself
+     * was missing, and asked whether continuous HRV tracking would fill them in. One bar under the
+     * stretch it explains cannot be mistaken for a scale, because a scale does not start and stop with
+     * the data.
+     *
+     * Adjacency is by POSITION in the series, not by timestamp arithmetic: the series is already the
+     * hour grid the chart draws, so two neighbouring entries are two neighbouring hours by construction.
+     *
+     * A span runs edge to edge of the hours it covers, NOT centre to centre. An hour is a stretch of the
+     * day, not an instant, and the difference is the whole case for the change: centre to centre gives a
+     * lone masked hour a width of zero, which is exactly the hour that most needs to be legible, since
+     * there is no run of neighbours to make it obvious. Edges are taken as the MIDPOINT to each
+     * neighbour rather than as a fixed slot, so an irregular series (a DST-long day, an hour missing
+     * from the list entirely) still gets honest extents. At the ends of the series the territory stops
+     * at the point itself: the day's extent is what was sampled, and nothing is invented past it, which
+     * also keeps every span inside the box without a clamp.
+     *
+     * The upper edge is floored to the lower one. On a sorted series it never binds, but the two
+     * platforms disagree about what an inverted range means, Kotlin yielding an empty one where Swift
+     * traps, and a twin that crashes on one side and shrugs on the other is not a twin.
      */
-    fun movingMarks(series: List<StressPoint>, width: Float): List<Float> {
+    fun movingSpans(series: List<StressPoint>, width: Float): List<ClosedFloatingPointRange<Float>> {
         if (series.isEmpty() || width <= 0f) return emptyList()
         val t0 = series.first().ts
         val span = (series.last().ts - t0).toFloat()
-        return series.filter { it.moving }.map { p ->
-            if (span <= 0f) 0f else (p.ts - t0) / span * width
+        val xs = FloatArray(series.size) {
+            if (span <= 0f) 0f else (series[it].ts - t0) / span * width
         }
+        val last = series.lastIndex
+        fun leftEdge(i: Int): Float = if (i == 0) xs[0] else (xs[i - 1] + xs[i]) / 2f
+        fun rightEdge(i: Int): Float = if (i == last) xs[last] else (xs[i] + xs[i + 1]) / 2f
+        val out = ArrayList<ClosedFloatingPointRange<Float>>()
+        var runStart: Int? = null
+        for (i in series.indices) {
+            val moving = series[i].moving
+            if (moving && runStart == null) runStart = i
+            val from = runStart
+            // A run closes at the first hour that is NOT moving, and also at the end of the series, or
+            // a day whose last hours were all masked would be dropped for want of a terminator.
+            if (from != null && (!moving || i == last)) {
+                val lo = leftEdge(from)
+                out.add(lo..maxOf(rightEdge(if (moving) i else i - 1), lo))
+                runStart = null
+            }
+        }
+        return out
     }
 
     /**
@@ -186,18 +225,30 @@ object StressTrace {
     fun levelTicks(): List<Int> = listOf(3, 2, 1, 0)
 
     /**
-     * The three timestamps along the bottom: first, middle, last of the SCORED data, not of the day.
+     * The three timestamps along the bottom: first, middle and last of the SERIES.
      *
-     * Anchored to scored hours because a day that only has an evening's worth of signal would otherwise
-     * label its axis with a morning that was never sampled, and the trace would sit crushed into the
-     * right-hand end of a mostly empty chart. Fewer than three distinct instants returns what there is,
-     * so the renderer draws one label rather than three copies of it.
+     * The series, not the scored hours, because these label the AXIS, and the axis IS the series: every
+     * placement in this file maps x across `first.ts .. last.ts`, and every renderer spreads these three
+     * labels evenly across that same width. Anchoring them to the scored subset instead put the last
+     * SCORED instant at the right-hand edge, so a day whose closing hours were all masked as movement
+     * announced that it ended when scoring stopped rather than when the day did.
+     *
+     * That is the second half of #2106, and it was read exactly as it was drawn: a chart running to
+     * 22:00 labelled "18:30" at its right edge, reported as the app having stopped updating. The
+     * trailing hours were there the whole time, masked as exertion. Only the axis disagreed.
+     *
+     * The rationale this replaces was that an evening-only wearer would otherwise be labelled with a
+     * morning that was never sampled. The buckets are built FROM the samples, so the series carries no
+     * unsampled hours to begin with, and the trace was already spread across the series either way. The
+     * labels were the only part that ever disagreed with the geometry.
+     *
+     * Fewer than three distinct instants returns what there is, so the renderer draws one label rather
+     * than three copies of it.
      */
     fun timeTicks(series: List<StressPoint>): List<Long> {
-        val scored = series.filter { it.level != null }
-        if (scored.isEmpty()) return emptyList()
-        val first = scored.first().ts
-        val last = scored.last().ts
+        if (series.isEmpty()) return emptyList()
+        val first = series.first().ts
+        val last = series.last().ts
         if (first == last) return listOf(first)
         val mid = first + (last - first) / 2
         return if (mid == first || mid == last) listOf(first, last) else listOf(first, mid, last)

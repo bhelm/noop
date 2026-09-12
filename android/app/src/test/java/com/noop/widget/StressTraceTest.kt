@@ -76,9 +76,9 @@ class StressTraceTest {
     fun `hours masked as movement are marked and do not join the line`() {
         val day = listOf(at(0, 1.0), at(1, null, moving = true), at(2, 1.0))
         assertEquals(2, StressTrace.segments(day, 100f, 100f).size)
-        val marks = StressTrace.movingMarks(day, 100f)
-        assertEquals(1, marks.size)
-        assertEquals(50f, marks.single(), 0.001f)
+        val span = StressTrace.movingSpans(day, 100f).single()
+        assertEquals(25f, span.start, 0.001f)
+        assertEquals(75f, span.endInclusive, 0.001f)
     }
 
     // MARK: - the high band
@@ -157,15 +157,93 @@ class StressTraceTest {
     }
 
     @Test
-    fun `time ticks anchor to the scored hours, not to the day`() {
+    fun `time ticks label the axis, which spans the whole series`() {
         val day = listOf(at(0, null), at(8, 1.0), at(12, 1.5), at(16, 2.0), at(23, null))
-        val ticks = StressTrace.timeTicks(day)
-        // An evening-only day must not label its axis with a morning that was never sampled.
-        assertEquals(listOf(8 * h, 12 * h, 16 * h), ticks)
+        // Every renderer spreads these three evenly across the chart, and the chart spans the SERIES.
+        // Anything narrower names the wrong instant at the edge it is drawn against.
+        assertEquals(listOf(0L, 11 * h + 1800L, 23 * h), StressTrace.timeTicks(day))
+    }
+
+    /**
+     * #2106: scored to 18:30, masked as movement until 22:00, and the axis said the day ended at 18:30.
+     * The right-hand label is the end of the DAY, not the end of scoring, or a chart that is perfectly
+     * current reads as one that stopped updating hours ago.
+     */
+    @Test
+    fun `a day whose closing hours were all masked still names its true end`() {
+        val day = listOf(at(6, 1.0), at(18, 1.5), at(20, null, moving = true), at(22, null, moving = true))
+        assertEquals(22 * h, StressTrace.timeTicks(day).last())
     }
 
     @Test
-    fun `one scored hour names one instant`() {
-        assertEquals(listOf(9 * h), StressTrace.timeTicks(listOf(at(9, 1.0), at(10, null))))
+    fun `one instant names one instant`() {
+        // The renderers hide a lone label, so this is what keeps a one-point day from showing a stray.
+        assertEquals(listOf(9 * h), StressTrace.timeTicks(listOf(at(9, 1.0))))
+    }
+
+    @Test
+    fun `two instants name both ends and the midpoint between them`() {
+        assertEquals(listOf(9 * h, 9 * h + 1800L, 10 * h),
+                     StressTrace.timeTicks(listOf(at(9, 1.0), at(10, null))))
+    }
+
+    // #2106: contiguous masked stretches, so the marks read as regions rather than as axis ticks.
+
+    /** Adjacent masked hours become ONE span: that is the whole point, a bar under the hole it explains. */
+    @Test
+    fun `adjacent moving hours join into one span`() {
+        val day = listOf(at(0, 1.0), at(1, null, moving = true), at(2, null, moving = true), at(3, 1.5))
+        assertEquals(1, StressTrace.movingSpans(day, 100f).size)
+    }
+
+    /** Separated runs stay separate, so two different stretches are not merged into one claim. */
+    @Test
+    fun `separated moving runs stay separate`() {
+        val day = listOf(at(0, null, moving = true), at(1, 1.0), at(2, null, moving = true))
+        assertEquals(2, StressTrace.movingSpans(day, 100f).size)
+    }
+
+    /** A run ending at the LAST hour still closes, rather than being dropped for want of a terminator. */
+    @Test
+    fun `a run ending at the last point is still emitted`() {
+        val day = listOf(at(0, 1.0), at(1, null, moving = true), at(2, null, moving = true))
+        val span = StressTrace.movingSpans(day, 100f).single()
+        assertEquals(100f, span.endInclusive, 0.001f)
+    }
+
+    /** No moving hours means no marks, so an ordinary day carries no band at all. */
+    @Test
+    fun `no moving hours yields no spans`() {
+        assertEquals(emptyList<ClosedFloatingPointRange<Float>>(),
+                     StressTrace.movingSpans(listOf(at(0, 1.0), at(1, 2.0)), 100f))
+    }
+
+    /**
+     * A LONE masked hour is the case the geometry exists for: centre to centre it has a width of zero,
+     * and it is the hour with no neighbours to make it obvious, so it is also the one that most needs
+     * to be legible. It covers its own hour, half a slot either side of its centre.
+     */
+    @Test
+    fun `a lone moving hour spans its own hour, not an instant`() {
+        val day = listOf(at(0, 1.0), at(1, 1.0), at(2, null, moving = true), at(3, 1.0), at(4, 1.0))
+        val span = StressTrace.movingSpans(day, 100f).single()
+        assertEquals(37.5f, span.start, 0.001f)
+        assertEquals(62.5f, span.endInclusive, 0.001f)
+    }
+
+    /** A run covers its hours EDGE to edge, so the bar reaches past the outermost masked centres. */
+    @Test
+    fun `a run covers its hours edge to edge`() {
+        val day = listOf(at(0, 1.0), at(1, null, moving = true), at(2, null, moving = true), at(3, 1.0))
+        val span = StressTrace.movingSpans(day, 100f).single()
+        assertEquals(100f / 6f, span.start, 0.001f)
+        assertEquals(100f * 5f / 6f, span.endInclusive, 0.001f)
+    }
+
+    /** At the ends of the day the territory stops at the data: nothing is invented past what was sampled. */
+    @Test
+    fun `a run starting at the first hour starts at the edge of the box`() {
+        val day = listOf(at(0, null, moving = true), at(1, 1.0), at(2, 1.0))
+        assertEquals(0f, StressTrace.movingSpans(day, 100f).single().start, 0.001f)
     }
 }
