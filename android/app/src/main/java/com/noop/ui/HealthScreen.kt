@@ -2189,19 +2189,23 @@ fun VitalDetailScreen(vm: AppViewModel, key: String) {
                 val barLabels = remember(bars, stepsSeries) {
                     stepsSeries?.selectionLabels ?: bars?.map { shortDayLabel(it.first) }
                 }
-                if (stepsSeries != null) {
-                    StepsDetailChart(stepsSeries, effectiveRange == VitalDetailRange.WEEK || effectiveRange == VitalDetailRange.TWO_WEEK)
-                } else if (barValues != null && barLabels != null) {
+                if (barValues != null && barLabels != null) {
                     val chart: @Composable () -> Unit = {
                         BarChart(
                             baselineValue = baseline,
                             values = barValues,
-                            modifier = Modifier.height(Metrics.chartHeight),
+                            modifier = Modifier.height(if (isStepsDetail) 300.dp else Metrics.chartHeight),
                             color = detail.color,
                             selectionEnabled = true,
                             selectionLabels = barLabels,
+                            axisStep = if (isStepsDetail) 5000.0 else null,
+                            showValueLabels = isStepsDetail && (effectiveRange == VitalDetailRange.WEEK || effectiveRange == VitalDetailRange.TWO_WEEK),
+                            largeSelectionReadout = isStepsDetail,
                             formatValue = { value ->
-                                stepsSeries?.let { stepsBucketValueLabel(value, it.granularity) }
+                                stepsSeries?.let {
+                                    if (it.granularity == com.noop.analytics.StepsDetailGranularity.DAILY) stepsBucketValueLabel(value, it.granularity)
+                                    else uiString(R.string.steps_chart_mean, java.text.NumberFormat.getIntegerInstance().format(value))
+                                }
                                     ?: "${detail.format(value)} ${detail.unit}".trim()
                             },
                         )
