@@ -30,10 +30,10 @@ private let strandDayParser: DateFormatter = {
 
 private func parseDay(_ day: String) -> Date? { strandDayParser.date(from: day) }
 
-/// "9 Jun 2026" — long, locale-stable date for the hero "as of" line.
+/// Localized long date for the hero "as of" line, with a fixed calendar-day time zone.
 private func longDate(_ d: Date) -> String {
     let f = DateFormatter()
-    f.locale = Locale(identifier: "en_US_POSIX")
+    f.locale = AppLanguage.activeLocale
     f.timeZone = TimeZone(identifier: "UTC")
     f.dateFormat = "d MMM yyyy"
     return f.string(from: d)
@@ -157,7 +157,7 @@ enum MetricDetailSteps {
 
         var accessibilitySummary: String {
             guard let latest = buckets.last else { return String(localized: "Steps chart, no data") }
-            let noun = buckets.count == 1 ? "bar" : "bars"
+            let noun = buckets.count == 1 ? String(localized: "bar") : String(localized: "bars")
             let period = MetricDetailSteps.periodLabel(day: latest.displayDay, resolution: resolution)
             switch resolution {
             case .daily:
@@ -255,7 +255,7 @@ enum MetricDetailSteps {
             return String(localized: "week of \(longDate(date))")
         case .monthly:
             let formatter = DateFormatter()
-            formatter.locale = Locale(identifier: "en_US_POSIX")
+            formatter.locale = AppLanguage.activeLocale
             formatter.timeZone = TimeZone(identifier: "UTC")
             formatter.dateFormat = "MMMM yyyy"
             return formatter.string(from: date)
@@ -263,7 +263,7 @@ enum MetricDetailSteps {
     }
 
     static func countCaption(count: Int, resolution: Resolution, rangeName: String) -> String {
-        let noun = count == 1 ? "bar" : "bars"
+        let noun = count == 1 ? String(localized: "bar") : String(localized: "bars")
         switch resolution {
         case .daily:
             return String(localized: "\(count) daily \(noun) · \(rangeName)")
@@ -275,7 +275,7 @@ enum MetricDetailSteps {
     }
 
     static func valueLabel(_ value: Double, resolution: Resolution) -> String {
-        let formatted = String(Int(value.rounded()))
+        let formatted = value.formatted(.number.locale(AppLanguage.activeLocale).precision(.fractionLength(0)))
         switch resolution {
         case .daily:
             return String(localized: "\(formatted) steps")
@@ -392,7 +392,7 @@ func vitalReadingRows(readings: [VitalReading], unit: String, strapDeviceId: Str
 }
 
 /// "9 Jun" for a "YYYY-MM-DD" reading day (today / yesterday read as words to match the hero "as of"
-/// line); the verbatim string if it doesn't parse. UTC-fixed en_US_POSIX, matching this file's other date
+/// line); the verbatim string if it doesn't parse. UTC-fixed and localized, matching this file's other date
 /// labels. Swift twin of Android's `vitalReadingDateLabel`.
 func vitalReadingDateLabel(_ day: String, now: Date = Date()) -> String {
     guard let date = parseDay(day) else { return day }
@@ -401,17 +401,12 @@ func vitalReadingDateLabel(_ day: String, now: Date = Date()) -> String {
     if cal.isDate(date, inSameDayAs: now) { return String(localized: "Today") }
     if let yesterday = cal.date(byAdding: .day, value: -1, to: now),
        cal.isDate(date, inSameDayAs: yesterday) { return String(localized: "Yesterday") }
-    return readingShortDateFormatter.string(from: date)
+    let formatter = DateFormatter()
+    formatter.locale = AppLanguage.activeLocale
+    formatter.timeZone = TimeZone(identifier: "UTC")
+    formatter.dateFormat = "d MMM"
+    return formatter.string(from: date)
 }
-
-/// "d MMM" (e.g. "9 Jun"), UTC / en_US_POSIX so the label is locale-stable, matching `longDate`.
-private let readingShortDateFormatter: DateFormatter = {
-    let f = DateFormatter()
-    f.locale = Locale(identifier: "en_US_POSIX")
-    f.timeZone = TimeZone(identifier: "UTC")
-    f.dateFormat = "d MMM"
-    return f
-}()
 
 // MARK: - Skin-temp explorer notes (#1847 / #1848)
 
@@ -729,7 +724,8 @@ struct MetricDetailView: View {
         SkinTempDisplay.Kind(rawValue: skinTempDisplayRaw) ?? .absolute
     }
     private func fmt(_ v: Double) -> String {
-        metric.format(v, system: unitSystem, temperature: temperatureUnit, effortScale: effortScale)
+        if isStepsDetail { return MetricDetailSteps.valueLabel(v, resolution: .daily) }
+        return metric.format(v, system: unitSystem, temperature: temperatureUnit, effortScale: effortScale)
     }
 
     @State private var range: ExploreRange = .month
@@ -1067,8 +1063,12 @@ struct MetricDetailView: View {
             // the store-backed full-history resolver instead of the bounded in-memory Explore cache.
             let fullHistory = MetricDetailSteps.requiresFullHistory(
                 metricKey: metric.key, range: requestedRange)
-            resolution = await repo.resolvedSeries(
-                key: metric.key, source: metric.source, fullHistory: fullHistory)
+            if metric.source == MetricCatalog.combinedStepsSource {
+                resolution = await repo.resolvedSteps(from: "0000-01-01", to: "9999-12-31")
+            } else {
+                resolution = await repo.resolvedSeries(
+                    key: metric.key, source: metric.source, fullHistory: fullHistory)
+            }
             loadedSeries = resolution.values
         } else {
             // Preserve the generic explorer's established value path and load order.
@@ -1262,13 +1262,13 @@ struct MetricDetailView: View {
         VStack(alignment: .leading, spacing: NoopMetrics.gap) {
                 // Category + title on their OWN full-width row so a long title ("Heart Rate Variability")
                 // is never crushed into a letter-per-line column by the range pill (2026-07-02).
-                VStack(alignment: .leading, spacing: 2) {
+                if !isStepsDetail { VStack(alignment: .leading, spacing: 2) {
                     Text(MetricCatalog.categoryDisplayName(metric.category).uppercased()).strandOverline()
                     Text(metric.title)
                         .font(StrandFont.title2)
                         .foregroundStyle(StrandPalette.textPrimary)
                         .fixedSize(horizontal: false, vertical: true)
-                }
+                } }
                 // Range control on its own row beneath the title.
                 SegmentedPillControl(ExploreRange.allCases, selection: selectionBinding,
                                      adaptsToAvailableWidth: true,
@@ -1378,12 +1378,12 @@ struct MetricDetailView: View {
                                    windowed: windowed,
                                    windowFellBack: windowFellBack)
         return VStack(alignment: .leading, spacing: 8) {
-            VStack(alignment: .leading, spacing: 2) {
+            if !isStepsDetail { VStack(alignment: .leading, spacing: 2) {
                 Text(MetricCatalog.categoryDisplayName(metric.category).uppercased()).strandOverline()
                 Text(metric.title)
                     .font(StrandFont.title2)
                     .foregroundStyle(StrandPalette.textPrimary)
-            }
+            } }
             SegmentedPillControl(ExploreRange.allCases, selection: selectionBinding,
                                  adaptsToAvailableWidth: true,
                                  isEnabled: isUnlocked) { $0.label }
@@ -1454,9 +1454,10 @@ struct MetricDetailView: View {
             : nil
         let stepsResolution = MetricDetailSteps.resolution(for: effectiveRange)
         return ChartCard(
-            title: "\(metric.title)",
+            title: isStepsDetail ? LocalizedStringKey("Historical trend") : LocalizedStringKey("\(metric.title)"),
             subtitle: subtitle,
             trailing: "\(heroValue) · \(asOf)",
+            height: NoopMetrics.chartHeight + (isStepsDetail ? 70 : 0),
             tint: metricDomain(metric).color
         ) {
             TrendChart(
@@ -1483,7 +1484,10 @@ struct MetricDetailView: View {
                             day: strandDayParser.string(from: date), resolution: stepsResolution)
                         : TrendChart.defaultDateString(date)
                 },
-                accessibilityLabel: stepsAccessibility
+                accessibilityLabel: stepsAccessibility,
+                yAxisStep: isStepsDetail ? 5000 : nil,
+                showsBarValues: isStepsDetail && (effectiveRange == .week || effectiveRange == .twoWeeks),
+                largeSelection: isStepsDetail
             )
         } footer: {
             // #1662: the VO₂max line is SPLIT on purpose wherever the estimator changes, so two

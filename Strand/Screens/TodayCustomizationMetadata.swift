@@ -45,7 +45,7 @@ extension KeyMetric {
         case .restingHr: return "heart.fill"
         case .bloodOxygen: return "drop.fill"
         case .respiratory: return "lungs.fill"
-        case .steps: return "figure.walk"
+        case .steps, .stepsAverage30: return "figure.walk"
         case .weight: return "scalemass"
         case .calories: return "flame.fill"
         // Same glyph the sibling "Your Cards" tile (`DashboardCard.skinTemp`) already uses.
@@ -59,7 +59,7 @@ extension KeyMetric {
         case .effort: return StrandPalette.effortColor
         case .rest, .hrv: return StrandPalette.metricPurple
         case .restingHr: return StrandPalette.metricRose
-        case .bloodOxygen, .steps: return StrandPalette.metricCyan
+        case .bloodOxygen, .steps, .stepsAverage30: return StrandPalette.metricCyan
         case .respiratory, .weight: return StrandPalette.accent
         case .calories, .skinTemp: return StrandPalette.metricAmber
         }

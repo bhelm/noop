@@ -3961,6 +3961,8 @@ struct TodayView: View {
         let d = displayDay
         let aLatest = appleDays.last
         switch metric {
+        case .stepsAverage30:
+            RollingStepsAverageTile(day: selectedDayKey)
         case .charge:
             // Order of precedence: today's own scored recovery → mid-calibration "N of 4" → the last
             // scored day carried over ("Last night · <date>", #543) so a post-rollover today that
