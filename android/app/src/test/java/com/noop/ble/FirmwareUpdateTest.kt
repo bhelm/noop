@@ -70,9 +70,9 @@ class FirmwareUpdateTest {
         val selected = FirmwareUpdateTransitions.selected(info, eligible = true)
         assertTrue(selected.canStart)
         assertFalse(selected.canActivate)
-        val writing = FirmwareUpdateTransitions.writing(
-            FirmwareUpdateTransitions.begin(selected, "WHOOP 5/MG"), 220,
-        )
+        val beginning = FirmwareUpdateTransitions.begin(selected, "WHOOP 5/MG · 50.42.1.0 · AA:BB")
+        assertTrue(beginning.lockedDeviceLabel.orEmpty().contains("AA:BB"))
+        val writing = FirmwareUpdateTransitions.writing(beginning, 220)
         assertFalse(writing.canActivate)
         val validating = FirmwareUpdateTransitions.remoteValidating(writing)
         assertFalse(validating.canActivate)
@@ -108,12 +108,12 @@ class FirmwareUpdateTest {
     }
 
     @Test
-    fun `verify ignores an interim response and propagates final remote failure`() = runBlocking {
+    fun `verify ignores an optional pending response and propagates final remote failure`() = runBlocking {
         val selected = parsedImage(type = 5)
         val engine = FirmwareTransferEngine(FirmwareTransferTransport { command, _, _, accept ->
             val candidates = if (command == FirmwareTransferEngine.VERIFY_COMMAND) {
                 listOf(
-                    FirmwareWireResponse(command, 0, 1, byteArrayOf(0)),
+                    FirmwareWireResponse(command, 0, 2, byteArrayOf(1)),
                     FirmwareWireResponse(command, 0, 0, byteArrayOf(1)),
                 )
             } else listOf(FirmwareWireResponse(command, 0, 1, byteArrayOf(1, 0)))
@@ -146,12 +146,59 @@ class FirmwareUpdateTest {
     }
 
     @Test
+    fun `whoop5 decoder accepts crc valid firmware responses and removes wire padding`() {
+        val cases = listOf(
+            Triple(FirmwareTransferEngine.PREPARE_COMMAND, byteArrayOf(1, 0), 1),
+            Triple(FirmwareTransferEngine.WRITE_COMMAND, byteArrayOf(1, 0), 1),
+            Triple(FirmwareTransferEngine.VERIFY_COMMAND, byteArrayOf(1), 1),
+            Triple(FirmwareTransferEngine.ACTIVATE_COMMAND, byteArrayOf(1, 1), 1),
+        )
+        for ((command, body, result) in cases) {
+            val decoded = FirmwareWhoop5ResponseDecoder.decode(
+                whoop5ResponseFrame(command, originSequence = 0xa5, result = result, body = body),
+            )
+            assertTrue("command $command should decode", decoded != null)
+            assertEquals(command, decoded!!.command)
+            assertEquals(0xa5, decoded.originSequence)
+            assertEquals(result, decoded.result)
+            assertTrue(body.contentEquals(decoded.body))
+        }
+        val puffinAlias = FirmwareWhoop5ResponseDecoder.decode(
+            whoop5ResponseFrame(144, 0x33, 1, byteArrayOf(1, 1), type = 0x26),
+        )
+        assertEquals(FirmwareTransferEngine.ACTIVATE_COMMAND, puffinAlias?.command)
+
+        val pending = FirmwareWhoop5ResponseDecoder.decode(
+            whoop5ResponseFrame(83, 0x44, 2, byteArrayOf(1)),
+        )!!
+        assertFalse(FirmwareResponseMatcher.isFinal(FirmwareTransferEngine.VERIFY_COMMAND, pending))
+    }
+
+    @Test
+    fun `whoop5 decoder rejects malformed length truncation crc and nonresponse frames`() {
+        val valid = whoop5ResponseFrame(142, originSequence = 7, result = 1, body = byteArrayOf(1, 0))
+        assertEquals(null, FirmwareWhoop5ResponseDecoder.decode(valid.copyOf(valid.size - 1)))
+        assertEquals(null, FirmwareWhoop5ResponseDecoder.decode(valid + byteArrayOf(0)))
+        assertEquals(null, FirmwareWhoop5ResponseDecoder.decode(valid.copyOf().also { it[2]++ }))
+        assertEquals(null, FirmwareWhoop5ResponseDecoder.decode(valid.copyOf().also { it[13] = 2 }))
+        assertEquals(
+            null,
+            FirmwareWhoop5ResponseDecoder.decode(
+                whoop5ResponseFrame(142, 7, 1, byteArrayOf(1, 0), type = 0x23),
+            ),
+        )
+    }
+
+    @Test
     fun `exclusive session acquisition refuses queued or in flight unrelated writes`() {
         assertEquals(null, FirmwareUpdateAdmission.busyReason(false, false, false, 0))
         assertTrue(FirmwareUpdateAdmission.busyReason(false, false, false, 1)!!.contains("Bluetooth is busy"))
         assertTrue(FirmwareUpdateAdmission.busyReason(false, true, false, 0)!!.contains("Bluetooth is busy"))
         assertTrue(FirmwareUpdateAdmission.busyReason(false, false, true, 0)!!.contains("Bluetooth is busy"))
         assertTrue(FirmwareUpdateAdmission.busyReason(true, false, false, 0)!!.contains("Bluetooth is busy"))
+        assertTrue(FirmwareUpdateAdmission.busyReason(false, false, false, 0, 23)!!.contains("MTU"))
+        assertTrue(FirmwareUpdateAdmission.busyReason(false, false, false, 0, 247, cccdInFlight = true)!!.contains("notification"))
+        assertTrue(FirmwareUpdateAdmission.busyReason(false, false, false, 0, 247, queuedCccds = 1)!!.contains("notification"))
     }
 
     @Test
@@ -172,6 +219,8 @@ class FirmwareUpdateTest {
         assertTrue(FirmwareActivationObservation.sessionIsCurrent(12, 12))
         assertFalse(FirmwareActivationObservation.sessionIsCurrent(12, 13))
         assertFalse(FirmwareActivationObservation.sessionIsCurrent(12, null))
+        assertFalse(FirmwareActivationObservation.canAcceptReportedVersion(FirmwareUpdateStage.ACTIVATION_REQUESTED))
+        assertTrue(FirmwareActivationObservation.canAcceptReportedVersion(FirmwareUpdateStage.RECONNECTING))
     }
 
     @Test
@@ -273,6 +322,44 @@ class FirmwareUpdateTest {
         bytes.putU32(504, crc(bytes, 8, 504))
         bytes.putU32(508, bytes.u32(0))
         return bytes
+    }
+
+    private fun whoop5ResponseFrame(
+        command: Int,
+        originSequence: Int,
+        result: Int,
+        body: ByteArray,
+        type: Int = 0x24,
+    ): ByteArray {
+        val inner0 = byteArrayOf(
+            type.toByte(), 0x51, command.toByte(), originSequence.toByte(), result.toByte(),
+        ) + body
+        val inner = inner0 + ByteArray((4 - inner0.size % 4) % 4)
+        val declaredLength = inner.size + 4
+        val frame = ByteArray(declaredLength + 8)
+        frame[0] = 0xaa.toByte()
+        frame[1] = 1
+        frame[2] = declaredLength.toByte()
+        frame[3] = (declaredLength ushr 8).toByte()
+        frame[4] = 0
+        frame[5] = 1
+        val headerCrc = crc16Modbus(frame, 0, 6)
+        frame[6] = headerCrc.toByte()
+        frame[7] = (headerCrc ushr 8).toByte()
+        inner.copyInto(frame, 8)
+        frame.putU32(frame.size - 4, crc(frame, 8, frame.size - 4))
+        return frame
+    }
+
+    private fun crc16Modbus(bytes: ByteArray, from: Int, until: Int): Int {
+        var value = 0xffff
+        for (index in from until until) {
+            value = value xor (bytes[index].toInt() and 0xff)
+            repeat(8) {
+                value = if ((value and 1) == 1) (value ushr 1) xor 0xa001 else value ushr 1
+            }
+        }
+        return value and 0xffff
     }
 
     private fun crc(bytes: ByteArray, from: Int, until: Int): Long = CRC32().run {

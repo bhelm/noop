@@ -4442,6 +4442,10 @@ class WhoopBleClient(
             writeInFlight = writeInFlight,
             retryPending = pendingRetry != null,
             queuedWrites = writeQueue.size,
+            negotiatedMtu = lastMtuValue,
+            requiredMtu = GATT_MTU,
+            cccdInFlight = cccdInFlight,
+            queuedCccds = cccdQueue.size,
         )
         if (busyReason != null) {
             _firmwareUpdateState.value = FirmwareUpdateTransitions.failed(
@@ -4462,7 +4466,7 @@ class WhoopBleClient(
         val fw = _state.value.strapFirmware?.takeIf { it.isNotBlank() } ?: "unknown firmware"
         _firmwareUpdateState.value = FirmwareUpdateTransitions.begin(
             _firmwareUpdateState.value,
-            "WHOOP 5/MG · $fw",
+            "WHOOP 5/MG · $fw · $address",
         )
         session.job = firmwareScope.launch { runFirmwareTransfer(session) }
     }
@@ -4653,9 +4657,7 @@ class WhoopBleClient(
             return
         }
         if (!session.deviceAddress.equals(lastDeviceAddress, ignoreCase = true)) return
-        if (_firmwareUpdateState.value.stage != FirmwareUpdateStage.RECONNECTING &&
-            _firmwareUpdateState.value.stage != FirmwareUpdateStage.ACTIVATION_REQUESTED
-        ) return
+        if (!FirmwareActivationObservation.canAcceptReportedVersion(_firmwareUpdateState.value.stage)) return
         session.job?.cancel()
         firmwarePending = null
         firmwareUpdateExclusive = false
@@ -8134,25 +8136,19 @@ class WhoopBleClient(
         if (connectedFamily != DeviceFamily.WHOOP5) return
         val pending = firmwarePending ?: return
         val session = firmwareSession ?: return
-        val cmdOffset = 10
-        if (frame.size <= cmdOffset + 2 || (frame[cmdOffset - 2].toInt() and 0xff) != 0x24) return
-        val command = frame[cmdOffset].toInt() and 0xff
-        val originSequence = frame[cmdOffset + 1].toInt() and 0xff
+        val response = FirmwareWhoop5ResponseDecoder.decode(frame) ?: return
         if (!FirmwareResponseMatcher.correlated(
                 FirmwareResponseKey(
                     pendingSessionId = pending.sessionId,
                     currentSessionId = session.id,
                     expectedCommand = pending.command,
                     expectedSequence = pending.sequence,
-                    actualCommand = command,
-                    actualSequence = originSequence,
+                    actualCommand = response.command,
+                    actualSequence = response.originSequence,
                     sameDevice = session.deviceAddress.equals(lastDeviceAddress, ignoreCase = true),
                 ),
             )
         ) return
-        val body = whoop5CommandResponsePayload(frame) ?: return
-        val result = frame[cmdOffset + 2].toInt() and 0xff
-        val response = FirmwareWireResponse(command, originSequence, result, body)
         if (!pending.accept(response)) return
         if (firmwarePending === pending) firmwarePending = null
         pending.deferred.complete(response)

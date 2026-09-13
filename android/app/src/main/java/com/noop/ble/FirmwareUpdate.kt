@@ -1,5 +1,6 @@
 package com.noop.ble
 
+import com.noop.protocol.Crc
 import java.security.MessageDigest
 import java.util.Locale
 import java.util.zip.CRC32
@@ -35,6 +36,42 @@ internal data class FirmwareWireResponse(
     val body: ByteArray,
 )
 
+/** Decode the WHOOP 5/MG command-response envelope used by the firmware transaction. */
+internal object FirmwareWhoop5ResponseDecoder {
+    private const val COMMAND_RESPONSE = 0x24
+    private const val PUFFIN_COMMAND_RESPONSE = 0x26
+    private const val BODY_START = 13
+
+    fun decode(frame: ByteArray): FirmwareWireResponse? {
+        if (frame.size < 20 || frame[0] != 0xaa.toByte()) return null
+        val declaredLength = frame.u16le(2)
+        if (declaredLength < 4 || declaredLength + 8 != frame.size) return null
+        val payloadEnd = frame.size - 4
+        if (Crc.crc16Modbus(frame, 0, 6) != frame.u16le(6)) return null
+        if (Crc.crc32(frame, 8, payloadEnd) != frame.u32le(payloadEnd)) return null
+
+        val responseType = frame[8].toInt() and 0xff
+        if (responseType != COMMAND_RESPONSE && responseType != PUFFIN_COMMAND_RESPONSE) return null
+        val command = frame[10].toInt() and 0xff
+        val bodyLength = when (command) {
+            FirmwareTransferEngine.VERIFY_COMMAND -> 1
+            FirmwareTransferEngine.PREPARE_COMMAND,
+            FirmwareTransferEngine.WRITE_COMMAND,
+            FirmwareTransferEngine.ACTIVATE_COMMAND -> 2
+            else -> return null
+        }
+        val unpaddedInnerLength = 5 + bodyLength
+        val paddedInnerLength = (unpaddedInnerLength + 3) and -4
+        if (payloadEnd - 8 != paddedInnerLength || BODY_START + bodyLength > payloadEnd) return null
+        return FirmwareWireResponse(
+            command = command,
+            originSequence = frame[11].toInt() and 0xff,
+            result = frame[12].toInt() and 0xff,
+            body = frame.copyOfRange(BODY_START, BODY_START + bodyLength),
+        )
+    }
+}
+
 internal data class FirmwareResponseKey(
     val pendingSessionId: Int,
     val currentSessionId: Int,
@@ -52,18 +89,33 @@ internal object FirmwareResponseMatcher {
 
     /** VERIFY is asynchronous; body[0] == 1 is the recovered final-result discriminator. */
     fun isFinal(command: Int, response: FirmwareWireResponse): Boolean =
-        command != FirmwareTransferEngine.VERIFY_COMMAND || response.body.firstOrNull()?.toInt() == 1
+        command != FirmwareTransferEngine.VERIFY_COMMAND ||
+            (response.result != 2 && response.body.firstOrNull()?.toInt() == 1)
 }
 
 internal object FirmwareUpdateAdmission {
+    /** A 220-byte data chunk produces a 244-byte puffin frame, requiring ATT MTU 247 with its 3-byte header. */
     fun busyReason(
         backfilling: Boolean,
         writeInFlight: Boolean,
         retryPending: Boolean,
         queuedWrites: Int,
-    ): String? = if (backfilling || writeInFlight || retryPending || queuedWrites > 0) {
-        "Bluetooth is busy with another strap operation. Wait for it to finish, then reselect the image."
-    } else null
+        negotiatedMtu: Int = Int.MAX_VALUE,
+        requiredMtu: Int = 247,
+        cccdInFlight: Boolean = false,
+        queuedCccds: Int = 0,
+    ): String? {
+        val mtuLabel = if (negotiatedMtu > 0) negotiatedMtu.toString() else "not negotiated"
+        return when {
+            backfilling || writeInFlight || retryPending || queuedWrites > 0 ->
+                "Bluetooth is busy with another strap operation. Wait for it to finish, then reselect the image."
+            negotiatedMtu < requiredMtu ->
+                "The Bluetooth MTU is $mtuLabel; firmware chunks require MTU $requiredMtu. Reconnect and reselect the image."
+            cccdInFlight || queuedCccds > 0 ->
+                "Bluetooth notification setup is still finishing. Wait for it to complete, then reselect the image."
+            else -> null
+        }
+    }
 }
 
 /** Keep ordinary BLE queue behavior intact while fail-closing session-bound OTA writes. */
@@ -80,6 +132,9 @@ internal object FirmwareActivationObservation {
 
     fun sessionIsCurrent(observedSessionId: Int, currentSessionId: Int?): Boolean =
         observedSessionId == currentSessionId
+
+    fun canAcceptReportedVersion(stage: FirmwareUpdateStage): Boolean =
+        stage == FirmwareUpdateStage.RECONNECTING
 }
 
 internal fun interface FirmwareTransferTransport {
@@ -385,6 +440,9 @@ private fun ByteArray.u32le(offset: Int): Long =
         ((this[offset + 1].toLong() and 0xff) shl 8) or
         ((this[offset + 2].toLong() and 0xff) shl 16) or
         ((this[offset + 3].toLong() and 0xff) shl 24)
+
+private fun ByteArray.u16le(offset: Int): Int =
+    (this[offset].toInt() and 0xff) or ((this[offset + 1].toInt() and 0xff) shl 8)
 
 private fun ByteArray.crc32(from: Int, until: Int): Long = CRC32().run {
     update(this@crc32, from, until - from)
