@@ -24,6 +24,7 @@ enum KeyMetric: String, CaseIterable, Identifiable {
     case bloodOxygen
     case respiratory
     case steps
+    case stepsAverage30
     case weight
     case calories
     /// Added 2026-08-24 (queue 11c follow-up): Skin Temp was already a "Your Cards" (`DashboardCard`)
@@ -45,6 +46,7 @@ enum KeyMetric: String, CaseIterable, Identifiable {
         case .bloodOxygen: return String(localized: "Blood Oxygen")
         case .respiratory: return String(localized: "Respiratory")
         case .steps:       return String(localized: "Steps")
+        case .stepsAverage30: return String(localized: "30-day step average")
         case .weight:      return String(localized: "Weight")
         case .calories:    return String(localized: "Calories")
         // Same short label the sibling "Your Cards" tile (`DashboardCard.skinTemp`) already uses —

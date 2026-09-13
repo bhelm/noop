@@ -1374,6 +1374,8 @@ struct LiquidTodayView: View {
         case .steps:
             ktile(String(localized: "Steps"), icon: keyMetricIcon(metric), stepsText, "", StrandPalette.chargeColor,
                   fracOver(stepCount, 10000), key: stepsDetailKey, detailMetric: stepsDetailMetric)
+        case .stepsAverage30:
+            RollingStepsAverageTile(day: selectedDayKey)
         case .weight:
             ktile(String(localized: "Weight"), icon: keyMetricIcon(metric), "—", "", StrandPalette.metricAmber, nil, key: "weight")
         case .calories:
@@ -1406,7 +1408,7 @@ struct LiquidTodayView: View {
         case .restingHr: return "heart.circle.fill"
         case .bloodOxygen: return "drop.fill"
         case .respiratory: return "lungs.fill"
-        case .steps: return "figure.walk"
+        case .steps, .stepsAverage30: return "figure.walk"
         case .weight: return "scalemass.fill"
         case .calories: return "flame.fill"
         case .skinTemp: return "thermometer.medium"
