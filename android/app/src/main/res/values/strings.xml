@@ -2719,6 +2719,12 @@
     <string name="firmware_flash_compat_bin">Research raw form. Installation of this decompressed type is not established.</string>
     <string name="firmware_flash_size">Image size</string>
     <string name="firmware_flash_version">Image version</string>
+    <string name="firmware_flash_current_version">Current strap</string>
+    <string name="firmware_flash_target_version">Selected image</string>
+    <string name="firmware_flash_version_downgrade">Downgrade: the selected image is older than the firmware currently reported by the strap. Transfer and activation remain available for this test.</string>
+    <string name="firmware_flash_version_same">This firmware version is already reported as installed. You can intentionally transfer and activate it again.</string>
+    <string name="firmware_flash_version_upgrade">The selected image version is newer than the firmware currently reported by the strap.</string>
+    <string name="firmware_flash_version_incomparable">The current or selected version is unknown or malformed, so their order cannot be determined.</string>
     <string name="firmware_flash_payload">Payload size</string>
     <string name="firmware_flash_payload_crc">Payload CRC32</string>
     <string name="firmware_flash_header_crc">Header CRC32</string>
@@ -2726,6 +2732,7 @@
     <string name="firmware_flash_status">Update status</string>
     <string name="firmware_flash_session_device">Locked session</string>
     <string name="firmware_flash_progress">%1$s / %2$s acknowledged · %3$d%%</string>
+    <string name="firmware_flash_remote_check_in_progress">All image bytes were acknowledged. The strap is checking the staged image; activation has not started.</string>
     <string name="firmware_flash_transfer">Transfer image to strap</string>
     <string name="firmware_flash_remote_valid">The strap acknowledged the complete transfer and returned a successful remote validation result. Activation is still separate.</string>
     <string name="firmware_flash_activate">Review and activate…</string>
@@ -2743,7 +2750,7 @@
     <string name="firmware_flash_device_ready">Active WHOOP 5/MG is connected and paired · reported firmware %1$s</string>
     <string name="firmware_flash_unknown_version">unknown</string>
     <string name="firmware_flash_activate_title">Activate the staged firmware?</string>
-    <string name="firmware_flash_activate_identity">Image: %1$s\nVersion: %2$s\nDevice session: %3$s</string>
+    <string name="firmware_flash_activate_identity">Image: %1$s\nCurrent strap: %2$s\nSelected image: %3$s\nDevice session: %4$s</string>
     <string name="firmware_flash_activate_warning">Activation may disconnect the strap and may leave it unusable. A validation result and matching CRCs do not prove a trusted signature or a successful boot. Reconnection only reports the version the strap later exposes.</string>
     <string name="firmware_flash_activate_confirm">Activate firmware</string>
     <string name="firmware_flash_keep_staged">Not now</string>

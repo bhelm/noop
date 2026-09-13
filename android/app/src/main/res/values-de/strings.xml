@@ -2697,6 +2697,12 @@
     <string name="firmware_flash_compat_bin">Rohe Forschungsform. Die Installation dieses dekomprimierten Typs ist nicht belegt.</string>
     <string name="firmware_flash_size">Image-Größe</string>
     <string name="firmware_flash_version">Image-Version</string>
+    <string name="firmware_flash_current_version">Aktuelles Band</string>
+    <string name="firmware_flash_target_version">Ausgewähltes Image</string>
+    <string name="firmware_flash_version_downgrade">Downgrade: Das ausgewählte Image ist älter als die aktuell vom Band gemeldete Firmware. Übertragung und Aktivierung bleiben für diesen Test verfügbar.</string>
+    <string name="firmware_flash_version_same">Diese Firmware-Version wird bereits als installiert gemeldet. Du kannst sie absichtlich erneut übertragen und aktivieren.</string>
+    <string name="firmware_flash_version_upgrade">Die Version des ausgewählten Images ist neuer als die aktuell vom Band gemeldete Firmware.</string>
+    <string name="firmware_flash_version_incomparable">Die aktuelle oder ausgewählte Version ist unbekannt oder fehlerhaft; ihre Reihenfolge kann daher nicht bestimmt werden.</string>
     <string name="firmware_flash_payload">Nutzdaten-Größe</string>
     <string name="firmware_flash_payload_crc">Nutzdaten-CRC32</string>
     <string name="firmware_flash_header_crc">Header-CRC32</string>
@@ -2704,6 +2710,7 @@
     <string name="firmware_flash_status">Update-Status</string>
     <string name="firmware_flash_session_device">Gebundene Sitzung</string>
     <string name="firmware_flash_progress">%1$s / %2$s bestätigt · %3$d %%</string>
+    <string name="firmware_flash_remote_check_in_progress">Alle Image-Bytes wurden bestätigt. Das Band prüft das bereitgestellte Image; die Aktivierung hat noch nicht begonnen.</string>
     <string name="firmware_flash_transfer">Image an das Band übertragen</string>
     <string name="firmware_flash_remote_valid">Das Band hat die vollständige Übertragung bestätigt und eine erfolgreiche Geräteprüfung gemeldet. Die Aktivierung bleibt ein eigener Schritt.</string>
     <string name="firmware_flash_activate">Aktivierung prüfen…</string>
@@ -2721,7 +2728,7 @@
     <string name="firmware_flash_device_ready">Aktives WHOOP 5/MG ist verbunden und gekoppelt · gemeldete Firmware %1$s</string>
     <string name="firmware_flash_unknown_version">unbekannt</string>
     <string name="firmware_flash_activate_title">Bereitgestellte Firmware aktivieren?</string>
-    <string name="firmware_flash_activate_identity">Image: %1$s\nVersion: %2$s\nGerätesitzung: %3$s</string>
+    <string name="firmware_flash_activate_identity">Image: %1$s\nAktuelles Band: %2$s\nAusgewähltes Image: %3$s\nGerätesitzung: %4$s</string>
     <string name="firmware_flash_activate_warning">Die Aktivierung kann die Verbindung trennen und das Band unbrauchbar machen. Geräteprüfung und passende CRCs beweisen weder eine vertrauenswürdige Signatur noch einen erfolgreichen Start. Eine erneute Verbindung meldet nur die Firmware-Version, die das Band danach ausgibt.</string>
     <string name="firmware_flash_activate_confirm">Firmware aktivieren</string>
     <string name="firmware_flash_keep_staged">Noch nicht</string>

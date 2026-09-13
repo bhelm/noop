@@ -12,6 +12,46 @@ import org.junit.Test
 
 class FirmwareFlashUiPolicyTest {
     @Test
+    fun versionComparisonCoversUpgradeEqualAndDowngrade() {
+        assertEquals(
+            FirmwareVersionRelation.UPGRADE,
+            compareFirmwareVersions("50.9.1.2", "50.10.1.2"),
+        )
+        assertEquals(
+            FirmwareVersionRelation.SAME,
+            compareFirmwareVersions("50.10.1.2", "50.10.1.2"),
+        )
+        assertEquals(
+            FirmwareVersionRelation.DOWNGRADE,
+            compareFirmwareVersions("50.10.1.2", "50.9.9.9"),
+        )
+    }
+
+    @Test
+    fun versionComparisonIsNumericAndRespondsToChangedLiveVersion() {
+        val target = "50.10.1.2"
+        assertEquals(FirmwareVersionRelation.UPGRADE, compareFirmwareVersions("50.9.99.99", target))
+        assertEquals(FirmwareVersionRelation.SAME, compareFirmwareVersions("50.10.1.2", target))
+        assertEquals(FirmwareVersionRelation.DOWNGRADE, compareFirmwareVersions("50.11.0.0", target))
+    }
+
+    @Test
+    fun unknownMalformedAndOutOfRangeVersionsRemainIncomparable() {
+        val target = "50.10.1.2"
+        listOf(null, "", "50.10.1", "50.10.x.2", "50.-1.1.2", "4294967296.1.2.3").forEach { current ->
+            assertEquals(
+                "current=$current",
+                FirmwareVersionRelation.INCOMPARABLE,
+                compareFirmwareVersions(current, target),
+            )
+        }
+        assertEquals(
+            FirmwareVersionRelation.INCOMPARABLE,
+            compareFirmwareVersions("50.10.1.2", "50.10.1.2.0"),
+        )
+    }
+
+    @Test
     fun fileReplacementAndClearAreLockedAcrossEveryActiveDeviceStage() {
         val activeStages = listOf(
             FirmwareUpdateStage.PREPARING,

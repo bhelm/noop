@@ -52,6 +52,36 @@ import kotlinx.coroutines.withContext
 
 private const val FIRMWARE_READ_BUFFER_BYTES = 64 * 1024
 private const val VISIBLE_LOG_LINES = 16
+private const val MAX_VERSION_COMPONENT = 0xffff_ffffL
+
+internal enum class FirmwareVersionRelation {
+    DOWNGRADE,
+    SAME,
+    UPGRADE,
+    INCOMPARABLE,
+}
+
+/** Compares canonical four-component firmware versions numerically, never lexicographically. */
+internal fun compareFirmwareVersions(currentVersion: String?, targetVersion: String): FirmwareVersionRelation {
+    val current = currentVersion?.let(::parseFirmwareVersion)
+        ?: return FirmwareVersionRelation.INCOMPARABLE
+    val target = parseFirmwareVersion(targetVersion)
+        ?: return FirmwareVersionRelation.INCOMPARABLE
+    current.indices.forEach { index ->
+        if (target[index] < current[index]) return FirmwareVersionRelation.DOWNGRADE
+        if (target[index] > current[index]) return FirmwareVersionRelation.UPGRADE
+    }
+    return FirmwareVersionRelation.SAME
+}
+
+private fun parseFirmwareVersion(version: String): List<Long>? {
+    val components = version.trim().split('.')
+    if (components.size != 4) return null
+    return components.map { component ->
+        if (component.isEmpty() || component.any { it !in '0'..'9' }) return null
+        component.toLongOrNull()?.takeIf { it in 0..MAX_VERSION_COMPONENT } ?: return null
+    }
+}
 
 /**
  * The Test Centre firmware-update body. File selection and local validation are deliberately separate
@@ -191,7 +221,10 @@ internal fun FirmwareFlashContent(
                     stringResourceCompat(R.string.firmware_flash_size),
                     formatFirmwareBytes(image.byteCount.toLong()),
                 )
-                FirmwareFact(stringResourceCompat(R.string.firmware_flash_version), image.version)
+                FirmwareVersionPair(
+                    currentVersion = reportedFirmware,
+                    targetVersion = image.version,
+                )
                 FirmwareFact(
                     stringResourceCompat(R.string.firmware_flash_payload),
                     formatFirmwareBytes(image.payloadLength.toLong()),
@@ -243,6 +276,13 @@ internal fun FirmwareFlashContent(
                         style = NoopType.footnote,
                         color = Palette.textTertiary,
                     )
+                    if (state.stage == FirmwareUpdateStage.REMOTE_VALIDATING) {
+                        Text(
+                            stringResourceCompat(R.string.firmware_flash_remote_check_in_progress),
+                            style = NoopType.footnote,
+                            color = Palette.textSecondary,
+                        )
+                    }
                 }
             }
         }
@@ -340,6 +380,7 @@ internal fun FirmwareFlashContent(
     if (showActivationConfirmation) {
         FirmwareActivationDialog(
             state = state,
+            currentVersion = reportedFirmware,
             onDismiss = { showActivationConfirmation = false },
             onActivate = {
                 showActivationConfirmation = false
@@ -373,6 +414,7 @@ private fun FirmwareDeviceReadiness(
 @Composable
 private fun FirmwareActivationDialog(
     state: FirmwareUpdateState,
+    currentVersion: String?,
     onDismiss: () -> Unit,
     onActivate: () -> Unit,
 ) {
@@ -393,11 +435,15 @@ private fun FirmwareActivationDialog(
                     stringResourceCompat(
                         R.string.firmware_flash_activate_identity,
                         image?.fileName ?: "?",
+                        currentVersion ?: stringResourceCompat(R.string.firmware_flash_unknown_version),
                         image?.version ?: "?",
                         state.lockedDeviceLabel ?: stringResourceCompat(R.string.firmware_flash_unknown_device),
                     ),
                     style = NoopType.subhead,
                     color = Palette.textPrimary,
+                )
+                FirmwareVersionRelationNote(
+                    compareFirmwareVersions(currentVersion, image?.version ?: ""),
                 )
                 Text(
                     stringResourceCompat(R.string.firmware_flash_activate_warning),
@@ -425,6 +471,52 @@ private fun FirmwareActivationDialog(
             }
         },
     )
+}
+
+@Composable
+private fun FirmwareVersionPair(currentVersion: String?, targetVersion: String) {
+    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+        Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+            Text(
+                stringResourceCompat(R.string.firmware_flash_current_version),
+                style = NoopType.footnote,
+                color = Palette.textTertiary,
+            )
+            Text(
+                currentVersion ?: stringResourceCompat(R.string.firmware_flash_unknown_version),
+                style = NoopType.subhead.copy(fontFamily = FontFamily.Monospace),
+                color = Palette.textSecondary,
+            )
+        }
+        Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+            Text(
+                stringResourceCompat(R.string.firmware_flash_target_version),
+                style = NoopType.footnote,
+                color = Palette.textTertiary,
+            )
+            Text(
+                targetVersion,
+                style = NoopType.subhead.copy(fontFamily = FontFamily.Monospace),
+                color = Palette.textSecondary,
+            )
+        }
+    }
+    FirmwareVersionRelationNote(compareFirmwareVersions(currentVersion, targetVersion))
+}
+
+@Composable
+private fun FirmwareVersionRelationNote(relation: FirmwareVersionRelation) {
+    val (message, color) = when (relation) {
+        FirmwareVersionRelation.DOWNGRADE ->
+            stringResourceCompat(R.string.firmware_flash_version_downgrade) to Palette.statusWarning
+        FirmwareVersionRelation.SAME ->
+            stringResourceCompat(R.string.firmware_flash_version_same) to Palette.textSecondary
+        FirmwareVersionRelation.UPGRADE ->
+            stringResourceCompat(R.string.firmware_flash_version_upgrade) to Palette.statusPositive
+        FirmwareVersionRelation.INCOMPARABLE ->
+            stringResourceCompat(R.string.firmware_flash_version_incomparable) to Palette.statusWarning
+    }
+    Text(message, style = NoopType.footnote, color = color)
 }
 
 @Composable
