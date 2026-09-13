@@ -308,32 +308,31 @@ internal fun projectStepsDetail(
     val points = buckets.map { it.displayDay to it.mean.toDouble() }
     val labels = buckets.map { bucket -> stepsBucketLabel(bucket.displayDay, granularity) }
     val accessibility = if (buckets.isEmpty()) {
-        "Steps, no data"
+        uiString(com.noop.R.string.steps_no_data)
     } else {
-        labels.zip(buckets).joinToString(
-            prefix = "Steps, ${buckets.size} bars. ",
+        uiString(com.noop.R.string.steps_chart_summary, buckets.size, labels.zip(buckets).joinToString(
             separator = "; ",
         ) { (label, bucket) ->
-            "$label, ${bucket.mean} average steps per observed day, ${bucket.observedDayCount} observed days"
-        }
+            "$label, ${stepsBucketValueLabel(bucket.mean.toDouble(), granularity)}"
+        })
     }
     return StepsDetailUiSeries(buckets, granularity, points, labels, accessibility)
 }
 
 internal fun stepsBucketValueLabel(value: Double, granularity: StepsDetailGranularity): String =
     if (granularity == StepsDetailGranularity.DAILY) {
-        "${value.toInt()} steps"
+        uiString(com.noop.R.string.steps_value, java.text.NumberFormat.getIntegerInstance().format(value.toInt()))
     } else {
-        "${value.toInt()} average steps per observed day"
+        uiString(com.noop.R.string.steps_mean_value, java.text.NumberFormat.getIntegerInstance().format(value.toInt()))
     }
 
 private fun stepsBucketLabel(day: String, granularity: StepsDetailGranularity): String {
     val parsed = strictLocalDay(day) ?: return day
     return when (granularity) {
-        StepsDetailGranularity.DAILY -> parsed.format(DateTimeFormatter.ofPattern("d MMM", Locale.US))
+        StepsDetailGranularity.DAILY -> parsed.format(DateTimeFormatter.ofPattern("d MMM", Locale.getDefault()))
         StepsDetailGranularity.WEEKLY ->
-            "Week of ${parsed.format(DateTimeFormatter.ofPattern("d MMM", Locale.US))}"
-        StepsDetailGranularity.MONTHLY -> parsed.format(DateTimeFormatter.ofPattern("MMM yyyy", Locale.US))
+            uiString(com.noop.R.string.steps_week_of, parsed.format(DateTimeFormatter.ofPattern("d MMM", Locale.getDefault())))
+        StepsDetailGranularity.MONTHLY -> parsed.format(DateTimeFormatter.ofPattern("MMM yyyy", Locale.getDefault()))
     }
 }
 
