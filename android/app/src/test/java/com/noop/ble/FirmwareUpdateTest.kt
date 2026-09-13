@@ -5,8 +5,10 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Assume.assumeTrue
 import org.junit.Test
+import java.io.ByteArrayOutputStream
 import java.io.File
 import java.util.zip.CRC32
+import java.util.zip.GZIPOutputStream
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.runBlocking
 
@@ -101,10 +103,13 @@ class FirmwareUpdateTest {
         val end = engine.transfer(selected, initial) {}
         assertEquals(FirmwareUpdateStage.READY_TO_ACTIVATE, end.stage)
         val writes = calls.filter { it.first == FirmwareTransferEngine.WRITE_COMMAND }
-        assertEquals(5, writes.size)
+        val expectedWrites = (selected.bytes.size + FirmwareImageParser.CHUNK_SIZE - 1) /
+            FirmwareImageParser.CHUNK_SIZE
+        assertEquals(expectedWrites, writes.size)
         assertEquals(220, writes.first().second[5].toInt() and 0xff)
-        assertEquals(72, writes.last().second[5].toInt() and 0xff)
-        assertEquals(880, writes.last().second.u32(1).toInt())
+        val expectedLastOffset = (expectedWrites - 1) * FirmwareImageParser.CHUNK_SIZE
+        assertEquals(selected.bytes.size - expectedLastOffset, writes.last().second[5].toInt() and 0xff)
+        assertEquals(expectedLastOffset.toLong(), writes.last().second.u32(1))
     }
 
     @Test
@@ -308,7 +313,15 @@ class FirmwareUpdateTest {
     }
 
     private fun image(type: Int, extensionMarkerAt8: Int = 5): ByteArray {
-        val payload = ByteArray(440) { ((it * 17) and 0xff).toByte() }
+        val payload = if (type == FirmwareImageFormat.ZBIN_COMPRESSED.containerType.toInt()) {
+            val compressed = ByteArrayOutputStream().use { output ->
+                GZIPOutputStream(output).use { it.write(image(FirmwareImageFormat.BIN_RAW.containerType.toInt())) }
+                output.toByteArray()
+            }
+            compressed + ByteArray((4 - compressed.size % 4) % 4)
+        } else {
+            ByteArray(440) { ((it * 17) and 0xff).toByte() }
+        }
         val bytes = ByteArray(FirmwareImageParser.HEADER_SIZE + payload.size)
         payload.copyInto(bytes, FirmwareImageParser.HEADER_SIZE)
         bytes.putU32(4, payload.size)
