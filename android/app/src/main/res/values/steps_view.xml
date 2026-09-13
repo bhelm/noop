@@ -15,6 +15,7 @@
     <string name="steps_unit">steps</string>
     <string name="steps_value">%1$s steps</string>
     <string name="steps_mean_value">%1$s average steps per recorded day</string>
+    <string name="steps_chart_mean">Avg. %1$s steps/day</string>
     <string name="steps_week_of">Week of %1$s</string>
     <string name="steps_chart_summary">Steps, %1$d bars. %2$s</string>
     <string name="steps_no_data">Steps, no data</string>

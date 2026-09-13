@@ -1,12 +1,13 @@
 # Android steps view
 
 The steps detail has one page title and localized English/German visible labels, including ranges,
-loading/empty states, calendar bucket labels and units. A dedicated chart supports immediate finger
-selection and horizontal scrubbing. While held, other bars dim and a dashed guide extends above the
+loading/empty states, calendar bucket labels and units. The shared BarChart supports immediate finger
+selection and horizontal scrubbing for all selectable callers. While held, other bars dim and a dashed guide extends above the
 selected bar. Date and value remain above the plot in a larger readout. The zero-based side axis has
 5,000-step ticks and rounds the maximum upward to the next occupied 5,000-step block (minimum 5,000).
 Daily values are printed above each bar for one- and two-week windows. Existing density buckets and
-calendar filtering are preserved.
+calendar filtering are preserved. Axis step, above-bar values and a larger two-line readout are optional
+shared-widget parameters enabled by the steps detail; other callers retain their default sizing/scale.
 
 The Key Metrics editor offers a new **30-day step average** tile. It is absent from the default order,
 so fresh installs and existing layouts keep it off until explicitly enabled. Its arithmetic mean uses
