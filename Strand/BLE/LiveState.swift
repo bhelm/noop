@@ -226,6 +226,46 @@ public final class LiveState: ObservableObject {
     }
     @Published public private(set) var strapRange: StrapRange?
 
+    // MARK: - R-R transport snapshot (#2117)
+
+    /// What this device has banked versus what its unit policy can actually score.
+    ///
+    /// Banked here for the same reason `strapRange` is: the export assembler turns it into a UNIVERSAL
+    /// line that rides EVERY Test Centre report, so a wearer whose HRV went blank self-diagnoses without
+    /// having known to turn a mode on. Observability only, never gated, and cleared on disconnect so a
+    /// stale answer cannot outlive the link. nil until resolved for this session.
+    ///
+    /// The judgement lives in `UniversalTrace.rrTransportLine`, not here. This carries facts.
+    public struct RRTransport: Equatable, Sendable {
+        public var strictWhoop5: Bool
+        public var firstRecordedUnix: Int?
+        public var firstScorableUnix: Int?
+        public init(strictWhoop5: Bool, firstRecordedUnix: Int?, firstScorableUnix: Int?) {
+            self.strictWhoop5 = strictWhoop5
+            self.firstRecordedUnix = firstRecordedUnix
+            self.firstScorableUnix = firstScorableUnix
+        }
+    }
+    @Published public private(set) var rrTransport: RRTransport?
+
+    /// Bank the device's R-R transport facts. Two indexed MINs at the call site, so this is cheap enough
+    /// to refresh on connect rather than being cached across links.
+    public func setRRTransport(strictWhoop5: Bool, firstRecordedUnix: Int?, firstScorableUnix: Int?) {
+        rrTransport = RRTransport(strictWhoop5: strictWhoop5, firstRecordedUnix: firstRecordedUnix,
+                                  firstScorableUnix: firstScorableUnix)
+    }
+
+    /// Clear the banked facts. Deliberately NOT called from `clearBiometrics` the way `clearStrapRange`
+    /// is, because the two describe different things: a strap range is the STRAP's own clock, which must
+    /// not outlive the link that reported it, while these describe what OUR database holds, which stays
+    /// true after a disconnect.
+    ///
+    /// That difference decides whether the line is present when it is wanted. The wearer this exists for
+    /// is the one who notices a blank HRV, opens Test Centre and exports, and the strap is quite possibly
+    /// not connected by then. Clearing on disconnect would drop the line from precisely that export.
+    /// Re-read on each connect, so a newly banked history is picked up.
+    public func clearRRTransport() { rrTransport = nil }
+
     /// Bank the strap's reported banked-record window (from GET_DATA_RANGE). Additive observability: the
     /// universal clock-drift export line reads this. `oldest` keeps the previously-known value when this
     /// reply carries only the upper bound, so a half/short range reply never clears a good lower bound.
@@ -340,6 +380,16 @@ public final class LiveState: ObservableObject {
     /// offload (consecutive empty backfills). Lets the home state read "connected, history sync is
     /// experimental on 5.0" instead of a WHOOP-4-style "not recording"/sync-error. Reset on connect/disconnect.
     @Published public var historySyncExperimental: Bool = false
+
+    /// #689/#815 — the strap's ring-buffer page backlog, sampled ONCE from the connect-time
+    /// GET_DATA_RANGE reply and never re-polled mid-offload: the link is already firmware-paced, and #377
+    /// rules out re-polling just to feed a readout. So this is a figure AT CONNECT rather than a live one,
+    /// and the Today sync chip's copy says so — a static number under a "syncing" label otherwise reads as
+    /// a stalled live one. A bounded ring measure (write pointer − read pointer against the ring size),
+    /// never a percentage: the strap never reveals a total record count. Confirmed against real captures
+    /// on WHOOP 4.0 and 5.0/MG. nil before the first reply this session, or when the frame did not decode.
+    /// Twin of Android `LiveState.pagesBehindAtConnect`.
+    @Published public var pagesBehindAtConnect: Int? = nil
 
     /// #612 — true when the WHOOP-4/generic empty-offload streak (`EmptySyncTracker`, `BLEManager`) is
     /// currently SUSTAINED (3+ consecutive completed-but-empty offloads). Not 5/MG-specific and not
