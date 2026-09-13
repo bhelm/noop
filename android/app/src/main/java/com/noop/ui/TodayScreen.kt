@@ -863,6 +863,13 @@ fun TodayScreen(
     // on a 4.0 the tile shows your imported steps instead of "No Data". Reloads as the day selector
     // moves. On-device WHOOP 5/MG steps still take precedence. (#150)
     var importedStepsForDay by remember { mutableStateOf<Int?>(null) }
+    var stepsAverage30 by remember { mutableStateOf<Pair<Double?, Int>>(null to 0) }
+    LaunchedEffect(days, selectedDayKey, enabledKeyMetrics, importedStepsForDay) {
+        stepsAverage30 = if (KeyMetric.STEPS_AVERAGE_30 in enabledKeyMetrics) {
+            val readings = buildSeriesVitalDetail(viewModel, "steps_est")?.readings.orEmpty()
+            rollingStepsAverage(readings, java.time.LocalDate.parse(selectedDayKey))
+        } else null to 0
+    }
     LaunchedEffect(days, selectedDayKey) {
         // Today's steps keep moving after the manual one-shot HC import, so the stored row goes
         // stale within minutes, top it up with ONE live StepsRecord read before the stored-row
@@ -1767,6 +1774,7 @@ fun TodayScreen(
                                     profileWeightKg = profileWeightKg,
                                     importedStepsForDay = importedStepsForDay,
                                     estimatedStepsForDay = stepsEstForDay,
+                                    stepsAverage30 = stepsAverage30,
                                     caloriesForDay = caloriesByDay[selectedDayKey],
                                     caloriesSpark = caloriesSpark,                    // #616: imported-first trend
                                     stepActivityClassForDay = stepActivityClassForDay,
@@ -5773,6 +5781,7 @@ internal fun resolveSkinTempReading(
 private fun MetricGrid(
     d: DailyMetric?,
     w: Window,
+    stepsAverage30: Pair<Double?, Int> = null to 0,
     recoveryCalibration: Int? = null,
     lastScoredCharge: LastCharge? = null,
     carriedDay: DailyMetric? = null,
@@ -5984,6 +5993,14 @@ private fun MetricGrid(
                 },
             )
         },
+        KeyMetric.STEPS_AVERAGE_30 to KeyTileData(
+            label = uiString(R.string.steps_average_30),
+            value = stepsAverage30.first?.let { intStringGrouped(it) } ?: NO_DATA,
+            unit = "",
+            tint = Palette.metricCyan,
+            frac = stepsAverage30.first?.let { (it / 10000.0).coerceIn(0.0, 1.0) },
+            caption = uiString(R.string.steps_average_coverage, stepsAverage30.second),
+        ),
         KeyMetric.WEIGHT to run {
             val weight = weightTile(latestWeightKg, profileWeightKg, unitSystem)
             KeyTileData(
@@ -6048,6 +6065,7 @@ private fun MetricGrid(
         KeyMetric.BLOOD_OXYGEN -> ({ onOpenMetric("spo2") })
         KeyMetric.RESPIRATORY -> ({ onOpenMetric("resp") })
         KeyMetric.STEPS -> if (stepsOpenCalibration) onOpenStepsCalibration else ({ onOpenMetric("steps_est") })
+        KeyMetric.STEPS_AVERAGE_30 -> ({ onOpenMetric("steps_est") })
         KeyMetric.CALORIES -> ({ onOpenMetric("active_kcal") })
         KeyMetric.WEIGHT -> null
         // Same "skin" vital_detail key `dashboardCardMetricKey(DashboardCard.SKIN_TEMP)` already routes
@@ -6147,6 +6165,7 @@ private fun keyMetricIcon(metric: KeyMetric): ImageVector = when (metric) {
     KeyMetric.BLOOD_OXYGEN -> Icons.Filled.WaterDrop
     KeyMetric.RESPIRATORY -> Icons.Filled.Air
     KeyMetric.STEPS -> Icons.AutoMirrored.Filled.DirectionsWalk
+    KeyMetric.STEPS_AVERAGE_30 -> Icons.Filled.Timeline
     KeyMetric.WEIGHT -> Icons.Filled.MonitorWeight
     KeyMetric.CALORIES -> Icons.Filled.LocalFireDepartment
     // Same glyph the sibling "Your Cards" tile (DashboardCard.SKIN_TEMP) already uses.
