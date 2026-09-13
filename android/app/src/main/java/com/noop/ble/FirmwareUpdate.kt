@@ -7,7 +7,7 @@ import java.util.zip.CRC32
 /** The two container types whose layout and CRC predicates are retained from the strap firmware. */
 enum class FirmwareImageFormat(val containerType: Long, val displayName: String) {
     BIN_RAW(1, "Raw BIN (experimental)"),
-    ZBIN_COMPRESSED(5, "Original compressed ZBIN"),
+    ZBIN_COMPRESSED(5, "Compressed ZBIN (OTA format)"),
 }
 
 data class FirmwareImageInfo(
@@ -27,6 +27,143 @@ internal data class ValidatedFirmwareImage(
     /** Immutable session bytes. The parser always copies the caller-owned array. */
     val bytes: ByteArray,
 )
+
+internal data class FirmwareWireResponse(
+    val command: Int,
+    val originSequence: Int,
+    val result: Int,
+    val body: ByteArray,
+)
+
+internal data class FirmwareResponseKey(
+    val pendingSessionId: Int,
+    val currentSessionId: Int,
+    val expectedCommand: Int,
+    val expectedSequence: Int,
+    val actualCommand: Int,
+    val actualSequence: Int,
+    val sameDevice: Boolean,
+)
+
+internal object FirmwareResponseMatcher {
+    fun correlated(key: FirmwareResponseKey): Boolean =
+        key.pendingSessionId == key.currentSessionId && key.sameDevice &&
+            key.expectedCommand == key.actualCommand && key.expectedSequence == key.actualSequence
+
+    /** VERIFY is asynchronous; body[0] == 1 is the recovered final-result discriminator. */
+    fun isFinal(command: Int, response: FirmwareWireResponse): Boolean =
+        command != FirmwareTransferEngine.VERIFY_COMMAND || response.body.firstOrNull()?.toInt() == 1
+}
+
+internal object FirmwareUpdateAdmission {
+    fun busyReason(
+        backfilling: Boolean,
+        writeInFlight: Boolean,
+        retryPending: Boolean,
+        queuedWrites: Int,
+    ): String? = if (backfilling || writeInFlight || retryPending || queuedWrites > 0) {
+        "Bluetooth is busy with another strap operation. Wait for it to finish, then reselect the image."
+    } else null
+}
+
+/** Keep ordinary BLE queue behavior intact while fail-closing session-bound OTA writes. */
+internal object FirmwareWriteQueuePolicy {
+    fun belongsToCurrentSession(firmwareSessionId: Int?, currentSessionId: Int?): Boolean =
+        firmwareSessionId == null || firmwareSessionId == currentSessionId
+
+    fun mayRetryAfterAmbiguousRejection(firmwareSessionId: Int?): Boolean = firmwareSessionId == null
+}
+
+internal object FirmwareActivationObservation {
+    const val DISCONNECT_TIMEOUT_MS = 30_000L
+    const val RECONNECT_TIMEOUT_MS = 60_000L
+
+    fun sessionIsCurrent(observedSessionId: Int, currentSessionId: Int?): Boolean =
+        observedSessionId == currentSessionId
+}
+
+internal fun interface FirmwareTransferTransport {
+    suspend fun exchange(
+        command: Int,
+        payload: ByteArray,
+        timeoutMs: Long,
+        accept: (FirmwareWireResponse) -> Boolean,
+    ): FirmwareWireResponse
+}
+
+/**
+ * Transport-independent OTA transaction. The BLE client supplies correlation/timeouts; tests supply a
+ * deterministic fake. Every failure stops the plan and there is deliberately no retry or resume branch.
+ */
+internal class FirmwareTransferEngine(private val transport: FirmwareTransferTransport) {
+    companion object {
+        const val PREPARE_COMMAND = 142
+        const val WRITE_COMMAND = 143
+        const val ACTIVATE_COMMAND = 144
+        const val VERIFY_COMMAND = 83
+        const val COMMAND_TIMEOUT_MS = 8_000L
+        const val VERIFY_TIMEOUT_MS = 30_000L
+    }
+
+    suspend fun transfer(
+        image: ValidatedFirmwareImage,
+        initial: FirmwareUpdateState,
+        publish: (FirmwareUpdateState) -> Unit,
+    ): FirmwareUpdateState {
+        requireAccepted(
+            exchange(PREPARE_COMMAND, byteArrayOf(1), COMMAND_TIMEOUT_MS),
+            expectedTail = 0,
+            step = "prepare",
+        )
+        var state = initial
+        var offset = 0
+        while (offset < image.bytes.size) {
+            val count = minOf(FirmwareImageParser.CHUNK_SIZE, image.bytes.size - offset)
+            val payload = ByteArray(6 + count)
+            payload[0] = 1
+            payload[1] = (offset and 0xff).toByte()
+            payload[2] = ((offset ushr 8) and 0xff).toByte()
+            payload[3] = ((offset ushr 16) and 0xff).toByte()
+            payload[4] = ((offset ushr 24) and 0xff).toByte()
+            payload[5] = count.toByte()
+            image.bytes.copyInto(payload, 6, offset, offset + count)
+            requireAccepted(
+                exchange(WRITE_COMMAND, payload, COMMAND_TIMEOUT_MS),
+                expectedTail = 0,
+                step = "write at offset $offset",
+            )
+            offset += count
+            state = FirmwareUpdateTransitions.writing(state, offset)
+            publish(state)
+        }
+        state = FirmwareUpdateTransitions.remoteValidating(state)
+        publish(state)
+        val verified = exchange(VERIFY_COMMAND, byteArrayOf(1), VERIFY_TIMEOUT_MS)
+        if (verified.result != 1 || verified.body.firstOrNull()?.toInt() != 1) {
+            throw FirmwareTransferException("The strap reported that remote image validation failed")
+        }
+        return FirmwareUpdateTransitions.ready(state).also(publish)
+    }
+
+    suspend fun activate(): FirmwareWireResponse {
+        val response = exchange(ACTIVATE_COMMAND, byteArrayOf(1), COMMAND_TIMEOUT_MS)
+        if (response.result != 1 || response.body.size < 2 ||
+            response.body[0].toInt() != 1 || response.body[1].toInt() != 1
+        ) throw FirmwareTransferException("The strap rejected the activation/reset request")
+        return response
+    }
+
+    private suspend fun exchange(command: Int, payload: ByteArray, timeoutMs: Long): FirmwareWireResponse =
+        transport.exchange(command, payload, timeoutMs) { FirmwareResponseMatcher.isFinal(command, it) }
+
+    private fun requireAccepted(response: FirmwareWireResponse, expectedTail: Int, step: String) {
+        if (response.result != 1 || response.body.size < 2 ||
+            response.body[0].toInt() != 1 || response.body[1].toInt() != expectedTail
+        ) throw FirmwareTransferException("The strap rejected firmware $step")
+    }
+}
+
+internal class FirmwareTransferException(message: String) : Exception(message)
 
 sealed class FirmwareImageValidation {
     internal data class Valid(val image: ValidatedFirmwareImage) : FirmwareImageValidation()
@@ -73,7 +210,7 @@ object FirmwareImageParser {
             return FirmwareImageValidation.Invalid("Payload length must be a multiple of 4 bytes")
         }
 
-        val type = input.u32le(8)
+        val type = input.u32le(12)
         val format = FirmwareImageFormat.entries.firstOrNull { it.containerType == type }
             ?: return FirmwareImageValidation.Invalid("Unsupported firmware container type $type")
         val expectedExtension = if (format == FirmwareImageFormat.ZBIN_COMPRESSED) "zbin" else "bin"
@@ -102,7 +239,7 @@ object FirmwareImageParser {
             .joinToString(".") { input.u32le(it).toString() }
         val note = when (format) {
             FirmwareImageFormat.ZBIN_COMPRESSED ->
-                "Original compressed update form. CRCs do not prove device compatibility or authentication."
+                "Vendor OTA container format. CRCs do not prove device compatibility or authentication."
             FirmwareImageFormat.BIN_RAW ->
                 "Research raw form. Installation of this decompressed type is not established."
         }
