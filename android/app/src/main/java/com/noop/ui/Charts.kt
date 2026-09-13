@@ -879,7 +879,7 @@ fun BarChart(
                             for (tick in 0..(maxV / axisStep).toInt()) {
                                 val v = tick * axisStep
                                 val y = h - (v / maxV).toFloat() * usableH
-                                drawLine(
+                                if (v > 0 && v < maxV) drawLine(
                                     Palette.hairlineStrong, Offset(axisWidth, y), Offset(size.width, y),
                                     strokeWidth = 1.dp.toPx(), pathEffect = gridDash,
                                 )
