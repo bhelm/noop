@@ -860,7 +860,8 @@ fun BarChart(
                         ?.let { h - ((it / maxV).toFloat().coerceIn(0f, 1f) * usableH) }
                     val slot = w / clean.size
                     val barWidth = (slot * 0.64f).coerceAtLeast(1f)
-                    val capRadius = (barWidth / 2f)
+                    val barCornerRadius = minOf(2.dp.toPx(), barWidth / 4f)
+                    val gridDash = PathEffect.dashPathEffect(floatArrayOf(5.dp.toPx(), 4.dp.toPx()))
                     // Precompute each bar's x centre + top y once.
                     data class BarSeg(val index: Int, val cx: Float, val top: Float)
                     val bars = ArrayList<BarSeg>(clean.size)
@@ -878,22 +879,26 @@ fun BarChart(
                             for (tick in 0..(maxV / axisStep).toInt()) {
                                 val v = tick * axisStep
                                 val y = h - (v / maxV).toFloat() * usableH
-                                drawLine(Palette.hairline, Offset(axisWidth, y), Offset(size.width, y))
+                                drawLine(
+                                    Palette.hairlineStrong, Offset(axisWidth, y), Offset(size.width, y),
+                                    strokeWidth = 1.dp.toPx(), pathEffect = gridDash,
+                                )
                                 drawContext.canvas.nativeCanvas.drawText(numberFormat.format(v), 0f, y + 3.dp.toPx(), axisPaint)
                             }
                         }
                         bars.forEach { seg ->
                             val i = seg.index
-                            if (clean[i] > 0) drawLine(
+                            if (clean[i] > 0) drawRoundRect(
                                 color = when {
                                     holding && i != selectedIndex -> color.copy(alpha = 0.22f)
                                     selectionEnabled && (i == selectedIndex || largeSelectionReadout) -> color
                                     else -> unselectedColor
                                 },
-                                start = Offset(seg.cx, h),
-                                end = Offset(seg.cx, (seg.top + capRadius).coerceAtMost(h)),
-                                strokeWidth = barWidth,
-                                cap = StrokeCap.Round,
+                                topLeft = Offset(seg.cx - barWidth / 2f, seg.top),
+                                size = androidx.compose.ui.geometry.Size(barWidth, h - seg.top),
+                                cornerRadius = minOf(barCornerRadius, (h - seg.top) / 4f).let {
+                                    androidx.compose.ui.geometry.CornerRadius(it, it)
+                                },
                             )
                             if (holding && i == selectedIndex) drawLine(
                                 color, Offset(seg.cx, seg.top), Offset(seg.cx, if (largeSelectionReadout) 62.dp.toPx() else 0f),
