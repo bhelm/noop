@@ -2710,7 +2710,7 @@
     <!-- Test Centre: local firmware image inspection, transfer and explicit activation. -->
     <string name="firmware_flash_title">Firmware image transfer</string>
     <string name="firmware_flash_blurb">Inspect a local WHOOP 5/MG firmware image, transfer it with acknowledged progress, then choose separately whether to activate it.</string>
-    <string name="firmware_flash_integrity_note">Use only unmodified original WHOOP images. NOOP then transfers the same file the WHOOP app does: it checks the image first, and the strap checks it again itself before activation.</string>
+    <string name="firmware_flash_integrity_note">The update process is safeguarded: NOOP checks the image before the transfer, and the strap checks it again itself before activation. The risk is the same as with a regular firmware update.</string>
     <string name="firmware_flash_file_note">For a normal original update, extract the vendor ZIP and select its .zbin file. A .bin file is the decompressed research form.</string>
     <string name="firmware_flash_choose_image">Choose .zbin or .bin image</string>
     <string name="firmware_flash_choose_replacement">Choose a different image</string>
@@ -2725,7 +2725,7 @@
     <string name="firmware_flash_local_valid">Local header, length, payload CRC and header CRC checks passed.</string>
     <string name="firmware_flash_format_zbin">Vendor OTA .zbin · compressed type 5</string>
     <string name="firmware_flash_format_bin">Raw research .bin · type 1</string>
-    <string name="firmware_flash_compat_zbin">Original update format, the same file the WHOOP app transfers.</string>
+    <string name="firmware_flash_compat_zbin">The strap’s regular update format.</string>
     <string name="firmware_flash_compat_bin">Research raw form. Installation of this decompressed type is not established.</string>
     <string name="firmware_flash_size">Image size</string>
     <string name="firmware_flash_version">Image version</string>
