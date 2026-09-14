@@ -207,6 +207,214 @@
     "%lld weeks · averages per observed day": {"localizations":{"de":{"stringUnit":{"state":"translated","value":"%lld Wochen · Durchschnitt je erfasstem Tag"}}}},
     "1 month · averages per observed day": {"localizations":{"de":{"stringUnit":{"state":"translated","value":"1 Monat · Durchschnitt je erfasstem Tag"}}}},
     "%lld months · averages per observed day": {"localizations":{"de":{"stringUnit":{"state":"translated","value":"%lld Monate · Durchschnitt je erfasstem Tag"}}}},
+    "FIRMWARE IMAGE TRANSFER" : { "localizations" : {
+      "de" : { "stringUnit" : { "state" : "translated", "value" : "FIRMWARE-IMAGE ÜBERTRAGEN" } },
+      "en" : { "stringUnit" : { "state" : "translated", "value" : "FIRMWARE IMAGE TRANSFER" } }
+    } },
+    "Inspect a local WHOOP 5/MG firmware image, transfer it with acknowledged progress, then choose separately whether to activate it." : { "localizations" : {
+      "de" : { "stringUnit" : { "state" : "translated", "value" : "Prüfe ein lokales WHOOP-5/MG-Firmware-Image, übertrage es mit bestätigtem Fortschritt und entscheide danach getrennt über die Aktivierung." } },
+      "en" : { "stringUnit" : { "state" : "translated", "value" : "Inspect a local WHOOP 5/MG firmware image, transfer it with acknowledged progress, then choose separately whether to activate it." } }
+    } },
+    "The update process is safeguarded: NOOP checks the image before the transfer, and the strap checks it again itself before activation. The risk is the same as with a regular firmware update." : { "localizations" : {
+      "de" : { "stringUnit" : { "state" : "translated", "value" : "Der Update-Vorgang ist abgesichert: NOOP prüft das Image vor der Übertragung, und das Band prüft es vor der Aktivierung noch einmal selbst. Das Risiko ist dasselbe wie bei einem regulären Firmware-Update." } },
+      "en" : { "stringUnit" : { "state" : "translated", "value" : "The update process is safeguarded: NOOP checks the image before the transfer, and the strap checks it again itself before activation. The risk is the same as with a regular firmware update." } }
+    } },
+    "For a normal original update, extract the vendor ZIP and select its .zbin file. A .bin file is the decompressed research form." : { "localizations" : {
+      "de" : { "stringUnit" : { "state" : "translated", "value" : "Entpacke für ein normales Original-Update das Hersteller-ZIP und wähle die enthaltene .zbin-Datei. Eine .bin-Datei ist die dekomprimierte Forschungsform." } },
+      "en" : { "stringUnit" : { "state" : "translated", "value" : "For a normal original update, extract the vendor ZIP and select its .zbin file. A .bin file is the decompressed research form." } }
+    } },
+    "Choose .zbin or .bin image" : { "localizations" : {
+      "de" : { "stringUnit" : { "state" : "translated", "value" : ".zbin- oder .bin-Image auswählen" } },
+      "en" : { "stringUnit" : { "state" : "translated", "value" : "Choose .zbin or .bin image" } }
+    } },
+    "Choose a different image" : { "localizations" : {
+      "de" : { "stringUnit" : { "state" : "translated", "value" : "Anderes Image auswählen" } },
+      "en" : { "stringUnit" : { "state" : "translated", "value" : "Choose a different image" } }
+    } },
+    "The selected image could not be read." : { "localizations" : {
+      "de" : { "stringUnit" : { "state" : "translated", "value" : "Das ausgewählte Image konnte nicht gelesen werden." } },
+      "en" : { "stringUnit" : { "state" : "translated", "value" : "The selected image could not be read." } }
+    } },
+    "The selected image exceeds the app’s 16 MiB safety limit." : { "localizations" : {
+      "de" : { "stringUnit" : { "state" : "translated", "value" : "Das ausgewählte Image überschreitet die Sicherheitsgrenze der App von 16 MiB." } },
+      "en" : { "stringUnit" : { "state" : "translated", "value" : "The selected image exceeds the app’s 16 MiB safety limit." } }
+    } },
+    "The selected image is empty." : { "localizations" : {
+      "de" : { "stringUnit" : { "state" : "translated", "value" : "Das ausgewählte Image ist leer." } },
+      "en" : { "stringUnit" : { "state" : "translated", "value" : "The selected image is empty." } }
+    } },
+    "Reading and validating the selected image…" : { "localizations" : {
+      "de" : { "stringUnit" : { "state" : "translated", "value" : "Ausgewähltes Image wird gelesen und geprüft…" } },
+      "en" : { "stringUnit" : { "state" : "translated", "value" : "Reading and validating the selected image…" } }
+    } },
+    "Waiting for a local file selection…" : { "localizations" : {
+      "de" : { "stringUnit" : { "state" : "translated", "value" : "Lokale Dateiauswahl ist geöffnet…" } },
+      "en" : { "stringUnit" : { "state" : "translated", "value" : "Waiting for a local file selection…" } }
+    } },
+    "Format" : { "localizations" : {
+      "de" : { "stringUnit" : { "state" : "translated", "value" : "Format" } },
+      "en" : { "stringUnit" : { "state" : "translated", "value" : "Format" } }
+    } },
+    "Local header, length, payload CRC and header CRC checks passed." : { "localizations" : {
+      "de" : { "stringUnit" : { "state" : "translated", "value" : "Lokale Prüfungen von Header, Länge, Nutzdaten-CRC und Header-CRC bestanden." } },
+      "en" : { "stringUnit" : { "state" : "translated", "value" : "Local header, length, payload CRC and header CRC checks passed." } }
+    } },
+    "Vendor OTA .zbin · compressed type 5" : { "localizations" : {
+      "de" : { "stringUnit" : { "state" : "translated", "value" : "Hersteller-OTA .zbin · komprimierter Typ 5" } },
+      "en" : { "stringUnit" : { "state" : "translated", "value" : "Vendor OTA .zbin · compressed type 5" } }
+    } },
+    "Raw research .bin · type 1" : { "localizations" : {
+      "de" : { "stringUnit" : { "state" : "translated", "value" : "Rohes Forschungs-.bin · Typ 1" } },
+      "en" : { "stringUnit" : { "state" : "translated", "value" : "Raw research .bin · type 1" } }
+    } },
+    "The strap’s regular update format." : { "localizations" : {
+      "de" : { "stringUnit" : { "state" : "translated", "value" : "Das reguläre Update-Format des Bands." } },
+      "en" : { "stringUnit" : { "state" : "translated", "value" : "The strap’s regular update format." } }
+    } },
+    "Research raw form. Installation of this decompressed type is not established." : { "localizations" : {
+      "de" : { "stringUnit" : { "state" : "translated", "value" : "Rohe Forschungsform. Die Installation dieses dekomprimierten Typs ist nicht belegt." } },
+      "en" : { "stringUnit" : { "state" : "translated", "value" : "Research raw form. Installation of this decompressed type is not established." } }
+    } },
+    "Image size" : { "localizations" : {
+      "de" : { "stringUnit" : { "state" : "translated", "value" : "Image-Größe" } },
+      "en" : { "stringUnit" : { "state" : "translated", "value" : "Image size" } }
+    } },
+    "Current strap" : { "localizations" : {
+      "de" : { "stringUnit" : { "state" : "translated", "value" : "Aktuelles Band" } },
+      "en" : { "stringUnit" : { "state" : "translated", "value" : "Current strap" } }
+    } },
+    "Selected image" : { "localizations" : {
+      "de" : { "stringUnit" : { "state" : "translated", "value" : "Ausgewähltes Image" } },
+      "en" : { "stringUnit" : { "state" : "translated", "value" : "Selected image" } }
+    } },
+    "Downgrade: the selected image is older than the firmware currently reported by the strap. Transfer and activation remain available for this test." : { "localizations" : {
+      "de" : { "stringUnit" : { "state" : "translated", "value" : "Downgrade: Das ausgewählte Image ist älter als die aktuell vom Band gemeldete Firmware. Übertragung und Aktivierung bleiben für diesen Test verfügbar." } },
+      "en" : { "stringUnit" : { "state" : "translated", "value" : "Downgrade: the selected image is older than the firmware currently reported by the strap. Transfer and activation remain available for this test." } }
+    } },
+    "This firmware version is already reported as installed. You can intentionally transfer and activate it again." : { "localizations" : {
+      "de" : { "stringUnit" : { "state" : "translated", "value" : "Diese Firmware-Version wird bereits als installiert gemeldet. Du kannst sie absichtlich erneut übertragen und aktivieren." } },
+      "en" : { "stringUnit" : { "state" : "translated", "value" : "This firmware version is already reported as installed. You can intentionally transfer and activate it again." } }
+    } },
+    "The selected image version is newer than the firmware currently reported by the strap." : { "localizations" : {
+      "de" : { "stringUnit" : { "state" : "translated", "value" : "Die Version des ausgewählten Images ist neuer als die aktuell vom Band gemeldete Firmware." } },
+      "en" : { "stringUnit" : { "state" : "translated", "value" : "The selected image version is newer than the firmware currently reported by the strap." } }
+    } },
+    "The current or selected version is unknown or malformed, so their order cannot be determined." : { "localizations" : {
+      "de" : { "stringUnit" : { "state" : "translated", "value" : "Die aktuelle oder ausgewählte Version ist unbekannt oder fehlerhaft; ihre Reihenfolge kann daher nicht bestimmt werden." } },
+      "en" : { "stringUnit" : { "state" : "translated", "value" : "The current or selected version is unknown or malformed, so their order cannot be determined." } }
+    } },
+    "Payload size" : { "localizations" : {
+      "de" : { "stringUnit" : { "state" : "translated", "value" : "Nutzdaten-Größe" } },
+      "en" : { "stringUnit" : { "state" : "translated", "value" : "Payload size" } }
+    } },
+    "Payload CRC32" : { "localizations" : {
+      "de" : { "stringUnit" : { "state" : "translated", "value" : "Nutzdaten-CRC32" } },
+      "en" : { "stringUnit" : { "state" : "translated", "value" : "Payload CRC32" } }
+    } },
+    "Header CRC32" : { "localizations" : {
+      "de" : { "stringUnit" : { "state" : "translated", "value" : "Header-CRC32" } },
+      "en" : { "stringUnit" : { "state" : "translated", "value" : "Header CRC32" } }
+    } },
+    "SHA-256" : { "localizations" : {
+      "de" : { "stringUnit" : { "state" : "translated", "value" : "SHA-256" } },
+      "en" : { "stringUnit" : { "state" : "translated", "value" : "SHA-256" } }
+    } },
+    "Update status" : { "localizations" : {
+      "de" : { "stringUnit" : { "state" : "translated", "value" : "Update-Status" } },
+      "en" : { "stringUnit" : { "state" : "translated", "value" : "Update status" } }
+    } },
+    "Locked session" : { "localizations" : {
+      "de" : { "stringUnit" : { "state" : "translated", "value" : "Gebundene Sitzung" } },
+      "en" : { "stringUnit" : { "state" : "translated", "value" : "Locked session" } }
+    } },
+    "%1$@ / %2$@ acknowledged · %3$lld%%" : { "localizations" : {
+      "de" : { "stringUnit" : { "state" : "translated", "value" : "%1$@ / %2$@ bestätigt · %3$lld %%" } },
+      "en" : { "stringUnit" : { "state" : "translated", "value" : "%1$@ / %2$@ acknowledged · %3$lld%%" } }
+    } },
+    "All image bytes were acknowledged. The strap is checking the staged image; activation has not started." : { "localizations" : {
+      "de" : { "stringUnit" : { "state" : "translated", "value" : "Alle Image-Bytes wurden bestätigt. Das Band prüft das bereitgestellte Image; die Aktivierung hat noch nicht begonnen." } },
+      "en" : { "stringUnit" : { "state" : "translated", "value" : "All image bytes were acknowledged. The strap is checking the staged image; activation has not started." } }
+    } },
+    "Transfer image to strap" : { "localizations" : {
+      "de" : { "stringUnit" : { "state" : "translated", "value" : "Image an das Band übertragen" } },
+      "en" : { "stringUnit" : { "state" : "translated", "value" : "Transfer image to strap" } }
+    } },
+    "Resume on this connection" : { "localizations" : {
+      "de" : { "stringUnit" : { "state" : "translated", "value" : "Auf dieser Verbindung fortsetzen" } },
+      "en" : { "stringUnit" : { "state" : "translated", "value" : "Resume on this connection" } }
+    } },
+    "The transfer can resume only while this exact Bluetooth connection remains active and the selected image is unchanged. After a disconnect, start again from the beginning." : { "localizations" : {
+      "de" : { "stringUnit" : { "state" : "translated", "value" : "Die Übertragung kann nur fortgesetzt werden, solange genau diese Bluetooth-Verbindung besteht und das ausgewählte Image unverändert ist. Nach einer Trennung muss die Übertragung von vorn beginnen." } },
+      "en" : { "stringUnit" : { "state" : "translated", "value" : "The transfer can resume only while this exact Bluetooth connection remains active and the selected image is unchanged. After a disconnect, start again from the beginning." } }
+    } },
+    "The strap acknowledged the complete transfer and returned a successful remote validation result. Activation is still separate." : { "localizations" : {
+      "de" : { "stringUnit" : { "state" : "translated", "value" : "Das Band hat die vollständige Übertragung bestätigt und eine erfolgreiche Geräteprüfung gemeldet. Die Aktivierung bleibt ein eigener Schritt." } },
+      "en" : { "stringUnit" : { "state" : "translated", "value" : "The strap acknowledged the complete transfer and returned a successful remote validation result. Activation is still separate." } }
+    } },
+    "Review and activate…" : { "localizations" : {
+      "de" : { "stringUnit" : { "state" : "translated", "value" : "Aktivierung prüfen…" } },
+      "en" : { "stringUnit" : { "state" : "translated", "value" : "Review and activate…" } }
+    } },
+    "Stop this update session" : { "localizations" : {
+      "de" : { "stringUnit" : { "state" : "translated", "value" : "Diese Update-Sitzung stoppen" } },
+      "en" : { "stringUnit" : { "state" : "translated", "value" : "Stop this update session" } }
+    } },
+    "Stopping prevents further sends from NOOP. It does not roll back bytes the strap has already acknowledged." : { "localizations" : {
+      "de" : { "stringUnit" : { "state" : "translated", "value" : "Das Stoppen verhindert weitere Sendungen durch NOOP. Bereits vom Band bestätigte Bytes werden nicht zurückgesetzt." } },
+      "en" : { "stringUnit" : { "state" : "translated", "value" : "Stopping prevents further sends from NOOP. It does not roll back bytes the strap has already acknowledged." } }
+    } },
+    "Clear image and status" : { "localizations" : {
+      "de" : { "stringUnit" : { "state" : "translated", "value" : "Image und Status löschen" } },
+      "en" : { "stringUnit" : { "state" : "translated", "value" : "Clear image and status" } }
+    } },
+    "Select a WHOOP 5/MG as the active device before transfer. Local image inspection remains available." : { "localizations" : {
+      "de" : { "stringUnit" : { "state" : "translated", "value" : "Wähle vor der Übertragung ein WHOOP 5/MG als aktives Gerät. Die lokale Image-Prüfung bleibt verfügbar." } },
+      "en" : { "stringUnit" : { "state" : "translated", "value" : "Select a WHOOP 5/MG as the active device before transfer. Local image inspection remains available." } }
+    } },
+    "Transfer is supported only with positive WHOOP 5/MG evidence. WHOOP 4.0 and non-WHOOP devices are blocked." : { "localizations" : {
+      "de" : { "stringUnit" : { "state" : "translated", "value" : "Die Übertragung ist nur mit eindeutigem WHOOP-5/MG-Nachweis möglich. WHOOP 4.0 und andere Geräte sind gesperrt." } },
+      "en" : { "stringUnit" : { "state" : "translated", "value" : "Transfer is supported only with positive WHOOP 5/MG evidence. WHOOP 4.0 and non-WHOOP devices are blocked." } }
+    } },
+    "The active WHOOP 5/MG is disconnected. Connect it before transfer." : { "localizations" : {
+      "de" : { "stringUnit" : { "state" : "translated", "value" : "Das aktive WHOOP 5/MG ist getrennt. Verbinde es vor der Übertragung." } },
+      "en" : { "stringUnit" : { "state" : "translated", "value" : "The active WHOOP 5/MG is disconnected. Connect it before transfer." } }
+    } },
+    "The strap is connected, but its encrypted WHOOP 5/MG session is not ready." : { "localizations" : {
+      "de" : { "stringUnit" : { "state" : "translated", "value" : "Das Band ist verbunden, aber seine verschlüsselte WHOOP-5/MG-Sitzung ist nicht bereit." } },
+      "en" : { "stringUnit" : { "state" : "translated", "value" : "The strap is connected, but its encrypted WHOOP 5/MG session is not ready." } }
+    } },
+    "Active WHOOP 5/MG is connected and paired · reported firmware %@" : { "localizations" : {
+      "de" : { "stringUnit" : { "state" : "translated", "value" : "Aktives WHOOP 5/MG ist verbunden und gekoppelt · gemeldete Firmware %@" } },
+      "en" : { "stringUnit" : { "state" : "translated", "value" : "Active WHOOP 5/MG is connected and paired · reported firmware %@" } }
+    } },
+    "unknown" : { "localizations" : {
+      "de" : { "stringUnit" : { "state" : "translated", "value" : "unbekannt" } },
+      "en" : { "stringUnit" : { "state" : "translated", "value" : "unknown" } }
+    } },
+    "Activate the staged firmware?" : { "localizations" : {
+      "de" : { "stringUnit" : { "state" : "translated", "value" : "Bereitgestellte Firmware aktivieren?" } },
+      "en" : { "stringUnit" : { "state" : "translated", "value" : "Activate the staged firmware?" } }
+    } },
+    "firmware_flash_keep_staged" : { "localizations" : {
+      "de" : { "stringUnit" : { "state" : "translated", "value" : "Noch nicht" } },
+      "en" : { "stringUnit" : { "state" : "translated", "value" : "Not now" } }
+    } },
+    "Image: %1$@\nCurrent strap: %2$@\nSelected image: %3$@\nDevice session: %4$@" : { "localizations" : {
+      "de" : { "stringUnit" : { "state" : "translated", "value" : "Image: %1$@\nAktuelles Band: %2$@\nAusgewähltes Image: %3$@\nGerätesitzung: %4$@" } },
+      "en" : { "stringUnit" : { "state" : "translated", "value" : "Image: %1$@\nCurrent strap: %2$@\nSelected image: %3$@\nDevice session: %4$@" } }
+    } },
+    "The strap restarts on the new firmware and briefly disconnects. It then reconnects and reports its version. Keep the strap nearby and charged until it is connected again." : { "localizations" : {
+      "de" : { "stringUnit" : { "state" : "translated", "value" : "Das Band startet mit der neuen Firmware neu und trennt dabei kurz die Verbindung. Danach verbindet es sich wieder und meldet seine Version. Lass das Band in der Nähe und geladen, bis es wieder verbunden ist." } },
+      "en" : { "stringUnit" : { "state" : "translated", "value" : "The strap restarts on the new firmware and briefly disconnects. It then reconnects and reports its version. Keep the strap nearby and charged until it is connected again." } }
+    } },
+    "Activate firmware" : { "localizations" : {
+      "de" : { "stringUnit" : { "state" : "translated", "value" : "Firmware aktivieren" } },
+      "en" : { "stringUnit" : { "state" : "translated", "value" : "Activate firmware" } }
+    } },
+    "unknown device" : { "localizations" : {
+      "de" : { "stringUnit" : { "state" : "translated", "value" : "unbekanntes Gerät" } },
+      "en" : { "stringUnit" : { "state" : "translated", "value" : "unknown device" } }
+    } },
     "Heart rate, no reading": { "localizations": {
       "de": { "stringUnit": { "state": "translated", "value": "Herzfrequenz, keine Messung" } }, "en": { "stringUnit": { "state": "translated", "value": "Heart rate, no reading" } }, "es": { "stringUnit": { "state": "translated", "value": "Frecuencia cardíaca, sin lectura" } }, "fr": { "stringUnit": { "state": "translated", "value": "Fréquence cardiaque, aucune mesure" } }, "it": { "stringUnit": { "state": "translated", "value": "Frequenza cardiaca, nessuna lettura" } }, "pl": { "stringUnit": { "state": "translated", "value": "Tętno, brak odczytu" } }, "pt-PT": { "stringUnit": { "state": "translated", "value": "Frequência cardíaca, sem leitura" } }, "ru": { "stringUnit": { "state": "translated", "value": "Пульс, нет данных" } }, "zh-Hans": { "stringUnit": { "state": "translated", "value": "心率，无读数" } }, "zh-Hant": { "stringUnit": { "state": "translated", "value": "心率，無讀數" } }
     } },

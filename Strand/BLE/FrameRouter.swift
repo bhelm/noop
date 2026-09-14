@@ -16,6 +16,11 @@ public final class FrameRouter {
     var onStrapSerial: ((String) -> Void)?
 
     var onSyncTrigger: (() -> Void)?
+    /// Fires when a COMMAND_RESPONSE decodes a firmware version (`fw_version` / `fw_harvard`). The
+    /// BLEManager wires this to the firmware-update reconnect observer so a strap that reappears after an
+    /// activation reports its new version through the same decode path as the Devices card. nil in
+    /// pure/unit contexts. Twin of the Android `noteFirmwareReportedVersion` call site.
+    var onFirmwareVersion: ((String) -> Void)?
     /// #1706: which strap this connection is talking to, so an alarm readback can be attributed to a
     /// device. Set per connection by BLEManager immediately AFTER `family`, whose didSet clears this —
     /// a path that sets the family and forgets the id then attributes nothing rather than carrying the
@@ -123,11 +128,16 @@ public final class FrameRouter {
             // (REPORT_VERSION_INFO), WHOOP 5/MG decodes `fw_version` (GET_HELLO). Take whichever the
             // decoder produced; one branch covers both families. It's stable for the connection, so
             // only republish on a real change. Surfaced on the Devices card.
-            if let fw = parsed.parsed["fw_version"]?.stringValue ?? parsed.parsed["fw_harvard"]?.stringValue,
-               state.strapFirmware != fw {
-                state.strapFirmware = fw
-                // Persist so the debug export can name the firmware offline (state clears on disconnect).
-                UserDefaults.standard.set(fw, forKey: "noop.lastFirmware")
+            if let fw = parsed.parsed["fw_version"]?.stringValue ?? parsed.parsed["fw_harvard"]?.stringValue {
+                if state.strapFirmware != fw {
+                    state.strapFirmware = fw
+                    // Persist so the debug export can name the firmware offline (state clears on disconnect).
+                    UserDefaults.standard.set(fw, forKey: "noop.lastFirmware")
+                }
+                // Fire every time a version decodes (not only on change): the firmware-update reconnect
+                // observer needs the report even when the value matches, since strapFirmware was cleared
+                // on the activation disconnect. It gates on its own stage, so this is inert otherwise.
+                onFirmwareVersion?(fw)
             }
 
             // #1634: the 5/MG hello decoded no firmware. The guards fail closed by design, so this is the

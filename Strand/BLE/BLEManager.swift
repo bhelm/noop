@@ -1043,6 +1043,56 @@ public final class BLEManager: NSObject, ObservableObject {
     private var reassembler = Reassembler()
     private var seq: UInt8 = 0
     private var didBond = false
+
+    // MARK: Firmware update (Test Centre) — see BLEManager+Firmware.swift for the transaction.
+    /// The one observable firmware-update state the Test Centre card renders. Twin of the Android
+    /// `WhoopBleClient.firmwareUpdateState` StateFlow.
+    @Published public private(set) var firmwareUpdateState = FirmwareUpdateState()
+    /// Bytes selected in Test Centre. Replaced only by a fully validated immutable container.
+    var selectedFirmwareImage: ValidatedFirmwareImage?
+    var firmwareSession: FirmwareSession?
+    var firmwarePending: PendingFirmwareResponse?
+    var firmwareUpdateExclusive = false
+    var firmwareSessionCounter = 0
+    /// The in-flight transfer/activation task, cancelled when the session is torn down.
+    var firmwareTransferTask: Task<Void, Never>?
+    /// Continuation for the one firmware command currently awaiting its correlated response.
+    var firmwarePendingContinuation: CheckedContinuation<FirmwareWireResponse, Error>?
+    /// Bumped by every image selection and clear, so a parse still running off the main actor when the
+    /// user clears or picks again is discarded instead of arming a superseded image.
+    var firmwareSelectionGeneration = 0
+
+    /// Publish a new firmware-update state on the main actor.
+    func setFirmwareUpdateState(_ next: FirmwareUpdateState) { firmwareUpdateState = next }
+    /// Read the private connect counter from the firmware extension (a resume binds to one generation).
+    var firmwareConnectGenerationValue: Int { connectGeneration }
+    // Thin internal accessors so BLEManager+Firmware.swift (a separate file) can reach members that are
+    // file-private here, without widening their visibility for the rest of the class.
+    var firmwarePeripheral: CBPeripheral? { peripheral }
+    var firmwareCmdCharacteristic: CBCharacteristic? { cmdCharacteristic }
+    var firmwareSelectedFamily: DeviceFamily { selectedModel.deviceFamily }
+    func firmwareLog(_ message: String) { log(message) }
+    func firmwareNextSequence() -> UInt8 { seq = seq &+ 1; return seq }
+    /// A raw/ground-truth IMU capture holds the command channel; a firmware transfer must not start or
+    /// resume under it. Twin of the Android `_groundTruthImuStatus.value.requested` check.
+    var firmwareRawCaptureActive: Bool { rawCaptureInFlight }
+
+    /// Hand the link back to the live stream once an exclusive firmware session ends. While it held the
+    /// channel, `reconcileRealtime` and the keep-alive stood down without touching `realtimeArmed`, but the
+    /// engine's quiesce step sends TOGGLE_REALTIME_HR 0, so the strap may be disarmed whatever the latch
+    /// says. Clearing both arm latches makes the reconciler see the edge and re-arm if a screen or
+    /// continuous capture still wants the stream; restarting the keep-alive gives it a full interval before
+    /// its next tick. Twin of the Android `restoreAfterFirmwareExclusive`.
+    func restoreAfterFirmwareExclusive() {
+        keepAliveTimer?.cancel()
+        keepAliveTimer = nil
+        guard state.connected && state.bonded else { return }
+        realtimeArmed = false
+        whoop5RealtimeArmed = false
+        reconcileRealtime()
+        startKeepAlive()
+    }
+
     /// #1635: one explicit Connect grants one fresh CLIENT_HELLO even when the suppression latch is set.
     /// Consumed unconditionally by the write site, so the retry belongs to THIS session — leaving it set
     /// would hand a stale retry to some later automatic reconnect and restart the loop the suppression
@@ -1339,6 +1389,7 @@ public final class BLEManager: NSObject, ObservableObject {
         // Strap-as-clock: an incoming EVENT packet kicks a rate-limited catch-up sync.
         router.onSyncTrigger = { [weak self] in self?.requestSync(.strap) }
         router.onStrapSerial = { [weak self] serial in self?.noteHarvardSerial(serial) }   // #1193
+        router.onFirmwareVersion = { [weak self] fw in self?.noteFirmwareReportedVersion(fw) }
         // #78 hole-4: a paused-for-bond-loop strap gets one bounded salvage attempt per app-foreground.
         installForegroundSalvageProbe()
     }
@@ -1539,6 +1590,7 @@ public final class BLEManager: NSObject, ObservableObject {
         // Strap-as-clock: an incoming EVENT packet kicks a rate-limited catch-up sync.
         router.onSyncTrigger = { [weak self] in self?.requestSync(.strap) }
         router.onStrapSerial = { [weak self] serial in self?.noteHarvardSerial(serial) }   // #1193
+        router.onFirmwareVersion = { [weak self] fw in self?.noteFirmwareReportedVersion(fw) }
         // #78 hole-4: a paused-for-bond-loop strap gets one bounded salvage attempt per app-foreground.
         installForegroundSalvageProbe()
     }
@@ -2189,6 +2241,14 @@ public final class BLEManager: NSObject, ObservableObject {
         guard state.connected, let p = peripheral, p.state == .connected, let ch = cmdCharacteristic else {
             let reason = state.connected ? "command characteristic unavailable" : "not connected"
             log("send(\(command.label)) ignored — \(reason)")
+            return
+        }
+        // An exclusive firmware-update session owns the command channel: ordinary commands are paused so
+        // nothing interleaves with the OTA writes (twin of the Android `firmwareUpdateExclusive` guard in
+        // `send`). The firmware transfer writes its frames directly in `firmwareExchange`
+        // (BLEManager+Firmware.swift), not through send().
+        if firmwareUpdateExclusive {
+            log("send(\(command.label)) paused — an exclusive firmware update session is active")
             return
         }
         // The MG ECG family is 5/MG-only by construction, and the WHOOP 4.0 branch further down has no
@@ -3275,6 +3335,10 @@ public final class BLEManager: NSObject, ObservableObject {
     private func reconcileRealtime() {
         let want = screenWantsRealtime || continuousCaptureWantsNow()
         wantsRealtime = want   // keep-alive + post-bond arm-on-connect read this derived value
+        // An exclusive firmware session owns the command channel and send() would drop the toggle, so
+        // stand down BEFORE latching `realtimeArmed` — latching a value that never reached the strap would
+        // hide the edge afterwards. restoreAfterFirmwareExclusive re-runs this. Twin of the Android guard.
+        guard !firmwareUpdateExclusive else { return }
         guard want != realtimeArmed else { return }                      // no edge — nothing to send
         guard selectedModel.deviceFamily == .whoop4 || state.bonded else { return }   // can't reach the strap yet
         realtimeArmed = want
@@ -4507,6 +4571,11 @@ public final class BLEManager: NSObject, ObservableObject {
         // door again rather than letting an unbonded link issue puffin work that cannot land.
         guard keepAliveMayRun(connected: state.connected, didBond: didBond,
                               bonded: state.bonded, family: selectedModel.deviceFamily) else { return }
+        // An exclusive firmware session (the transfer, and the wait for the user's activation decision)
+        // stands the whole tick down, as on Android: every send would be dropped, and the liveness bounce
+        // below would drop the link itself, which the session would then report as a strap disconnect. The
+        // timer keeps repeating; restoreAfterFirmwareExclusive restarts it when the session ends.
+        if firmwareUpdateExclusive { return }
         if didBond { enableLiveNotifications(reason: "keepalive") }
         // Liveness watchdog: if NOTHING has arrived for a while, the stream/link stalled.
         // Bounce the connection — the auto-rescan on disconnect re-bonds and resumes streaming.
@@ -5410,6 +5479,10 @@ extension BLEManager: @preconcurrency CBCentralManagerDelegate {
         unauthorizedSettleWork?.cancel()
         unauthorizedSettleWork = nil
         guard central.state == .poweredOn else {
+            // Any radio state other than poweredOn invalidates the link, and CoreBluetooth need not follow
+            // it with didDisconnectPeripheral, so a running firmware session is settled here exactly as a
+            // disconnect would settle it. Without a session this only marks a selected image ineligible.
+            noteFirmwareDisconnected()
             // #280: a non-poweredOn radio state used to be a SILENT return — the strap log showed only
             // "Central state: 3" and the UI just read "not connected", so a user whose Mac had denied NOOP
             // Bluetooth (.unauthorized == raw 3) had nothing explaining why no strap was ever found. This is
@@ -5822,6 +5895,10 @@ extension BLEManager: @preconcurrency CBCentralManagerDelegate {
             }
         }
         bondedAt = nil   // cleared after the bond-loop detector above read it (#617)
+        // Firmware update: a drop mid-transfer fails the session; a drop after an activation request is
+        // the expected reboot and becomes the reconnect wait. Runs BEFORE the state reset below so it
+        // reads the live session. Twin of the Android `noteFirmwareDisconnected` call in handleDisconnect.
+        noteFirmwareDisconnected()
         state.connected = false
         state.encryptedBond = false   // cleared with didBond; next session must re-prove the bond (#69)
         state.charging = nil          // a stale charging flag must not outlive the link
@@ -6451,6 +6528,7 @@ extension BLEManager: @preconcurrency CBPeripheralDelegate {
                 bondLoopPausedAt = nil
                 noteGenuineBond(of: peripheral)   // #52: this strap bonds fine; clears any pin-refusal streak
                 emitConnectionBondState("encryptedBond family=whoop5 (CLIENT_HELLO acked)")
+                refreshFirmwareUpdateEligibility()   // a bonded 5/MG can now be the firmware-update target
                 log("WHOOP 5/MG: CLIENT_HELLO acked — link established; subscribing notify chars (experimental).")
                 // #1883: Apple has no link-encryption state to verify the bond against. A completion
                 // faster than one connection interval did not come from the strap — that is the
@@ -6534,6 +6612,7 @@ extension BLEManager: @preconcurrency CBPeripheralDelegate {
             bondedAt = Date()            // #617: start the bond→drop stopwatch for the bond-loop detector
             noteGenuineBond(of: peripheral)   // #52: this strap bonds fine; clears any pin-refusal streak
             emitConnectionBondState("encryptedBond family=whoop4 (confirmed write acked)")
+            refreshFirmwareUpdateEligibility()   // keeps the firmware card's eligibility line honest (4.0 stays ineligible)
             log("BONDED (confirmed write acknowledged) — custom channels should now flow")
         }
         // Run the connect handshake EXACTLY ONCE per connection. didWriteValueFor re-fires on EVERY
@@ -7001,6 +7080,10 @@ extension BLEManager: @preconcurrency CBPeripheralDelegate {
                         continue
                     }
                     router.handle(frame: frame)
+                    // Route only the correlated response for the one firmware command in flight. The
+                    // decoder CRC-gates and type-gates the frame itself, so this is a cheap reject on
+                    // every other frame. Twin of the Android `handleFirmwareCommandResponse`.
+                    handleFirmwareCommandResponse(frame)
                     // #592: a 5/MG extended-battery probe COMMAND_RESPONSE (puffin envelope: type @8, cmd
                     // @10). Format + publish it for the Devices dialog, exactly like the 4.0 path above.
                     if frame.count > 10, frame[8] == 0x24, frame[10] == WhoopCommand.getExtendedBatteryInfo.rawValue {

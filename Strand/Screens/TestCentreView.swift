@@ -164,6 +164,7 @@ struct TestCentreView: View {
             VStack(alignment: .leading, spacing: NoopMetrics.sectionSpacing) {
                 domainModesCard.staggeredAppear(index: 0)
                 diagnosticToolsCard.staggeredAppear(index: 1)
+                firmwareFlashCard.staggeredAppear(index: 2)
                 if is5MG { rawDataCollectorCard.staggeredAppear(index: 2) }
                 if is5MG { fiveMGProtocolDiagnosticsCard.staggeredAppear(index: 3) }
                 if ouraPaired { ouraCard.staggeredAppear(index: 2) }
@@ -216,6 +217,30 @@ struct TestCentreView: View {
                     if idx > 0 { Divider().overlay(StrandPalette.hairline) }
                     TestModeRow(mode: mode, report: report)
                 }
+            }
+        }
+    }
+
+    // MARK: - Firmware image transfer (local validation + transfer + explicit activation)
+
+    @ViewBuilder private var firmwareFlashCard: some View {
+        NoopCard {
+            VStack(alignment: .leading, spacing: NoopMetrics.space3) {
+                Text("FIRMWARE IMAGE TRANSFER")
+                    .font(StrandFont.overline).tracking(StrandFont.overlineTracking)
+                    .foregroundStyle(StrandPalette.textSecondary)
+                Text("Inspect a local WHOOP 5/MG firmware image, transfer it with acknowledged progress, then choose separately whether to activate it.")
+                    .font(StrandFont.caption).foregroundStyle(StrandPalette.textTertiary)
+                    .fixedSize(horizontal: false, vertical: true)
+                FirmwareFlashView(
+                    ble: model.ble,
+                    // A registry row actually marked active, as Android's non-null active strap id. Not
+                    // `activeDeviceId`, which falls back to "my-whoop" when nothing is active.
+                    hasActiveDevice: model.deviceRegistry?.devices.contains { $0.status == .active } ?? false,
+                    hasWhoop5MgEvidence: is5MG,
+                    connected: live.connected,
+                    encryptedBond: live.encryptedBond,
+                    reportedFirmware: live.strapFirmware)
             }
         }
     }
