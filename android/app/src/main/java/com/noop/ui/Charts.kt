@@ -880,8 +880,8 @@ fun BarChart(
                                 val v = tick * axisStep
                                 val y = h - (v / maxV).toFloat() * usableH
                                 if (v > 0 && v < maxV) drawLine(
-                                    Palette.hairlineStrong, Offset(axisWidth, y), Offset(size.width, y),
-                                    strokeWidth = 1.dp.toPx(), pathEffect = gridDash,
+                                    Palette.textSecondary.copy(alpha = 0.45f), Offset(axisWidth, y), Offset(size.width, y),
+                                    strokeWidth = 1.5.dp.toPx(), pathEffect = gridDash,
                                 )
                                 drawContext.canvas.nativeCanvas.drawText(numberFormat.format(v), 0f, y + 3.dp.toPx(), axisPaint)
                             }

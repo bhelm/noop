@@ -359,8 +359,8 @@ public struct TrendChart: View {
             if let step = yAxisStep, step > 0 {
                 AxisMarks(position: .leading, values: Array(stride(from: 0.0, through: plotYDomain.upperBound, by: step))) { value in
                     if let number = value.as(Double.self), number > 0, number < plotYDomain.upperBound {
-                        AxisGridLine(stroke: StrokeStyle(lineWidth: 1, dash: [4, 4]))
-                            .foregroundStyle(Color.gray.opacity(0.45))
+                        AxisGridLine(stroke: StrokeStyle(lineWidth: 1.5, dash: [4, 4]))
+                            .foregroundStyle(StrandPalette.textSecondary.opacity(0.45))
                     }
                     AxisValueLabel {
                         if let number = value.as(Double.self) {
