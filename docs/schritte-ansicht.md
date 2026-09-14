@@ -19,11 +19,9 @@ the selected day and preceding 29 calendar days. Only recorded days enter the di
 are not converted to zero. A recorded zero is included. Coverage is shown as N of 30 days. The tile
 uses the same per-day source precedence as the detail (strap, imported, estimated) and opens that detail.
 
-The original Android implementation registered the optional metric but populated the editor's hidden
-list from `KeyMetric.defaultOrder`, which intentionally omitted it. Thus it was not merely hidden:
-users could not enable it in that editor. Both opening and resetting the Key Metrics editor now derive
-hidden options from the complete registry. The Your Cards editor likewise uses its complete registry.
-Regression tests cover default-off discoverability, saved selection, and optional items after Reset.
+The Your Cards editor uses its complete registry to offer the default-off average card.
+Regression tests cover its discoverability and saved selection. The general Key Metrics editor
+retains its original opening and reset behavior; the separate picker correction has been removed.
 
 Validation: final staging APK build is performed from an integration worktree preserving the existing
 main/translation integration. No emulator or physical-device touch interaction has been exercised;

@@ -41,9 +41,6 @@ enum class KeyMetric(val raw: String, @StringRes val titleRes: Int) {
     companion object {
         fun fromRaw(raw: String?): KeyMetric? = entries.firstOrNull { it.raw == raw }
 
-        /** Every optional metric must remain discoverable, including after Reset. */
-        fun hiddenOptions(shown: List<KeyMetric>): List<KeyMetric> = entries.filter { it !in shown }
-
         /** The original, hard-coded grid order — the default when the layout isn't customised. */
         val defaultOrder: List<KeyMetric> = listOf(
             CHARGE, EFFORT, REST, HRV, RESTING_HR,
