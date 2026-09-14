@@ -261,6 +261,25 @@ public struct FirmwareCancellationException: Error {
     public init(_ message: String) { self.message = message }
 }
 
+// The Kotlin exceptions carry their text as `Throwable.message`, which the Android UI shows verbatim.
+// `LocalizedError` is the Swift equivalent: without it `localizedDescription` falls back to Foundation's
+// generic "The operation couldn't be completed" text, which names neither the command nor the timeout.
+extension FirmwareTransferException: LocalizedError {
+    public var errorDescription: String? { message }
+}
+
+extension FirmwareRetryableTransportException: LocalizedError {
+    public var errorDescription: String? { message }
+}
+
+extension FirmwareTransferPausedException: LocalizedError {
+    public var errorDescription: String? { message }
+}
+
+extension FirmwareCancellationException: LocalizedError {
+    public var errorDescription: String? { message }
+}
+
 // MARK: - Transport + engine
 
 public protocol FirmwareTransferTransport {

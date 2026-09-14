@@ -326,6 +326,49 @@ final class FirmwareTransferTests: XCTestCase {
         XCTAssertTrue(reconnected.status.contains("reconnected"))
     }
 
+    /// The iOS reconnect deadline: the same strap is back but no version decoded. The status must say it
+    /// reconnected and name no version, never "did not reconnect".
+    func testReconnectWithoutDecodedVersionReportsNoVersion() {
+        let reconnecting = FirmwareUpdateTransitions.reconnecting(FirmwareUpdateTransitions.activationRequested(
+            FirmwareUpdateTransitions.ready(FirmwareUpdateTransitions.begin(
+                FirmwareUpdateTransitions.selected(validInfo(), eligible: true), deviceLabel: "WHOOP 5/MG"))))
+        let reconnected = FirmwareUpdateTransitions.reconnected(reconnecting, reportedVersion: nil)
+        XCTAssertEqual(reconnected.stage, .deviceReconnected)
+        XCTAssertEqual(reconnected.status, "The strap reconnected.")
+        XCTAssertNil(reconnected.error)
+        XCTAssertFalse(reconnected.canCancel)
+    }
+
+    /// Timeouts outside the chunk loop (quiesce 3/106/20, prepare 142, verify 83, activate 144) are not
+    /// retried and reach the UI as the thrown error. Its text must be the transport's own message, as
+    /// Android shows `t.message`, not Foundation's generic "The operation couldn't be completed".
+    func testFailuresOutsideTheChunkLoopCarryTheirOwnReadableText() async throws {
+        let selected = try parsedImage(type: 5)
+        for silent in [FirmwareCommand.stopRealtimeHr, FirmwareCommand.stopImu, FirmwareCommand.abortHistory,
+                       FirmwareCommand.prepare, FirmwareCommand.verify] {
+            let text = "No response to firmware command \(silent) within 8000ms"
+            let e = engine { command, _, accept in
+                if command == silent { throw FirmwareRetryableTransportException(text) }
+                let r = self.accepted(command); XCTAssertTrue(accept(r)); return r
+            }
+            let failure = await captureError { try await e.transfer(image: selected, initial: self.begun(selected)) { _ in } }
+            XCTAssertTrue(failure is FirmwareRetryableTransportException, "command \(silent)")
+            XCTAssertEqual((failure as? LocalizedError)?.errorDescription, text)
+            XCTAssertEqual(failure?.localizedDescription, text)
+        }
+        let activation = engine { command, _, _ in
+            throw FirmwareRetryableTransportException("No response to firmware command \(command) within 8000ms")
+        }
+        let activationFailure = await captureError { _ = try await activation.activate() }
+        XCTAssertEqual(activationFailure?.localizedDescription, "No response to firmware command 144 within 8000ms")
+
+        XCTAssertEqual(FirmwareCancellationException("Firmware update cancelled").localizedDescription, "Firmware update cancelled")
+        XCTAssertEqual(FirmwareTransferException("The connected strap changed or is no longer ready").localizedDescription,
+                       "The connected strap changed or is no longer ready")
+        XCTAssertEqual(FirmwareTransferPausedException(acknowledgedOffset: 220, attempts: 7, message: "paused at 220").localizedDescription,
+                       "paused at 220")
+    }
+
     func testTransferEntryPointRejectsPrepareWithOffsetAndResumeBetweenBoundaries() async throws {
         // The engine uses precondition() for these, which traps rather than throws; the Kotlin twin uses
         // require(). The BLE layer never forms these arguments (they are guarded by FirmwareResumePolicy),
