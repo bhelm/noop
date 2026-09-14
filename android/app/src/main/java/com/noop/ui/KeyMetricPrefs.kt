@@ -29,7 +29,6 @@ enum class KeyMetric(val raw: String, @StringRes val titleRes: Int) {
     BLOOD_OXYGEN("bloodOxygen", R.string.today_metric_blood_oxygen),
     RESPIRATORY("respiratory", R.string.today_metric_respiratory),
     STEPS("steps", R.string.today_metric_steps),
-    STEPS_AVERAGE_30("stepsAverage30", R.string.steps_average_30),
     WEIGHT("weight", R.string.today_metric_weight),
     CALORIES("calories", R.string.today_metric_calories),
     // Added 2026-08-24 (queue 11c follow-up): Skin Temp was already a "Your Cards" (DashboardCard)
@@ -41,6 +40,9 @@ enum class KeyMetric(val raw: String, @StringRes val titleRes: Int) {
 
     companion object {
         fun fromRaw(raw: String?): KeyMetric? = entries.firstOrNull { it.raw == raw }
+
+        /** Every optional metric must remain discoverable, including after Reset. */
+        fun hiddenOptions(shown: List<KeyMetric>): List<KeyMetric> = entries.filter { it !in shown }
 
         /** The original, hard-coded grid order — the default when the layout isn't customised. */
         val defaultOrder: List<KeyMetric> = listOf(
