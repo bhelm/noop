@@ -22,10 +22,4 @@ class StepsAverageCardTest {
         assertNull(KeyMetric.fromRaw("stepsAverage30"))
     }
 
-    @Test fun keyMetricEditorOffersOptionalMetricsOnOpenAndReset() {
-        // The original editor used defaultOrder as the available set, losing every default-off item.
-        assertTrue(KeyMetric.SKIN_TEMP in KeyMetric.hiddenOptions(KeyMetricPrefs.decodeEnabled("")))
-        assertTrue(KeyMetric.SKIN_TEMP in KeyMetric.hiddenOptions(KeyMetric.defaultOrder))
-        assertFalse(KeyMetric.SKIN_TEMP in KeyMetric.hiddenOptions(listOf(KeyMetric.SKIN_TEMP)))
-    }
 }

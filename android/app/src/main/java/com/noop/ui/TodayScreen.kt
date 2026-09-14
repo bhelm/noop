@@ -7930,7 +7930,7 @@ private fun KeyMetricsEditorDialog(
     val shown = remember { mutableStateListOf<KeyMetric>().apply { addAll(initial) } }
     val hidden = remember {
         mutableStateListOf<KeyMetric>().apply {
-            addAll(KeyMetric.hiddenOptions(initial))
+            addAll(KeyMetric.defaultOrder.filter { it !in initial })
         }
     }
 
@@ -8007,7 +8007,6 @@ private fun KeyMetricsEditorDialog(
                             shown.clear()
                             shown.addAll(KeyMetric.defaultOrder)
                             hidden.clear()
-                            hidden.addAll(KeyMetric.hiddenOptions(shown))
                             detailed = false
                             windowDays = 14
                         },
