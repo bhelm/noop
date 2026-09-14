@@ -9,11 +9,21 @@ Daily values are printed above each bar for one- and two-week windows. Existing 
 calendar filtering are preserved. Axis step, above-bar values and a larger two-line readout are optional
 shared-widget parameters enabled by the steps detail; other callers retain their default sizing/scale.
 
-The Key Metrics editor offers a new **30-day step average** tile. It is absent from the default order,
-so fresh installs and existing layouts keep it off until explicitly enabled. Its arithmetic mean uses
+The **Your Cards** editor offers the **30-day step average** card (German:
+**30-Tage-Schrittedurchschnitt**). It is absent from the default selection,
+so fresh installs and existing layouts keep it off until explicitly enabled. On Android, open
+**Heute → Deine Karten → edit/pencil → AUSGEBLENDET**, tap **+** beside the average, then **Fertig**.
+The saved choice survives app restarts. A previously explicit Key Metrics opt-in migrates once to
+Your Cards; the old tile is removed to avoid duplicate displays. Its arithmetic mean uses
 the selected day and preceding 29 calendar days. Only recorded days enter the divisor; missing days
 are not converted to zero. A recorded zero is included. Coverage is shown as N of 30 days. The tile
 uses the same per-day source precedence as the detail (strap, imported, estimated) and opens that detail.
+
+The original Android implementation registered the optional metric but populated the editor's hidden
+list from `KeyMetric.defaultOrder`, which intentionally omitted it. Thus it was not merely hidden:
+users could not enable it in that editor. Both opening and resetting the Key Metrics editor now derive
+hidden options from the complete registry. The Your Cards editor likewise uses its complete registry.
+Regression tests cover default-off discoverability, saved selection, and optional items after Reset.
 
 Validation: final staging APK build is performed from an integration worktree preserving the existing
 main/translation integration. No emulator or physical-device touch interaction has been exercised;
@@ -29,12 +39,12 @@ dashed grid lines appear only at interior 5,000-step ticks (not zero or the uppe
 Other trend callers retain their existing scale/readout defaults. Steps no longer repeats category
 and metric headers below the navigation title; the chart is labelled Historical trend.
 
-Classic and Liquid Today both offer the optional `stepsAverage30` tile through the existing editor,
+Classic and Liquid Today both offer the optional `stepsAverage30` card through the Your Cards editor,
 excluded from defaults. Its selected-day task queries the exact 30-calendar-day window, using the
 same daily resolver as its explicitly combined steps detail (strap, phone, estimate). Existing
 WHOOP, Apple, Xiaomi and estimate catalog entries remain source-specific. Coverage counts recorded
 zeroes, excludes missing/invalid readings and changes
-when the selected day or repository refresh changes. The tile opens the steps detail.
+when the selected day or repository refresh changes. The card opens the steps detail.
 
 iOS validation on this Linux host is limited to source/diff checks and localization JSON checks.
 XCTest cases cover calendar boundaries, zero/missing observations, opt-in persistence and axis
