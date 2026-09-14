@@ -263,10 +263,11 @@ WHOOP5_META_TYPE_OFF = 10
 WHOOP5_META_TRIM_OFF = 21
 WHOOP5_END_DATA_LEN = 8
 
-# Smallest well-formed frame per family, mirroring `FrameLimits` in the Swift WhoopProtocol package
-# (whoop4MinimumFrameBytes = 11, whoop5MinimumFrameBytes = 13). Below these, a byte run can still be
-# internally consistent while carrying next to no payload — at the smallest size its CRC32 covers no
-# payload byte at all — and both verifiers here used to accept it.
+# Accepted frame floor per family, mirroring `FrameLimits` in the Swift WhoopProtocol package
+# (whoop4MinimumFrameBytes = 11, whoop5MinimumFrameBytes = 13). The 4.0 value is structural for its
+# type/seq/cmd record. The 5.0 value is empirical: a 12-byte empty-payload envelope is internally
+# consistent (and accepted by Goose's v5Payload), but NOOP requires at least the inner type byte and
+# no zero-payload hardware frame has been observed.
 #
 # On the trim-ack path itself this bound is not reachable: `history_end_data*` already requires 25 and
 # 29 bytes before it verifies anything. The bound is here so this tool's verifiers answer the same

@@ -302,11 +302,13 @@ total = declaredLength + 8
 | `WHOOP4` | `WHOOP4_MINIMUM_FRAME_BYTES` = **11** | `length + 4` |
 | `WHOOP5` | `WHOOP5_MINIMUM_FRAME_BYTES` = **13** | `declaredLength + 8` |
 
-The minimum is the smallest envelope that can still carry one payload byte. The exact size is
-compared for **equality** against the bytes actually handed in, so a truncated frame and a frame
-with trailing bytes past its own end are both rejected — including the case where the payload CRC32
-over the declared range still checks out. Keep both constants in step with the Swift side; they are
-part of the parity contract, not a local tuning knob.
+The minima have different evidence. Eleven bytes is structural for WHOOP 4.0 and deliberately admits
+real metadata records with no data after `type/seq/cmd`. Thirteen bytes is NOOP's empirical 5.0/MG
+policy: Goose's `v5Payload` accepts a self-consistent 12-byte empty-payload envelope, but no such
+hardware frame has been observed (the smallest project capture is 124 bytes), so NOOP requires at
+least the inner type byte. The exact size is compared for **equality**, rejecting truncation and
+trailing bytes even when the payload CRC32 over the declared range checks out. Keep both constants
+in step with Swift; changing 13 requires new protocol evidence, not local tuning.
 
 `Reassembler.feed(fragment)` accumulates BLE notification fragments and emits complete frames; a
 complete WHOOP 4.0 frame is `length + 4` bytes where `length = u16 LE at buf[1..3]`. Port the
@@ -325,9 +327,9 @@ its `typeName` and `parsed` fields for the diagnostic and capture surfaces. `rej
 non-optional `FrameRejectReason` on the parse result, so a consumer reports the cause from the value
 it was handed rather than verifying a second time; `NONE` accompanies a positive verdict and only
 that. Its cases map to the Swift `FrameRejectReason` value for value (`none` → `NONE`,
-`noStartOfFrame` → `NO_START_OF_FRAME`, and so on). A payload CRC32 that cannot be computed is
-`PAYLOAD_CRC_UNVERIFIABLE` — a rejection, kept distinct from `PAYLOAD_CRC_MISMATCH` because "could
-not compute" is a different claim from "disagreed".
+`noStartOfFrame` → `NO_START_OF_FRAME`, and so on). If the payload CRC32 cannot be computed safely,
+the preceding size rule supplies the rejection reason; the checksum reason is reserved for a CRC32
+that was computed and disagreed.
 
 Named inner-field reads are bounded by the **minimum of the CRC32 trailer's start and the frame's
 real size**, matching the Swift interpreter, so a frame at the family minimum cannot have its own

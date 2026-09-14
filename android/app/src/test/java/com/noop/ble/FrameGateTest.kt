@@ -199,9 +199,9 @@ class FrameGateTest {
         )
     }
 
-    /** An unverifiable CRC32 was never a pass and still is not. */
+    /** A missing CRC diagnostic cannot support a positive probe finding. */
     @Test
-    fun anUnverifiableChecksumIsNotProof() {
+    fun aMissingChecksumDiagnosticIsNotProof() {
         assertEquals(
             UnbondedProbeEvidence.NONE,
             unbondedProbeEvidenceOf(ok = true, crcOk = null, typeName = "COMMAND_RESPONSE"),

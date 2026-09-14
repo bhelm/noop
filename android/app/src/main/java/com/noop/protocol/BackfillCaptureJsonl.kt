@@ -17,7 +17,6 @@ val FrameRejectReason.wireName: String
         FrameRejectReason.LENGTH_MISMATCH -> "lengthMismatch"
         FrameRejectReason.HEADER_CHECKSUM_MISMATCH -> "headerChecksumMismatch"
         FrameRejectReason.PAYLOAD_CRC_MISMATCH -> "payloadCRCMismatch"
-        FrameRejectReason.PAYLOAD_CRC_UNVERIFIABLE -> "payloadCRCUnverifiable"
     }
 
 data class BackfillCaptureRecord(

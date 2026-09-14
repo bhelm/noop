@@ -184,10 +184,10 @@ def _whoop5_frame_of_total(total: int) -> bytes:
 class MinimumFrameLengthTests(unittest.TestCase):
     """The family minimums from WhoopProtocol's `FrameLimits` (11 bytes on WHOOP 4.0, 13 on 5.0/MG).
 
-    A frame below them is internally consistent — declared length, header checksum and a CRC32 over
-    zero payload bytes all agree — and was accepted before. It is rejected here so the verifiers of
-    this tool and of the protocol package answer the same question; the callers on the trim-ack path
-    already demand more bytes than this, so the effect is on the verifiers' other callers.
+    The 4.0 value preserves its real type/seq/cmd minimum. The 5.0 value is an empirical NOOP policy:
+    a 12-byte empty-payload envelope is internally consistent and Goose accepts it, but no such frame
+    has been observed from hardware. It is rejected here so this tool and the protocol package answer
+    the same question; trim-ack callers already demand more bytes than either floor.
     """
 
     def test_whoop4_eight_byte_frame_is_rejected(self):

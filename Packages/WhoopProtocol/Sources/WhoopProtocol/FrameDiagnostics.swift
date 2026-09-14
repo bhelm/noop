@@ -43,9 +43,8 @@ public extension ParsedFrame {
 /// Counted per reason only — NOT additionally per device family. A connection talks to exactly one
 /// strap, so a family dimension would be constant.
 ///
-/// A tally asserts only what it observed: an unverifiable payload CRC32 is counted as
-/// `payloadCRCUnverifiable`, never folded into `payloadCRCMismatch`. "Could not be checked" is not
-/// "was wrong".
+/// A tally asserts only what it observed. Structural failures retain a nil CRC diagnostic when the
+/// declared payload cannot be checked; only a computed, disagreeing checksum is a payload mismatch.
 public struct FrameRejectTally: Equatable, Sendable {
     /// How often each reason was the FIRST rule a frame failed. `.none` is never counted.
     public private(set) var counts: [FrameRejectReason: Int] = [:]

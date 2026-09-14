@@ -236,7 +236,7 @@ class FrameRejectDiagnosticsTest {
         assertEquals(
             listOf(
                 "none", "noStartOfFrame", "belowMinimumLength", "lengthMismatch",
-                "headerChecksumMismatch", "payloadCRCMismatch", "payloadCRCUnverifiable",
+                "headerChecksumMismatch", "payloadCRCMismatch",
             ),
             FrameRejectReason.entries.map { it.wireName },
         )

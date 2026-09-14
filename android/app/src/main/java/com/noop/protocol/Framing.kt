@@ -136,9 +136,9 @@ class Reassembler(private val family: DeviceFamily = DeviceFamily.WHOOP4) {
                 ((data[head + 1].toInt() and 0xFF) or ((data[head + 2].toInt() and 0xFF) shl 8)) + 4
             }
             if (total < FrameLimits.minimumFrameBytes(family)) {
-                // A declared total below the family minimum cannot be a frame: emitting it would hand
-                // a parser a byte run whose "inner fields" are its own checksum trailer. Drop this
-                // 0xAA, count it, and resync on the next one — same shape as the ceiling below.
+                // A declared total below the configured family floor is not accepted: emitting it
+                // would hand the parser a byte run whose "inner fields" are its own checksum trailer.
+                // Drop this 0xAA, count it, and resync — same shape as the ceiling below.
                 belowMinimumLengthDrops += 1
                 head += 1
                 continue
@@ -230,23 +230,18 @@ enum class FrameRejectReason {
 
     /** The payload CRC32 was computed and disagreed. */
     PAYLOAD_CRC_MISMATCH,
-
-    /**
-     * The payload CRC32 could not be computed at all. Fail-closed: an unverifiable CRC counts as a
-     * negative verdict, never as "unknown". The structural rules above make this unreachable for a
-     * frame that got past them, so it is defence in depth rather than an observed class.
-     */
-    PAYLOAD_CRC_UNVERIFIABLE,
 }
 
 /**
- * The structural lower bounds a frame must clear before any of its bytes are read as fields.
+ * The family lower bounds a frame must clear before any of its bytes are read as fields.
  *
  * WHOOP 4.0: `[SOF][len u16][crc8][type][seq][cmd] + [crc32 u32]` = 11 bytes. The zero-payload
  * metadata frames at this bound are valid and intentional; the minimum preserves the old `length >= 7` rule.
  * WHOOP 5.0/MG: `[SOF][fmt][declLen u16][hdr u16][crc16 u16] + >=1 payload byte + [crc32 u32]` = 13.
- * The smallest real frame in the project's captures is exactly 11 bytes (WHOOP 4.0) and 124 bytes
- * (WHOOP 5.0/MG), so neither bound rejects a recorded frame. Twin of the Swift `FrameLimits`.
+ * Unlike the 4.0 bound, 13 is an empirical acceptance policy, not an envelope necessity: Goose's
+ * `v5Payload` accepts a 12-byte, zero-payload frame (`declaredLength == 4`). NOOP deliberately
+ * requires the inner type byte; no zero-payload 5.0/MG frame has been observed, and the smallest
+ * recorded one is 124 bytes. Twin of the Swift `FrameLimits`.
  */
 object FrameLimits {
     const val WHOOP4_MINIMUM_FRAME_BYTES = 11
@@ -260,26 +255,16 @@ object FrameLimits {
 }
 
 /**
- * Turn the individual outcomes into ONE verdict and ONE reason, in a fixed order: structure first
- * (a length we cannot trust makes every later read meaningless), then the header checksum, then the
- * payload CRC32. A null [crc32Ok] is a rejection, not an "unknown" that a consumer might read as a
- * pass — that tri-state is exactly what let malformed frames drive live state before this change.
+ * Turn the two checksum outcomes into ONE integrity reason after the caller has established the
+ * structural bounds. A non-null payload result makes the evaluation order explicit: an uncomputable
+ * CRC is represented by the earlier structural reason, not a dead checksum case.
  */
-private fun frameRejectReason(
-    totalFromLength: Int,
-    actualCount: Int,
-    minimumBytes: Int,
+private fun integrityRejectReason(
     headerCrcOk: Boolean,
-    crc32Ok: Boolean?,
+    payloadCrcOk: Boolean,
 ): FrameRejectReason {
-    if (totalFromLength < minimumBytes) return FrameRejectReason.BELOW_MINIMUM_LENGTH
-    if (totalFromLength != actualCount) return FrameRejectReason.LENGTH_MISMATCH
     if (!headerCrcOk) return FrameRejectReason.HEADER_CHECKSUM_MISMATCH
-    return when (crc32Ok) {
-        null -> FrameRejectReason.PAYLOAD_CRC_UNVERIFIABLE
-        false -> FrameRejectReason.PAYLOAD_CRC_MISMATCH
-        true -> FrameRejectReason.NONE
-    }
+    return if (payloadCrcOk) FrameRejectReason.NONE else FrameRejectReason.PAYLOAD_CRC_MISMATCH
 }
 
 /**
@@ -315,31 +300,44 @@ object Framing {
             return FrameCheck(ok = false, reason = FrameRejectReason.NO_START_OF_FRAME)
         }
         if (frame.size < FrameLimits.WHOOP4_MINIMUM_FRAME_BYTES) {
-            // Too short even to hold an envelope plus one payload byte: no field of it is read, and
-            // the length word it may carry is not worth reporting as a length.
+            // Below the smallest real 4.0 inner record (type + sequence + command): no field is read,
+            // and the length word it may carry is not worth reporting as a length.
             return FrameCheck(ok = false, reason = FrameRejectReason.BELOW_MINIMUM_LENGTH)
         }
         val length = (frame[1].toInt() and 0xFF) or ((frame[2].toInt() and 0xFF) shl 8)
         val total = length + 4
         // Ranged CRC checksums the two length bytes in place, with no per-frame allocation.
         val headerOk = Crc.crc8(frame, 1, 3) == (frame[3].toInt() and 0xFF)
-        var crc32Ok: Boolean? = null
-        // length must cover at least the envelope's inner bytes (mirrors framing.py). Trailing bytes
-        // do not stop the CRC32 from being computed — that combination (payload CRC right, envelope
-        // wrong) is precisely the class this change stops admitting, so it must stay observable.
-        if (length >= 7 && total <= frame.size) {
-            // inner record = frame[4 until length], checksummed in place.
-            val want = Crc.crc32(frame, 4, length)
-            val got = frame.envU32(length) ?: 0L
-            crc32Ok = want == got
+        if (total < FrameLimits.WHOOP4_MINIMUM_FRAME_BYTES) {
+            return FrameCheck(
+                ok = false,
+                length = length,
+                headerCrcOk = headerOk,
+                reason = FrameRejectReason.BELOW_MINIMUM_LENGTH,
+            )
         }
-        val reason = frameRejectReason(
-            totalFromLength = total,
-            actualCount = frame.size,
-            minimumBytes = FrameLimits.WHOOP4_MINIMUM_FRAME_BYTES,
-            headerCrcOk = headerOk,
-            crc32Ok = crc32Ok,
-        )
+        if (total != frame.size) {
+            // A surplus tail does not stop the declared payload CRC from being computed. Preserve
+            // that diagnostic because the hardware gate reads "payload CRC right, envelope wrong".
+            val crc32Ok = if (total <= frame.size) {
+                Crc.crc32(frame, 4, length) == frame.envU32(length)
+            } else {
+                null
+            }
+            return FrameCheck(
+                ok = false,
+                length = length,
+                headerCrcOk = headerOk,
+                crc32Ok = crc32Ok,
+                reason = FrameRejectReason.LENGTH_MISMATCH,
+            )
+        }
+        // The structural checks prove length >= 7 and leave a complete four-byte trailer in bounds.
+        val gotCrc32 = checkNotNull(frame.envU32(length)) {
+            "exact WHOOP 4.0 frame must include its CRC32 trailer"
+        }
+        val crc32Ok = Crc.crc32(frame, 4, length) == gotCrc32
+        val reason = integrityRejectReason(headerCrcOk = headerOk, payloadCrcOk = crc32Ok)
         return FrameCheck(
             ok = reason == FrameRejectReason.NONE,
             length = length,
@@ -359,7 +357,8 @@ object Framing {
         if (frame.isEmpty() || frame[0] != 0xAA.toByte()) {
             return FrameCheck(ok = false, reason = FrameRejectReason.NO_START_OF_FRAME)
         }
-        // Smallest well-formed whoop5 frame: 8 header bytes (incl. CRC16) + 1 payload byte + 4 CRC32.
+        // NOOP's empirical 5/MG floor: envelope + at least the inner type byte + CRC32. The Goose
+        // reference parser permits a 12-byte empty payload, but no such hardware frame is known here.
         if (frame.size < FrameLimits.WHOOP5_MINIMUM_FRAME_BYTES) {
             return FrameCheck(ok = false, reason = FrameRejectReason.BELOW_MINIMUM_LENGTH)
         }
@@ -371,21 +370,44 @@ object Framing {
         val gotHeader = (frame[6].toInt() and 0xFF) or ((frame[7].toInt() and 0xFF) shl 8)
         val headerOk = wantHeader == gotHeader
 
-        var crc32Ok: Boolean? = null
-        if (declaredLength >= 4 && total <= frame.size) {
-            val payloadEnd = total - 4
-            // payload = frame[8 until payloadEnd], checksummed in place.
-            val want = Crc.crc32(frame, 8, payloadEnd)
-            val got = frame.envU32(payloadEnd) ?: 0L
-            crc32Ok = want == got
+        if (total < FrameLimits.WHOOP5_MINIMUM_FRAME_BYTES) {
+            val diagnosticCrc32Ok = if (declaredLength >= 4 && total <= frame.size) {
+                val payloadEnd = total - 4
+                Crc.crc32(frame, 8, payloadEnd) == checkNotNull(frame.envU32(payloadEnd))
+            } else {
+                null
+            }
+            return FrameCheck(
+                ok = false,
+                length = declaredLength,
+                headerCrcOk = headerOk,
+                crc32Ok = diagnosticCrc32Ok,
+                reason = FrameRejectReason.BELOW_MINIMUM_LENGTH,
+            )
         }
-        val reason = frameRejectReason(
-            totalFromLength = total,
-            actualCount = frame.size,
-            minimumBytes = FrameLimits.WHOOP5_MINIMUM_FRAME_BYTES,
-            headerCrcOk = headerOk,
-            crc32Ok = crc32Ok,
-        )
+        if (total != frame.size) {
+            // Preserve a CRC result for a surplus tail; truncation leaves it unavailable.
+            val diagnosticCrc32Ok = if (total <= frame.size) {
+                val payloadEnd = total - 4
+                Crc.crc32(frame, 8, payloadEnd) == checkNotNull(frame.envU32(payloadEnd))
+            } else {
+                null
+            }
+            return FrameCheck(
+                ok = false,
+                length = declaredLength,
+                headerCrcOk = headerOk,
+                crc32Ok = diagnosticCrc32Ok,
+                reason = FrameRejectReason.LENGTH_MISMATCH,
+            )
+        }
+        // Exact size plus the configured 13-byte floor proves at least one byte before the trailer.
+        val payloadEnd = total - 4
+        val gotCrc32 = checkNotNull(frame.envU32(payloadEnd)) {
+            "exact WHOOP 5.0 frame must include its CRC32 trailer"
+        }
+        val crc32Ok = Crc.crc32(frame, 8, payloadEnd) == gotCrc32
+        val reason = integrityRejectReason(headerCrcOk = headerOk, payloadCrcOk = crc32Ok)
         return FrameCheck(
             ok = reason == FrameRejectReason.NONE,
             length = declaredLength,

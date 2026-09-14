@@ -25,15 +25,13 @@ import org.junit.Test
  *  3. the EXACT total the declared length implies (`len + 4` / `declLen + 8`), so a truncated frame
  *     and one carrying trailing bytes are both rejected,
  *  4. the header checksum (CRC-8 / CRC-16-Modbus),
- *  5. the payload CRC32 — where "could not be computed" is a REJECTION, never an "unknown" a gate
- *     might read as a pass.
+ *  5. the payload CRC32. The structural checks make it computable before this decision is reached.
  *
  * Reason names map one-to-one onto the Swift enum: `none` ↔ [FrameRejectReason.NONE],
  * `noStartOfFrame` ↔ [FrameRejectReason.NO_START_OF_FRAME], `belowMinimumLength` ↔
  * [FrameRejectReason.BELOW_MINIMUM_LENGTH], `lengthMismatch` ↔ [FrameRejectReason.LENGTH_MISMATCH],
- * `headerChecksumMismatch` ↔ [FrameRejectReason.HEADER_CHECKSUM_MISMATCH], `payloadCRCMismatch` ↔
- * [FrameRejectReason.PAYLOAD_CRC_MISMATCH], `payloadCRCUnverifiable` ↔
- * [FrameRejectReason.PAYLOAD_CRC_UNVERIFIABLE].
+ * `headerChecksumMismatch` ↔ [FrameRejectReason.HEADER_CHECKSUM_MISMATCH], and
+ * `payloadCRCMismatch` ↔ [FrameRejectReason.PAYLOAD_CRC_MISMATCH].
  */
 class FrameIntegrityTest {
 
@@ -153,14 +151,12 @@ class FrameIntegrityTest {
     }
 
     @Test
-    fun payloadCrcNotComputable_isNegative_notUnknown() {
-        // Too short for the payload CRC32 to be computed at all. The verdict must be NEGATIVE — the
-        // "unknown" tri-state is what let these through before, since every gate only asked whether
-        // the CRC was DEMONSTRABLY wrong.
+    fun belowMinimumLength_ownsReason_whenPayloadCrcIsUnavailable() {
+        // Too short for the payload CRC32 to be computed at all: the structural rule decides it.
         val runt = byteArrayOf(0xAA.toByte(), 0x08, 0x00, 0x00, 0x28, 0x00, 0x00)
         val p = Framing.parseFrame(runt, DeviceFamily.WHOOP4)
         assertFalse(p.ok)
-        assertNull("nothing to check is not a check that passed", p.crcOk)
+        assertNull("the diagnostic stays honest: no CRC32 was computed", p.crcOk)
         assertEquals(FrameRejectReason.BELOW_MINIMUM_LENGTH, p.rejectReason)
     }
 

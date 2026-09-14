@@ -142,8 +142,13 @@ and `declLength + 8` respectively, so trailing bytes and truncation both fail),
 the header checksum and the payload CRC32, all together. Beside it are the
 declared `length`, the individual header/payload CRC outcomes as diagnostics, and
 `reason: FrameRejectReason` — a non-optional enum that is `.none` exactly when
-`ok` is true. A payload CRC32 that could not be computed is a rejection
-(`.payloadCRCUnverifiable`), not an "unknown".
+`ok` is true. If the payload CRC32 cannot be computed safely, the preceding size
+rule supplies the rejection reason; only a computed disagreement is a CRC reason.
+
+The 11-byte 4.0 minimum is structural and admits real zero-data metadata records.
+The 13-byte 5.0/MG minimum is an explicit empirical policy requiring at least the
+inner type byte: Goose permits a 12-byte empty-payload envelope, but none has been
+observed from hardware and the smallest project capture is 124 bytes.
 
 **Schema + parsing** (`Schema.swift`, `Interpreter.swift`, `Values.swift`)
 

@@ -23,9 +23,6 @@ import XCTest
 /// `reject_reason` key when there is no reason, Swift's `Codable` always writes it. That is a textual
 /// difference in a different artefact; the oracle pins the judgement, not the serialisation.
 ///
-/// Deliberately absent: a `payloadCRCUnverifiable` line. The structural rules run first on BOTH
-/// platforms, so no byte run can reach that branch — it is defence in depth, and inventing a case for
-/// it would mean inventing an input that cannot exist.
 final class FrameIntegrityOracleTests: XCTestCase {
 
     private struct Oracle: Decodable {
@@ -166,14 +163,11 @@ final class FrameIntegrityOracleTests: XCTestCase {
             XCTAssertTrue(oracle.cases.contains { $0.family == fam && !$0.verdict },
                           "no rejected \(fam) frame in the oracle")
         }
-        // Every reachable reason. `payloadCRCUnverifiable` is unreachable on both platforms and is
-        // therefore absent by design — asserting it here would demand an impossible input.
-        for reason in FrameRejectReason.allCases where reason != .payloadCRCUnverifiable {
+        // Every declared reason is reachable and therefore pinned by the shared oracle.
+        for reason in FrameRejectReason.allCases {
             XCTAssertGreaterThan(reasons[reason.rawValue] ?? 0, 0,
                                  "reason \(reason.rawValue) is not covered by any oracle case")
         }
-        XCTAssertNil(reasons["payloadCRCUnverifiable"],
-                     "payloadCRCUnverifiable cannot be produced by any input — a line claiming it is wrong")
         // Each historical-metadata outcome, since that is the third pinned field.
         let metas = Set(oracle.cases.map(\.meta))
         XCTAssertTrue(metas.contains("start"))

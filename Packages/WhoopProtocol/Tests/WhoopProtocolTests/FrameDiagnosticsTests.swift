@@ -57,9 +57,9 @@ final class FrameDiagnosticsTests: XCTestCase {
         XCTAssertFalse(line.contains("reason="), "an intact frame has no reason to report: \(line)")
     }
 
-    /// Scenario "Nicht prüfbar wird nicht als falsch gemeldet": a payload CRC32 that could not be
-    /// computed is reported as unverifiable, and the CRC column stays "—" rather than claiming "BAD".
-    func testUnverifiablePayloadCRCIsNotReportedAsAMismatch() {
+    /// A structural rejection whose declared payload is unavailable keeps the CRC column at "—"
+    /// rather than claiming the checksum was computed and disagreed.
+    func testUnavailablePayloadCRCDiagnosticIsNotReportedAsAMismatch() {
         let p = parseFrame(hex(FrameIntegrityTests.w4Total8))
         XCTAssertNil(p.crcOK)
         XCTAssertNotEqual(p.rejectReason, .payloadCRCMismatch)
@@ -125,15 +125,16 @@ final class FrameDiagnosticsTests: XCTestCase {
         XCTAssertEqual(tally.totalRejected, 3)
     }
 
-    func testTallyReportsUnverifiableSeparatelyFromMismatch() {
+    func testTallyReportsOnlyAComputedPayloadMismatchAsPayloadCRCMismatch() {
         var tally = FrameRejectTally()
         // Payload byte flipped: the CRC32 was computed and disagreed.
         var wrongPayload = hex(FrameIntegrityTests.w4Valid)
         wrongPayload[10] ^= 0xFF
         tally.note(parseFrame(wrongPayload))
+        tally.note(parseFrame(hex(FrameIntegrityTests.w4Total8)))
         XCTAssertEqual(tally.count(.payloadCRCMismatch), 1)
-        XCTAssertEqual(tally.count(.payloadCRCUnverifiable), 0,
-                       "\"could not be checked\" and \"was wrong\" are different claims")
+        XCTAssertEqual(tally.count(.belowMinimumLength), 1,
+                       "an unavailable CRC stays classified by the structural failure")
     }
 
     /// Scenario "Die vorher durchgelassene Klasse ist einzeln ablesbar" (2.16) — the ONE counter the
@@ -146,7 +147,7 @@ final class FrameDiagnosticsTests: XCTestCase {
         var wrongPayload = hex(FrameIntegrityTests.w4Valid)
         wrongPayload[10] ^= 0xFF
         tally.note(parseFrame(wrongPayload))                                  // CRC32 wrong: NOT the class
-        tally.note(parseFrame(hex(FrameIntegrityTests.w4Total8)))             // CRC32 unverifiable: not it
+        tally.note(parseFrame(hex(FrameIntegrityTests.w4Total8)))             // CRC32 unavailable: not it
         XCTAssertEqual(tally.payloadCRCOKButEnvelopeRejected, 2)
         XCTAssertEqual(tally.totalRejected, 4, "the class is counted BESIDE its reason, not instead of it")
     }
@@ -168,7 +169,7 @@ final class FrameDiagnosticsTests: XCTestCase {
     }
 
     /// The same three separations the parse-result overload keeps: an intact frame is not counted, a
-    /// wrong payload CRC32 is not the named class, and an unverifiable one is neither.
+    /// wrong payload CRC32 is not the named class, and a structural failure with no CRC result is neither.
     func testTheVerdictOverloadKeepsTheClassSeparations() {
         var tally = FrameRejectTally()
         XCTAssertEqual(tally.note(verifyFrame(hex(FrameIntegrityTests.w4Valid), family: .whoop4)), .none)

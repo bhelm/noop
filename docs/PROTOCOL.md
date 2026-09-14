@@ -111,20 +111,25 @@ checksum. The branch point is `DeviceFamily.headerCRCKind`:
 | `whoop4` | CRC8 (poly `0x07`) | `.crc8` |
 | `whoop5` | CRC16-Modbus (poly `0xA001`, init `0xFFFF`, reflected) | `.crc16Modbus` |
 
-Beyond the two checksums, an envelope must also satisfy two **structural** rules before it counts
-as intact. Both are enforced in one place — `verifyFrame` — and both are family-specific:
+Beyond the two checksums, a frame must also satisfy two **size** rules before it counts as intact.
+Both are enforced in one place — `verifyFrame` — and both are family-specific:
 
 | Family | Minimum total frame size | Exact total frame size |
 |--------|--------------------------|------------------------|
 | `whoop4` | **11 bytes** (`FrameLimits.whoop4MinimumFrameBytes`) | `length + 4` |
 | `whoop5` | **13 bytes** (`FrameLimits.whoop5MinimumFrameBytes`) | `declLength + 8` |
 
-The minimum is the smallest envelope that can still carry one payload byte; anything shorter has
-no payload to read and is rejected outright. The exact size is compared against the byte count that
-was actually handed in, so **a truncated frame and a frame with trailing bytes past its own end are
-both rejected** — the comparison is equality, not "at least". The smallest real frame in the
-project's captures is exactly 11 bytes (WHOOP 4.0) and 124 bytes (WHOOP 5.0/MG), so neither bound
-rejects a recorded frame.
+The two minima have different evidence. The 11-byte WHOOP 4.0 value is structural for this record
+format: it contains `type`, `seq`, `cmd`, and the CRC32 trailer, and real zero-data metadata frames
+sit exactly there. The 13-byte WHOOP 5.0/MG value is a deliberate empirical policy: the envelope
+alone can represent a 12-byte frame with `declLength == 4` and an empty CRC-covered payload, and
+Goose's [`v5Payload`](https://github.com/b-nnett/goose/blob/ba9ae0280c9b5b9a1545baab8e944cb3b7563c62/GooseSwift/GooseBLEClient%2BParsing.swift#L890-L900)
+accepts that shape. NOOP requires at least the inner type byte because no
+zero-payload 5.0/MG frame has been observed; the smallest recorded frame is 124 bytes. Retaining 13
+is therefore an explicit compatibility bet, not a claim that 12 is structurally impossible.
+
+The exact size is compared against the byte count actually handed in, so **a truncated frame and a
+frame with trailing bytes past its own end are both rejected** — equality, not "at least".
 
 ### 2.1 WHOOP 4.0 envelope
 
@@ -160,22 +165,20 @@ guard frame.count >= FrameLimits.whoop4MinimumFrameBytes else {
 let length = u16le(frame, 1)
 let total = length + 4
 let crc8OK = crc8(frame, 1, 3) == frame[3]          // ranged: no per-frame sub-array copy
-var crc32OK: Bool? = nil
-if 7 <= length && total <= frame.count {
-    crc32OK = crc32(frame, 4, length) == u32le(frame, length)
+if total < FrameLimits.whoop4MinimumFrameBytes {
+    return FrameCheck(ok: false, length: length, crc8OK: crc8OK, reason: .belowMinimumLength)
 }
-// One verdict, one reason: structure first, then the header checksum, then the payload CRC32.
-let reason = frameRejectReason(totalFromLength: total, actualCount: frame.count,
-                               minimumBytes: FrameLimits.whoop4MinimumFrameBytes,
-                               headerCRCOK: crc8OK, crc32OK: crc32OK)
+if total != frame.count { /* retain any safely-computable CRC diagnostic; reject length */ }
+let crc32OK = crc32(frame, 4, length) == u32le(frame, length)
+let reason = integrityRejectReason(headerCRCOK: crc8OK, payloadCRCOK: crc32OK)
 return FrameCheck(ok: reason == .none, length: length, crc8OK: crc8OK, crc32OK: crc32OK,
                   reason: reason)
 ```
 
 The payload CRC32 is still computed when the byte count and the declared total disagree, so the
 combination "payload CRC right, envelope wrong" stays observable in `FrameCheck.crc32OK` — but it
-does not make the frame intact. A payload CRC32 that could **not** be computed at all is likewise a
-rejection (`.payloadCRCUnverifiable`), never an "unknown" a consumer might read as a pass.
+does not make the frame intact. If the declared payload cannot be checked safely, an earlier size
+reason wins; every frame reaching the payload-integrity decision has a computable CRC32.
 
 ### 2.2 WHOOP 5.0 / MG envelope
 
@@ -197,9 +200,10 @@ total frame size = declLength + 8
   `frame[6..8]`.
 - **inner record** — starts at **offset 8**: `type` `[8]`, `seq` `[9]`, `cmd` `[10]`, payload `[11..]`.
 - **`crc32`** — same zlib CRC-32, LE, over the payload `frame[8 .. declLength+4)`.
-- **structural size** — the frame must be at least **13 bytes** long (8 header bytes including the
-  CRC16, one payload byte, the 4-byte CRC32 trailer) and must carry **exactly** `declLength + 8`
-  bytes. As on 4.0, truncation and trailing bytes are both rejected.
+- **accepted size** — NOOP requires at least **13 bytes** (8 header bytes including CRC16, the inner
+  type byte, and the 4-byte CRC32 trailer) and exactly `declLength + 8` bytes. This one-byte-payload
+  floor is the empirical policy described above; Goose's envelope parser also accepts the otherwise
+  self-consistent 12-byte empty-payload shape. Truncation and trailing bytes are rejected.
 
 Reference: `verifyFrameWhoop5(_:)` / `parseFrameWhoop5(_:)`. For a uniform "header CRC ok?"
 signal across families, the `FrameCheck.crc8OK` field carries the **CRC16** outcome on 5.0.
@@ -304,8 +308,8 @@ no SOF is dropped. The app feeds the data/cmd/event notify characteristics throu
 `Reassembler` in `peripheral(_:didUpdateValueFor:error:)`.
 
 The reassembler applies the **same family minimum** as `verifyFrame` (11 / 13 bytes): a `0xAA`
-whose declared total falls below it cannot be a frame at all — its "inner fields" would be its own
-checksum trailer — so that SOF is dropped and the scan resyncs on the next one. Such a drop is
+whose declared total falls below the configured acceptance floor is dropped before its checksum
+trailer can be mistaken for inner fields, and the scan resyncs on the next one. Such a drop is
 counted in `Reassembler.belowMinimumLengthDrops` rather than vanishing silently, because a byte run
 discarded here never reaches a parser and never reaches the evidence-preserving reader either. The
 existing ceiling (`maxFrameBytes`, 8192) resyncs the same way at the other end.
@@ -843,12 +847,11 @@ reason would break that invariant. `.none` accompanies a positive verdict and on
 | `lengthMismatch` | Byte count ≠ the total the length field declares: truncated, or trailing bytes. |
 | `headerChecksumMismatch` | CRC8 (4.0) or CRC16-Modbus (5.0/MG) disagreed. |
 | `payloadCRCMismatch` | The payload CRC32 was computed and disagreed. |
-| `payloadCRCUnverifiable` | The payload CRC32 could not be computed. A **rejection**, not "unknown". |
 
-The two payload-CRC cases stay apart on purpose: "we could not compute the CRC32" is a different
-claim from "the CRC32 disagreed", and a diagnostic may only assert what it observed. Decoding a
-`ParsedFrame` from an older capture that predates the field defaults `rejectReason` to `.none`
-rather than failing.
+An unavailable CRC diagnostic is never promoted to a checksum reason: the preceding minimum or
+exact-length rule rejects that byte run first. Thus every declared reason has a real input class and
+is pinned by the shared parity oracle. Decoding a `ParsedFrame` from an older capture that predates
+the field defaults `rejectReason` to `.none` rather than failing.
 
 **Named inner-field reads are bounded by the CRC32 trailer.** Every read of a named field —
 sequence byte, command byte, and the schema-driven fields including the per-type post-hooks — is
@@ -1084,4 +1087,3 @@ observations. Treat a strap that stops adopting as evidence the field moved, rat
 table is wrong about the shape. This is why the 4.0 adoption path waits for the same value on two
 separate hellos before acting on it (`RepeatedSerialGate`), where a 5/MG adopts its spec-defined DIS
 serial on first read.
-

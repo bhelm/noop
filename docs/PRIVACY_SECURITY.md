@@ -437,18 +437,19 @@ verbatim from the wire formats:
 - `crc16Modbus` for the WHOOP 5.0 header (ported from the `goose` work).
 
 `verifyFrame(_:)` (and the family-aware `verifyFrame(_:family:)`) return
-`ok == true` only when the header CRC, the payload CRC32 **and** the structural size
-rules all hold. The structural half matters as much as the checksums: a frame must be
+`ok == true` only when the header CRC, the payload CRC32 **and** the configured size
+rules all hold. The size half matters as much as the checksums: a frame must be
 at least 11 bytes on WHOOP 4.0 and 13 on 5.0/MG, and must carry *exactly* the total its
 length field declares (`length + 4`, `declLength + 8`), so a truncated frame and one
-with trailing bytes past its own end are both rejected. A payload CRC32 that cannot be
-computed counts as a failure, never as "unknown". The outcome is one verdict plus one
-non-optional reason:
+with trailing bytes past its own end are both rejected. If the payload CRC32 cannot be
+computed safely, the earlier size rule is the rejection reason; every frame reaching the
+payload-integrity decision has a CRC result. The outcome is one verdict plus one non-optional reason:
 
 ```swift
-let reason = frameRejectReason(totalFromLength: total, actualCount: frame.count,
-                               minimumBytes: FrameLimits.whoop4MinimumFrameBytes,
-                               headerCRCOK: crc8OK, crc32OK: crc32OK)
+guard total >= FrameLimits.whoop4MinimumFrameBytes else { /* reject minimum */ }
+guard total == frame.count else { /* reject length; retain any safe CRC diagnostic */ }
+let crc32OK = crc32(frame, 4, length) == u32le(frame, length)
+let reason = integrityRejectReason(headerCRCOK: crc8OK, payloadCRCOK: crc32OK)
 return FrameCheck(ok: reason == .none, /* … */ reason: reason)
 ```
 

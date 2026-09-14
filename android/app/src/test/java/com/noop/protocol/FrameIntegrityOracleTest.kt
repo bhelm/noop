@@ -3,7 +3,6 @@ package com.noop.protocol
 import org.json.JSONObject
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
-import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -32,9 +31,6 @@ import org.junit.Test
  * while Swift's `Codable` always writes it. That is a textual difference in a different artefact; the
  * oracle pins the judgement, not the serialisation.
  *
- * Deliberately absent: a [FrameRejectReason.PAYLOAD_CRC_UNVERIFIABLE] line. The structural rules run
- * first on BOTH platforms, so no byte run can reach that branch — it is defence in depth, and
- * inventing a case for it would mean inventing an input that cannot exist.
  */
 class FrameIntegrityOracleTest {
 
@@ -155,16 +151,10 @@ class FrameIntegrityOracleTest {
             assertTrue("no accepted $fam frame in the oracle", families.contains(fam to true))
             assertTrue("no rejected $fam frame in the oracle", families.contains(fam to false))
         }
-        // Every reachable reason. PAYLOAD_CRC_UNVERIFIABLE is unreachable on both platforms and is
-        // therefore absent by design — asserting it here would demand an impossible input.
+        // Every declared reason is reachable and therefore pinned by the shared oracle.
         for (reason in FrameRejectReason.values()) {
-            if (reason == FrameRejectReason.PAYLOAD_CRC_UNVERIFIABLE) continue
             assertTrue("reason ${reason.wireName} is not covered", (reasons[reason.wireName] ?: 0) > 0)
         }
-        assertNull(
-            "PAYLOAD_CRC_UNVERIFIABLE cannot be produced by any input — a line claiming it is wrong",
-            reasons[FrameRejectReason.PAYLOAD_CRC_UNVERIFIABLE.wireName],
-        )
         // Each historical-metadata outcome, since that is the third pinned field.
         assertTrue(metas.contains("start"))
         assertTrue(metas.contains("complete"))

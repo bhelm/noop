@@ -145,7 +145,8 @@ against `my-whoop`'s `WhoopPacket.framed_packet` and is implemented in `Commands
 - **`crc8`** (poly `0x07`, table in `Framing.swift`) guards **only the two length bytes** — a cheap
   header integrity check that lets the reassembler trust the declared length.
 - **`crc32`** is standard zlib CRC-32 (reflected, poly `0xEDB88320`) over the inner bytes.
-- **Size rules.** A 4.0 frame must be **at least 11 bytes** — the envelope plus one payload byte —
+- **Size rules.** A 4.0 frame must be **at least 11 bytes** — `type`, `seq`, `cmd`, and the envelope
+  including the CRC32 trailer; real zero-data metadata records sit exactly on this bound —
   and must be **exactly `len + 4`** bytes. Equality, not "at least": a frame cut short and a frame
   carrying trailing bytes past its own end are **both** rejected, even when the payload CRC32 over
   the bytes the length field claims happens to check out.
@@ -183,11 +184,12 @@ The inner record (`[type][seq][cmd][data…]`) starts at **offset 8** instead of
 payload CRC32 is unchanged from 4.0. The whole 4-vs-5 difference is funnelled through one switch:
 `DeviceFamily.headerCRCKind`.
 
-The size rules carry over with the family's own numbers: a 5.0/MG frame must be **at least 13
-bytes** (8 header bytes including the CRC16, one payload byte, the 4-byte CRC32 trailer) and
-**exactly `declaredLength + 8`** bytes, so truncation and trailing bytes are again both rejected.
-The smallest real frame in the project's captures is exactly 11 bytes on 4.0 and 124 bytes on
-5.0/MG, so neither minimum rejects anything that has actually been recorded off a strap.
+NOOP accepts a 5.0/MG frame only at **13 bytes or more** (8 header bytes including the CRC16, at
+least the inner type byte, and the 4-byte CRC32 trailer) and exactly `declaredLength + 8` bytes, so
+truncation and trailing bytes are rejected. The 13-byte floor is empirical rather than structural:
+Goose's `v5Payload` accepts the self-consistent 12-byte, zero-payload envelope, but no such frame has
+been observed from hardware and the smallest project capture is 124 bytes. Keeping 13 is a deliberate
+compatibility assumption that prevents a typeless frame's trailer from being treated as record data.
 
 ---
 

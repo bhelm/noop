@@ -83,12 +83,12 @@ final class FrameIntegrityTests: XCTestCase {
         XCTAssertEqual(parsed.typeName, "COMMAND_RESPONSE")
     }
 
-    func testPayloadCRCThatCannotBeComputedIsNegativeNotUnknown() {
-        // Too short for a CRC32 over any payload byte at all.
+    func testBelowMinimumLengthOwnsTheReasonWhenPayloadCRCIsUnavailable() {
+        // Too short for a CRC32 over any payload byte at all: the structural rule decides it.
         let parsed = parseFrame(Self.hex(Self.w4Total8))
-        XCTAssertFalse(parsed.ok, "an uncomputable payload CRC must never read as a pass")
-        XCTAssertNil(parsed.crcOK, "the tri-state stays honest: the CRC is unknown …")
-        XCTAssertEqual(parsed.rejectReason, .belowMinimumLength, "… but the verdict is not")
+        XCTAssertFalse(parsed.ok)
+        XCTAssertNil(parsed.crcOK, "the diagnostic stays honest: no CRC32 was computed")
+        XCTAssertEqual(parsed.rejectReason, .belowMinimumLength)
     }
 
     func testFullyValidFrameKeepsItsPositiveVerdictAndFields() {
@@ -132,11 +132,7 @@ final class FrameIntegrityTests: XCTestCase {
         XCTAssertEqual(reasons, [.noStartOfFrame, .belowMinimumLength, .lengthMismatch,
                                  .headerChecksumMismatch, .payloadCRCMismatch, .none])
         XCTAssertEqual(Set(reasons).count, reasons.count, "the reasons must not collapse into each other")
-        // The seventh reason exists so an uncomputable CRC can never be reported as a wrong one. The
-        // structural rules above make it unreachable from the verifier today; it is a fail-closed
-        // default, and this pins that it is a value of its own rather than an alias.
-        XCTAssertFalse(reasons.contains(.payloadCRCUnverifiable))
-        XCTAssertEqual(FrameRejectReason.allCases.count, 7)
+        XCTAssertEqual(FrameRejectReason.allCases.count, 6)
     }
 
     func testValidFrameCarriesNoReason() {

@@ -247,8 +247,8 @@ if jsonOut {
     for (t, c) in typeCounts.sorted(by: { $0.value > $1.value }) {
         summary += "  \(pad(String(c), 5, right: true))  \(t)\n"
     }
-    // Why the rejected ones were rejected. Never silently omitted, and never overstated: a payload
-    // CRC32 that could not be computed is reported as `payloadCRCUnverifiable`, not as a mismatch.
+    // Why the rejected ones were rejected. Never silently omitted, and never overstated: structural
+    // failures remain structural reasons even when their payload CRC32 could not be computed.
     if !rejectCounts.isEmpty {
         summary += "  rejected by reason:\n"
         for r in FrameRejectReason.allCases where (rejectCounts[r] ?? 0) > 0 {

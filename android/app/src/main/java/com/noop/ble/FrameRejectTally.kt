@@ -60,9 +60,8 @@ val ParsedFrame.payloadCrcOkButEnvelopeRejected: Boolean
  * Counted per reason only — NOT additionally per device family. A connection talks to exactly one
  * strap, so a family dimension would be constant.
  *
- * A tally asserts only what it observed: an unverifiable payload CRC32 is counted as
- * [FrameRejectReason.PAYLOAD_CRC_UNVERIFIABLE], never folded into
- * [FrameRejectReason.PAYLOAD_CRC_MISMATCH]. "Could not be checked" is not "was wrong".
+ * A tally asserts only what it observed. Structural failures retain a null CRC diagnostic when the
+ * declared payload cannot be checked; only a computed, disagreeing checksum is a payload mismatch.
  *
  * Not thread-safe on its own: the BLE client mutates it only from the GATT binder thread that feeds
  * the reassembler, and reads it on the same thread at teardown.

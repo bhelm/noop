@@ -85,9 +85,9 @@ public func crc16Modbus(_ bytes: [UInt8], _ from: Int = 0, _ to: Int? = nil) -> 
 /// Why a frame failed the envelope check — one value, never optional, so a consumer can report the
 /// cause without verifying or parsing the frame a second time (the parse-once invariant).
 ///
-/// `none` is the ONLY value that accompanies a positive verdict. The two payload-CRC cases are kept
-/// apart on purpose: a diagnostic may only assert what it observed, and "we could not compute the
-/// CRC32" is not the same claim as "the CRC32 disagreed".
+/// `none` is the ONLY value that accompanies a positive verdict. Structural failures are decided
+/// before the payload CRC is required, so every frame that reaches the payload-integrity decision
+/// has a computable CRC32 by construction.
 public enum FrameRejectReason: String, Codable, Equatable, Sendable, CaseIterable {
     /// The frame is intact: header checksum, payload CRC32 and the structural length all agree.
     case none
@@ -102,19 +102,17 @@ public enum FrameRejectReason: String, Codable, Equatable, Sendable, CaseIterabl
     case headerChecksumMismatch
     /// The payload CRC32 was computed and disagreed.
     case payloadCRCMismatch
-    /// The payload CRC32 could not be computed at all. Fail-closed: an unverifiable CRC counts as a
-    /// negative verdict, never as "unknown". The structural rules above make this unreachable for a
-    /// frame that got past them, so it is defence in depth rather than an observed class.
-    case payloadCRCUnverifiable
 }
 
-/// The structural lower bounds a frame must clear before any of its bytes are read as fields.
+/// The family lower bounds a frame must clear before any of its bytes are read as fields.
 ///
 /// WHOOP 4.0: `[SOF][len u16][crc8][type][seq][cmd] + [crc32 u32]` = 11 bytes. The zero-payload
 /// metadata frames at this bound are valid and intentional; the minimum preserves the old `length >= 7` rule.
 /// WHOOP 5.0/MG: `[SOF][fmt][declLen u16][hdr u16][crc16 u16] + >=1 payload byte + [crc32 u32]` = 13.
-/// Both are the values `E2` fixes; the smallest real frame in the project's captures is exactly 11
-/// bytes (WHOOP 4.0) and 124 bytes (WHOOP 5.0/MG), so neither bound rejects a recorded frame.
+/// Unlike the 4.0 bound, 13 is an empirical acceptance policy, not an envelope necessity: Goose's
+/// `v5Payload` accepts a 12-byte, zero-payload frame (`declaredLength == 4`). NOOP deliberately
+/// requires the inner type byte; no zero-payload 5.0/MG frame has been observed, and the smallest
+/// recorded one is 124 bytes. Keep this assumption explicit until hardware evidence changes it.
 public enum FrameLimits {
     public static let whoop4MinimumFrameBytes = 11
     public static let whoop5MinimumFrameBytes = 13
@@ -147,21 +145,13 @@ public struct FrameCheck: Equatable {
     }
 }
 
-/// Turn the individual outcomes into ONE verdict and ONE reason, in a fixed order: structure first
-/// (a length we cannot trust makes every later read meaningless), then the header checksum, then the
-/// payload CRC32. `crc32OK == nil` is a rejection, not an "unknown" that a consumer might read as a
-/// pass — that tri-state is exactly what let malformed frames drive live state before this change.
+/// Turn the two checksum outcomes into ONE integrity reason after the caller has already established
+/// the structural bounds. Taking a non-optional payload result makes the evaluation order explicit:
+/// an uncomputable CRC is represented by the earlier structural reason, not a dead checksum case.
 @inline(__always)
-private func frameRejectReason(totalFromLength: Int, actualCount: Int, minimumBytes: Int,
-                               headerCRCOK: Bool, crc32OK: Bool?) -> FrameRejectReason {
-    if totalFromLength < minimumBytes { return .belowMinimumLength }
-    if totalFromLength != actualCount { return .lengthMismatch }
+private func integrityRejectReason(headerCRCOK: Bool, payloadCRCOK: Bool) -> FrameRejectReason {
     if !headerCRCOK { return .headerChecksumMismatch }
-    switch crc32OK {
-    case .none: return .payloadCRCUnverifiable
-    case .some(false): return .payloadCRCMismatch
-    case .some(true): return .none
-    }
+    return payloadCRCOK ? .none : .payloadCRCMismatch
 }
 
 @inline(__always)
@@ -187,25 +177,29 @@ public func verifyFrame(_ frame: [UInt8]) -> FrameCheck {
         return FrameCheck(ok: false, reason: .noStartOfFrame)
     }
     guard frame.count >= FrameLimits.whoop4MinimumFrameBytes else {
-        // Too short even to hold an envelope plus one payload byte: no field of it is read, and the
-        // length word it may carry is not worth reporting as a length.
+        // Below the smallest real 4.0 inner record (type + sequence + command): no field is read, and
+        // the length word it may carry is not worth reporting as a length.
         return FrameCheck(ok: false, reason: .belowMinimumLength)
     }
     let length = u16le(frame, 1)
     let total = length + 4
     // Ranged CRCs checksum the frame in place, with no per-frame sub-array allocation.
     let crc8OK = crc8(frame, 1, 3) == frame[3]
-    var crc32OK: Bool? = nil
-    // length must cover at least the envelope's inner bytes (mirrors framing.py). Trailing bytes do
-    // not stop the CRC32 from being computed — that combination (payload CRC right, envelope wrong)
-    // is precisely the class this change stops admitting, so it must stay observable.
-    if 7 <= length && total <= frame.count {
-        // inner record = frame[4..<length]
-        crc32OK = crc32(frame, 4, length) == u32le(frame, length)
+    if total < FrameLimits.whoop4MinimumFrameBytes {
+        return FrameCheck(ok: false, length: length, crc8OK: crc8OK, reason: .belowMinimumLength)
     }
-    let reason = frameRejectReason(totalFromLength: total, actualCount: frame.count,
-                                   minimumBytes: FrameLimits.whoop4MinimumFrameBytes,
-                                   headerCRCOK: crc8OK, crc32OK: crc32OK)
+    if total != frame.count {
+        // A surplus tail does not stop the declared payload CRC from being computed. Preserve that
+        // diagnostic because "payload CRC right, envelope wrong" is the class the hardware gate reads.
+        let crc32OK = total <= frame.count
+            ? crc32(frame, 4, length) == u32le(frame, length)
+            : nil
+        return FrameCheck(ok: false, length: length, crc8OK: crc8OK, crc32OK: crc32OK,
+                          reason: .lengthMismatch)
+    }
+    // The structural checks prove length >= 7 and leave a complete four-byte trailer in bounds.
+    let crc32OK = crc32(frame, 4, length) == u32le(frame, length)
+    let reason = integrityRejectReason(headerCRCOK: crc8OK, payloadCRCOK: crc32OK)
     return FrameCheck(ok: reason == .none, length: length, crc8OK: crc8OK, crc32OK: crc32OK,
                       reason: reason)
 }
@@ -239,7 +233,8 @@ private func verifyFrameWhoop5(_ frame: [UInt8]) -> FrameCheck {
     guard frame.first == 0xAA else {
         return FrameCheck(ok: false, reason: .noStartOfFrame)
     }
-    // Smallest well-formed whoop5 frame: 8 header bytes (incl. CRC16) + 1 payload byte + 4 CRC32.
+    // NOOP's empirical 5/MG floor: envelope + at least the inner type byte + CRC32. The Goose
+    // reference parser permits a 12-byte empty payload, but no such hardware frame is known here.
     guard frame.count >= FrameLimits.whoop5MinimumFrameBytes else {
         return FrameCheck(ok: false, reason: .belowMinimumLength)
     }
@@ -252,19 +247,25 @@ private func verifyFrameWhoop5(_ frame: [UInt8]) -> FrameCheck {
     let gotHeaderCRC = UInt16(frame[6]) | (UInt16(frame[7]) << 8)
     let headerCRCOK = wantHeaderCRC == gotHeaderCRC
 
-    var crc32OK: Bool? = nil
-    if declaredLength >= 4, total <= frame.count {
-        // payload spans [8, total-4); CRC32 trailer is the final 4 bytes the length declares.
-        let payloadEnd = total - 4
-        // payload = frame[8..<payloadEnd], checksummed in place.
-        let want = crc32(frame, 8, payloadEnd)
-        let got = u32le(frame, payloadEnd)
-        crc32OK = want == got
+    if total < FrameLimits.whoop5MinimumFrameBytes {
+        let diagnosticCRC32OK: Bool? = declaredLength >= 4 && total <= frame.count
+            ? crc32(frame, 8, total - 4) == u32le(frame, total - 4)
+            : nil
+        return FrameCheck(ok: false, length: declaredLength, crc8OK: headerCRCOK,
+                          crc32OK: diagnosticCRC32OK, reason: .belowMinimumLength)
     }
-
-    let reason = frameRejectReason(totalFromLength: total, actualCount: frame.count,
-                                   minimumBytes: FrameLimits.whoop5MinimumFrameBytes,
-                                   headerCRCOK: headerCRCOK, crc32OK: crc32OK)
+    if total != frame.count {
+        // Preserve a CRC result for a surplus tail; truncation leaves it unavailable.
+        let diagnosticCRC32OK: Bool? = total <= frame.count
+            ? crc32(frame, 8, total - 4) == u32le(frame, total - 4)
+            : nil
+        return FrameCheck(ok: false, length: declaredLength, crc8OK: headerCRCOK,
+                          crc32OK: diagnosticCRC32OK, reason: .lengthMismatch)
+    }
+    // Exact size plus the configured 13-byte floor proves at least one byte before the CRC trailer.
+    let payloadEnd = total - 4
+    let crc32OK = crc32(frame, 8, payloadEnd) == u32le(frame, payloadEnd)
+    let reason = integrityRejectReason(headerCRCOK: headerCRCOK, payloadCRCOK: crc32OK)
     // Report the header outcome through crc8OK so callers have a single header-CRC signal.
     return FrameCheck(ok: reason == .none, length: declaredLength, crc8OK: headerCRCOK,
                       crc32OK: crc32OK, reason: reason)
@@ -384,9 +385,9 @@ public final class Reassembler {
                 total = (Int(buf[head + 2]) | (Int(buf[head + 3]) << 8)) + 8
             }
             if total < FrameLimits.minimumFrameBytes(for: family) {
-                // A declared total below the family minimum cannot be a frame: emitting it would hand
-                // a parser a byte run whose "inner fields" are its own checksum trailer. Drop this
-                // 0xAA, count it, and resync on the next one — same shape as the ceiling below.
+                // A declared total below the configured family floor is not accepted: emitting it
+                // would hand the parser a byte run whose "inner fields" are its own checksum trailer.
+                // Drop this 0xAA, count it, and resync — same shape as the ceiling below.
                 belowMinimumLengthDrops += 1
                 head += 1
                 continue
