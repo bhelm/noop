@@ -298,6 +298,7 @@ private fun VitalDetailRange.stepsRange(): StepsDetailRange = when (this) {
 internal fun projectStepsDetail(
     readings: List<VitalReading>,
     range: VitalDetailRange,
+    resolveString: (Int, Array<out Any>) -> String = ::uiString,
 ): StepsDetailUiSeries {
     val sharedRange = range.stepsRange()
     val buckets = StepsDetailDensity.project(
@@ -306,32 +307,40 @@ internal fun projectStepsDetail(
     )
     val granularity = sharedRange.granularity()
     val points = buckets.map { it.displayDay to it.mean.toDouble() }
-    val labels = buckets.map { bucket -> stepsBucketLabel(bucket.displayDay, granularity) }
+    val labels = buckets.map { bucket -> stepsBucketLabel(bucket.displayDay, granularity, resolveString) }
     val accessibility = if (buckets.isEmpty()) {
-        uiString(com.noop.R.string.steps_no_data)
+        resolveString(com.noop.R.string.steps_no_data, emptyArray())
     } else {
-        uiString(com.noop.R.string.steps_chart_summary, buckets.size, labels.zip(buckets).joinToString(
+        resolveString(com.noop.R.string.steps_chart_summary, arrayOf(buckets.size, labels.zip(buckets).joinToString(
             separator = "; ",
         ) { (label, bucket) ->
-            "$label, ${stepsBucketValueLabel(bucket.mean.toDouble(), granularity)}"
-        })
+            "$label, ${stepsBucketValueLabel(bucket.mean.toDouble(), granularity, resolveString)}"
+        }))
     }
     return StepsDetailUiSeries(buckets, granularity, points, labels, accessibility)
 }
 
-internal fun stepsBucketValueLabel(value: Double, granularity: StepsDetailGranularity): String =
+internal fun stepsBucketValueLabel(
+    value: Double,
+    granularity: StepsDetailGranularity,
+    resolveString: (Int, Array<out Any>) -> String = ::uiString,
+): String =
     if (granularity == StepsDetailGranularity.DAILY) {
-        uiString(com.noop.R.string.steps_value, java.text.NumberFormat.getIntegerInstance().format(value.toInt()))
+        resolveString(com.noop.R.string.steps_value, arrayOf(java.text.NumberFormat.getIntegerInstance().format(value.toInt())))
     } else {
-        uiString(com.noop.R.string.steps_mean_value, java.text.NumberFormat.getIntegerInstance().format(value.toInt()))
+        resolveString(com.noop.R.string.steps_mean_value, arrayOf(java.text.NumberFormat.getIntegerInstance().format(value.toInt())))
     }
 
-private fun stepsBucketLabel(day: String, granularity: StepsDetailGranularity): String {
+private fun stepsBucketLabel(
+    day: String,
+    granularity: StepsDetailGranularity,
+    resolveString: (Int, Array<out Any>) -> String,
+): String {
     val parsed = strictLocalDay(day) ?: return day
     return when (granularity) {
         StepsDetailGranularity.DAILY -> parsed.format(DateTimeFormatter.ofPattern("d MMM", Locale.getDefault()))
         StepsDetailGranularity.WEEKLY ->
-            uiString(com.noop.R.string.steps_week_of, parsed.format(DateTimeFormatter.ofPattern("d MMM", Locale.getDefault())))
+            resolveString(com.noop.R.string.steps_week_of, arrayOf(parsed.format(DateTimeFormatter.ofPattern("d MMM", Locale.getDefault()))))
         StepsDetailGranularity.MONTHLY -> parsed.format(DateTimeFormatter.ofPattern("MMM yyyy", Locale.getDefault()))
     }
 }

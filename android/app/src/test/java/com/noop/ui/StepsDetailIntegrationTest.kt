@@ -9,6 +9,19 @@ import org.junit.Test
 class StepsDetailIntegrationTest {
     private fun reading(day: String, value: Double) = VitalReading(day, value, "steps-source")
 
+    // Plain JVM tests provide presentation strings without attaching an Android Application.
+    private fun projectStepsDetail(readings: List<VitalReading>, range: VitalDetailRange) =
+        com.noop.ui.projectStepsDetail(readings, range) { id, args ->
+            when (id) {
+                com.noop.R.string.steps_no_data -> "No data"
+                com.noop.R.string.steps_chart_summary -> "${args[0]} bars: ${args[1]}"
+                com.noop.R.string.steps_value -> "${args[0]} steps"
+                com.noop.R.string.steps_mean_value -> "${args[0]} average steps per observed day"
+                com.noop.R.string.steps_week_of -> "week of ${args[0]}"
+                else -> error("Unexpected steps string: $id")
+            }
+        }
+
     @Test
     fun `steps force bars even when the preference is line`() {
         assertTrue(vitalChartIsBars("steps_est", TrendChartStyle.LINE))
