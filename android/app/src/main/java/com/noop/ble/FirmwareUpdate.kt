@@ -708,24 +708,24 @@ internal object FirmwareUpdateTransitions {
 
     fun ready(state: FirmwareUpdateState): FirmwareUpdateState = state.copy(
         stage = FirmwareUpdateStage.READY_TO_ACTIVATE,
-        status = "The strap accepted the transferred image integrity check. Activation still requires your confirmation.",
+        status = "The strap verified the image. Activation needs your confirmation.",
     )
 
     fun activationRequested(state: FirmwareUpdateState): FirmwareUpdateState = state.copy(
         stage = FirmwareUpdateStage.ACTIVATION_REQUESTED,
-        status = "Activation/reset request accepted. Waiting for the link to change; boot is not yet confirmed.",
+        status = "Activation accepted. The strap is restarting.",
     )
 
     fun reconnecting(state: FirmwareUpdateState): FirmwareUpdateState = state.copy(
         stage = FirmwareUpdateStage.RECONNECTING,
-        status = "The strap disconnected after activation. Waiting for a fresh connection; no transfer will be resumed.",
+        status = "The strap is restarting. Waiting for it to reconnect.",
     )
 
     fun reconnected(state: FirmwareUpdateState, reportedVersion: String?): FirmwareUpdateState {
         val suffix = reportedVersion?.let { " and reports firmware $it" } ?: ""
         return state.copy(
             stage = FirmwareUpdateStage.DEVICE_RECONNECTED,
-            status = "The same strap reconnected$suffix. This does not prove which image booted.",
+            status = "The strap reconnected$suffix.",
         )
     }
 

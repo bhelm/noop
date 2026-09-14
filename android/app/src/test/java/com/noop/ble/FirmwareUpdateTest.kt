@@ -457,10 +457,10 @@ class FirmwareUpdateTest {
         val sent = FirmwareUpdateTransitions.activationRequested(ready)
         val reconnecting = FirmwareUpdateTransitions.reconnecting(sent)
         assertEquals(FirmwareUpdateStage.RECONNECTING, reconnecting.stage)
-        assertTrue(reconnecting.status.contains("no transfer will be resumed"))
+        assertTrue(reconnecting.status.contains("Waiting for it to reconnect"))
         val reconnected = FirmwareUpdateTransitions.reconnected(reconnecting, "50.42.1.0")
         assertEquals(FirmwareUpdateStage.DEVICE_RECONNECTED, reconnected.stage)
-        assertTrue(reconnected.status.contains("does not prove"))
+        assertTrue(reconnected.status.contains("reconnected"))
     }
 
     @Test

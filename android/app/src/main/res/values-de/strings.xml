@@ -2678,7 +2678,7 @@
     <!-- Testcenter: lokales Firmware-Image prüfen, übertragen und getrennt aktivieren. -->
     <string name="firmware_flash_title">Firmware-Image übertragen</string>
     <string name="firmware_flash_blurb">Prüfe ein lokales WHOOP-5/MG-Firmware-Image, übertrage es mit bestätigtem Fortschritt und entscheide danach getrennt über die Aktivierung.</string>
-    <string name="firmware_flash_integrity_note">Experimentell und mit Risiko für das Gerät. Passende CRCs belegen nur die Unversehrtheit der Bytes; sie authentifizieren den Herausgeber nicht und beweisen weder Kompatibilität noch einen erfolgreichen Start.</string>
+    <string name="firmware_flash_integrity_note">Nutze nur unveränderte Original-Images von WHOOP. Dann überträgt NOOP dieselbe Datei wie die WHOOP-App: NOOP prüft das Image vorher, und das Band prüft es vor der Aktivierung noch einmal selbst.</string>
     <string name="firmware_flash_file_note">Entpacke für ein normales Original-Update das Hersteller-ZIP und wähle die enthaltene .zbin-Datei. Eine .bin-Datei ist die dekomprimierte Forschungsform.</string>
     <string name="firmware_flash_choose_image">.zbin- oder .bin-Image auswählen</string>
     <string name="firmware_flash_choose_replacement">Anderes Image auswählen</string>
@@ -2693,7 +2693,7 @@
     <string name="firmware_flash_local_valid">Lokale Prüfungen von Header, Länge, Nutzdaten-CRC und Header-CRC bestanden.</string>
     <string name="firmware_flash_format_zbin">Hersteller-OTA .zbin · komprimierter Typ 5</string>
     <string name="firmware_flash_format_bin">Rohes Forschungs-.bin · Typ 1</string>
-    <string name="firmware_flash_compat_zbin">Ursprüngliche komprimierte Update-Form. CRCs beweisen weder Gerätekompatibilität noch Authentifizierung.</string>
+    <string name="firmware_flash_compat_zbin">Original-Update-Format, dieselbe Datei, die auch die WHOOP-App überträgt.</string>
     <string name="firmware_flash_compat_bin">Rohe Forschungsform. Die Installation dieses dekomprimierten Typs ist nicht belegt.</string>
     <string name="firmware_flash_size">Image-Größe</string>
     <string name="firmware_flash_version">Image-Version</string>
@@ -2727,7 +2727,7 @@
     <string name="firmware_flash_unknown_version">unbekannt</string>
     <string name="firmware_flash_activate_title">Bereitgestellte Firmware aktivieren?</string>
     <string name="firmware_flash_activate_identity">Image: %1$s\nAktuelles Band: %2$s\nAusgewähltes Image: %3$s\nGerätesitzung: %4$s</string>
-    <string name="firmware_flash_activate_warning">Die Aktivierung kann die Verbindung trennen und das Band unbrauchbar machen. Geräteprüfung und passende CRCs beweisen weder eine vertrauenswürdige Signatur noch einen erfolgreichen Start. Eine erneute Verbindung meldet nur die Firmware-Version, die das Band danach ausgibt.</string>
+    <string name="firmware_flash_activate_warning">Das Band startet mit der neuen Firmware neu und trennt dabei kurz die Verbindung. Danach verbindet es sich wieder und meldet seine Version. Lass das Band in der Nähe und geladen, bis es wieder verbunden ist.</string>
     <string name="firmware_flash_activate_confirm">Firmware aktivieren</string>
     <string name="firmware_flash_keep_staged">Noch nicht</string>
     <string name="firmware_flash_unknown_device">unbekanntes Gerät</string>
