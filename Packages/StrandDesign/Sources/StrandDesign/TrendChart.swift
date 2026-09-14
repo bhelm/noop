@@ -244,9 +244,11 @@ public struct TrendChart: View {
     }
 
     public var body: some View {
+        // Resolve against current data so the marker and readout never refer to a removed date.
+        let currentSelection = selectedPoint.flatMap { selected in points.first { $0.date == selected.date } }
         VStack(alignment: .leading, spacing: 8) {
         if largeSelection {
-            let point = selectedPoint.flatMap { selected in points.first { $0.date == selected.date } } ?? points.last
+            let point = currentSelection ?? points.last
             VStack(alignment: .leading, spacing: 3) {
                 Text(point.map { dateFormat($0.date) } ?? "—").font(.headline)
                 Text(point.map { valueFormat($0.value) } ?? "—").font(.title2.bold()).monospacedDigit()
@@ -271,7 +273,7 @@ public struct TrendChart: View {
                     )
                     .foregroundStyle(valueGradient)
                     .cornerRadius(min(2, max(0, CGFloat(p.value / max(1, plotYDomain.upperBound)) * height * 0.2)))
-                    .opacity(holdingBar && selectedPoint?.date != p.date ? 0.3 : 1)
+                    .opacity(holdingBar && currentSelection != nil && currentSelection?.date != p.date ? 0.3 : 1)
                     .annotation(position: .top, spacing: 3) {
                         if showsBarValues {
                             Text(p.value.formatted(.number.precision(.fractionLength(0))))
@@ -280,7 +282,7 @@ public struct TrendChart: View {
                         }
                     }
                 }
-                if holdingBar, let selectedPoint {
+                if showsHover, let selectedPoint = currentSelection {
                     RuleMark(x: .value("Date", selectedPoint.date))
                         .lineStyle(StrokeStyle(lineWidth: 1, dash: [4, 4]))
                         .foregroundStyle(StrandPalette.textSecondary)
@@ -466,6 +468,11 @@ public struct TrendChart: View {
         .accessibilityLabel(accessibilityLabel.map(Text.init) ?? Text("Trend", bundle: .module))
         .accessibilityValue(Text(a11ySummary))
         .accessibilityHidden(!showsHover && accessibilityLabel == nil)
+        }
+        .onChange(of: points.map(\.date)) { _ in
+            selectedPoint = nil
+            holdingBar = false
+            hoverX = nil
         }
     }
 }
