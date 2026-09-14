@@ -1,4 +1,165 @@
 {
   "schema_version": 1,
-  "dispositions": []
+  "dispositions": [
+    {
+      "type": "platform_specific",
+      "kind": "add-unpaired-function",
+      "identity": "swift\u0000Packages/WhoopProtocol/Sources/WhoopProtocol/FirmwareImage.swift::fail/1#1",
+      "identity_sha256": "6a4d5f06e168a53b8255badfb2d67d21baba5ba4e7d7a797951601b85b21a753",
+      "platform": "swift",
+      "rationale": "Swift-local shorthand inside inflateSingleGzipMember that wraps a rejection reason in Result.failure. The Kotlin twin returns InflationResult.Invalid inline, so no Kotlin declaration exists to pair."
+    },
+    {
+      "type": "platform_specific",
+      "kind": "add-unpaired-function",
+      "identity": "swift\u0000Packages/WhoopProtocol/Sources/WhoopProtocol/FirmwareImage.swift::build/1#1",
+      "identity_sha256": "d18c9c4a1dc9c0766ee3f698436a762bc69e37616790f57e00758b43030a35ad",
+      "platform": "swift",
+      "rationale": "Hand-rolled raw-DEFLATE decoder (RFC 1951): WhoopProtocol builds on Linux without dependencies and Foundation offers no inflate there. The Kotlin twin FirmwareImageParser.inflateSingleGzipMember delegates to java.util.zip.Inflater, so no Kotlin declaration exists to pair."
+    },
+    {
+      "type": "platform_specific",
+      "kind": "add-unpaired-function",
+      "identity": "swift\u0000Packages/WhoopProtocol/Sources/WhoopProtocol/FirmwareImage.swift::run/0#1",
+      "identity_sha256": "2ec9d8b516b52432eb95a5ee032f8cea1cffb5de29eeb76dfb34862041386108",
+      "platform": "swift",
+      "rationale": "Hand-rolled raw-DEFLATE decoder (RFC 1951): WhoopProtocol builds on Linux without dependencies and Foundation offers no inflate there. The Kotlin twin FirmwareImageParser.inflateSingleGzipMember delegates to java.util.zip.Inflater, so no Kotlin declaration exists to pair."
+    },
+    {
+      "type": "platform_specific",
+      "kind": "add-unpaired-function",
+      "identity": "swift\u0000Packages/WhoopProtocol/Sources/WhoopProtocol/FirmwareImage.swift::bits/1#1",
+      "identity_sha256": "2701924b79c087c5dff34aab5ede9ea6e5d0616493f0ea13d3afd1cd5076fcfc",
+      "platform": "swift",
+      "rationale": "Hand-rolled raw-DEFLATE decoder (RFC 1951): WhoopProtocol builds on Linux without dependencies and Foundation offers no inflate there. The Kotlin twin FirmwareImageParser.inflateSingleGzipMember delegates to java.util.zip.Inflater, so no Kotlin declaration exists to pair."
+    },
+    {
+      "type": "platform_specific",
+      "kind": "add-unpaired-function",
+      "identity": "swift\u0000Packages/WhoopProtocol/Sources/WhoopProtocol/FirmwareImage.swift::append/1#1",
+      "identity_sha256": "7f56400123ec0f163ae5860a36c3257cc85220cc6da09d6c15661670f661efe3",
+      "platform": "swift",
+      "rationale": "Hand-rolled raw-DEFLATE decoder (RFC 1951): WhoopProtocol builds on Linux without dependencies and Foundation offers no inflate there. The Kotlin twin FirmwareImageParser.inflateSingleGzipMember delegates to java.util.zip.Inflater, so no Kotlin declaration exists to pair."
+    },
+    {
+      "type": "platform_specific",
+      "kind": "add-unpaired-function",
+      "identity": "swift\u0000Packages/WhoopProtocol/Sources/WhoopProtocol/FirmwareImage.swift::stored/0#1",
+      "identity_sha256": "1cd57b7b7f6cd02e41c9c9f3b719b8b0314507fa7f9418e28c6b991305b38659",
+      "platform": "swift",
+      "rationale": "Hand-rolled raw-DEFLATE decoder (RFC 1951): WhoopProtocol builds on Linux without dependencies and Foundation offers no inflate there. The Kotlin twin FirmwareImageParser.inflateSingleGzipMember delegates to java.util.zip.Inflater, so no Kotlin declaration exists to pair."
+    },
+    {
+      "type": "platform_specific",
+      "kind": "add-unpaired-function",
+      "identity": "swift\u0000Packages/WhoopProtocol/Sources/WhoopProtocol/FirmwareImage.swift::decode/1#1",
+      "identity_sha256": "ec54137f5db488e38bde22dbdb31aa5ff3542887be7da3e913d8d82f13095d72",
+      "platform": "swift",
+      "rationale": "Hand-rolled raw-DEFLATE decoder (RFC 1951): WhoopProtocol builds on Linux without dependencies and Foundation offers no inflate there. The Kotlin twin FirmwareImageParser.inflateSingleGzipMember delegates to java.util.zip.Inflater, so no Kotlin declaration exists to pair."
+    },
+    {
+      "type": "platform_specific",
+      "kind": "add-unpaired-function",
+      "identity": "swift\u0000Packages/WhoopProtocol/Sources/WhoopProtocol/FirmwareImage.swift::codes/2#1",
+      "identity_sha256": "2d269c2906b517f4dafb63b3ce08f86e6ec25dd20a6d4c91907e1ef00f46f57e",
+      "platform": "swift",
+      "rationale": "Hand-rolled raw-DEFLATE decoder (RFC 1951): WhoopProtocol builds on Linux without dependencies and Foundation offers no inflate there. The Kotlin twin FirmwareImageParser.inflateSingleGzipMember delegates to java.util.zip.Inflater, so no Kotlin declaration exists to pair."
+    },
+    {
+      "type": "platform_specific",
+      "kind": "add-unpaired-function",
+      "identity": "swift\u0000Packages/WhoopProtocol/Sources/WhoopProtocol/FirmwareImage.swift::dynamic/0#1",
+      "identity_sha256": "bbe5e049f3461763bf33dce580412700cac291315fa463db7410b38c3e9bc6b8",
+      "platform": "swift",
+      "rationale": "Hand-rolled raw-DEFLATE decoder (RFC 1951): WhoopProtocol builds on Linux without dependencies and Foundation offers no inflate there. The Kotlin twin FirmwareImageParser.inflateSingleGzipMember delegates to java.util.zip.Inflater, so no Kotlin declaration exists to pair."
+    },
+    {
+      "type": "platform_specific",
+      "kind": "add-unpaired-function",
+      "identity": "swift\u0000Packages/WhoopProtocol/Sources/WhoopProtocol/FirmwareImage.swift::digest/1#1",
+      "identity_sha256": "cbe686f85f86b1e9a4b7bf1fc60ef1d6e0471f5eabf3498947d9f44bc6c06597",
+      "platform": "swift",
+      "rationale": "Hand-rolled SHA-256 (FIPS 180-4): CryptoKit is Apple-only and WhoopProtocol builds on Linux without dependencies. The Kotlin twin FirmwareImageParser.parse uses java.security.MessageDigest, so no Kotlin declaration exists to pair."
+    },
+    {
+      "type": "platform_specific",
+      "kind": "add-unpaired-function",
+      "identity": "swift\u0000Packages/WhoopProtocol/Sources/WhoopProtocol/FirmwareImage.swift::rotr/2#1",
+      "identity_sha256": "ae425c67750505f04578170577db2eb9aaa8dbd667e19e2e0a7ea218f680125d",
+      "platform": "swift",
+      "rationale": "Hand-rolled SHA-256 (FIPS 180-4): CryptoKit is Apple-only and WhoopProtocol builds on Linux without dependencies. The Kotlin twin FirmwareImageParser.parse uses java.security.MessageDigest, so no Kotlin declaration exists to pair."
+    },
+    {
+      "type": "platform_specific",
+      "kind": "add-unpaired-constant",
+      "identity": "swift\u0000Packages/WhoopProtocol/Sources/WhoopProtocol/FirmwareImage.swift::lengthBase",
+      "identity_sha256": "a8226def7acaac0d2608a04739b7245095af2f271f7c829787e6b9729abf23c8",
+      "platform": "swift",
+      "rationale": "Hand-rolled raw-DEFLATE decoder (RFC 1951): WhoopProtocol builds on Linux without dependencies and Foundation offers no inflate there. The Kotlin twin FirmwareImageParser.inflateSingleGzipMember delegates to java.util.zip.Inflater, so no Kotlin declaration exists to pair."
+    },
+    {
+      "type": "platform_specific",
+      "kind": "add-unpaired-constant",
+      "identity": "swift\u0000Packages/WhoopProtocol/Sources/WhoopProtocol/FirmwareImage.swift::lengthExtra",
+      "identity_sha256": "ac565a2c45ba566d2133e94d0e4ba98bbd2ea6639bf2646aa63912718b5caf59",
+      "platform": "swift",
+      "rationale": "Hand-rolled raw-DEFLATE decoder (RFC 1951): WhoopProtocol builds on Linux without dependencies and Foundation offers no inflate there. The Kotlin twin FirmwareImageParser.inflateSingleGzipMember delegates to java.util.zip.Inflater, so no Kotlin declaration exists to pair."
+    },
+    {
+      "type": "platform_specific",
+      "kind": "add-unpaired-constant",
+      "identity": "swift\u0000Packages/WhoopProtocol/Sources/WhoopProtocol/FirmwareImage.swift::distanceBase",
+      "identity_sha256": "90bb745cfd4afba202b376d18bd5f8ca7298d45c595ac4e6050afba083c3c3f3",
+      "platform": "swift",
+      "rationale": "Hand-rolled raw-DEFLATE decoder (RFC 1951): WhoopProtocol builds on Linux without dependencies and Foundation offers no inflate there. The Kotlin twin FirmwareImageParser.inflateSingleGzipMember delegates to java.util.zip.Inflater, so no Kotlin declaration exists to pair."
+    },
+    {
+      "type": "platform_specific",
+      "kind": "add-unpaired-constant",
+      "identity": "swift\u0000Packages/WhoopProtocol/Sources/WhoopProtocol/FirmwareImage.swift::distanceExtra",
+      "identity_sha256": "8837310fb6e4f2bab32d13214d38adf84f1f8c1a513f5ded6d822474238e1262",
+      "platform": "swift",
+      "rationale": "Hand-rolled raw-DEFLATE decoder (RFC 1951): WhoopProtocol builds on Linux without dependencies and Foundation offers no inflate there. The Kotlin twin FirmwareImageParser.inflateSingleGzipMember delegates to java.util.zip.Inflater, so no Kotlin declaration exists to pair."
+    },
+    {
+      "type": "platform_specific",
+      "kind": "add-unpaired-constant",
+      "identity": "swift\u0000Packages/WhoopProtocol/Sources/WhoopProtocol/FirmwareImage.swift::codeLengthOrder",
+      "identity_sha256": "0cd3e17a42df4a07198c1fd26718b1dc040b60e1ffe58e2bf8455991c29bb331",
+      "platform": "swift",
+      "rationale": "Hand-rolled raw-DEFLATE decoder (RFC 1951): WhoopProtocol builds on Linux without dependencies and Foundation offers no inflate there. The Kotlin twin FirmwareImageParser.inflateSingleGzipMember delegates to java.util.zip.Inflater, so no Kotlin declaration exists to pair."
+    },
+    {
+      "type": "platform_specific",
+      "kind": "add-unpaired-constant",
+      "identity": "swift\u0000Packages/WhoopProtocol/Sources/WhoopProtocol/FirmwareImage.swift::maxBits",
+      "identity_sha256": "92cf0a1180772e0805ed8f5e5ce43a9c026c13066c5156d44710fc6239283cf3",
+      "platform": "swift",
+      "rationale": "Hand-rolled raw-DEFLATE decoder (RFC 1951): WhoopProtocol builds on Linux without dependencies and Foundation offers no inflate there. The Kotlin twin FirmwareImageParser.inflateSingleGzipMember delegates to java.util.zip.Inflater, so no Kotlin declaration exists to pair."
+    },
+    {
+      "type": "platform_specific",
+      "kind": "add-unpaired-constant",
+      "identity": "swift\u0000Packages/WhoopProtocol/Sources/WhoopProtocol/FirmwareImage.swift::fixedLiteral",
+      "identity_sha256": "9293f653b0a4de3d7f26fae7c508caa9cdcc75f74aa4c3f27cac3601fe1e699a",
+      "platform": "swift",
+      "rationale": "Hand-rolled raw-DEFLATE decoder (RFC 1951): WhoopProtocol builds on Linux without dependencies and Foundation offers no inflate there. The Kotlin twin FirmwareImageParser.inflateSingleGzipMember delegates to java.util.zip.Inflater, so no Kotlin declaration exists to pair."
+    },
+    {
+      "type": "platform_specific",
+      "kind": "add-unpaired-constant",
+      "identity": "swift\u0000Packages/WhoopProtocol/Sources/WhoopProtocol/FirmwareImage.swift::fixedDistance",
+      "identity_sha256": "2855d6ff8767e66433d50a317c0dd37d1c2f62e075365fd1b4d738236f1dca44",
+      "platform": "swift",
+      "rationale": "Hand-rolled raw-DEFLATE decoder (RFC 1951): WhoopProtocol builds on Linux without dependencies and Foundation offers no inflate there. The Kotlin twin FirmwareImageParser.inflateSingleGzipMember delegates to java.util.zip.Inflater, so no Kotlin declaration exists to pair."
+    },
+    {
+      "type": "platform_specific",
+      "kind": "add-unpaired-constant",
+      "identity": "swift\u0000Packages/WhoopProtocol/Sources/WhoopProtocol/FirmwareImage.swift::k",
+      "identity_sha256": "f4e333e6c0572027b21d0dc92e42e036887519d66b11c2f4e3f653f7b6884c03",
+      "platform": "swift",
+      "rationale": "Hand-rolled SHA-256 (FIPS 180-4): CryptoKit is Apple-only and WhoopProtocol builds on Linux without dependencies. The Kotlin twin FirmwareImageParser.parse uses java.security.MessageDigest, so no Kotlin declaration exists to pair."
+    }
+  ]
 }
