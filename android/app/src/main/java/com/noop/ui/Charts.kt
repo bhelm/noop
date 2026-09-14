@@ -762,8 +762,9 @@ fun BarChart(
     val cleanSelectionLabels = remember(values, selectionLabels) {
         if (selectionLabels == null || selectionLabels.size != values.size) null else selectionLabels
     }
-    var selectedIndex by remember(cleanValues) { mutableIntStateOf(-1) }
-    var holding by remember(cleanValues) { mutableStateOf(false) }
+    // Selection survives release, but belongs to this dataset (including its dates), not a slot.
+    var selectedIndex by remember(values, cleanSelectionLabels) { mutableIntStateOf(-1) }
+    var holding by remember(values, cleanSelectionLabels) { mutableStateOf(false) }
     val density = LocalDensity.current
     val axisWidth = if (axisStep != null && axisStep > 0) with(density) { 54.dp.toPx() } else 0f
     // Pre-laid value-label Paint, remembered rather than allocated inside the draw block (the old code
@@ -795,7 +796,7 @@ fun BarChart(
             .clearAndSetSemantics { contentDescription = axSummary }
             .then(
                 if (selectionEnabled) {
-                    Modifier.pointerInput(cleanValues, axisWidth) {
+                    Modifier.pointerInput(values, cleanSelectionLabels, axisWidth) {
                         awaitEachGesture {
                             val down = awaitFirstDown(requireUnconsumed = false)
                             fun select(x: Float) {
@@ -900,7 +901,7 @@ fun BarChart(
                                     androidx.compose.ui.geometry.CornerRadius(it, it)
                                 },
                             )
-                            if (holding && i == selectedIndex) drawLine(
+                            if (selectionEnabled && i == selectedIndex && values.getOrNull(i)?.isFinite() == true) drawLine(
                                 color, Offset(seg.cx, seg.top), Offset(seg.cx, if (largeSelectionReadout) 62.dp.toPx() else 0f),
                                 strokeWidth = 1.dp.toPx(), pathEffect = PathEffect.dashPathEffect(floatArrayOf(5.dp.toPx(), 4.dp.toPx())),
                             )
