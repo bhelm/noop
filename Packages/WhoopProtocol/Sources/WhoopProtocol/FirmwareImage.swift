@@ -83,6 +83,7 @@ public enum FirmwareImageParser {
     private static let gzipFlagComment: UInt8 = 0x10
     private static let gzipReservedFlags: UInt8 = 0xe0
 
+    /// Kotlin twin: `FirmwareImageParser.parse`.
     public static func parse(fileName: String, input: [UInt8]) -> FirmwareImageValidation {
         let ext: String
         if let dot = fileName.lastIndex(of: ".") {
@@ -174,6 +175,7 @@ public enum FirmwareImageParser {
     /// Exactly one gzip member (RFC 1952) after the 512-byte header, followed by at most three zero
     /// alignment bytes. Everything the member declares is checked: header flags and optional fields,
     /// the optional header CRC, the deflate stream itself, the trailer CRC and the trailer size.
+    /// Kotlin twin: `FirmwareImageParser.inflateSingleGzipMember`.
     private static func inflateSingleGzipMember(_ container: [UInt8]) -> Result<[UInt8], InflationFailure> {
         func fail(_ reason: String) -> Result<[UInt8], InflationFailure> { .failure(InflationFailure(reason: reason)) }
         let start = headerSize
@@ -194,6 +196,7 @@ public enum FirmwareImageParser {
         }
         var cursor = start + gzipFixedHeaderSize
 
+        // Kotlin twin: `FirmwareImageParser.requireAvailable`.
         func truncation(_ count: Int, _ part: String) -> String? {
             (count < 0 || cursor > end - count) ? "Compressed payload has a truncated gzip \(part)" : nil
         }
@@ -264,6 +267,7 @@ public enum FirmwareImageParser {
         return .success(inflated)
     }
 
+    /// Kotlin twin: `FirmwareImageParser.validateNestedRawImage`.
     private static func validateNestedRawImage(_ raw: [UInt8], outerVersion: String) -> String? {
         if raw.count < headerSize + 4 {
             return "Nested raw image is shorter than the 512-byte header and payload"
@@ -299,6 +303,7 @@ public enum FirmwareImageParser {
         return nil
     }
 
+    /// Kotlin twin: `ByteArray.findGzipZeroTerminator`.
     private static func zeroTerminator(_ bytes: [UInt8], from: Int, until: Int) -> Int? {
         var index = from
         while index < until {
@@ -309,6 +314,7 @@ public enum FirmwareImageParser {
     }
 
     /// The four version words at 0x7c/0x80/0x84/0x88, printed as unsigned decimals joined by dots.
+    /// Kotlin twin: `ByteArray.versionString`.
     private static func versionString(_ bytes: [UInt8]) -> String {
         [0x7c, 0x80, 0x84, 0x88].map { String(fwU32le(bytes, $0)) }.joined(separator: ".")
     }
@@ -316,18 +322,21 @@ public enum FirmwareImageParser {
 
 // MARK: - Byte helpers (file-local names so they cannot collide with Framing.swift's private twins)
 
+/// Kotlin twin: `ByteArray.u32le`.
 @inline(__always)
 func fwU32le(_ bytes: [UInt8], _ offset: Int) -> UInt32 {
     UInt32(bytes[offset]) | (UInt32(bytes[offset + 1]) << 8)
         | (UInt32(bytes[offset + 2]) << 16) | (UInt32(bytes[offset + 3]) << 24)
 }
 
+/// Kotlin twin: `ByteArray.u16le`.
 @inline(__always)
 func fwU16le(_ bytes: [UInt8], _ offset: Int) -> Int {
     Int(bytes[offset]) | (Int(bytes[offset + 1]) << 8)
 }
 
 /// `%08x`: eight lowercase hex digits, zero padded.
+/// Kotlin twin: `Long.hex8`.
 func fwHex8(_ value: UInt32) -> String {
     let digits = String(value, radix: 16)
     return String(repeating: "0", count: max(0, 8 - digits.count)) + digits
@@ -494,7 +503,7 @@ struct RawInflater {
 
         var lengths = [Int](repeating: 0, count: 19)
         for index in 0..<codeCount { lengths[RawInflater.codeLengthOrder[index]] = try bits(3) }
-        let (lengthCode, lengthLeft) = Huffman.build(lengths[0..<19])
+        let (lengthCode, lengthLeft) = Huffman.build(lengths[...])
         guard lengthLeft == 0 else { throw Failure.invalid }
 
         let total = literalCount + distanceCount

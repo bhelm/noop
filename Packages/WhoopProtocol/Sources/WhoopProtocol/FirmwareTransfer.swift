@@ -49,6 +49,7 @@ public enum FirmwareWhoop5ResponseDecoder {
     private static let puffinCommandResponse = 0x26
     private static let bodyStart = 13
 
+    /// Kotlin twin: `FirmwareWhoop5ResponseDecoder.decode`.
     public static func decode(_ frame: [UInt8]) -> FirmwareWireResponse? {
         if frame.count < 20 || frame[0] != 0xaa { return nil }
         let declaredLength = fwU16le(frame, 2)
@@ -106,12 +107,14 @@ public struct FirmwareResponseKey {
 }
 
 public enum FirmwareResponseMatcher {
+    /// Kotlin twin: `FirmwareResponseMatcher.correlated`.
     public static func correlated(_ key: FirmwareResponseKey) -> Bool {
         key.pendingSessionId == key.currentSessionId && key.sameDevice
             && key.expectedCommand == key.actualCommand && key.expectedSequence == key.actualSequence
     }
 
     /// VERIFY is asynchronous; body[0] == 1 is the recovered final-result discriminator.
+    /// Kotlin twin: `FirmwareResponseMatcher.isFinal`.
     public static func isFinal(command: Int, _ response: FirmwareWireResponse) -> Bool {
         command != FirmwareCommand.verify || (response.result != 2 && response.body.first == 1)
     }
@@ -119,6 +122,7 @@ public enum FirmwareResponseMatcher {
 
 public enum FirmwareUpdateAdmission {
     /// A 220-byte data chunk produces a 244-byte puffin frame, requiring ATT MTU 247 with its 3-byte header.
+    /// Kotlin twin: `FirmwareUpdateAdmission.busyReason`.
     public static func busyReason(
         backfilling: Bool,
         writeInFlight: Bool,
@@ -145,10 +149,12 @@ public enum FirmwareUpdateAdmission {
 
 /// Keep ordinary BLE queue behavior intact while fail-closing session-bound OTA writes.
 public enum FirmwareWriteQueuePolicy {
+    /// Kotlin twin: `FirmwareWriteQueuePolicy.belongsToCurrentSession`.
     public static func belongsToCurrentSession(firmwareSessionId: Int?, currentSessionId: Int?) -> Bool {
         firmwareSessionId == nil || firmwareSessionId == currentSessionId
     }
 
+    /// Kotlin twin: `FirmwareWriteQueuePolicy.mayRetryAfterAmbiguousRejection`.
     public static func mayRetryAfterAmbiguousRejection(firmwareSessionId: Int?) -> Bool {
         firmwareSessionId == nil
     }
@@ -158,10 +164,12 @@ public enum FirmwareActivationObservation {
     public static let disconnectTimeoutMs = 30_000
     public static let reconnectTimeoutMs = 60_000
 
+    /// Kotlin twin: `FirmwareActivationObservation.sessionIsCurrent`.
     public static func sessionIsCurrent(observedSessionId: Int, currentSessionId: Int?) -> Bool {
         observedSessionId == currentSessionId
     }
 
+    /// Kotlin twin: `FirmwareActivationObservation.canAcceptReportedVersion`.
     public static func canAcceptReportedVersion(_ stage: FirmwareUpdateStage) -> Bool {
         stage == .reconnecting
     }
@@ -198,6 +206,7 @@ public struct FirmwareResumeBinding {
 
 /// Resume is deliberately local to one uninterrupted BLE connection and one immutable image.
 public enum FirmwareResumePolicy {
+    /// Kotlin twin: `FirmwareResumePolicy.rejectionReason`.
     public static func rejectionReason(_ binding: FirmwareResumeBinding) -> String? {
         if binding.pendingSessionId != binding.currentSessionId {
             return "The paused firmware session is no longer current"
@@ -258,6 +267,7 @@ public protocol FirmwareTransferTransport {
     /// Send one framed command and await a correlated final response. `accept` recovers VERIFY's final
     /// result. Throws `FirmwareRetryableTransportException` for an ambiguous chunk failure, any other
     /// error for a permanent one.
+    /// Kotlin twin: `FirmwareTransferTransport.exchange`.
     func exchange(command: Int, payload: [UInt8], timeoutMs: Int,
                   accept: @escaping (FirmwareWireResponse) -> Bool) async throws -> FirmwareWireResponse
 }
@@ -278,6 +288,7 @@ public final class FirmwareTransferEngine {
         self.sleep = sleep
     }
 
+    /// Kotlin twin: `FirmwareTransferEngine.transfer`.
     @discardableResult
     public func transfer(
         image: ValidatedFirmwareImage,
@@ -344,6 +355,7 @@ public final class FirmwareTransferEngine {
         return state
     }
 
+    /// Kotlin twin: `FirmwareTransferEngine.activate`.
     @discardableResult
     public func activate() async throws -> FirmwareWireResponse {
         let response = try await exchange(FirmwareCommand.activate, [1], FirmwareCommand.commandTimeoutMs)
@@ -353,12 +365,14 @@ public final class FirmwareTransferEngine {
         return response
     }
 
+    /// Kotlin twin: `FirmwareTransferEngine.exchange`.
     private func exchange(_ command: Int, _ payload: [UInt8], _ timeoutMs: Int) async throws -> FirmwareWireResponse {
         try await transport.exchange(command: command, payload: payload, timeoutMs: timeoutMs) {
             FirmwareResponseMatcher.isFinal(command: command, $0)
         }
     }
 
+    /// Kotlin twin: `FirmwareTransferEngine.quiesceStrap`.
     private func quiesceStrap() async throws {
         let steps: [(Int, [UInt8], String)] = [
             (FirmwareCommand.stopRealtimeHr, [0], "stop realtime HR"),
@@ -373,6 +387,7 @@ public final class FirmwareTransferEngine {
         }
     }
 
+    /// Kotlin twin: `FirmwareTransferEngine.requireAccepted`.
     private func requireAccepted(_ response: FirmwareWireResponse, expectedTail: Int, step: String) throws {
         if response.result != 1 || response.body.count < 2
             || response.body[0] != 1 || Int(response.body[1]) != expectedTail {
@@ -380,6 +395,7 @@ public final class FirmwareTransferEngine {
         }
     }
 
+    /// Kotlin twin: `FirmwareTransferEngine.rejectionMessage`.
     private func rejectionMessage(_ step: String, _ response: FirmwareWireResponse) -> String {
         let detail = response.body.count > 1 ? Int(response.body[1]) : nil
         let detailText: String

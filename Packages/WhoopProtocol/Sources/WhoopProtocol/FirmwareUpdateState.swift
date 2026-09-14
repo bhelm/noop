@@ -63,6 +63,7 @@ public struct FirmwareUpdateState: Sendable {
 
 /// Pure state transitions shared by the BLE integration and unit tests.
 public enum FirmwareUpdateTransitions {
+    /// Kotlin twin: `FirmwareUpdateTransitions.selected`.
     public static func selected(_ image: FirmwareImageInfo, eligible: Bool) -> FirmwareUpdateState {
         FirmwareUpdateState(
             stage: .imageReady,
@@ -73,6 +74,7 @@ public enum FirmwareUpdateTransitions {
             deviceEligible: eligible)
     }
 
+    /// Kotlin twin: `FirmwareUpdateTransitions.begin`.
     public static func begin(_ state: FirmwareUpdateState, deviceLabel: String) -> FirmwareUpdateState {
         var next = state
         next.stage = .preparing
@@ -84,6 +86,7 @@ public enum FirmwareUpdateTransitions {
         return next
     }
 
+    /// Kotlin twin: `FirmwareUpdateTransitions.writing`.
     public static func writing(_ state: FirmwareUpdateState, acknowledged: Int) -> FirmwareUpdateState {
         var next = state
         let clamped = min(max(0, acknowledged), state.totalBytes)
@@ -93,6 +96,7 @@ public enum FirmwareUpdateTransitions {
         return next
     }
 
+    /// Kotlin twin: `FirmwareUpdateTransitions.retrying`.
     public static func retrying(_ state: FirmwareUpdateState, acknowledged: Int, attempt: Int, maximum: Int) -> FirmwareUpdateState {
         var next = state
         next.stage = .writing
@@ -101,6 +105,7 @@ public enum FirmwareUpdateTransitions {
         return next
     }
 
+    /// Kotlin twin: `FirmwareUpdateTransitions.paused`.
     public static func paused(_ state: FirmwareUpdateState, acknowledged: Int, reason: String) -> FirmwareUpdateState {
         var next = state
         next.stage = .paused
@@ -111,6 +116,7 @@ public enum FirmwareUpdateTransitions {
         return next
     }
 
+    /// Kotlin twin: `FirmwareUpdateTransitions.resuming`.
     public static func resuming(_ state: FirmwareUpdateState) -> FirmwareUpdateState {
         var next = state
         next.stage = .preparing
@@ -119,6 +125,7 @@ public enum FirmwareUpdateTransitions {
         return next
     }
 
+    /// Kotlin twin: `FirmwareUpdateTransitions.remoteValidating`.
     public static func remoteValidating(_ state: FirmwareUpdateState) -> FirmwareUpdateState {
         var next = state
         next.stage = .remoteValidating
@@ -127,6 +134,7 @@ public enum FirmwareUpdateTransitions {
         return next
     }
 
+    /// Kotlin twin: `FirmwareUpdateTransitions.ready`.
     public static func ready(_ state: FirmwareUpdateState) -> FirmwareUpdateState {
         var next = state
         next.stage = .readyToActivate
@@ -134,6 +142,7 @@ public enum FirmwareUpdateTransitions {
         return next
     }
 
+    /// Kotlin twin: `FirmwareUpdateTransitions.activationRequested`.
     public static func activationRequested(_ state: FirmwareUpdateState) -> FirmwareUpdateState {
         var next = state
         next.stage = .activationRequested
@@ -141,6 +150,7 @@ public enum FirmwareUpdateTransitions {
         return next
     }
 
+    /// Kotlin twin: `FirmwareUpdateTransitions.reconnecting`.
     public static func reconnecting(_ state: FirmwareUpdateState) -> FirmwareUpdateState {
         var next = state
         next.stage = .reconnecting
@@ -148,6 +158,7 @@ public enum FirmwareUpdateTransitions {
         return next
     }
 
+    /// Kotlin twin: `FirmwareUpdateTransitions.reconnected`.
     public static func reconnected(_ state: FirmwareUpdateState, reportedVersion: String?) -> FirmwareUpdateState {
         var next = state
         let suffix = reportedVersion.map { " and reports firmware \($0)" } ?? ""
@@ -156,6 +167,7 @@ public enum FirmwareUpdateTransitions {
         return next
     }
 
+    /// Kotlin twin: `FirmwareUpdateTransitions.failed`.
     public static func failed(_ state: FirmwareUpdateState, reason: String) -> FirmwareUpdateState {
         var next = state
         next.stage = .failed
@@ -165,6 +177,7 @@ public enum FirmwareUpdateTransitions {
         return next
     }
 
+    /// Kotlin twin: `FirmwareUpdateTransitions.cancelled`.
     public static func cancelled(_ state: FirmwareUpdateState) -> FirmwareUpdateState {
         var next = state
         next.stage = .cancelled
@@ -174,6 +187,7 @@ public enum FirmwareUpdateTransitions {
         return next
     }
 
+    /// Kotlin twin: `FirmwareUpdateTransitions.eligibility`.
     public static func eligibility(_ state: FirmwareUpdateState, eligible: Bool) -> FirmwareUpdateState {
         guard state.stage == .imageReady else { return state }
         var next = state
@@ -208,6 +222,7 @@ public func compareFirmwareVersions(current currentVersion: String?, target targ
     return .same
 }
 
+/// Kotlin twin: `parseFirmwareVersion`.
 private func parseFirmwareVersion(_ version: String?) -> [UInt64]? {
     guard let version else { return nil }
     let components = version.trimmingCharacters(in: .whitespacesAndNewlines).split(separator: ".", omittingEmptySubsequences: false)
@@ -228,14 +243,17 @@ public enum FirmwareFlashUiPolicy {
         .empty, .imageReady, .failed, .cancelled, .deviceReconnected,
     ]
 
+    /// Kotlin twin: `FirmwareFlashUiPolicy.canChooseFile`.
     public static func canChooseFile(_ stage: FirmwareUpdateStage, uiBusy: Bool) -> Bool {
         !uiBusy && settledStages.contains(stage)
     }
 
+    /// Kotlin twin: `FirmwareFlashUiPolicy.canClear`.
     public static func canClear(_ stage: FirmwareUpdateStage, uiBusy: Bool) -> Bool {
         !uiBusy && settledStages.contains(stage) && stage != .empty
     }
 
+    /// Kotlin twin: `FirmwareFlashUiPolicy.showsProgress`.
     public static func showsProgress(_ stage: FirmwareUpdateStage) -> Bool {
         [.preparing, .writing, .remoteValidating, .readyToActivate, .paused].contains(stage)
     }
@@ -246,7 +264,7 @@ public enum FirmwareFlashUiPolicy {
 public struct FirmwareImageTooLargeError: Error { public init() {} }
 public struct EmptyFirmwareImageError: Error { public init() {} }
 
-/// Bytes-per-unit label matching the Kotlin `formatFirmwareBytes`.
+/// Bytes-per-unit label. Kotlin twin: `formatFirmwareBytes`.
 public func formatFirmwareBytes(_ bytes: Int) -> String {
     if bytes >= 1024 * 1024 {
         return String(format: "%.2f MiB", locale: Locale(identifier: "en_US_POSIX"), Double(bytes) / (1024.0 * 1024.0))
