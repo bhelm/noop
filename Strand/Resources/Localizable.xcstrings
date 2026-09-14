@@ -4,6 +4,7 @@
     "3 weeks": {"localizations":{"de":{"stringUnit":{"state":"translated","value":"3 Wochen"}}}},
     "sparse, widened to %@": {"localizations":{"de":{"stringUnit":{"state":"translated","value":"wenige Daten, erweitert auf %@"}}}},
     "30-day step average": {"localizations":{"de":{"stringUnit":{"state":"translated","value":"30-Tage-Schrittedurchschnitt"}}}},
+    "Rolling average over the last 30 days": {"localizations":{"de":{"stringUnit":{"state":"translated","value":"Fließender Durchschnitt der letzten 30 Tage"}}}},
     "%lld of 30 days": {"localizations":{"de":{"stringUnit":{"state":"translated","value":"%lld von 30 Tagen"}}}},
     "Historical trend": {"localizations":{"de":{"stringUnit":{"state":"translated","value":"Historischer Verlauf"}}}},
     "bar": {"localizations":{"de":{"stringUnit":{"state":"translated","value":"Balken"}}}},
