@@ -2710,7 +2710,7 @@
     <!-- Test Centre: local firmware image inspection, transfer and explicit activation. -->
     <string name="firmware_flash_title">Firmware image transfer</string>
     <string name="firmware_flash_blurb">Inspect a local WHOOP 5/MG firmware image, transfer it with acknowledged progress, then choose separately whether to activate it.</string>
-    <string name="firmware_flash_integrity_note">Experimental and device-risking. Matching CRCs prove byte integrity only; they do not authenticate the publisher, prove compatibility, or guarantee that the strap will boot.</string>
+    <string name="firmware_flash_integrity_note">Use only unmodified original WHOOP images. NOOP then transfers the same file the WHOOP app does: it checks the image first, and the strap checks it again itself before activation.</string>
     <string name="firmware_flash_file_note">For a normal original update, extract the vendor ZIP and select its .zbin file. A .bin file is the decompressed research form.</string>
     <string name="firmware_flash_choose_image">Choose .zbin or .bin image</string>
     <string name="firmware_flash_choose_replacement">Choose a different image</string>
@@ -2725,7 +2725,7 @@
     <string name="firmware_flash_local_valid">Local header, length, payload CRC and header CRC checks passed.</string>
     <string name="firmware_flash_format_zbin">Vendor OTA .zbin · compressed type 5</string>
     <string name="firmware_flash_format_bin">Raw research .bin · type 1</string>
-    <string name="firmware_flash_compat_zbin">Original compressed update form. CRCs do not prove device compatibility or authentication.</string>
+    <string name="firmware_flash_compat_zbin">Original update format, the same file the WHOOP app transfers.</string>
     <string name="firmware_flash_compat_bin">Research raw form. Installation of this decompressed type is not established.</string>
     <string name="firmware_flash_size">Image size</string>
     <string name="firmware_flash_version">Image version</string>
@@ -2751,10 +2751,6 @@
     <string name="firmware_flash_cancel">Stop this update session</string>
     <string name="firmware_flash_cancel_note">Stopping prevents further sends from NOOP. It does not roll back bytes the strap has already acknowledged.</string>
     <string name="firmware_flash_clear">Clear image and status</string>
-    <string name="firmware_flash_log">Firmware update log</string>
-    <string name="firmware_flash_copy_log">Copy log</string>
-    <string name="firmware_flash_share_log">Share log</string>
-    <string name="firmware_flash_log_subject">NOOP firmware update log</string>
     <string name="firmware_flash_no_active_device">Select a WHOOP 5/MG as the active device before transfer. Local image inspection remains available.</string>
     <string name="firmware_flash_whoop5_only">Transfer is supported only with positive WHOOP 5/MG evidence. WHOOP 4.0 and non-WHOOP devices are blocked.</string>
     <string name="firmware_flash_device_disconnected">The active WHOOP 5/MG is disconnected. Connect it before transfer.</string>
@@ -2763,7 +2759,7 @@
     <string name="firmware_flash_unknown_version">unknown</string>
     <string name="firmware_flash_activate_title">Activate the staged firmware?</string>
     <string name="firmware_flash_activate_identity">Image: %1$s\nCurrent strap: %2$s\nSelected image: %3$s\nDevice session: %4$s</string>
-    <string name="firmware_flash_activate_warning">Activation may disconnect the strap and may leave it unusable. A validation result and matching CRCs do not prove a trusted signature or a successful boot. Reconnection only reports the version the strap later exposes.</string>
+    <string name="firmware_flash_activate_warning">The strap restarts on the new firmware and briefly disconnects. It then reconnects and reports its version. Keep the strap nearby and charged until it is connected again.</string>
     <string name="firmware_flash_activate_confirm">Activate firmware</string>
     <string name="firmware_flash_keep_staged">Not now</string>
     <string name="firmware_flash_unknown_device">unknown device</string>
