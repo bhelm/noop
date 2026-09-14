@@ -102,16 +102,6 @@ class FirmwareFlashUiPolicyTest {
     }
 
     @Test
-    fun visibleLogIsBoundedToNewestLines() {
-        val lines = (1..30).map { "line-$it" }
-        val visible = FirmwareFlashUiPolicy.visibleLog(lines)
-
-        assertEquals(16, visible.size)
-        assertEquals("line-15", visible.first())
-        assertEquals("line-30", visible.last())
-    }
-
-    @Test
     fun readerRejectsEmptyAndDeclaredOversizeBeforeReading() {
         assertThrows(EmptyFirmwareImageException::class.java) {
             readFirmwareBytes(ByteArrayInputStream(byteArrayOf()))

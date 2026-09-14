@@ -263,7 +263,6 @@ internal class FirmwareTransferEngine(private val transport: FirmwareTransferTra
                         acknowledged = offset,
                         attempt = attempts + 1,
                         maximum = MAX_CHUNK_ATTEMPTS,
-                        reason = retryable.message ?: "transport response unavailable",
                     )
                     publish(state)
                 }
@@ -633,7 +632,6 @@ data class FirmwareUpdateState(
     val totalBytes: Int = image?.byteCount ?: 0,
     val status: String = "Choose an original .zbin update image",
     val error: String? = null,
-    val log: List<String> = emptyList(),
     val deviceEligible: Boolean = false,
     val lockedDeviceLabel: String? = null,
 ) {
@@ -653,8 +651,6 @@ data class FirmwareUpdateState(
 
 /** Pure state transitions shared by the BLE integration and unit tests. */
 internal object FirmwareUpdateTransitions {
-    private const val MAX_LOG_LINES = 80
-
     fun selected(image: FirmwareImageInfo, eligible: Boolean): FirmwareUpdateState = FirmwareUpdateState(
         stage = FirmwareUpdateStage.IMAGE_READY,
         image = image,
@@ -662,7 +658,7 @@ internal object FirmwareUpdateTransitions {
         status = if (eligible) "Image validated locally. Ready to transfer." else
             "Image validated. Connect and bond a WHOOP 5/MG strap to continue.",
         deviceEligible = eligible,
-    ).withLog("Local header, length, payload CRC and header CRC verified")
+    )
 
     fun begin(state: FirmwareUpdateState, deviceLabel: String): FirmwareUpdateState = state.copy(
         stage = FirmwareUpdateStage.PREPARING,
@@ -671,7 +667,7 @@ internal object FirmwareUpdateTransitions {
         error = null,
         lockedDeviceLabel = deviceLabel,
         deviceEligible = true,
-    ).withLog("Exclusive update session acquired for $deviceLabel")
+    )
 
     fun writing(state: FirmwareUpdateState, acknowledged: Int): FirmwareUpdateState = state.copy(
         stage = FirmwareUpdateStage.WRITING,
@@ -684,12 +680,11 @@ internal object FirmwareUpdateTransitions {
         acknowledged: Int,
         attempt: Int,
         maximum: Int,
-        reason: String,
     ): FirmwareUpdateState = state.copy(
         stage = FirmwareUpdateStage.WRITING,
         bytesAcknowledged = acknowledged.coerceIn(0, state.totalBytes),
         status = "Retrying firmware chunk at offset $acknowledged ($attempt / $maximum)",
-    ).withLog("Chunk at offset $acknowledged will be retried ($attempt / $maximum): $reason")
+    )
 
     fun paused(state: FirmwareUpdateState, acknowledged: Int, reason: String): FirmwareUpdateState = state.copy(
         stage = FirmwareUpdateStage.PAUSED,
@@ -697,41 +692,41 @@ internal object FirmwareUpdateTransitions {
         status = "Transfer paused at the last acknowledged offset. Resume is available only on this connection.",
         error = reason,
         deviceEligible = true,
-    ).withLog("Paused at offset ${acknowledged.coerceIn(0, state.totalBytes)}: $reason")
+    )
 
     fun resuming(state: FirmwareUpdateState): FirmwareUpdateState = state.copy(
         stage = FirmwareUpdateStage.PREPARING,
         status = "Preparing the same strap connection to resume at offset ${state.bytesAcknowledged}",
         error = null,
-    ).withLog("Resuming the existing update slot at offset ${state.bytesAcknowledged}")
+    )
 
     fun remoteValidating(state: FirmwareUpdateState): FirmwareUpdateState = state.copy(
         stage = FirmwareUpdateStage.REMOTE_VALIDATING,
         bytesAcknowledged = state.totalBytes,
         status = "Transfer complete. Waiting for the strap's asynchronous integrity result.",
-    ).withLog("All chunks acknowledged; remote validation requested")
+    )
 
     fun ready(state: FirmwareUpdateState): FirmwareUpdateState = state.copy(
         stage = FirmwareUpdateStage.READY_TO_ACTIVATE,
         status = "The strap accepted the transferred image integrity check. Activation still requires your confirmation.",
-    ).withLog("Remote validation succeeded; activation unlocked for this session")
+    )
 
     fun activationRequested(state: FirmwareUpdateState): FirmwareUpdateState = state.copy(
         stage = FirmwareUpdateStage.ACTIVATION_REQUESTED,
         status = "Activation/reset request accepted. Waiting for the link to change; boot is not yet confirmed.",
-    ).withLog("Activation/reset request accepted; this is not proof that the image booted")
+    )
 
     fun reconnecting(state: FirmwareUpdateState): FirmwareUpdateState = state.copy(
         stage = FirmwareUpdateStage.RECONNECTING,
         status = "The strap disconnected after activation. Waiting for a fresh connection; no transfer will be resumed.",
-    ).withLog("Link dropped after activation request")
+    )
 
     fun reconnected(state: FirmwareUpdateState, reportedVersion: String?): FirmwareUpdateState {
         val suffix = reportedVersion?.let { " and reports firmware $it" } ?: ""
         return state.copy(
             stage = FirmwareUpdateStage.DEVICE_RECONNECTED,
             status = "The same strap reconnected$suffix. This does not prove which image booted.",
-        ).withLog("Same device reconnected${reportedVersion?.let { "; reported version $it" } ?: ""}")
+        )
     }
 
     fun failed(state: FirmwareUpdateState, reason: String): FirmwareUpdateState = state.copy(
@@ -739,14 +734,14 @@ internal object FirmwareUpdateTransitions {
         status = "Firmware update stopped",
         error = reason,
         deviceEligible = false,
-    ).withLog("Stopped: $reason")
+    )
 
     fun cancelled(state: FirmwareUpdateState): FirmwareUpdateState = state.copy(
         stage = FirmwareUpdateStage.CANCELLED,
         status = "Update session cancelled. The app will not resume or activate it automatically.",
         error = null,
         deviceEligible = false,
-    ).withLog("Cancelled by user; no automatic retry")
+    )
 
     fun eligibility(state: FirmwareUpdateState, eligible: Boolean): FirmwareUpdateState {
         if (state.stage != FirmwareUpdateStage.IMAGE_READY) return state
@@ -756,9 +751,6 @@ internal object FirmwareUpdateTransitions {
                 "Image validated. Connect and bond a WHOOP 5/MG strap to continue.",
         )
     }
-
-    private fun FirmwareUpdateState.withLog(line: String): FirmwareUpdateState =
-        copy(log = (log + line).takeLast(MAX_LOG_LINES))
 }
 
 private fun ByteArray.u32le(offset: Int): Long =

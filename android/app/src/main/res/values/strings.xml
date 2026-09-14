@@ -2741,10 +2741,6 @@
     <string name="firmware_flash_cancel">Stop this update session</string>
     <string name="firmware_flash_cancel_note">Stopping prevents further sends from NOOP. It does not roll back bytes the strap has already acknowledged.</string>
     <string name="firmware_flash_clear">Clear image and status</string>
-    <string name="firmware_flash_log">Firmware update log</string>
-    <string name="firmware_flash_copy_log">Copy log</string>
-    <string name="firmware_flash_share_log">Share log</string>
-    <string name="firmware_flash_log_subject">NOOP firmware update log</string>
     <string name="firmware_flash_no_active_device">Select a WHOOP 5/MG as the active device before transfer. Local image inspection remains available.</string>
     <string name="firmware_flash_whoop5_only">Transfer is supported only with positive WHOOP 5/MG evidence. WHOOP 4.0 and non-WHOOP devices are blocked.</string>
     <string name="firmware_flash_device_disconnected">The active WHOOP 5/MG is disconnected. Connect it before transfer.</string>

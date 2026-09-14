@@ -1,8 +1,6 @@
 package com.noop.ui
 
-import android.content.ClipData
 import android.content.Context
-import android.content.Intent
 import android.net.Uri
 import android.provider.OpenableColumns
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -11,13 +9,8 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.FolderOpen
-import androidx.compose.material.icons.filled.IosShare
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material3.AlertDialog
@@ -33,10 +26,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.AnnotatedString
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.noop.R
@@ -51,7 +41,6 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 private const val FIRMWARE_READ_BUFFER_BYTES = 64 * 1024
-private const val VISIBLE_LOG_LINES = 16
 private const val MAX_VERSION_COMPONENT = 0xffff_ffffL
 
 internal enum class FirmwareVersionRelation {
@@ -99,7 +88,6 @@ internal fun FirmwareFlashContent(
     reportedFirmware: String?,
 ) {
     val context = LocalContext.current
-    val clipboard = LocalClipboardManager.current
     val scope = rememberCoroutineScope()
     val state by ble.firmwareUpdateState.collectAsStateWithLifecycle()
     var pickerOpen by remember { mutableStateOf(false) }
@@ -110,9 +98,6 @@ internal fun FirmwareFlashContent(
     val uiBusy = pickerOpen || fileReadBusy
     val canChooseFile = FirmwareFlashUiPolicy.canChooseFile(state.stage, uiBusy)
     val canClear = FirmwareFlashUiPolicy.canClear(state.stage, uiBusy)
-    val visibleLog = FirmwareFlashUiPolicy.visibleLog(state.log)
-    val visibleLogText = visibleLog.joinToString("\n")
-    val fullLogText = state.log.joinToString("\n")
 
     LaunchedEffect(state.stage) {
         if (state.stage != FirmwareUpdateStage.READY_TO_ACTIVATE) showActivationConfirmation = false
@@ -355,42 +340,6 @@ internal fun FirmwareFlashContent(
             )
         }
 
-        if (visibleLog.isNotEmpty()) {
-            HorizontalDivider(color = Palette.hairline)
-            Text(
-                stringResourceCompat(R.string.firmware_flash_log),
-                style = NoopType.subhead,
-                color = Palette.textPrimary,
-            )
-            Text(
-                visibleLogText,
-                style = NoopType.footnote.copy(fontFamily = FontFamily.Monospace),
-                color = Palette.textTertiary,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .heightIn(max = 180.dp)
-                    .verticalScroll(rememberScrollState()),
-            )
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(10.dp),
-            ) {
-                NoopButton(
-                    text = stringResourceCompat(R.string.firmware_flash_copy_log),
-                    leadingIcon = Icons.Filled.ContentCopy,
-                    kind = NoopButtonKind.Tertiary,
-                    modifier = Modifier.weight(1f),
-                    onClick = { clipboard.setText(AnnotatedString(fullLogText)) },
-                )
-                NoopButton(
-                    text = stringResourceCompat(R.string.firmware_flash_share_log),
-                    leadingIcon = Icons.Filled.IosShare,
-                    kind = NoopButtonKind.Tertiary,
-                    modifier = Modifier.weight(1f),
-                    onClick = { shareFirmwareLog(context, fullLogText) },
-                )
-            }
-        }
     }
 
     if (showActivationConfirmation) {
@@ -570,7 +519,6 @@ internal object FirmwareFlashUiPolicy {
         FirmwareUpdateStage.PAUSED,
     )
 
-    fun visibleLog(lines: List<String>): List<String> = lines.takeLast(VISIBLE_LOG_LINES)
 }
 
 internal data class FirmwareDocument(val fileName: String, val bytes: ByteArray)
@@ -639,16 +587,6 @@ internal fun formatFirmwareBytes(bytes: Long): String = when {
     bytes >= 1024L * 1024L -> "%.2f MiB".format(java.util.Locale.ROOT, bytes / (1024.0 * 1024.0))
     bytes >= 1024L -> "%.1f KiB".format(java.util.Locale.ROOT, bytes / 1024.0)
     else -> "$bytes B"
-}
-
-private fun shareFirmwareLog(context: Context, text: String) {
-    val intent = Intent(Intent.ACTION_SEND).apply {
-        type = "text/plain"
-        putExtra(Intent.EXTRA_SUBJECT, context.getString(R.string.firmware_flash_log_subject))
-        putExtra(Intent.EXTRA_TEXT, text)
-        clipData = ClipData.newPlainText(context.getString(R.string.firmware_flash_log), text)
-    }
-    context.startActivity(Intent.createChooser(intent, context.getString(R.string.firmware_flash_share_log)))
 }
 
 @Composable

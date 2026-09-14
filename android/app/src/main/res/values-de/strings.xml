@@ -2719,10 +2719,6 @@
     <string name="firmware_flash_cancel">Diese Update-Sitzung stoppen</string>
     <string name="firmware_flash_cancel_note">Das Stoppen verhindert weitere Sendungen durch NOOP. Bereits vom Band bestätigte Bytes werden nicht zurückgesetzt.</string>
     <string name="firmware_flash_clear">Image und Status löschen</string>
-    <string name="firmware_flash_log">Firmware-Update-Protokoll</string>
-    <string name="firmware_flash_copy_log">Protokoll kopieren</string>
-    <string name="firmware_flash_share_log">Protokoll teilen</string>
-    <string name="firmware_flash_log_subject">NOOP-Firmware-Update-Protokoll</string>
     <string name="firmware_flash_no_active_device">Wähle vor der Übertragung ein WHOOP 5/MG als aktives Gerät. Die lokale Image-Prüfung bleibt verfügbar.</string>
     <string name="firmware_flash_whoop5_only">Die Übertragung ist nur mit eindeutigem WHOOP-5/MG-Nachweis möglich. WHOOP 4.0 und andere Geräte sind gesperrt.</string>
     <string name="firmware_flash_device_disconnected">Das aktive WHOOP 5/MG ist getrennt. Verbinde es vor der Übertragung.</string>
