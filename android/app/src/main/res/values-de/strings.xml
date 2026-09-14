@@ -2678,7 +2678,7 @@
     <!-- Testcenter: lokales Firmware-Image prüfen, übertragen und getrennt aktivieren. -->
     <string name="firmware_flash_title">Firmware-Image übertragen</string>
     <string name="firmware_flash_blurb">Prüfe ein lokales WHOOP-5/MG-Firmware-Image, übertrage es mit bestätigtem Fortschritt und entscheide danach getrennt über die Aktivierung.</string>
-    <string name="firmware_flash_integrity_note">Nutze nur unveränderte Original-Images von WHOOP. Dann überträgt NOOP dieselbe Datei wie die WHOOP-App: NOOP prüft das Image vorher, und das Band prüft es vor der Aktivierung noch einmal selbst.</string>
+    <string name="firmware_flash_integrity_note">Der Update-Vorgang ist abgesichert: NOOP prüft das Image vor der Übertragung, und das Band prüft es vor der Aktivierung noch einmal selbst. Das Risiko ist dasselbe wie bei einem regulären Firmware-Update.</string>
     <string name="firmware_flash_file_note">Entpacke für ein normales Original-Update das Hersteller-ZIP und wähle die enthaltene .zbin-Datei. Eine .bin-Datei ist die dekomprimierte Forschungsform.</string>
     <string name="firmware_flash_choose_image">.zbin- oder .bin-Image auswählen</string>
     <string name="firmware_flash_choose_replacement">Anderes Image auswählen</string>
@@ -2693,7 +2693,7 @@
     <string name="firmware_flash_local_valid">Lokale Prüfungen von Header, Länge, Nutzdaten-CRC und Header-CRC bestanden.</string>
     <string name="firmware_flash_format_zbin">Hersteller-OTA .zbin · komprimierter Typ 5</string>
     <string name="firmware_flash_format_bin">Rohes Forschungs-.bin · Typ 1</string>
-    <string name="firmware_flash_compat_zbin">Original-Update-Format, dieselbe Datei, die auch die WHOOP-App überträgt.</string>
+    <string name="firmware_flash_compat_zbin">Das reguläre Update-Format des Bands.</string>
     <string name="firmware_flash_compat_bin">Rohe Forschungsform. Die Installation dieses dekomprimierten Typs ist nicht belegt.</string>
     <string name="firmware_flash_size">Image-Größe</string>
     <string name="firmware_flash_version">Image-Version</string>
