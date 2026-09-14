@@ -209,6 +209,21 @@ fun TestCentreScreen(vm: AppViewModel, onOpenGroundTruthCollector: () -> Unit = 
             )
         }
 
+        SettingsSectionTC(
+            icon = Icons.Filled.Autorenew,
+            title = stringResource(R.string.firmware_flash_title),
+            blurb = stringResource(R.string.firmware_flash_blurb),
+        ) {
+            FirmwareFlashContent(
+                ble = vm.ble,
+                hasActiveDevice = publishedActiveStrapId != null,
+                hasWhoop5MgEvidence = is5MG,
+                connected = live.connected,
+                encryptedBond = live.encryptedBond,
+                reportedFirmware = live.strapFirmware,
+            )
+        }
+
         if (is5MG) {
             SettingsSectionTC(
                 icon = Icons.Filled.Science,
