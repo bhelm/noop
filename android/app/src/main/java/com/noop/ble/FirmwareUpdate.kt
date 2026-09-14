@@ -7,6 +7,7 @@ import java.util.Locale
 import java.util.zip.CRC32
 import java.util.zip.DataFormatException
 import java.util.zip.Inflater
+import kotlinx.coroutines.delay
 
 /** The two container types whose layout and CRC predicates are retained from the strap firmware. */
 enum class FirmwareImageFormat(val containerType: Long, val displayName: String) {
@@ -58,6 +59,9 @@ internal object FirmwareWhoop5ResponseDecoder {
         val command = frame[10].toInt() and 0xff
         val bodyLength = when (command) {
             FirmwareTransferEngine.VERIFY_COMMAND -> 1
+            FirmwareTransferEngine.STOP_REALTIME_HR_COMMAND,
+            FirmwareTransferEngine.ABORT_HISTORY_COMMAND -> 0
+            FirmwareTransferEngine.STOP_IMU_COMMAND,
             FirmwareTransferEngine.PREPARE_COMMAND,
             FirmwareTransferEngine.WRITE_COMMAND,
             FirmwareTransferEngine.ACTIVATE_COMMAND -> 2
@@ -140,6 +144,39 @@ internal object FirmwareActivationObservation {
         stage == FirmwareUpdateStage.RECONNECTING
 }
 
+internal data class FirmwareResumeBinding(
+    val pendingSessionId: Int,
+    val currentSessionId: Int,
+    val pendingDeviceAddress: String,
+    val currentDeviceAddress: String,
+    val pendingConnectionGeneration: Int,
+    val currentConnectionGeneration: Int,
+    val pendingImageSha256: String,
+    val currentImageSha256: String,
+    val acknowledgedOffset: Int,
+    val totalBytes: Int,
+)
+
+/** Resume is deliberately local to one uninterrupted BLE connection and one immutable image. */
+internal object FirmwareResumePolicy {
+    fun rejectionReason(binding: FirmwareResumeBinding): String? = when {
+        binding.pendingSessionId != binding.currentSessionId ->
+            "The paused firmware session is no longer current"
+        !binding.pendingDeviceAddress.equals(binding.currentDeviceAddress, ignoreCase = true) ->
+            "The connected strap no longer matches the paused firmware session"
+        binding.pendingConnectionGeneration != binding.currentConnectionGeneration ->
+            "The Bluetooth connection changed; restart the firmware transfer from the beginning"
+        !binding.pendingImageSha256.equals(binding.currentImageSha256, ignoreCase = true) ->
+            "The selected image changed; restart the firmware transfer from the beginning"
+        binding.acknowledgedOffset !in 0..binding.totalBytes ->
+            "The saved firmware offset is outside the selected image"
+        binding.acknowledgedOffset != binding.totalBytes &&
+            binding.acknowledgedOffset % FirmwareImageParser.CHUNK_SIZE != 0 ->
+            "The saved firmware offset is not an acknowledged chunk boundary"
+        else -> null
+    }
+}
+
 internal fun interface FirmwareTransferTransport {
     suspend fun exchange(
         command: Int,
@@ -151,7 +188,8 @@ internal fun interface FirmwareTransferTransport {
 
 /**
  * Transport-independent OTA transaction. The BLE client supplies correlation/timeouts; tests supply a
- * deterministic fake. Every failure stops the plan and there is deliberately no retry or resume branch.
+ * deterministic fake. Only ambiguous transport failures for a data chunk are retried. A rejected command
+ * is permanent, and exhausting the bounded retry budget pauses at the last acknowledged offset.
  */
 internal class FirmwareTransferEngine(private val transport: FirmwareTransferTransport) {
     companion object {
@@ -159,6 +197,11 @@ internal class FirmwareTransferEngine(private val transport: FirmwareTransferTra
         const val WRITE_COMMAND = 143
         const val ACTIVATE_COMMAND = 144
         const val VERIFY_COMMAND = 83
+        const val STOP_REALTIME_HR_COMMAND = 3
+        const val STOP_IMU_COMMAND = 106
+        const val ABORT_HISTORY_COMMAND = 20
+        const val MAX_CHUNK_ATTEMPTS = 7
+        const val PRE_TRANSFER_DELAY_MS = 500L
         const val COMMAND_TIMEOUT_MS = 8_000L
         const val VERIFY_TIMEOUT_MS = 30_000L
     }
@@ -166,15 +209,26 @@ internal class FirmwareTransferEngine(private val transport: FirmwareTransferTra
     suspend fun transfer(
         image: ValidatedFirmwareImage,
         initial: FirmwareUpdateState,
+        startOffset: Int = 0,
+        prepareSlot: Boolean = true,
         publish: (FirmwareUpdateState) -> Unit,
     ): FirmwareUpdateState {
-        requireAccepted(
-            exchange(PREPARE_COMMAND, byteArrayOf(1), COMMAND_TIMEOUT_MS),
-            expectedTail = 0,
-            step = "prepare",
-        )
+        require(startOffset in 0..image.bytes.size) { "Invalid firmware start offset $startOffset" }
+        require(!prepareSlot || startOffset == 0) { "A newly prepared slot must start at offset 0" }
+        require(startOffset == image.bytes.size || startOffset % FirmwareImageParser.CHUNK_SIZE == 0) {
+            "Firmware resume offset $startOffset is not an acknowledged chunk boundary"
+        }
+        delay(PRE_TRANSFER_DELAY_MS)
+        quiesceStrap()
+        if (prepareSlot) {
+            requireAccepted(
+                exchange(PREPARE_COMMAND, byteArrayOf(1), COMMAND_TIMEOUT_MS),
+                expectedTail = 0,
+                step = "prepare",
+            )
+        }
         var state = initial
-        var offset = 0
+        var offset = startOffset
         while (offset < image.bytes.size) {
             val count = minOf(FirmwareImageParser.CHUNK_SIZE, image.bytes.size - offset)
             val payload = ByteArray(6 + count)
@@ -185,11 +239,35 @@ internal class FirmwareTransferEngine(private val transport: FirmwareTransferTra
             payload[4] = ((offset ushr 24) and 0xff).toByte()
             payload[5] = count.toByte()
             image.bytes.copyInto(payload, 6, offset, offset + count)
-            requireAccepted(
-                exchange(WRITE_COMMAND, payload, COMMAND_TIMEOUT_MS),
-                expectedTail = 0,
-                step = "write at offset $offset",
-            )
+            var attempts = 0
+            while (true) {
+                attempts += 1
+                try {
+                    requireAccepted(
+                        exchange(WRITE_COMMAND, payload, COMMAND_TIMEOUT_MS),
+                        expectedTail = 0,
+                        step = "write at offset $offset",
+                    )
+                    break
+                } catch (retryable: FirmwareRetryableTransportException) {
+                    if (attempts >= MAX_CHUNK_ATTEMPTS) {
+                        throw FirmwareTransferPausedException(
+                            acknowledgedOffset = offset,
+                            attempts = attempts,
+                            message = "Firmware transfer paused at offset $offset after $attempts attempts: " +
+                                (retryable.message ?: "transport response unavailable"),
+                        )
+                    }
+                    state = FirmwareUpdateTransitions.retrying(
+                        state,
+                        acknowledged = offset,
+                        attempt = attempts + 1,
+                        maximum = MAX_CHUNK_ATTEMPTS,
+                        reason = retryable.message ?: "transport response unavailable",
+                    )
+                    publish(state)
+                }
+            }
             offset += count
             state = FirmwareUpdateTransitions.writing(state, offset)
             publish(state)
@@ -198,7 +276,7 @@ internal class FirmwareTransferEngine(private val transport: FirmwareTransferTra
         publish(state)
         val verified = exchange(VERIFY_COMMAND, byteArrayOf(1), VERIFY_TIMEOUT_MS)
         if (verified.result != 1 || verified.body.firstOrNull()?.toInt() != 1) {
-            throw FirmwareTransferException("The strap reported that remote image validation failed")
+            throw FirmwareTransferException(rejectionMessage("firmware remote image validation failed", verified))
         }
         return FirmwareUpdateTransitions.ready(state).also(publish)
     }
@@ -207,21 +285,53 @@ internal class FirmwareTransferEngine(private val transport: FirmwareTransferTra
         val response = exchange(ACTIVATE_COMMAND, byteArrayOf(1), COMMAND_TIMEOUT_MS)
         if (response.result != 1 || response.body.size < 2 ||
             response.body[0].toInt() != 1 || response.body[1].toInt() != 1
-        ) throw FirmwareTransferException("The strap rejected the activation/reset request")
+        ) throw FirmwareTransferException(rejectionMessage("firmware activation/reset", response))
         return response
     }
 
     private suspend fun exchange(command: Int, payload: ByteArray, timeoutMs: Long): FirmwareWireResponse =
         transport.exchange(command, payload, timeoutMs) { FirmwareResponseMatcher.isFinal(command, it) }
 
+    private suspend fun quiesceStrap() {
+        listOf(
+            Triple(STOP_REALTIME_HR_COMMAND, byteArrayOf(0), "stop realtime HR"),
+            Triple(STOP_IMU_COMMAND, byteArrayOf(1, 0), "stop IMU streaming"),
+            Triple(ABORT_HISTORY_COMMAND, byteArrayOf(), "abort history transfer"),
+        ).forEach { (command, payload, step) ->
+            val response = exchange(command, payload, COMMAND_TIMEOUT_MS)
+            if (response.result != 1) {
+                throw FirmwareTransferException(rejectionMessage(step, response))
+            }
+        }
+    }
+
     private fun requireAccepted(response: FirmwareWireResponse, expectedTail: Int, step: String) {
         if (response.result != 1 || response.body.size < 2 ||
             response.body[0].toInt() != 1 || response.body[1].toInt() != expectedTail
-        ) throw FirmwareTransferException("The strap rejected firmware $step")
+        ) throw FirmwareTransferException(rejectionMessage("firmware $step", response))
+    }
+
+    private fun rejectionMessage(step: String, response: FirmwareWireResponse): String {
+        val detail = response.body.getOrNull(1)?.toInt()?.and(0xff)
+        val detailText = when {
+            response.command == PREPARE_COMMAND && detail == 10 -> "prepare state (10)"
+            response.command == WRITE_COMMAND && detail == 3 -> "invalid slot (3)"
+            response.command == WRITE_COMMAND && detail == 4 -> "range/overflow (4)"
+            response.command == WRITE_COMMAND && detail == 11 -> "flash/write state (11)"
+            detail != null -> "detail=$detail"
+            else -> "detail unavailable"
+        }
+        return "The strap rejected $step: result=${response.result}, $detailText, body=${response.body.toHex()}"
     }
 }
 
 internal class FirmwareTransferException(message: String) : Exception(message)
+internal class FirmwareRetryableTransportException(message: String, cause: Throwable? = null) : Exception(message, cause)
+internal class FirmwareTransferPausedException(
+    val acknowledgedOffset: Int,
+    val attempts: Int,
+    message: String,
+) : Exception(message)
 
 sealed class FirmwareImageValidation {
     internal data class Valid(val image: ValidatedFirmwareImage) : FirmwareImageValidation()
@@ -511,6 +621,7 @@ enum class FirmwareUpdateStage {
     ACTIVATION_REQUESTED,
     RECONNECTING,
     DEVICE_RECONNECTED,
+    PAUSED,
     FAILED,
     CANCELLED,
 }
@@ -530,11 +641,13 @@ data class FirmwareUpdateState(
         get() = if (totalBytes <= 0) 0f else (bytesAcknowledged.toFloat() / totalBytes).coerceIn(0f, 1f)
     val canStart: Boolean get() = stage == FirmwareUpdateStage.IMAGE_READY && deviceEligible
     val canActivate: Boolean get() = stage == FirmwareUpdateStage.READY_TO_ACTIVATE
+    val canResume: Boolean get() = stage == FirmwareUpdateStage.PAUSED && deviceEligible
     val canCancel: Boolean get() = stage in setOf(
         FirmwareUpdateStage.PREPARING,
         FirmwareUpdateStage.WRITING,
         FirmwareUpdateStage.REMOTE_VALIDATING,
         FirmwareUpdateStage.READY_TO_ACTIVATE,
+        FirmwareUpdateStage.PAUSED,
     )
 }
 
@@ -565,6 +678,32 @@ internal object FirmwareUpdateTransitions {
         bytesAcknowledged = acknowledged.coerceIn(0, state.totalBytes),
         status = "Writing firmware: ${acknowledged.coerceIn(0, state.totalBytes)} / ${state.totalBytes} bytes acknowledged",
     )
+
+    fun retrying(
+        state: FirmwareUpdateState,
+        acknowledged: Int,
+        attempt: Int,
+        maximum: Int,
+        reason: String,
+    ): FirmwareUpdateState = state.copy(
+        stage = FirmwareUpdateStage.WRITING,
+        bytesAcknowledged = acknowledged.coerceIn(0, state.totalBytes),
+        status = "Retrying firmware chunk at offset $acknowledged ($attempt / $maximum)",
+    ).withLog("Chunk at offset $acknowledged will be retried ($attempt / $maximum): $reason")
+
+    fun paused(state: FirmwareUpdateState, acknowledged: Int, reason: String): FirmwareUpdateState = state.copy(
+        stage = FirmwareUpdateStage.PAUSED,
+        bytesAcknowledged = acknowledged.coerceIn(0, state.totalBytes),
+        status = "Transfer paused at the last acknowledged offset. Resume is available only on this connection.",
+        error = reason,
+        deviceEligible = true,
+    ).withLog("Paused at offset ${acknowledged.coerceIn(0, state.totalBytes)}: $reason")
+
+    fun resuming(state: FirmwareUpdateState): FirmwareUpdateState = state.copy(
+        stage = FirmwareUpdateStage.PREPARING,
+        status = "Preparing the same strap connection to resume at offset ${state.bytesAcknowledged}",
+        error = null,
+    ).withLog("Resuming the existing update slot at offset ${state.bytesAcknowledged}")
 
     fun remoteValidating(state: FirmwareUpdateState): FirmwareUpdateState = state.copy(
         stage = FirmwareUpdateStage.REMOTE_VALIDATING,

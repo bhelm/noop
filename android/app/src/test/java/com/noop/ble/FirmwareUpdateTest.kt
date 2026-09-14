@@ -113,6 +113,191 @@ class FirmwareUpdateTest {
     }
 
     @Test
+    fun `fresh transfer quiesces strap in official order before opening slot`() = runBlocking {
+        val selected = parsedImage(type = 5)
+        val calls = mutableListOf<Pair<Int, ByteArray>>()
+        val engine = FirmwareTransferEngine(FirmwareTransferTransport { command, payload, _, accept ->
+            calls += command to payload.copyOf()
+            acceptedResponse(command).also { check(accept(it)) }
+        })
+
+        engine.transfer(selected, begun(selected)) {}
+
+        assertEquals(
+            listOf(
+                FirmwareTransferEngine.STOP_REALTIME_HR_COMMAND,
+                FirmwareTransferEngine.STOP_IMU_COMMAND,
+                FirmwareTransferEngine.ABORT_HISTORY_COMMAND,
+                FirmwareTransferEngine.PREPARE_COMMAND,
+            ),
+            calls.take(4).map { it.first },
+        )
+        assertTrue(calls[0].second.contentEquals(byteArrayOf(0)))
+        assertTrue(calls[1].second.contentEquals(byteArrayOf(1, 0)))
+        assertTrue(calls[2].second.isEmpty())
+        assertTrue(calls[3].second.contentEquals(byteArrayOf(1)))
+    }
+
+    @Test
+    fun `quiesce rejection stops before prepare and preserves raw device detail`() = runBlocking {
+        val selected = parsedImage(type = 5)
+        val calls = mutableListOf<Int>()
+        val engine = FirmwareTransferEngine(FirmwareTransferTransport { command, _, _, accept ->
+            calls += command
+            val response = if (command == FirmwareTransferEngine.STOP_IMU_COMMAND) {
+                FirmwareWireResponse(command, 0, 0x7f, byteArrayOf(1, 0x2a))
+            } else acceptedResponse(command)
+            check(accept(response))
+            response
+        })
+
+        val failure = runCatching { engine.transfer(selected, begun(selected)) {} }.exceptionOrNull()
+
+        assertTrue(failure is FirmwareTransferException)
+        assertTrue(failure?.message.orEmpty().contains("result=127"))
+        assertTrue(failure?.message.orEmpty().contains("body=012a"))
+        assertFalse(calls.contains(FirmwareTransferEngine.PREPARE_COMMAND))
+    }
+
+    @Test
+    fun `lost chunk acknowledgement retries identical offset and counts progress once`() = runBlocking {
+        val selected = parsedImage(type = 5)
+        val writePayloads = mutableListOf<ByteArray>()
+        val progress = mutableListOf<Int>()
+        var firstWrite = true
+        val engine = FirmwareTransferEngine(FirmwareTransferTransport { command, payload, _, accept ->
+            if (command == FirmwareTransferEngine.WRITE_COMMAND) {
+                writePayloads += payload.copyOf()
+                if (firstWrite) {
+                    firstWrite = false
+                    throw FirmwareRetryableTransportException("response timeout")
+                }
+            }
+            acceptedResponse(command).also { check(accept(it)) }
+        })
+
+        val end = engine.transfer(selected, begun(selected)) { progress += it.bytesAcknowledged }
+
+        assertEquals(FirmwareUpdateStage.READY_TO_ACTIVATE, end.stage)
+        assertEquals(2, writePayloads.count { it.u32(1) == 0L })
+        assertTrue(writePayloads[0].contentEquals(writePayloads[1]))
+        assertEquals(1, progress.count { it == 220 })
+    }
+
+    @Test
+    fun `retry exhaustion pauses at last acknowledged offset after seven attempts`() = runBlocking {
+        val selected = parsedImage(type = 5)
+        var writes = 0
+        val engine = FirmwareTransferEngine(FirmwareTransferTransport { command, _, _, accept ->
+            if (command == FirmwareTransferEngine.WRITE_COMMAND) {
+                writes++
+                throw FirmwareRetryableTransportException("response timeout")
+            }
+            acceptedResponse(command).also { check(accept(it)) }
+        })
+
+        val failure = runCatching { engine.transfer(selected, begun(selected)) {} }.exceptionOrNull()
+
+        assertTrue(failure is FirmwareTransferPausedException)
+        assertEquals(0, (failure as FirmwareTransferPausedException).acknowledgedOffset)
+        assertEquals(FirmwareTransferEngine.MAX_CHUNK_ATTEMPTS, failure.attempts)
+        assertEquals(7, writes)
+    }
+
+    @Test
+    fun `resume on same slot skips prepare keeps acknowledged progress and never activates`() = runBlocking {
+        val selected = parsedImage(type = 5)
+        val calls = mutableListOf<Pair<Int, ByteArray>>()
+        val progress = mutableListOf<Int>()
+        val engine = FirmwareTransferEngine(FirmwareTransferTransport { command, payload, _, accept ->
+            calls += command to payload.copyOf()
+            acceptedResponse(command).also { check(accept(it)) }
+        })
+        val paused = FirmwareUpdateTransitions.paused(
+            FirmwareUpdateTransitions.writing(begun(selected), 440),
+            acknowledged = 440,
+            reason = "response timeout",
+        )
+
+        val end = engine.transfer(
+            image = selected,
+            initial = FirmwareUpdateTransitions.resuming(paused),
+            startOffset = 440,
+            prepareSlot = false,
+            publish = { progress += it.bytesAcknowledged },
+        )
+
+        assertEquals(FirmwareUpdateStage.READY_TO_ACTIVATE, end.stage)
+        assertFalse(calls.any { it.first == FirmwareTransferEngine.PREPARE_COMMAND })
+        assertFalse(calls.any { it.first == FirmwareTransferEngine.ACTIVATE_COMMAND })
+        assertEquals(440L, calls.first { it.first == FirmwareTransferEngine.WRITE_COMMAND }.second.u32(1))
+        assertTrue(progress.none { it < 440 })
+    }
+
+    @Test
+    fun `explicit write rejection is not retried and reports known or numeric detail`() = runBlocking {
+        val selected = parsedImage(type = 5)
+        var writes = 0
+        val engine = FirmwareTransferEngine(FirmwareTransferTransport { command, _, _, accept ->
+            val response = if (command == FirmwareTransferEngine.WRITE_COMMAND) {
+                writes++
+                FirmwareWireResponse(command, 0, 0, byteArrayOf(1, 11))
+            } else acceptedResponse(command)
+            check(accept(response))
+            response
+        })
+
+        val failure = runCatching { engine.transfer(selected, begun(selected)) {} }.exceptionOrNull()
+
+        assertEquals(1, writes)
+        assertTrue(failure is FirmwareTransferException)
+        assertTrue(failure?.message.orEmpty().contains("flash/write state (11)"))
+        assertTrue(failure?.message.orEmpty().contains("result=0"))
+    }
+
+    @Test
+    fun `resume binding rejects stale session device connection image and invalid offset`() {
+        val valid = FirmwareResumeBinding(
+            pendingSessionId = 9,
+            currentSessionId = 9,
+            pendingDeviceAddress = "AA:BB",
+            currentDeviceAddress = "aa:bb",
+            pendingConnectionGeneration = 12,
+            currentConnectionGeneration = 12,
+            pendingImageSha256 = "abcd",
+            currentImageSha256 = "abcd",
+            acknowledgedOffset = 440,
+            totalBytes = 952,
+        )
+        assertEquals(null, FirmwareResumePolicy.rejectionReason(valid))
+        assertTrue(FirmwareResumePolicy.rejectionReason(valid.copy(currentSessionId = 10))!!.contains("session"))
+        assertTrue(FirmwareResumePolicy.rejectionReason(valid.copy(currentDeviceAddress = "CC:DD"))!!.contains("strap"))
+        assertTrue(FirmwareResumePolicy.rejectionReason(valid.copy(currentConnectionGeneration = 13))!!.contains("connection"))
+        assertTrue(FirmwareResumePolicy.rejectionReason(valid.copy(currentImageSha256 = "ef01"))!!.contains("image"))
+        assertTrue(FirmwareResumePolicy.rejectionReason(valid.copy(acknowledgedOffset = 953))!!.contains("offset"))
+        assertTrue(FirmwareResumePolicy.rejectionReason(valid.copy(acknowledgedOffset = 221))!!.contains("boundary"))
+    }
+
+    @Test
+    fun `transfer entry point rejects prepare with offset and resume between acknowledged boundaries`() = runBlocking {
+        val selected = parsedImage(type = 5)
+        val engine = FirmwareTransferEngine(FirmwareTransferTransport { command, _, _, _ ->
+            acceptedResponse(command)
+        })
+
+        assertTrue(
+            runCatching {
+                engine.transfer(selected, begun(selected), startOffset = 220, prepareSlot = true) {}
+            }.exceptionOrNull() is IllegalArgumentException,
+        )
+        assertTrue(
+            runCatching {
+                engine.transfer(selected, begun(selected), startOffset = 221, prepareSlot = false) {}
+            }.exceptionOrNull() is IllegalArgumentException,
+        )
+    }
+
+    @Test
     fun `verify ignores an optional pending response and propagates final remote failure`() = runBlocking {
         val selected = parsedImage(type = 5)
         val engine = FirmwareTransferEngine(FirmwareTransferTransport { command, _, _, accept ->
@@ -153,6 +338,9 @@ class FirmwareUpdateTest {
     @Test
     fun `whoop5 decoder accepts crc valid firmware responses and removes wire padding`() {
         val cases = listOf(
+            Triple(FirmwareTransferEngine.STOP_REALTIME_HR_COMMAND, byteArrayOf(), 1),
+            Triple(FirmwareTransferEngine.ABORT_HISTORY_COMMAND, byteArrayOf(), 1),
+            Triple(FirmwareTransferEngine.STOP_IMU_COMMAND, byteArrayOf(1, 0), 1),
             Triple(FirmwareTransferEngine.PREPARE_COMMAND, byteArrayOf(1, 0), 1),
             Triple(FirmwareTransferEngine.WRITE_COMMAND, byteArrayOf(1, 0), 1),
             Triple(FirmwareTransferEngine.VERIFY_COMMAND, byteArrayOf(1), 1),
@@ -235,15 +423,15 @@ class FirmwareUpdateTest {
         var last = FirmwareUpdateTransitions.begin(
             FirmwareUpdateTransitions.selected(selected.info, true), "WHOOP 5/MG",
         )
-        val engine = FirmwareTransferEngine(FirmwareTransferTransport { command, _, _, _ ->
+        val engine = FirmwareTransferEngine(FirmwareTransferTransport { command, _, _, accept ->
             calls++
-            if (calls == 3) throw CancellationException("disconnect")
-            FirmwareWireResponse(command, 0, 1, byteArrayOf(1, 0))
+            if (command == FirmwareTransferEngine.WRITE_COMMAND) throw CancellationException("disconnect")
+            acceptedResponse(command).also { check(accept(it)) }
         })
         val failure = runCatching { engine.transfer(selected, last) { last = it } }.exceptionOrNull()
         assertTrue(failure is CancellationException)
         assertFalse(last.canActivate)
-        assertTrue(calls < 7)
+        assertEquals(1, calls.let { total -> total - 4 })
     }
 
     @Test
@@ -310,6 +498,16 @@ class FirmwareUpdateTest {
     private fun parsedImage(type: Int): ValidatedFirmwareImage {
         val extension = if (type == 5) "zbin" else "bin"
         return (FirmwareImageParser.parse("fixture.$extension", image(type)) as FirmwareImageValidation.Valid).image
+    }
+
+    private fun begun(image: ValidatedFirmwareImage): FirmwareUpdateState = FirmwareUpdateTransitions.begin(
+        FirmwareUpdateTransitions.selected(image.info, true), "WHOOP 5/MG",
+    )
+
+    private fun acceptedResponse(command: Int): FirmwareWireResponse = when (command) {
+        FirmwareTransferEngine.VERIFY_COMMAND -> FirmwareWireResponse(command, 0, 1, byteArrayOf(1))
+        FirmwareTransferEngine.ACTIVATE_COMMAND -> FirmwareWireResponse(command, 0, 1, byteArrayOf(1, 1))
+        else -> FirmwareWireResponse(command, 0, 1, byteArrayOf(1, 0))
     }
 
     private fun image(type: Int, extensionMarkerAt8: Int = 5): ByteArray {

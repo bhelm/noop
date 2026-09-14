@@ -2712,6 +2712,8 @@
     <string name="firmware_flash_progress">%1$s / %2$s bestätigt · %3$d %%</string>
     <string name="firmware_flash_remote_check_in_progress">Alle Image-Bytes wurden bestätigt. Das Band prüft das bereitgestellte Image; die Aktivierung hat noch nicht begonnen.</string>
     <string name="firmware_flash_transfer">Image an das Band übertragen</string>
+    <string name="firmware_flash_resume">Auf dieser Verbindung fortsetzen</string>
+    <string name="firmware_flash_resume_note">Die Übertragung kann nur fortgesetzt werden, solange genau diese Bluetooth-Verbindung besteht und das ausgewählte Image unverändert ist. Nach einer Trennung muss die Übertragung von vorn beginnen.</string>
     <string name="firmware_flash_remote_valid">Das Band hat die vollständige Übertragung bestätigt und eine erfolgreiche Geräteprüfung gemeldet. Die Aktivierung bleibt ein eigener Schritt.</string>
     <string name="firmware_flash_activate">Aktivierung prüfen…</string>
     <string name="firmware_flash_cancel">Diese Update-Sitzung stoppen</string>

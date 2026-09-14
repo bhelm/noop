@@ -60,6 +60,7 @@ class FirmwareFlashUiPolicyTest {
             FirmwareUpdateStage.READY_TO_ACTIVATE,
             FirmwareUpdateStage.ACTIVATION_REQUESTED,
             FirmwareUpdateStage.RECONNECTING,
+            FirmwareUpdateStage.PAUSED,
         )
 
         activeStages.forEach { stage ->
@@ -92,6 +93,7 @@ class FirmwareFlashUiPolicyTest {
             FirmwareUpdateStage.WRITING,
             FirmwareUpdateStage.REMOTE_VALIDATING,
             FirmwareUpdateStage.READY_TO_ACTIVATE,
+            FirmwareUpdateStage.PAUSED,
         )
 
         FirmwareUpdateStage.entries.forEach { stage ->

@@ -296,6 +296,22 @@ internal fun FirmwareFlashContent(
             onClick = { ble.startFirmwareTransfer() },
         )
 
+        if (state.stage == FirmwareUpdateStage.PAUSED) {
+            Text(
+                stringResourceCompat(R.string.firmware_flash_resume_note),
+                style = NoopType.footnote,
+                color = Palette.statusWarning,
+            )
+            NoopButton(
+                text = stringResourceCompat(R.string.firmware_flash_resume),
+                leadingIcon = Icons.Filled.PlayArrow,
+                kind = NoopButtonKind.Primary,
+                fullWidth = true,
+                enabled = state.canResume && !uiBusy,
+                onClick = { ble.resumeFirmwareTransfer() },
+            )
+        }
+
         if (state.stage == FirmwareUpdateStage.READY_TO_ACTIVATE) {
             Text(
                 stringResourceCompat(R.string.firmware_flash_remote_valid),
@@ -551,6 +567,7 @@ internal object FirmwareFlashUiPolicy {
         FirmwareUpdateStage.WRITING,
         FirmwareUpdateStage.REMOTE_VALIDATING,
         FirmwareUpdateStage.READY_TO_ACTIVATE,
+        FirmwareUpdateStage.PAUSED,
     )
 
     fun visibleLog(lines: List<String>): List<String> = lines.takeLast(VISIBLE_LOG_LINES)

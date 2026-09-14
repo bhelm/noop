@@ -91,6 +91,7 @@ import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -2077,7 +2078,9 @@ class WhoopBleClient(
     private data class FirmwareSession(
         val id: Int,
         val deviceAddress: String,
+        val connectionGeneration: Int,
         val image: ValidatedFirmwareImage,
+        var acknowledgedOffset: Int = 0,
         var job: Job? = null,
     )
 
@@ -4379,7 +4382,9 @@ class WhoopBleClient(
     /** Select and validate a local container. This method never touches Bluetooth. */
     @Synchronized
     fun selectFirmwareImage(fileName: String, bytes: ByteArray) {
-        if (firmwareUpdateExclusive || firmwareSession?.job?.isActive == true) {
+        if (firmwareUpdateExclusive || firmwareSession?.job?.isActive == true ||
+            _firmwareUpdateState.value.stage == FirmwareUpdateStage.PAUSED
+        ) {
             _firmwareUpdateState.value = _firmwareUpdateState.value.copy(
                 error = "Cancel the current update session before choosing another image",
             )
@@ -4422,7 +4427,7 @@ class WhoopBleClient(
         _firmwareUpdateState.value = FirmwareUpdateState()
     }
 
-    /** Begin a fresh prepare/write/verify transaction. There is deliberately no resume path. */
+    /** Begin a fresh prepare/write/verify transaction at offset zero. */
     @Synchronized
     fun startFirmwareTransfer() {
         val image = selectedFirmwareImage
@@ -4435,6 +4440,13 @@ class WhoopBleClient(
         }
         if (!firmwareDeviceEligible()) {
             refreshFirmwareUpdateEligibility()
+            return
+        }
+        if (_groundTruthImuStatus.value.requested) {
+            _firmwareUpdateState.value = FirmwareUpdateTransitions.failed(
+                _firmwareUpdateState.value,
+                "Stop the active ground-truth IMU capture before starting a firmware transfer",
+            )
             return
         }
         val busyReason = FirmwareUpdateAdmission.busyReason(
@@ -4461,7 +4473,12 @@ class WhoopBleClient(
             return
         }
         firmwareUpdateExclusive = true
-        val session = FirmwareSession(firmwareSessionCounter.incrementAndGet(), address, image)
+        val session = FirmwareSession(
+            id = firmwareSessionCounter.incrementAndGet(),
+            deviceAddress = address,
+            connectionGeneration = connectGeneration,
+            image = image,
+        )
         firmwareSession = session
         val fw = _state.value.strapFirmware?.takeIf { it.isNotBlank() } ?: "unknown firmware"
         _firmwareUpdateState.value = FirmwareUpdateTransitions.begin(
@@ -4483,6 +4500,60 @@ class WhoopBleClient(
         firmwareUpdateExclusive = false
         sessionId?.let(::purgeQueuedFirmwareWrites)
         _firmwareUpdateState.value = FirmwareUpdateTransitions.cancelled(_firmwareUpdateState.value)
+        restoreAfterFirmwareExclusive()
+    }
+
+    /** Resume only the paused slot on this exact, uninterrupted BLE connection. */
+    @Synchronized
+    fun resumeFirmwareTransfer() {
+        val session = firmwareSession ?: return
+        val state = _firmwareUpdateState.value
+        val currentImage = selectedFirmwareImage ?: return
+        if (state.stage != FirmwareUpdateStage.PAUSED) return
+        val address = lastDeviceAddress ?: ""
+        val rejection = FirmwareResumePolicy.rejectionReason(
+            FirmwareResumeBinding(
+                pendingSessionId = session.id,
+                currentSessionId = firmwareSession?.id ?: -1,
+                pendingDeviceAddress = session.deviceAddress,
+                currentDeviceAddress = address,
+                pendingConnectionGeneration = session.connectionGeneration,
+                currentConnectionGeneration = connectGeneration,
+                pendingImageSha256 = session.image.info.sha256,
+                currentImageSha256 = currentImage.info.sha256,
+                acknowledgedOffset = session.acknowledgedOffset,
+                totalBytes = session.image.bytes.size,
+            ),
+        ) ?: if (!firmwareDeviceEligible()) "The strap is no longer ready on the paused connection" else null
+        if (rejection != null) {
+            _firmwareUpdateState.value = state.copy(error = rejection)
+            return
+        }
+        if (_groundTruthImuStatus.value.requested) {
+            _firmwareUpdateState.value = state.copy(
+                error = "Stop the active ground-truth IMU capture before resuming the firmware transfer",
+            )
+            return
+        }
+        val busyReason = FirmwareUpdateAdmission.busyReason(
+            backfilling = backfilling,
+            writeInFlight = writeInFlight,
+            retryPending = pendingRetry != null,
+            queuedWrites = writeQueue.size,
+            negotiatedMtu = lastMtuValue,
+            requiredMtu = GATT_MTU,
+            cccdInFlight = cccdInFlight,
+            queuedCccds = cccdQueue.size,
+        )
+        if (busyReason != null) {
+            _firmwareUpdateState.value = state.copy(error = busyReason)
+            return
+        }
+        firmwareUpdateExclusive = true
+        _firmwareUpdateState.value = FirmwareUpdateTransitions.resuming(state)
+        session.job = firmwareScope.launch {
+            runFirmwareTransfer(session, startOffset = session.acknowledgedOffset, prepareSlot = false)
+        }
     }
 
     /** Explicit second phase. The UI confirmation is required before this entry point is called. */
@@ -4526,13 +4597,27 @@ class WhoopBleClient(
         }
     }
 
-    private suspend fun runFirmwareTransfer(session: FirmwareSession) {
+    private suspend fun runFirmwareTransfer(
+        session: FirmwareSession,
+        startOffset: Int = 0,
+        prepareSlot: Boolean = true,
+    ) {
         try {
-            firmwareEngine(session).transfer(session.image, _firmwareUpdateState.value) { next ->
-                if (firmwareSession?.id == session.id) _firmwareUpdateState.value = next
+            firmwareEngine(session).transfer(
+                image = session.image,
+                initial = _firmwareUpdateState.value,
+                startOffset = startOffset,
+                prepareSlot = prepareSlot,
+            ) { next ->
+                if (firmwareSession?.id == session.id) {
+                    session.acknowledgedOffset = next.bytesAcknowledged
+                    _firmwareUpdateState.value = next
+                }
             }
         } catch (_: CancellationException) {
             // cancelFirmwareUpdate or disconnect already published the terminal state.
+        } catch (paused: FirmwareTransferPausedException) {
+            pauseFirmwareTransfer(session, paused)
         } catch (t: Throwable) {
             finishFirmwareFailure(session, t.message ?: "Firmware transfer failed")
         }
@@ -4568,6 +4653,12 @@ class WhoopBleClient(
         }
         return try {
             withTimeout(timeoutMs) { deferred.await() }
+        } catch (timeout: TimeoutCancellationException) {
+            purgeQueuedFirmwareWrites(session.id)
+            throw FirmwareRetryableTransportException(
+                "No response to firmware command $command within ${timeoutMs}ms",
+                timeout,
+            )
         } finally {
             synchronized(this) {
                 if (firmwarePending?.deferred === deferred) firmwarePending = null
@@ -4576,7 +4667,24 @@ class WhoopBleClient(
     }
 
     @Synchronized
-    private fun finishFirmwareFailure(session: FirmwareSession, reason: String) {
+    private fun pauseFirmwareTransfer(session: FirmwareSession, paused: FirmwareTransferPausedException) {
+        if (!FirmwareActivationObservation.sessionIsCurrent(session.id, firmwareSession?.id)) return
+        session.acknowledgedOffset = paused.acknowledgedOffset
+        session.job = null
+        firmwarePending = null
+        firmwareUpdateExclusive = false
+        purgeQueuedFirmwareWrites(session.id)
+        _firmwareUpdateState.value = FirmwareUpdateTransitions.paused(
+            _firmwareUpdateState.value,
+            acknowledged = paused.acknowledgedOffset,
+            reason = paused.message ?: "Firmware chunk response unavailable",
+        )
+        log("Firmware transfer paused at offset ${paused.acknowledgedOffset} after ${paused.attempts} attempts")
+        restoreAfterFirmwareExclusive()
+    }
+
+    @Synchronized
+    private fun finishFirmwareFailure(session: FirmwareSession, reason: String, restoreRealtime: Boolean = true) {
         if (!FirmwareActivationObservation.sessionIsCurrent(session.id, firmwareSession?.id)) return
         firmwarePending?.deferred?.cancel(CancellationException(reason))
         firmwarePending = null
@@ -4585,6 +4693,16 @@ class WhoopBleClient(
         purgeQueuedFirmwareWrites(session.id)
         _firmwareUpdateState.value = FirmwareUpdateTransitions.failed(_firmwareUpdateState.value, reason)
         log("Firmware update stopped: $reason")
+        if (restoreRealtime) restoreAfterFirmwareExclusive()
+    }
+
+    private fun restoreAfterFirmwareExclusive() {
+        handler.removeCallbacks(keepAliveRunnable)
+        if (_state.value.connected && _state.value.bonded) {
+            realtimeArmed = false
+            reconcileRealtime()
+            handler.postDelayed(keepAliveRunnable, KEEPALIVE_INTERVAL_MS)
+        }
     }
 
     /** Purge only unsent writes owned by this OTA session; ordinary queued commands remain untouched. */
@@ -4646,6 +4764,7 @@ class WhoopBleClient(
             else -> finishFirmwareFailure(
                 session,
                 "The strap disconnected before activation completed; transfer will not resume automatically",
+                restoreRealtime = false,
             )
         }
     }
@@ -8854,6 +8973,11 @@ class WhoopBleClient(
     private fun keepAliveFire() {
         val s = _state.value
         if (!s.connected || !s.bonded) return   // disconnected: stop the cadence (restarts on reconnect)
+        if (firmwareUpdateExclusive) {
+            handler.removeCallbacks(keepAliveRunnable)
+            handler.postDelayed(keepAliveRunnable, KEEPALIVE_INTERVAL_MS)
+            return
+        }
 
         val silentMs = System.currentTimeMillis() - lastDataAtMs
         // Everything below is the LIVE-path keep-alive. During a historical offload the strap owns the
@@ -9085,6 +9209,7 @@ class WhoopBleClient(
         }
         val want = screenWantsRealtime || continuousCaptureWantsNow()
         wantsRealtime = want   // the keep-alive + post-bond arm-on-connect read this derived value
+        if (firmwareUpdateExclusive) return
         if (want == realtimeArmed) return                          // no edge — nothing to send
         if (connectedFamily != DeviceFamily.WHOOP4 && !_state.value.bonded) return   // can't reach the strap yet
         realtimeArmed = want
@@ -9599,9 +9724,11 @@ class WhoopBleClient(
             if (!FirmwareWriteQueuePolicy.mayRetryAfterAmbiguousRejection(item.firmwareSessionId)) {
                 val session = firmwareSession?.takeIf { it.id == item.firmwareSessionId }
                 if (session != null) {
+                    val rawStatus = writeStatusLabel((ops as? RealGattOps)?.lastWriteStatus)
                     finishFirmwareFailure(
                         session,
-                        "Android rejected a firmware write before acknowledgement; it was not retried because delivery is ambiguous",
+                        "Android rejected a firmware write before acknowledgement ($rawStatus); " +
+                            "it was not retried because delivery is ambiguous",
                     )
                 }
                 drainWriteQueue()
