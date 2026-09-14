@@ -193,7 +193,7 @@ public enum FirmwareVersionRelation: Sendable {
     case incomparable
 }
 
-private let firmwareMaxVersionComponent: UInt64 = 0xffff_ffff
+private let firmwareMaxVersionComponent: UInt64 = UInt64(UInt32.max)
 
 /// Compares canonical four-component firmware versions numerically, never lexicographically. Twin of the
 /// Kotlin `compareFirmwareVersions`.
