@@ -160,7 +160,9 @@ struct TestCentreView: View {
                     .fixedSize(horizontal: false, vertical: true)
                 FirmwareFlashView(
                     ble: model.ble,
-                    hasActiveDevice: model.deviceRegistry != nil,
+                    // A registry row actually marked active, as Android's non-null active strap id. Not
+                    // `activeDeviceId`, which falls back to "my-whoop" when nothing is active.
+                    hasActiveDevice: model.deviceRegistry?.devices.contains { $0.status == .active } ?? false,
                     hasWhoop5MgEvidence: is5MG,
                     connected: live.connected,
                     encryptedBond: live.encryptedBond,

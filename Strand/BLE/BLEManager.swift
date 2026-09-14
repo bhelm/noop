@@ -1058,6 +1058,9 @@ public final class BLEManager: NSObject, ObservableObject {
     var firmwareTransferTask: Task<Void, Never>?
     /// Continuation for the one firmware command currently awaiting its correlated response.
     var firmwarePendingContinuation: CheckedContinuation<FirmwareWireResponse, Error>?
+    /// Bumped by every image selection and clear, so a parse still running off the main actor when the
+    /// user clears or picks again is discarded instead of arming a superseded image.
+    var firmwareSelectionGeneration = 0
 
     /// Publish a new firmware-update state on the main actor.
     func setFirmwareUpdateState(_ next: FirmwareUpdateState) { firmwareUpdateState = next }
@@ -1070,6 +1073,25 @@ public final class BLEManager: NSObject, ObservableObject {
     var firmwareSelectedFamily: DeviceFamily { selectedModel.deviceFamily }
     func firmwareLog(_ message: String) { log(message) }
     func firmwareNextSequence() -> UInt8 { seq = seq &+ 1; return seq }
+    /// A raw/ground-truth IMU capture holds the command channel; a firmware transfer must not start or
+    /// resume under it. Twin of the Android `_groundTruthImuStatus.value.requested` check.
+    var firmwareRawCaptureActive: Bool { rawCaptureInFlight }
+
+    /// Hand the link back to the live stream once an exclusive firmware session ends. While it held the
+    /// channel, `reconcileRealtime` and the keep-alive stood down without touching `realtimeArmed`, but the
+    /// engine's quiesce step sends TOGGLE_REALTIME_HR 0, so the strap may be disarmed whatever the latch
+    /// says. Clearing both arm latches makes the reconciler see the edge and re-arm if a screen or
+    /// continuous capture still wants the stream; restarting the keep-alive gives it a full interval before
+    /// its next tick. Twin of the Android `restoreAfterFirmwareExclusive`.
+    func restoreAfterFirmwareExclusive() {
+        keepAliveTimer?.cancel()
+        keepAliveTimer = nil
+        guard state.connected && state.bonded else { return }
+        realtimeArmed = false
+        whoop5RealtimeArmed = false
+        reconcileRealtime()
+        startKeepAlive()
+    }
 
     /// #1635: one explicit Connect grants one fresh CLIENT_HELLO even when the suppression latch is set.
     /// Consumed unconditionally by the write site, so the retry belongs to THIS session — leaving it set
@@ -2223,7 +2245,8 @@ public final class BLEManager: NSObject, ObservableObject {
         }
         // An exclusive firmware-update session owns the command channel: ordinary commands are paused so
         // nothing interleaves with the OTA writes (twin of the Android `firmwareUpdateExclusive` guard in
-        // `send`). The firmware transfer writes through its own path (`writeFirmwareFrame`), not send().
+        // `send`). The firmware transfer writes its frames directly in `firmwareExchange`
+        // (BLEManager+Firmware.swift), not through send().
         if firmwareUpdateExclusive {
             log("send(\(command.label)) paused — an exclusive firmware update session is active")
             return
@@ -3312,6 +3335,10 @@ public final class BLEManager: NSObject, ObservableObject {
     private func reconcileRealtime() {
         let want = screenWantsRealtime || continuousCaptureWantsNow()
         wantsRealtime = want   // keep-alive + post-bond arm-on-connect read this derived value
+        // An exclusive firmware session owns the command channel and send() would drop the toggle, so
+        // stand down BEFORE latching `realtimeArmed` — latching a value that never reached the strap would
+        // hide the edge afterwards. restoreAfterFirmwareExclusive re-runs this. Twin of the Android guard.
+        guard !firmwareUpdateExclusive else { return }
         guard want != realtimeArmed else { return }                      // no edge — nothing to send
         guard selectedModel.deviceFamily == .whoop4 || state.bonded else { return }   // can't reach the strap yet
         realtimeArmed = want
@@ -4544,6 +4571,11 @@ public final class BLEManager: NSObject, ObservableObject {
         // door again rather than letting an unbonded link issue puffin work that cannot land.
         guard keepAliveMayRun(connected: state.connected, didBond: didBond,
                               bonded: state.bonded, family: selectedModel.deviceFamily) else { return }
+        // An exclusive firmware session (the transfer, and the wait for the user's activation decision)
+        // stands the whole tick down, as on Android: every send would be dropped, and the liveness bounce
+        // below would drop the link itself, which the session would then report as a strap disconnect. The
+        // timer keeps repeating; restoreAfterFirmwareExclusive restarts it when the session ends.
+        if firmwareUpdateExclusive { return }
         if didBond { enableLiveNotifications(reason: "keepalive") }
         // Liveness watchdog: if NOTHING has arrived for a while, the stream/link stalled.
         // Bounce the connection — the auto-rescan on disconnect re-bonds and resumes streaming.
@@ -5447,6 +5479,10 @@ extension BLEManager: @preconcurrency CBCentralManagerDelegate {
         unauthorizedSettleWork?.cancel()
         unauthorizedSettleWork = nil
         guard central.state == .poweredOn else {
+            // Any radio state other than poweredOn invalidates the link, and CoreBluetooth need not follow
+            // it with didDisconnectPeripheral, so a running firmware session is settled here exactly as a
+            // disconnect would settle it. Without a session this only marks a selected image ineligible.
+            noteFirmwareDisconnected()
             // #280: a non-poweredOn radio state used to be a SILENT return — the strap log showed only
             // "Central state: 3" and the UI just read "not connected", so a user whose Mac had denied NOOP
             // Bluetooth (.unauthorized == raw 3) had nothing explaining why no strap was ever found. This is

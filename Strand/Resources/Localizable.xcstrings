@@ -37,6 +37,14 @@
       "de" : { "stringUnit" : { "state" : "translated", "value" : "Das ausgewählte Image ist leer." } },
       "en" : { "stringUnit" : { "state" : "translated", "value" : "The selected image is empty." } }
     } },
+    "Reading and validating the selected image…" : { "localizations" : {
+      "de" : { "stringUnit" : { "state" : "translated", "value" : "Ausgewähltes Image wird gelesen und geprüft…" } },
+      "en" : { "stringUnit" : { "state" : "translated", "value" : "Reading and validating the selected image…" } }
+    } },
+    "Waiting for a local file selection…" : { "localizations" : {
+      "de" : { "stringUnit" : { "state" : "translated", "value" : "Lokale Dateiauswahl ist geöffnet…" } },
+      "en" : { "stringUnit" : { "state" : "translated", "value" : "Waiting for a local file selection…" } }
+    } },
     "Format" : { "localizations" : {
       "de" : { "stringUnit" : { "state" : "translated", "value" : "Format" } },
       "en" : { "stringUnit" : { "state" : "translated", "value" : "Format" } }
@@ -180,6 +188,10 @@
     "Activate the staged firmware?" : { "localizations" : {
       "de" : { "stringUnit" : { "state" : "translated", "value" : "Bereitgestellte Firmware aktivieren?" } },
       "en" : { "stringUnit" : { "state" : "translated", "value" : "Activate the staged firmware?" } }
+    } },
+    "firmware_flash_keep_staged" : { "localizations" : {
+      "de" : { "stringUnit" : { "state" : "translated", "value" : "Noch nicht" } },
+      "en" : { "stringUnit" : { "state" : "translated", "value" : "Not now" } }
     } },
     "Image: %1$@\nCurrent strap: %2$@\nSelected image: %3$@\nDevice session: %4$@" : { "localizations" : {
       "de" : { "stringUnit" : { "state" : "translated", "value" : "Image: %1$@\nAktuelles Band: %2$@\nAusgewähltes Image: %3$@\nGerätesitzung: %4$@" } },

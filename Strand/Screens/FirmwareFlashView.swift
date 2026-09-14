@@ -18,11 +18,12 @@ struct FirmwareFlashView: View {
     let reportedFirmware: String?
 
     @State private var pickerOpen = false
+    @State private var fileReadBusy = false
     @State private var fileReadError: String?
     @State private var showActivationConfirmation = false
 
     private var state: FirmwareUpdateState { ble.firmwareUpdateState }
-    private var uiBusy: Bool { pickerOpen }
+    private var uiBusy: Bool { pickerOpen || fileReadBusy }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -43,6 +44,13 @@ struct FirmwareFlashView: View {
                 pickerOpen = true
             }
             .disabled(!FirmwareFlashUiPolicy.canChooseFile(state.stage, uiBusy: uiBusy))
+
+            if uiBusy {
+                Text(fileReadBusy
+                     ? String(localized: "Reading and validating the selected image…")
+                     : String(localized: "Waiting for a local file selection…"))
+                    .font(StrandFont.footnote).foregroundStyle(StrandPalette.textSecondary)
+            }
 
             if let error = fileReadError {
                 Text(error).font(StrandFont.footnote).foregroundStyle(StrandPalette.statusCritical)
@@ -101,7 +109,9 @@ struct FirmwareFlashView: View {
             if newStage != .readyToActivate { showActivationConfirmation = false }
         }
         .alert("Activate the staged firmware?", isPresented: $showActivationConfirmation) {
-            Button("Not now", role: .cancel) { showActivationConfirmation = false }
+            // Its own key: the shared "Not now" reads "Nicht jetzt", while this dismissal keeps a staged
+            // image for later ("Noch nicht"), as Android's `firmware_flash_keep_staged`.
+            Button("firmware_flash_keep_staged", role: .cancel) { showActivationConfirmation = false }
             Button("Activate firmware", role: .destructive) {
                 showActivationConfirmation = false
                 ble.activateVerifiedFirmware()
@@ -175,7 +185,7 @@ struct FirmwareFlashView: View {
     // MARK: - Status
 
     @ViewBuilder private var statusBlock: some View {
-        if state.stage != .empty {
+        if state.stage != .empty || fileReadBusy {
             Divider().overlay(StrandPalette.hairline)
             VStack(alignment: .leading, spacing: 6) {
                 Text("Update status").font(StrandFont.subhead).foregroundStyle(StrandPalette.textPrimary)
@@ -270,19 +280,40 @@ struct FirmwareFlashView: View {
             // validated image armed behind a newly displayed file name.
             ble.clearFirmwareImage()
             fileReadError = nil
-            let needsScope = url.startAccessingSecurityScopedResource()
-            defer { if needsScope { url.stopAccessingSecurityScopedResource() } }
-            do {
-                let data = try Data(contentsOf: url)
-                try validateFirmwareDocumentSize(byteCount: data.count)
-                ble.selectFirmwareImage(fileName: url.lastPathComponent, bytes: [UInt8](data))
-            } catch is FirmwareImageTooLargeError {
-                fileReadError = String(localized: "The selected image exceeds the app’s 16 MiB safety limit.")
-            } catch is EmptyFirmwareImageError {
-                fileReadError = String(localized: "The selected image is empty.")
-            } catch {
-                fileReadError = String(localized: "The selected image could not be read.")
+            fileReadBusy = true
+            Task { @MainActor in
+                defer { fileReadBusy = false }   // any exit, incl. a read or validation failure
+                do {
+                    // Reading up to 16 MiB is synchronous file I/O; keep it off the main actor, then
+                    // validate (also off-main, inside selectFirmwareImage) and report back here.
+                    let bytes = try await Task.detached(priority: .userInitiated) {
+                        try readFirmwareDocument(at: url)
+                    }.value
+                    await ble.selectFirmwareImage(fileName: url.lastPathComponent, bytes: bytes)
+                } catch is FirmwareImageTooLargeError {
+                    fileReadError = String(localized: "The selected image exceeds the app’s 16 MiB safety limit.")
+                } catch is EmptyFirmwareImageError {
+                    fileReadError = String(localized: "The selected image is empty.")
+                } catch {
+                    fileReadError = String(localized: "The selected image could not be read.")
+                }
             }
         }
     }
+}
+
+/// Read a picked firmware document within the 16 MiB bound. Runs off the main actor, and holds the
+/// security-scoped grant for exactly the span of the read. A declared size over the bound is refused
+/// before any byte is loaded; the loaded length is checked again, since the file can change in between.
+/// Twin of the Android `readFirmwareDocument` / `readFirmwareBytes`.
+private func readFirmwareDocument(at url: URL) throws -> [UInt8] {
+    let scoped = url.startAccessingSecurityScopedResource()
+    defer { if scoped { url.stopAccessingSecurityScopedResource() } }
+    if let declared = (try? url.resourceValues(forKeys: [.fileSizeKey]))?.fileSize,
+       declared > FirmwareImageParser.maxImageBytes {
+        throw FirmwareImageTooLargeError()
+    }
+    let data = try Data(contentsOf: url)
+    try validateFirmwareDocumentSize(byteCount: data.count)
+    return [UInt8](data)
 }
