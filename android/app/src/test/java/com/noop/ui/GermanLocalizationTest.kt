@@ -157,7 +157,7 @@ class GermanLocalizationTest {
             "today_card_coupled_subtitle" to "Erholung, Belastung und Schlaf auf einen Blick",
             "today_pending_scores_body" to "Deine Live-Herzfrequenz kommt bereits vom Strap. Erholung, Belastung und Schlaf werden in den nächsten Nächten aufgebaut und mit deinem Basiswert genauer. Für den vollständigen Verlauf kannst du deinen WHOOP-Export unter „Datenquellen“ importieren; er wird in etwa einer Minute ergänzt.",
             "today_training_read_explanation" to "Eine Trainingseinschätzung, unabhängig von deinem Energiewert.",
-            "l10n_today_screen_sync_chip_syncing_desc_bfc290e7" to "Verlaufssynchronisierung des Straps läuft, %1\$d Datenblöcke",
+            "l10n_today_screen_sync_chip_syncing_desc_92daf60c" to "Verlaufssynchronisierung des Straps läuft, %1\$s",
             "l10n_today_screen_squarer_tiles_with_a_trend_graph_3c297dec" to "Größere Kacheln mit einem Trenddiagramm unter dem Balken.",
         )
         expected.forEach { (key, value) -> assertEquals("unexpected German Today copy for $key", value, de[key]) }
