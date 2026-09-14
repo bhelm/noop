@@ -812,8 +812,8 @@ fun TodayScreen(
     // moves. On-device WHOOP 5/MG steps still take precedence. (#150)
     var importedStepsForDay by remember { mutableStateOf<Int?>(null) }
     var stepsAverage30 by remember { mutableStateOf<Pair<Double?, Int>>(null to 0) }
-    LaunchedEffect(days, selectedDayKey, enabledKeyMetrics, importedStepsForDay) {
-        stepsAverage30 = if (KeyMetric.STEPS_AVERAGE_30 in enabledKeyMetrics) {
+    LaunchedEffect(days, selectedDayKey, enabledDashboardCards, importedStepsForDay) {
+        stepsAverage30 = if (DashboardCard.STEPS_AVERAGE_30 in enabledDashboardCards) {
             val readings = buildSeriesVitalDetail(viewModel, "steps_est")?.readings.orEmpty()
             rollingStepsAverage(readings, java.time.LocalDate.parse(selectedDayKey))
         } else null to 0
@@ -1687,7 +1687,6 @@ fun TodayScreen(
                                     profileWeightKg = profileWeightKg,
                                     importedStepsForDay = importedStepsForDay,
                                     estimatedStepsForDay = stepsEstForDay,
-                                    stepsAverage30 = stepsAverage30,
                                     caloriesForDay = caloriesByDay[selectedDayKey],
                                     caloriesSpark = caloriesSpark,                    // #616: imported-first trend
                                     stepActivityClassForDay = stepActivityClassForDay,
@@ -1744,6 +1743,7 @@ fun TodayScreen(
                         // section emits no item; visibleDashboardCards is the loop-level filtered list.
                         TodaySection.YOUR_CARDS -> YourCardsSection(
                             cards = visibleDashboardCards,
+                            stepsAverage30 = stepsAverage30,
                             day = stepResolvedDisplayMetric,
                             carriedDay = lastScoredRecoveryDay,
                             vitalsDay = lastVitalsDay,
@@ -3665,6 +3665,7 @@ private fun HostedCardsSection(
 @Composable
 private fun YourCardsSection(
     cards: List<DashboardCard>,
+    stepsAverage30: Pair<Double?, Int>,
     day: DailyMetric?,
     carriedDay: DailyMetric?,
     vitalsDay: DailyMetric?,
@@ -3726,6 +3727,7 @@ private fun YourCardsSection(
                     card = card,
                     value = dashboardCardValue(
                         card = card,
+                        stepsAverage30 = stepsAverage30.first,
                         day = day,
                         carriedDay = carriedDay,
                         vitalsDay = vitalsDay,
@@ -3752,6 +3754,7 @@ private fun YourCardsSection(
                     // The mini liquid vessel's fill — the SAME per-card fraction iOS `liquidCard` uses.
                     fraction = dashboardCardFraction(
                         card = card,
+                        stepsAverage30 = stepsAverage30.first,
                         day = day,
                         carriedDay = carriedDay,
                         vitalsDay = vitalsDay,
@@ -3767,7 +3770,9 @@ private fun YourCardsSection(
                     // #110: label the sleep row with its source + night (this section renders at offset 0
                     // only, so it IS last night), so a WHOOP-imported figure is never silently shown as
                     // "last night" with no provenance. iOS TodayView.sleepSourceSubtitle twin.
-                    subtitleOverride = sleepSourceSubtitle(card, day),
+                    subtitleOverride = if (card == DashboardCard.STEPS_AVERAGE_30)
+                        uiString(R.string.steps_average_coverage, stepsAverage30.second)
+                    else sleepSourceSubtitle(card, day),
                     // #706/#684: every card now opens its OWN detail, matching iOS. The Stress card -> Stress;
                     // the overnight vitals (HRV / Resting HR / Respiratory / SpO₂ / Skin Temp) + Fitness age /
                     // Vitality / Steps / Calories -> each metric's focused trend (vital_detail/<key>, the iOS
@@ -3817,7 +3822,7 @@ internal fun dashboardCardMetricKey(card: DashboardCard): String? = when (card) 
     DashboardCard.FITNESS_AGE -> "fitness_age"
     DashboardCard.VO2MAX -> "vo2max_est"
     DashboardCard.VITALITY -> "vitality"
-    DashboardCard.STEPS -> "steps_est"
+    DashboardCard.STEPS, DashboardCard.STEPS_AVERAGE_30 -> "steps_est"
     DashboardCard.CALORIES -> "active_kcal"
     // These carry their own full screen, not a per-metric trend.
     DashboardCard.STRESS, DashboardCard.SLEEP, DashboardCard.HYDRATION, DashboardCard.COUPLED,
@@ -3873,7 +3878,7 @@ private fun dashboardCardTint(card: DashboardCard): Color = when (card) {
     DashboardCard.BLOOD_OXYGEN -> Palette.metricCyan
     DashboardCard.SKIN_TEMP -> Palette.metricAmber
     DashboardCard.SLEEP -> Palette.restColor
-    DashboardCard.STEPS -> Palette.metricCyan
+    DashboardCard.STEPS, DashboardCard.STEPS_AVERAGE_30 -> Palette.metricCyan
     DashboardCard.CALORIES -> Palette.metricAmber
     DashboardCard.HYDRATION -> Palette.metricCyan
     DashboardCard.COUPLED -> Palette.chargeColor
@@ -3893,6 +3898,7 @@ private fun dashboardCardTint(card: DashboardCard): Color = when (card) {
  */
 private fun dashboardCardFraction(
     card: DashboardCard,
+    stepsAverage30: Double?,
     day: DailyMetric?,
     carriedDay: DailyMetric?,
     vitalsDay: DailyMetric?,
@@ -3923,6 +3929,7 @@ private fun dashboardCardFraction(
             over(steps, 10000.0)
         }
         DashboardCard.SLEEP -> over(vd?.totalSleepMin, 480.0)
+        DashboardCard.STEPS_AVERAGE_30 -> over(stepsAverage30, 10000.0)
         DashboardCard.COUPLED -> 0.6
         DashboardCard.COACH -> 0.5
         // Not wired to a real read yet — an EMPTY vessel (not half-full) so it doesn't imply a reading.
@@ -3946,6 +3953,7 @@ private fun dashboardCardFraction(
  */
 private fun dashboardCardValue(
     card: DashboardCard,
+    stepsAverage30: Double?,
     day: DailyMetric?,
     carriedDay: DailyMetric?,
     vitalsDay: DailyMetric?,
@@ -4025,6 +4033,7 @@ private fun dashboardCardValue(
             val est = estimatedStepsForDay?.let { intStringGrouped(it.toDouble()) }
             real ?: est ?: NO_DATA
         }
+        DashboardCard.STEPS_AVERAGE_30 -> stepsAverage30?.let { intStringGrouped(it) } ?: NO_DATA
         DashboardCard.CALORIES ->
             withUnit(caloriesForDay?.let { intStringGrouped(it) } ?: NO_DATA)
         DashboardCard.STRESS ->
@@ -4429,7 +4438,7 @@ private fun DashboardCardsEditorDialog(
     val shown = remember { mutableStateListOf<DashboardCard>().apply { addAll(initial) } }
     val hidden = remember {
         mutableStateListOf<DashboardCard>().apply {
-            addAll(DashboardCard.canonicalOrder.filter { it !in initial })
+            addAll(DashboardCard.hiddenOptions(initial))
         }
     }
 
@@ -4463,7 +4472,7 @@ private fun DashboardCardsEditorDialog(
                             shown.clear()
                             shown.addAll(DashboardCard.defaultSelection)
                             hidden.clear()
-                            hidden.addAll(DashboardCard.canonicalOrder.filter { it !in shown })
+                            hidden.addAll(DashboardCard.hiddenOptions(shown))
                         },
                         colors = ButtonDefaults.textButtonColors(contentColor = Palette.textSecondary),
                     ) { Text(uiString(R.string.l10n_today_screen_reset_44c57abd), style = NoopType.body) }
@@ -5457,7 +5466,6 @@ internal fun resolveSkinTempReading(
 private fun MetricGrid(
     d: DailyMetric?,
     w: Window,
-    stepsAverage30: Pair<Double?, Int> = null to 0,
     recoveryCalibration: Int? = null,
     lastScoredCharge: LastCharge? = null,
     carriedDay: DailyMetric? = null,
@@ -5669,14 +5677,6 @@ private fun MetricGrid(
                 },
             )
         },
-        KeyMetric.STEPS_AVERAGE_30 to KeyTileData(
-            label = uiString(R.string.steps_average_30),
-            value = stepsAverage30.first?.let { intStringGrouped(it) } ?: NO_DATA,
-            unit = "",
-            tint = Palette.metricCyan,
-            frac = stepsAverage30.first?.let { (it / 10000.0).coerceIn(0.0, 1.0) },
-            caption = uiString(R.string.steps_average_coverage, stepsAverage30.second),
-        ),
         KeyMetric.WEIGHT to run {
             val weight = weightTile(latestWeightKg, profileWeightKg, unitSystem)
             KeyTileData(
@@ -5741,7 +5741,6 @@ private fun MetricGrid(
         KeyMetric.BLOOD_OXYGEN -> ({ onOpenMetric("spo2") })
         KeyMetric.RESPIRATORY -> ({ onOpenMetric("resp") })
         KeyMetric.STEPS -> if (stepsOpenCalibration) onOpenStepsCalibration else ({ onOpenMetric("steps_est") })
-        KeyMetric.STEPS_AVERAGE_30 -> ({ onOpenMetric("steps_est") })
         KeyMetric.CALORIES -> ({ onOpenMetric("active_kcal") })
         KeyMetric.WEIGHT -> null
         // Same "skin" vital_detail key `dashboardCardMetricKey(DashboardCard.SKIN_TEMP)` already routes
@@ -5841,7 +5840,6 @@ private fun keyMetricIcon(metric: KeyMetric): ImageVector = when (metric) {
     KeyMetric.BLOOD_OXYGEN -> Icons.Filled.WaterDrop
     KeyMetric.RESPIRATORY -> Icons.Filled.Air
     KeyMetric.STEPS -> Icons.AutoMirrored.Filled.DirectionsWalk
-    KeyMetric.STEPS_AVERAGE_30 -> Icons.Filled.Timeline
     KeyMetric.WEIGHT -> Icons.Filled.MonitorWeight
     KeyMetric.CALORIES -> Icons.Filled.LocalFireDepartment
     // Same glyph the sibling "Your Cards" tile (DashboardCard.SKIN_TEMP) already uses.
@@ -7598,7 +7596,7 @@ private fun KeyMetricsEditorDialog(
     val shown = remember { mutableStateListOf<KeyMetric>().apply { addAll(initial) } }
     val hidden = remember {
         mutableStateListOf<KeyMetric>().apply {
-            addAll(KeyMetric.defaultOrder.filter { it !in initial })
+            addAll(KeyMetric.hiddenOptions(initial))
         }
     }
 
@@ -7675,6 +7673,7 @@ private fun KeyMetricsEditorDialog(
                             shown.clear()
                             shown.addAll(KeyMetric.defaultOrder)
                             hidden.clear()
+                            hidden.addAll(KeyMetric.hiddenOptions(shown))
                             detailed = false
                             windowDays = 14
                         },

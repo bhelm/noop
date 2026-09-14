@@ -438,6 +438,7 @@ struct LiquidTodayView: View {
         // hydrationSeq joins the id so logging a drink re-reads the card immediately, the same trigger set
         // classic TodayView's reloadHydration() uses.
         .task(id: "\(repo.refreshSeq)-\(selectedDayOffset)-\(repo.hydrationSeq)-\(hydrationEnabled)-\(dayCycleModeRaw)") {
+            DashboardCardPrefs.migrateLegacyStepsAverage()
             await load()
         }
         .sheet(item: $guideSection) { section in
@@ -940,6 +941,8 @@ struct LiquidTodayView: View {
     @ViewBuilder
     private func liquidCard(for card: DashboardCard) -> some View {
         switch card {
+        case .stepsAverage30:
+            RollingStepsAverageCard(day: selectedDayKey)
         case .stress:
             cardLink(.stress, title: card.title, sub: card.subtitle,
                      value: stressText, tint: StrandPalette.accent, frac: fracOver(stress, 3))
@@ -1370,8 +1373,6 @@ struct LiquidTodayView: View {
         case .steps:
             ktile(String(localized: "Steps"), icon: keyMetricIcon(metric), stepsText, "", StrandPalette.chargeColor,
                   fracOver(stepCount, 10000), key: stepsDetailKey, detailMetric: stepsDetailMetric)
-        case .stepsAverage30:
-            RollingStepsAverageTile(day: selectedDayKey)
         case .weight:
             ktile(String(localized: "Weight"), icon: keyMetricIcon(metric), "—", "", StrandPalette.metricAmber, nil, key: "weight")
         case .calories:
@@ -1404,7 +1405,7 @@ struct LiquidTodayView: View {
         case .restingHr: return "heart.circle.fill"
         case .bloodOxygen: return "drop.fill"
         case .respiratory: return "lungs.fill"
-        case .steps, .stepsAverage30: return "figure.walk"
+        case .steps: return "figure.walk"
         case .weight: return "scalemass.fill"
         case .calories: return "flame.fill"
         case .skinTemp: return "thermometer.medium"
