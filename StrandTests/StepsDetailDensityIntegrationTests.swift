@@ -37,7 +37,7 @@ final class StepsDetailDensityIntegrationTests: XCTestCase {
                                                   preferredStyleRaw: TrendChartStyle.bar.rawValue))
     }
 
-    func testOneReadingAndOneAggregatedBucketRemainBars() {
+    func testOneReadingAndOneAggregatedBucketRemainBars() throws {
         let oneReading = MetricDetailSteps.presentation(
             readings: [("2026-03-08", 1_234)], range: .week)
         XCTAssertEqual(oneReading.series.count, 1)
@@ -48,10 +48,23 @@ final class StepsDetailDensityIntegrationTests: XCTestCase {
         XCTAssertEqual(oneWeeklyBucket.series.count, 1)
         XCTAssertEqual(oneWeeklyBucket.series.first?.day, "2026-03-02")
         XCTAssertEqual(oneWeeklyBucket.series.first?.value, 1_500)
-        XCTAssertTrue(oneWeeklyBucket.accessibilitySummary.contains("average steps per observed day"))
+        let bucketCount = 1
+        let mean = 1_500
+        let noun = String(localized: "bar")
+        let period = MetricDetailSteps.periodLabel(day: "2026-03-02", resolution: .weekly)
+        XCTAssertEqual(
+            oneWeeklyBucket.accessibilitySummary,
+            String(localized: "Steps chart, \(bucketCount) weekly \(noun), latest \(mean) average steps per observed day, \(period)"))
+
+        // Grouping follows the selected app locale; the displayed value is no longer a raw integer.
+        let formatter = NumberFormatter()
+        formatter.locale = AppLanguage.activeLocale
+        formatter.numberStyle = .decimal
+        formatter.maximumFractionDigits = 0
+        let formatted = try XCTUnwrap(formatter.string(from: NSNumber(value: mean)))
         XCTAssertEqual(
             MetricDetailSteps.valueLabel(1_500, resolution: .weekly),
-            "1500 average steps per observed day")
+            String(localized: "\(formatted) average steps per observed day"))
     }
 
     func testSparseHistoryUsesTheExpectedResolutionForEveryRange() {
