@@ -187,8 +187,9 @@ payload CRC32 is unchanged from 4.0. The whole 4-vs-5 difference is funnelled th
 NOOP accepts a 5.0/MG frame only at **13 bytes or more** (8 header bytes including the CRC16, at
 least the inner type byte, and the 4-byte CRC32 trailer) and exactly `declaredLength + 8` bytes, so
 truncation and trailing bytes are rejected. The 13-byte floor is empirical rather than structural:
-Goose's `v5Payload` accepts the self-consistent 12-byte, zero-payload envelope, but no such frame has
-been observed from hardware and the smallest project capture is 124 bytes. Keeping 13 is a deliberate
+Goose's `v5Payload` accepts the self-consistent 12-byte, zero-payload envelope. The committed real
+fixtures include 20-byte command responses and 24-/32-byte frames, but no 12-byte boundary case;
+they establish valid traffic above the floor, not that 12 is invalid. Keeping 13 is a deliberate
 compatibility assumption that prevents a typeless frame's trailer from being treated as record data.
 
 ---

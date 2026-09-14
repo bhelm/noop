@@ -1,8 +1,8 @@
 {
   "_comment": [
     "SHARED FRAME-INTEGRITY ORACLE (change frame-integrity, D5 / task 4.2).",
-    "Generated — do not hand-edit. Regenerate with:",
-    "swift run --package-path openspec/changes/frame-integrity/oracle-gen FrameIntegrityOracleGen",
+    "Committed parity fixture; no generator is retained in this repository.",
+    "Update both copies together and validate them with both platform suites.",
     "Two byte-identical copies are committed, one per test tree, and both suites assert every case",
     "and all three pinned fields (verdict, reject_reason, meta), so neither platform can move its",
     "verifier without the other's suite going red.",

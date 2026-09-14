@@ -111,8 +111,9 @@ public enum FrameRejectReason: String, Codable, Equatable, Sendable, CaseIterabl
 /// WHOOP 5.0/MG: `[SOF][fmt][declLen u16][hdr u16][crc16 u16] + >=1 payload byte + [crc32 u32]` = 13.
 /// Unlike the 4.0 bound, 13 is an empirical acceptance policy, not an envelope necessity: Goose's
 /// `v5Payload` accepts a 12-byte, zero-payload frame (`declaredLength == 4`). NOOP deliberately
-/// requires the inner type byte; no zero-payload 5.0/MG frame has been observed, and the smallest
-/// recorded one is 124 bytes. Keep this assumption explicit until hardware evidence changes it.
+/// requires the inner type byte. Real fixtures include 20-byte command responses plus 24- and
+/// 32-byte frames, but no captured 12-byte zero-payload frame; those observations do not prove the
+/// boundary. Keep this assumption explicit until hardware evidence changes it.
 public enum FrameLimits {
     public static let whoop4MinimumFrameBytes = 11
     public static let whoop5MinimumFrameBytes = 13

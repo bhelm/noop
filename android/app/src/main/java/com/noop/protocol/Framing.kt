@@ -204,10 +204,10 @@ class Reassembler(private val family: DeviceFamily = DeviceFamily.WHOOP4) {
  * Why a frame failed the envelope check — one value, never null, so a consumer can report the cause
  * without verifying or parsing the frame a second time (the parse-once invariant).
  *
- * [NONE] is the ONLY value that accompanies a positive verdict. The two payload-CRC cases are kept
- * apart on purpose: a diagnostic may only assert what it observed, and "we could not compute the
- * CRC32" is not the same claim as "the CRC32 disagreed". Twin of the Swift `FrameRejectReason`,
- * value for value (`none` → [NONE], `noStartOfFrame` → [NO_START_OF_FRAME], … ).
+ * [NONE] is the ONLY value that accompanies a positive verdict. Structural failures keep any
+ * unavailable payload CRC as a null diagnostic; [PAYLOAD_CRC_MISMATCH] means the CRC32 was actually
+ * computed and disagreed. Twin of the Swift `FrameRejectReason`, value for value (`none` → [NONE],
+ * `noStartOfFrame` → [NO_START_OF_FRAME], … ).
  */
 enum class FrameRejectReason {
     /** The frame is intact: header checksum, payload CRC32 and the structural length all agree. */
@@ -240,8 +240,9 @@ enum class FrameRejectReason {
  * WHOOP 5.0/MG: `[SOF][fmt][declLen u16][hdr u16][crc16 u16] + >=1 payload byte + [crc32 u32]` = 13.
  * Unlike the 4.0 bound, 13 is an empirical acceptance policy, not an envelope necessity: Goose's
  * `v5Payload` accepts a 12-byte, zero-payload frame (`declaredLength == 4`). NOOP deliberately
- * requires the inner type byte; no zero-payload 5.0/MG frame has been observed, and the smallest
- * recorded one is 124 bytes. Twin of the Swift `FrameLimits`.
+ * requires the inner type byte. Real fixtures include 20-byte command responses plus 24- and
+ * 32-byte frames, but no captured 12-byte zero-payload frame; those observations do not prove the
+ * boundary. Twin of the Swift `FrameLimits`.
  */
 object FrameLimits {
     const val WHOOP4_MINIMUM_FRAME_BYTES = 11

@@ -266,8 +266,9 @@ WHOOP5_END_DATA_LEN = 8
 # Accepted frame floor per family, mirroring `FrameLimits` in the Swift WhoopProtocol package
 # (whoop4MinimumFrameBytes = 11, whoop5MinimumFrameBytes = 13). The 4.0 value is structural for its
 # type/seq/cmd record. The 5.0 value is empirical: a 12-byte empty-payload envelope is internally
-# consistent (and accepted by Goose's v5Payload), but NOOP requires at least the inner type byte and
-# no zero-payload hardware frame has been observed.
+# consistent (and accepted by Goose's v5Payload), but NOOP requires at least the inner type byte.
+# Captured fixtures exist at 20, 24 and 32 bytes, not at the 12-byte boundary, so they do not prove
+# the configured floor.
 #
 # On the trim-ack path itself this bound is not reachable: `history_end_data*` already requires 25 and
 # 29 bytes before it verifies anything. The bound is here so this tool's verifiers answer the same

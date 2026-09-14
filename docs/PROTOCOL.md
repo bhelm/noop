@@ -124,9 +124,10 @@ format: it contains `type`, `seq`, `cmd`, and the CRC32 trailer, and real zero-d
 sit exactly there. The 13-byte WHOOP 5.0/MG value is a deliberate empirical policy: the envelope
 alone can represent a 12-byte frame with `declLength == 4` and an empty CRC-covered payload, and
 Goose's [`v5Payload`](https://github.com/b-nnett/goose/blob/ba9ae0280c9b5b9a1545baab8e944cb3b7563c62/GooseSwift/GooseBLEClient%2BParsing.swift#L890-L900)
-accepts that shape. NOOP requires at least the inner type byte because no
-zero-payload 5.0/MG frame has been observed; the smallest recorded frame is 124 bytes. Retaining 13
-is therefore an explicit compatibility bet, not a claim that 12 is structurally impossible.
+accepts that shape. The real fixtures committed here include 20-byte command responses and 24- and
+32-byte frames, but no captured 12-byte boundary case. They prove valid traffic above the floor, not
+that 12 is invalid. Requiring at least the inner type byte is therefore an explicit compatibility
+bet, not a claim that 12 is structurally impossible.
 
 The exact size is compared against the byte count actually handed in, so **a truncated frame and a
 frame with trailing bytes past its own end are both rejected** — equality, not "at least".

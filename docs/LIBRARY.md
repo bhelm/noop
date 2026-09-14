@@ -147,8 +147,9 @@ rule supplies the rejection reason; only a computed disagreement is a CRC reason
 
 The 11-byte 4.0 minimum is structural and admits real zero-data metadata records.
 The 13-byte 5.0/MG minimum is an explicit empirical policy requiring at least the
-inner type byte: Goose permits a 12-byte empty-payload envelope, but none has been
-observed from hardware and the smallest project capture is 124 bytes.
+inner type byte: Goose permits a 12-byte empty-payload envelope. Real fixtures exist
+at 20 bytes (command responses) and at 24/32 bytes, but no captured boundary case;
+that evidence does not prove the 13-byte floor.
 
 **Schema + parsing** (`Schema.swift`, `Interpreter.swift`, `Values.swift`)
 
