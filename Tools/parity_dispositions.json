@@ -160,6 +160,86 @@
       "identity_sha256": "f4e333e6c0572027b21d0dc92e42e036887519d66b11c2f4e3f653f7b6884c03",
       "platform": "swift",
       "rationale": "Hand-rolled SHA-256 (FIPS 180-4): CryptoKit is Apple-only and WhoopProtocol builds on Linux without dependencies. The Kotlin twin FirmwareImageParser.parse uses java.security.MessageDigest, so no Kotlin declaration exists to pair."
+    },
+    {
+      "type": "platform_specific",
+      "kind": "add-unpaired-function",
+      "identity": "swift\u0000Packages/WhoopProtocol/Sources/WhoopProtocol/FirmwareImage.swift::consumedEnd/0#1",
+      "identity_sha256": "7c08ec92bb57139fd58ca368c6b0d5ba86a9a0c258547206520021676b319035",
+      "platform": "swift",
+      "rationale": "Accessor of the hand-rolled raw-DEFLATE decoder (RFC 1951) that reports where the gzip trailer starts. The Kotlin twin FirmwareImageParser.inflateSingleGzipMember reads java.util.zip.Inflater.bytesRead instead, so no Kotlin declaration exists to pair."
+    },
+    {
+      "type": "platform_specific",
+      "kind": "add-unpaired-constant",
+      "identity": "swift\u0000Packages/WhoopProtocol/Sources/WhoopProtocol/FirmwareImage.swift::digits",
+      "identity_sha256": "e037ea90bda9b5ef9ab49d4db3213eb4e02db3a6c0592acee20f7d851b616e88",
+      "platform": "swift",
+      "rationale": "Function-local binding inside the top-level Swift helper fwHex8, which the ledger counts as a constant because it is indented only four spaces. The Kotlin twin Long.hex8 formats with \"%08x\" and has no such binding, so no Kotlin constant exists to pair."
+    },
+    {
+      "type": "platform_specific",
+      "kind": "add-unpaired-constant",
+      "identity": "swift\u0000Packages/WhoopProtocol/Sources/WhoopProtocol/FirmwareUpdateState.swift::components",
+      "identity_sha256": "0bccf4290709b7d9d26bcae2697349e98f6f3a7aa99c73d2a3aa36355025ea7a",
+      "platform": "swift",
+      "rationale": "Function-local binding inside the top-level Swift parseFirmwareVersion, which the ledger counts as a constant because it is indented only four spaces. The Kotlin twin keeps the split components in a local val, not a const val, so no Kotlin constant exists to pair."
+    },
+    {
+      "type": "platform_specific",
+      "kind": "add-unpaired-constant",
+      "identity": "swift\u0000Packages/WhoopProtocol/Sources/WhoopProtocol/FirmwareUpdateState.swift::current",
+      "identity_sha256": "7375f46db90558032aec843ce3f51ddb1dcbf1ac30530d771254108e1a8113cf",
+      "platform": "swift",
+      "rationale": "Function-local guard binding inside the top-level Swift compareFirmwareVersions, which the ledger counts as a constant because it is indented only four spaces. The Kotlin twin binds the parsed version to a local val, not a const val, so no Kotlin constant exists to pair."
+    },
+    {
+      "type": "platform_specific",
+      "kind": "add-unpaired-constant",
+      "identity": "swift\u0000Packages/WhoopProtocol/Sources/WhoopProtocol/FirmwareUpdateState.swift::target",
+      "identity_sha256": "2850e860d179460bce0d77b4ca13e61b428173b3d60f68dbf03158f5cb747db6",
+      "platform": "swift",
+      "rationale": "Function-local guard binding inside the top-level Swift compareFirmwareVersions, which the ledger counts as a constant because it is indented only four spaces. The Kotlin twin binds the parsed version to a local val, not a const val, so no Kotlin constant exists to pair."
+    },
+    {
+      "type": "platform_specific",
+      "kind": "add-unpaired-constant",
+      "identity": "swift\u0000Packages/WhoopProtocol/Sources/WhoopProtocol/FirmwareUpdateState.swift::settledStages",
+      "identity_sha256": "f2e9e87bbf74817366edefee8707d5e4e2282e3d95a49f8f37b0a6c43d7a82a4",
+      "platform": "swift",
+      "rationale": "Set-valued static of FirmwareFlashUiPolicy. A Kotlin const val cannot hold a collection, so its twin FirmwareFlashUiPolicy.settledStages is a private val outside the constant inventory and no Kotlin constant exists to pair."
+    },
+    {
+      "type": "platform_specific",
+      "kind": "add-unpaired-function",
+      "identity": "kotlin\u0000android/app/src/main/java/com/noop/protocol/FirmwareImage.kt::crc32/2#1",
+      "identity_sha256": "4541e75710e4ee94a958701589a57fc32d4204d9b331d5338e0fc9d9a72fbe12",
+      "platform": "kotlin",
+      "rationale": "Kotlin-local wrapper that runs java.util.zip.CRC32 over a byte range for the container checks. The Swift parser calls the package's existing crc32(_:_:_:) from Framing.swift directly, so no Swift declaration exists to pair."
+    },
+    {
+      "type": "platform_specific",
+      "kind": "add-unpaired-function",
+      "identity": "kotlin\u0000android/app/src/main/java/com/noop/protocol/FirmwareImage.kt::toHex/0#1",
+      "identity_sha256": "08e56b22d6152097cc8f142b6f3350d21b739a9b220e4c4a5a2c984b40697be0",
+      "platform": "kotlin",
+      "rationale": "Kotlin-local lowercase hex formatter for the image SHA-256 and the rejection body text. Swift uses the package's existing [UInt8].hexLower from Hex.swift, so no Swift declaration exists to pair."
+    },
+    {
+      "type": "platform_specific",
+      "kind": "add-unpaired-function",
+      "identity": "kotlin\u0000android/app/src/main/java/com/noop/protocol/FirmwareTransfer.kt::mayRetryAfterAmbiguousRejection/1#1",
+      "identity_sha256": "3554e4462bc0c6f9130d5804a609d82031e1a6267ea8345106ac18f5015adec3",
+      "platform": "kotlin",
+      "rationale": "Android-only gate for WhoopBleClient's GATT write queue, which re-sends a frame the stack refused as busy; for a firmware-session frame delivery is then ambiguous, so the session fails instead. iOS has no such re-send path: a CoreBluetooth write without response reports no per-write refusal, and the firmware transport checks canSendWriteWithoutResponse before handing a frame over."
+    },
+    {
+      "type": "platform_specific",
+      "kind": "add-unpaired-constant",
+      "identity": "kotlin\u0000android/app/src/main/java/com/noop/protocol/FirmwareUpdateState.kt::FIRMWARE_READ_BUFFER_BYTES",
+      "identity_sha256": "869483145264f459d2970c9ef26f5119ffdde35d2b4f083ace3e7fd8f2948f67",
+      "platform": "kotlin",
+      "rationale": "Buffer size for streaming a picked document out of Android's ContentResolver InputStream in readFirmwareBytes. The Swift file importer hands over already-loaded Data, so validateFirmwareDocumentSize checks the size only and has no read buffer."
     }
   ]
 }
