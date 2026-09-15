@@ -1,7 +1,5 @@
-package com.noop.ui
+package com.noop.protocol
 
-import com.noop.ble.FirmwareImageParser
-import com.noop.ble.FirmwareUpdateStage
 import java.io.ByteArrayInputStream
 import java.io.InputStream
 import org.junit.Assert.assertEquals

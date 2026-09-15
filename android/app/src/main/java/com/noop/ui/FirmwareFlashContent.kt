@@ -31,47 +31,19 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.noop.R
-import com.noop.ble.FirmwareImageParser
-import com.noop.ble.FirmwareUpdateStage
-import com.noop.ble.FirmwareUpdateState
 import com.noop.ble.WhoopBleClient
-import java.io.ByteArrayOutputStream
-import java.io.InputStream
+import com.noop.protocol.EmptyFirmwareImageException
+import com.noop.protocol.FirmwareFlashUiPolicy
+import com.noop.protocol.FirmwareImageTooLargeException
+import com.noop.protocol.FirmwareUpdateStage
+import com.noop.protocol.FirmwareUpdateState
+import com.noop.protocol.FirmwareVersionRelation
+import com.noop.protocol.compareFirmwareVersions
+import com.noop.protocol.formatFirmwareBytes
+import com.noop.protocol.readFirmwareBytes
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-
-private const val FIRMWARE_READ_BUFFER_BYTES = 64 * 1024
-private const val MAX_VERSION_COMPONENT = 0xffff_ffffL
-
-internal enum class FirmwareVersionRelation {
-    DOWNGRADE,
-    SAME,
-    UPGRADE,
-    INCOMPARABLE,
-}
-
-/** Compares canonical four-component firmware versions numerically, never lexicographically. */
-internal fun compareFirmwareVersions(currentVersion: String?, targetVersion: String): FirmwareVersionRelation {
-    val current = currentVersion?.let(::parseFirmwareVersion)
-        ?: return FirmwareVersionRelation.INCOMPARABLE
-    val target = parseFirmwareVersion(targetVersion)
-        ?: return FirmwareVersionRelation.INCOMPARABLE
-    current.indices.forEach { index ->
-        if (target[index] < current[index]) return FirmwareVersionRelation.DOWNGRADE
-        if (target[index] > current[index]) return FirmwareVersionRelation.UPGRADE
-    }
-    return FirmwareVersionRelation.SAME
-}
-
-private fun parseFirmwareVersion(version: String): List<Long>? {
-    val components = version.trim().split('.')
-    if (components.size != 4) return null
-    return components.map { component ->
-        if (component.isEmpty() || component.any { it !in '0'..'9' }) return null
-        component.toLongOrNull()?.takeIf { it in 0..MAX_VERSION_COMPONENT } ?: return null
-    }
-}
 
 /**
  * The Test Centre firmware-update body. File selection and local validation are deliberately separate
@@ -498,30 +470,6 @@ private fun FirmwareFact(label: String, value: String, mono: Boolean = false) {
     }
 }
 
-internal object FirmwareFlashUiPolicy {
-    private val settledStages = setOf(
-        FirmwareUpdateStage.EMPTY,
-        FirmwareUpdateStage.IMAGE_READY,
-        FirmwareUpdateStage.FAILED,
-        FirmwareUpdateStage.CANCELLED,
-        FirmwareUpdateStage.DEVICE_RECONNECTED,
-    )
-
-    fun canChooseFile(stage: FirmwareUpdateStage, uiBusy: Boolean): Boolean = !uiBusy && stage in settledStages
-
-    fun canClear(stage: FirmwareUpdateStage, uiBusy: Boolean): Boolean =
-        !uiBusy && stage in settledStages && stage != FirmwareUpdateStage.EMPTY
-
-    fun showsProgress(stage: FirmwareUpdateStage): Boolean = stage in setOf(
-        FirmwareUpdateStage.PREPARING,
-        FirmwareUpdateStage.WRITING,
-        FirmwareUpdateStage.REMOTE_VALIDATING,
-        FirmwareUpdateStage.READY_TO_ACTIVATE,
-        FirmwareUpdateStage.PAUSED,
-    )
-
-}
-
 internal data class FirmwareDocument(val fileName: String, val bytes: ByteArray)
 
 private fun readFirmwareDocument(context: Context, uri: Uri): FirmwareDocument {
@@ -548,46 +496,6 @@ private fun readFirmwareDocument(context: Context, uri: Uri): FirmwareDocument {
         ?: throw IllegalArgumentException(context.getString(R.string.firmware_flash_open_failed))
     val bytes = stream.use { readFirmwareBytes(it, declaredSize) }
     return FirmwareDocument(name, bytes)
-}
-
-internal fun readFirmwareBytes(
-    input: InputStream,
-    declaredSize: Long? = null,
-    maxBytes: Int = FirmwareImageParser.MAX_IMAGE_BYTES,
-): ByteArray {
-    require(maxBytes > 0)
-    if (declaredSize != null && declaredSize > maxBytes) {
-        throw FirmwareImageTooLargeException()
-    }
-    val initialCapacity = declaredSize
-        ?.coerceAtLeast(0L)
-        ?.coerceAtMost(maxBytes.toLong())
-        ?.toInt()
-        ?: FIRMWARE_READ_BUFFER_BYTES
-    val output = ByteArrayOutputStream(initialCapacity)
-    val buffer = ByteArray(FIRMWARE_READ_BUFFER_BYTES)
-    var total = 0
-    while (true) {
-        val count = input.read(buffer)
-        if (count < 0) break
-        if (count == 0) continue
-        total += count
-        if (total > maxBytes) {
-            throw FirmwareImageTooLargeException()
-        }
-        output.write(buffer, 0, count)
-    }
-    if (total == 0) throw EmptyFirmwareImageException()
-    return output.toByteArray()
-}
-
-internal class FirmwareImageTooLargeException : IllegalArgumentException()
-internal class EmptyFirmwareImageException : IllegalArgumentException()
-
-internal fun formatFirmwareBytes(bytes: Long): String = when {
-    bytes >= 1024L * 1024L -> "%.2f MiB".format(java.util.Locale.ROOT, bytes / (1024.0 * 1024.0))
-    bytes >= 1024L -> "%.1f KiB".format(java.util.Locale.ROOT, bytes / 1024.0)
-    else -> "$bytes B"
 }
 
 @Composable

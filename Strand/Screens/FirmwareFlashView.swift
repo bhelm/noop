@@ -235,26 +235,30 @@ struct FirmwareFlashView: View {
     }
 
     @ViewBuilder private func versionNote(_ relation: FirmwareVersionRelation) -> some View {
-        let (message, color): (String, Color) = {
-            switch relation {
-            case .downgrade: return (String(localized: "Downgrade: the selected image is older than the firmware currently reported by the strap. Transfer and activation remain available for this test."), StrandPalette.statusWarning)
-            case .same: return (String(localized: "This firmware version is already reported as installed. You can intentionally transfer and activate it again."), StrandPalette.textSecondary)
-            case .upgrade: return (String(localized: "The selected image version is newer than the firmware currently reported by the strap."), StrandPalette.statusPositive)
-            case .incomparable: return (String(localized: "The current or selected version is unknown or malformed, so their order cannot be determined."), StrandPalette.statusWarning)
-            }
-        }()
+        let (message, color) = versionNoteContent(relation)
         Text(message).font(StrandFont.footnote).foregroundStyle(color)
             .fixedSize(horizontal: false, vertical: true)
     }
 
+    private func versionNoteContent(_ relation: FirmwareVersionRelation) -> (String, Color) {
+        switch relation {
+        case .downgrade: return (String(localized: "Downgrade: the selected image is older than the firmware currently reported by the strap. Transfer and activation remain available for this test."), StrandPalette.statusWarning)
+        case .same: return (String(localized: "This firmware version is already reported as installed. You can intentionally transfer and activate it again."), StrandPalette.textSecondary)
+        case .upgrade: return (String(localized: "The selected image version is newer than the firmware currently reported by the strap."), StrandPalette.statusPositive)
+        case .incomparable: return (String(localized: "The current or selected version is unknown or malformed, so their order cannot be determined."), StrandPalette.statusWarning)
+        }
+    }
+
+    /// Identity, version relation, then the reboot warning — the order of the Android activation dialog.
     private var activationMessage: String {
         let identity = String(format: String(localized: "Image: %1$@\nCurrent strap: %2$@\nSelected image: %3$@\nDevice session: %4$@"),
                               state.image?.fileName ?? "?",
                               reportedFirmware ?? String(localized: "unknown"),
                               state.image?.version ?? "?",
                               state.lockedDeviceLabel ?? String(localized: "unknown device"))
+        let relation = versionNoteContent(compareFirmwareVersions(current: reportedFirmware, target: state.image?.version ?? "")).0
         let warning = String(localized: "The strap restarts on the new firmware and briefly disconnects. It then reconnects and reports its version. Keep the strap nearby and charged until it is connected again.")
-        return identity + "\n\n" + warning
+        return identity + "\n\n" + relation + "\n\n" + warning
     }
 
     // MARK: - Helpers
@@ -273,6 +277,9 @@ struct FirmwareFlashView: View {
     private func handleImport(_ result: Result<[URL], Error>) {
         switch result {
         case .failure:
+            // Fail closed as on a successful pick: a picker error may not leave the previously validated
+            // image armed behind the error line.
+            ble.clearFirmwareImage()
             fileReadError = String(localized: "The selected image could not be read.")
         case .success(let urls):
             guard let url = urls.first else { return }
@@ -280,6 +287,12 @@ struct FirmwareFlashView: View {
             // validated image armed behind a newly displayed file name.
             ble.clearFirmwareImage()
             fileReadError = nil
+            // As Android: a document without a usable name is refused before it is opened.
+            let fileName = url.lastPathComponent
+            guard !fileName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, fileName != "/" else {
+                fileReadError = String(localized: "The selected document has no usable file name.")
+                return
+            }
             fileReadBusy = true
             Task { @MainActor in
                 defer { fileReadBusy = false }   // any exit, incl. a read or validation failure
@@ -289,11 +302,13 @@ struct FirmwareFlashView: View {
                     let bytes = try await Task.detached(priority: .userInitiated) {
                         try readFirmwareDocument(at: url)
                     }.value
-                    await ble.selectFirmwareImage(fileName: url.lastPathComponent, bytes: bytes)
+                    await ble.selectFirmwareImage(fileName: fileName, bytes: bytes)
                 } catch is FirmwareImageTooLargeError {
                     fileReadError = String(localized: "The selected image exceeds the app’s 16 MiB safety limit.")
                 } catch is EmptyFirmwareImageError {
                     fileReadError = String(localized: "The selected image is empty.")
+                } catch is FirmwareDocumentOpenError {
+                    fileReadError = String(localized: "The selected document could not be opened.")
                 } catch {
                     fileReadError = String(localized: "The selected image could not be read.")
                 }
@@ -313,7 +328,14 @@ private func readFirmwareDocument(at url: URL) throws -> [UInt8] {
        declared > FirmwareImageParser.maxImageBytes {
         throw FirmwareImageTooLargeError()
     }
-    let data = try Data(contentsOf: url)
+    // Opening and reading fail separately, as on Android (`openInputStream` null vs. a failed read).
+    let handle: FileHandle
+    do { handle = try FileHandle(forReadingFrom: url) } catch { throw FirmwareDocumentOpenError() }
+    defer { try? handle.close() }
+    let data = try handle.readToEnd() ?? Data()
     try validateFirmwareDocumentSize(byteCount: data.count)
     return [UInt8](data)
 }
+
+/// The picked document could not be opened at all (Android's `firmware_flash_open_failed` case).
+private struct FirmwareDocumentOpenError: Error {}

@@ -63,6 +63,26 @@ import com.noop.protocol.extractStreams
 import com.noop.protocol.WhoopGattServiceFamily
 import com.noop.protocol.whoopGattScanDecision
 import com.noop.protocol.toHexLower
+import com.noop.protocol.FirmwareActivationObservation
+import com.noop.protocol.FirmwareImageParser
+import com.noop.protocol.FirmwareImageValidation
+import com.noop.protocol.FirmwareResponseKey
+import com.noop.protocol.FirmwareResponseMatcher
+import com.noop.protocol.FirmwareResumeBinding
+import com.noop.protocol.FirmwareResumePolicy
+import com.noop.protocol.FirmwareRetryableTransportException
+import com.noop.protocol.FirmwareTransferEngine
+import com.noop.protocol.FirmwareTransferException
+import com.noop.protocol.FirmwareTransferPausedException
+import com.noop.protocol.FirmwareTransferTransport
+import com.noop.protocol.FirmwareUpdateAdmission
+import com.noop.protocol.FirmwareUpdateStage
+import com.noop.protocol.FirmwareUpdateState
+import com.noop.protocol.FirmwareUpdateTransitions
+import com.noop.protocol.FirmwareWhoop5ResponseDecoder
+import com.noop.protocol.FirmwareWireResponse
+import com.noop.protocol.FirmwareWriteQueuePolicy
+import com.noop.protocol.ValidatedFirmwareImage
 import com.noop.analytics.Baselines
 import com.noop.analytics.BatterySocLine
 import com.noop.analytics.ConnectionReadout
@@ -4587,12 +4607,21 @@ class WhoopBleClient(
             try {
                 firmwareEngine(session).activate()
                 synchronized(this@WhoopBleClient) {
-                    if (firmwareSession?.id != session.id) return@synchronized
+                    // The ACK and a disconnect can race for this lock. If the drop was handled first,
+                    // noteFirmwareDisconnected already moved the stage on to RECONNECTING and armed the
+                    // reconnect wait; continuing would rewind it and arm a "did not disconnect" timer that
+                    // contradicts the drop.
+                    if (firmwareSession?.id != session.id ||
+                        _firmwareUpdateState.value.stage != FirmwareUpdateStage.ACTIVATION_REQUESTED
+                    ) return@synchronized
                     // Reconnect handshakes must run, so the command exclusion ends after the activation ACK.
                     firmwareUpdateExclusive = false
                     _firmwareUpdateState.value = FirmwareUpdateTransitions.activationRequested(
                         _firmwareUpdateState.value,
                     )
+                    // Normally this very job, which has nothing left to suspend on; cancelling it keeps the
+                    // rule that no replaced job survives its slot. The new job is not its child.
+                    session.job?.cancel()
                     session.job = firmwareScope.launch {
                         delay(FirmwareActivationObservation.DISCONNECT_TIMEOUT_MS)
                         finishFirmwareFailure(
@@ -4766,10 +4795,21 @@ class WhoopBleClient(
                 _firmwareUpdateState.value = FirmwareUpdateTransitions.reconnecting(_firmwareUpdateState.value)
                 session.job = firmwareScope.launch {
                     delay(FirmwareActivationObservation.RECONNECT_TIMEOUT_MS)
-                    finishFirmwareFailure(
-                        session,
-                        "The strap did not reconnect within 60 seconds after activation; boot outcome remains unknown",
-                    )
+                    // The same strap can be back without a decoded version: the 5/MG hello decoder fails
+                    // closed on a layout it does not know (#1634), plausibly right after a firmware change.
+                    // That is a reconnect with an unknown version, not a failure to reconnect.
+                    val sameStrapBack = synchronized(this@WhoopBleClient) {
+                        _state.value.connected && gatt != null &&
+                            session.deviceAddress.equals(lastDeviceAddress, ignoreCase = true)
+                    }
+                    if (sameStrapBack) {
+                        noteFirmwareReconnectedWithoutVersion(session)
+                    } else {
+                        finishFirmwareFailure(
+                            session,
+                            "The strap did not reconnect within 60 seconds after activation; boot outcome remains unknown",
+                        )
+                    }
                 }
             }
             FirmwareUpdateStage.DEVICE_RECONNECTED -> Unit
@@ -4779,6 +4819,26 @@ class WhoopBleClient(
                 restoreRealtime = false,
             )
         }
+    }
+
+    /**
+     * The reconnect wait ran out with the same strap connected again but no firmware version decoded.
+     * Ends the session like [noteFirmwareReportedVersion], with a status that names no version.
+     */
+    @Synchronized
+    private fun noteFirmwareReconnectedWithoutVersion(session: FirmwareSession) {
+        if (!FirmwareActivationObservation.sessionIsCurrent(session.id, firmwareSession?.id) ||
+            !FirmwareActivationObservation.canAcceptReportedVersion(_firmwareUpdateState.value.stage)
+        ) return
+        session.job = null
+        firmwarePending = null
+        firmwareUpdateExclusive = false
+        firmwareSession = null
+        _firmwareUpdateState.value = FirmwareUpdateTransitions.reconnected(_firmwareUpdateState.value, null)
+        log(
+            "Firmware update: the strap reconnected after activation but reported no firmware version " +
+                "within 60 seconds; the running version is unconfirmed",
+        )
     }
 
     @Synchronized
@@ -10625,6 +10685,13 @@ class WhoopBleClient(
     private fun requestSync(trigger: BackfillTrigger) {
         val s = _state.value
         if (!canRequestSync(s.connected, s.bonded, backfilling)) return
+        // An exclusive firmware session holds the command channel: send() would drop SEND_HISTORICAL_DATA,
+        // and the offload armed behind it would then run into its idle timeout and read as a stalled sync.
+        // Not starting it at all keeps the policy clock untouched; the next trigger after the session runs.
+        if (firmwareUpdateExclusive) {
+            log("Backfill: $trigger skipped - an exclusive firmware update session holds the command channel")
+            return
+        }
         val clockUntrusted = isFutureDatedNewest(strapNewestTs, System.currentTimeMillis() / 1000L)
         if (!BackfillPolicy.shouldRun(
                 trigger = trigger,

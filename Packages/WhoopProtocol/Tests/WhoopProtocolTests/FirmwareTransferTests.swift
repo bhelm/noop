@@ -264,14 +264,12 @@ final class FirmwareTransferTests: XCTestCase {
         XCTAssertTrue(FirmwareUpdateAdmission.busyReason(backfilling: false, writeInFlight: false, retryPending: false, queuedWrites: 0, negotiatedMtu: 247, queuedCccds: 1)!.contains("notification"))
     }
 
-    func testFirmwareQueueDropsStaleSessionWritesAndNeverRetriesAmbiguousRejection() {
+    func testFirmwareQueueDropsStaleSessionWrites() {
         XCTAssertTrue(FirmwareWriteQueuePolicy.belongsToCurrentSession(firmwareSessionId: nil, currentSessionId: nil))
         XCTAssertTrue(FirmwareWriteQueuePolicy.belongsToCurrentSession(firmwareSessionId: nil, currentSessionId: 12))
         XCTAssertTrue(FirmwareWriteQueuePolicy.belongsToCurrentSession(firmwareSessionId: 12, currentSessionId: 12))
         XCTAssertFalse(FirmwareWriteQueuePolicy.belongsToCurrentSession(firmwareSessionId: 11, currentSessionId: 12))
         XCTAssertFalse(FirmwareWriteQueuePolicy.belongsToCurrentSession(firmwareSessionId: 12, currentSessionId: nil))
-        XCTAssertTrue(FirmwareWriteQueuePolicy.mayRetryAfterAmbiguousRejection(firmwareSessionId: nil))
-        XCTAssertFalse(FirmwareWriteQueuePolicy.mayRetryAfterAmbiguousRejection(firmwareSessionId: 12))
     }
 
     func testActivationObservationIsBoundedAndStaleTimerCannotTerminateNewSession() {
@@ -370,15 +368,29 @@ final class FirmwareTransferTests: XCTestCase {
     }
 
     func testTransferEntryPointRejectsPrepareWithOffsetAndResumeBetweenBoundaries() async throws {
-        // The engine uses precondition() for these, which traps rather than throws; the Kotlin twin uses
-        // require(). The BLE layer never forms these arguments (they are guarded by FirmwareResumePolicy),
-        // so this test documents the invariant against the pure policy instead.
+        // As with the Kotlin require() checks, an invalid entry throws (the session fails with the text),
+        // it does not trap, and no command reaches the transport.
         let selected = try parsedImage(type: 5)
-        XCTAssertNotNil(FirmwareResumePolicy.rejectionReason(FirmwareResumeBinding(
-            pendingSessionId: 1, currentSessionId: 1, pendingDeviceAddress: "a", currentDeviceAddress: "a",
-            pendingConnectionGeneration: 0, currentConnectionGeneration: 0,
-            pendingImageSha256: "x", currentImageSha256: "x",
-            acknowledgedOffset: 221, totalBytes: selected.bytes.count)))
+        var sent: [Int] = []
+        let e = engine { command, _, _ in sent.append(command); return self.accepted(command) }
+
+        let prepared = await captureError {
+            try await e.transfer(image: selected, initial: self.begun(selected), startOffset: 220, prepareSlot: true) { _ in }
+        }
+        XCTAssertTrue(prepared is FirmwareTransferException)
+        XCTAssertEqual(prepared?.localizedDescription, "A newly prepared slot must start at offset 0")
+
+        let between = await captureError {
+            try await e.transfer(image: selected, initial: self.begun(selected), startOffset: 221, prepareSlot: false) { _ in }
+        }
+        XCTAssertTrue(between is FirmwareTransferException)
+        XCTAssertEqual(between?.localizedDescription, "Firmware resume offset 221 is not an acknowledged chunk boundary")
+
+        let outside = await captureError {
+            try await e.transfer(image: selected, initial: self.begun(selected), startOffset: -1, prepareSlot: false) { _ in }
+        }
+        XCTAssertEqual(outside?.localizedDescription, "Invalid firmware start offset -1")
+        XCTAssertTrue(sent.isEmpty)
     }
 
     // MARK: - Helpers

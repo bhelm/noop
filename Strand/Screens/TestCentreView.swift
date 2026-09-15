@@ -237,7 +237,9 @@ struct TestCentreView: View {
                     // A registry row actually marked active, as Android's non-null active strap id. Not
                     // `activeDeviceId`, which falls back to "my-whoop" when nothing is active.
                     hasActiveDevice: model.deviceRegistry?.devices.contains { $0.status == .active } ?? false,
-                    hasWhoop5MgEvidence: is5MG,
+                    // As Android: the chosen model OR a 5/MG this link actually selected, so a 5/MG
+                    // connected before its model choice is persisted still counts.
+                    hasWhoop5MgEvidence: is5MG || model.whoop5Detected,
                     connected: live.connected,
                     encryptedBond: live.encryptedBond,
                     reportedFirmware: live.strapFirmware)
