@@ -396,7 +396,7 @@ data class SleepSession(
     //     Interpreter's `(sb shr 4) and 3` (H2 persist half).
     // Both nullable TEXT (no SQL DEFAULT, a Kotlin construction default never reaches the schema), so old
     // rows read back null. HONESTY: an absent signal stays null, never a fabricated zero series. Written/read
-    // through the targeted DAO methods (not the @Upsert path, which never names them and so preserves them).
+    // through targeted DAO methods; [SleepSessionUpsertPolicy] carries the stored values through cache refreshes.
     val motionJSON: String? = null,
     val sleepStateJSON: String? = null,
     // v34 (Swift WhoopStore v34-sleep-staging-sparse parity, MIGRATION_27_28). True when this night was
@@ -576,12 +576,10 @@ data class WorkoutRow(
 )
 
 /**
- * Durable "this detected bout is not a workout" marker (#107). The IntelligenceEngine wipes +
- * re-derives sport="detected" rows under "<deviceId>-noop" every run, so a plain delete only hides a
- * bout until the next re-detect recreates it. This table is INDEPENDENT of that churn: a detected row
- * is filtered out at read time whenever it OVERLAPS a marker's [startTs, endTs] span, so dismissal is
- * permanent, and span-overlap (not an exact-key match) survives the small startTs DRIFT a bout's
- * boundary can take as more HR arrives, matching the macOS dismissed-span semantics exactly.
+ * Durable "this detected bout is not a workout" marker (#107). The engine no longer creates or
+ * reconciles generic detected rows (#2187), but grandfathered rows and their dismissal controls remain.
+ * A detected row and the opt-in suggestion path are filtered whenever they OVERLAP a marker's
+ * [startTs, endTs] span, so span drift cannot resurrect a candidate the user rejected.
  *
  * PK (deviceId, startTs), one marker per detected start; `endTs` is the span end. Android-only table
  * (no GRDB twin): the macOS read model can't add a column to its shared workout struct, so macOS

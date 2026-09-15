@@ -247,6 +247,15 @@ final class IntelligenceEngine: ObservableObject {
         let primarySessionRHRCoverage: PrimarySessionRestingHR.Coverage?
     }
 
+    /// Exact pre-upgrade R-R-derived cells retained only while an unlabelled WHOOP 5 window is withheld.
+    private struct LegacyScoreSnapshot {
+        let avgHrv: Double
+        let recovery: Double?
+        let respRateBpm: Double?
+        let avgSdnn: Double?
+        let recoverySource: String?
+    }
+
     struct Computed: Identifiable {
         let day: String
         let recovery: Double?
@@ -272,6 +281,11 @@ final class IntelligenceEngine: ObservableObject {
         /// "+0.3 C vs your normal" with a relative tier tag; never a fake clinical absolute.
         var skinTempRel: SkinTempRelative? = nil
         var id: String { day }
+
+        func withLegacyScore(hrv: Double, recovery: Double?) -> Computed {
+            Computed(day: day, recovery: recovery, strain: strain, sleepMin: sleepMin, hrv: hrv, rhr: rhr,
+                     source: source, confidence: confidence, drivers: drivers, skinTempRel: skinTempRel)
+        }
     }
 
     /// Optional sink for the per-day scoring diagnostic, fed line-by-line into the SAME shareable strap
@@ -1916,10 +1930,10 @@ final class IntelligenceEngine: ObservableObject {
         var out: [Computed] = []
         var dailies: [DailyMetric] = []
         var cachedSleep: [CachedSleepSession] = []
-        var workoutRows: [WorkoutRow] = []
         // #510: backfilled fields for a REAL (non-detected) row a dropped bout collided with, grouped by
-        // the deviceId it must be upserted under (see the collision branch below) — never mixed into
-        // `workoutRows`, which is always written under `computedId`.
+        // the deviceId it must be upserted under (see the collision branch below). The detector remains an
+        // analytics/enrichment input, but the opt-in confirmation card is now the only creator of a new
+        // visible workout; legacy `sport="detected"` rows are preserved rather than reconciled here.
         var backfilledByDevice: [String: [WorkoutRow]] = [:]
         // Rest composite (0–100) per computed night, persisted as the `sleep_performance` metric
         // series so the dashboard's Rest score reflects the new composite, not raw efficiency.
@@ -2011,11 +2025,20 @@ final class IntelligenceEngine: ObservableObject {
         // CAPTURE-B (#814/#799): the universal dayOwner line rides every export, so its gate is "ANY mode
         // active" (TestCentre.active(.universal) == anyActive). Read once here, like the other gates.
         let universalTraceActive = TestCentre.active(.universal)
-        // Workouts & GPS test mode (#975): read the zero-cost gate ONCE before the scoring loop so the
-        // detected-bout persist/drop decision can emit ONE `.workouts` line per derived bout. Without this
-        // the auto path produced NO trace at all (the "mode was on but produced NO trace" report), so an
-        // "auto workout appeared then vanished" could not be explained from an export. Diagnostic only.
+        // Workouts & GPS test mode (#975/#2187): read the zero-cost gate ONCE before the scoring loop so
+        // each analytics-only/backfill decision can emit one `.workouts` line per derived bout. Diagnostic
+        // only; this path no longer publishes or reconciles generic workout rows.
         let workoutsTraceActive = TestCentre.active(.workouts)
+        let oldestDay = AnalyticsEngine.dayString(nowLocalMidnight - (maxDays - 1) * 86_400,
+                                                  offsetSec: tzOffset)
+        let newestDay = AnalyticsEngine.dayString(nowLocalMidnight, offsetSec: tzOffset)
+        let strictCanonicalAlias = (try? await store.isWhoop5RRSource(deviceId: regActiveId)) ?? true
+        let legacySnapshots = await Self.legacyScoreSnapshots(
+            store: store, computedId: computedId, from: oldestDay, to: newestDay,
+            fresh: scoredNights.map { $0.daily }, ownerByDay: resolvedScoreOwnerByDay,
+            nowLocalMidnight: nowLocalMidnight, now: now, offsetSec: tzOffset,
+            maxDays: maxDays, strictCanonicalAlias: strictCanonicalAlias)
+        var appliedLegacySnapshots: [String: LegacyScoreSnapshot] = [:]
         for night in scoredNights {
             // #299: scope the edits to THIS day before folding. A userEdited row / hand-logged nap belongs
             // to exactly ONE day — the day its night ENDS on, matching the daily's end-day bucket. `endTs`
@@ -2152,9 +2175,9 @@ final class IntelligenceEngine: ObservableObject {
                 restPoints.append(MetricPoint(day: daily.day, key: "rhr_primary_session_duration_s", value: cov.durationSec))
             }
             cachedSleep.append(contentsOf: night.cachedSleep)
-            // Persist the detected workouts the pipeline already computes (previously discarded).
-            // Skip any bout overlapping a real imported/manual workout so import+wear users don't
-            // double-count. sport = "detected"; energyKcal is the APPROXIMATE Keytel/BMR total.
+            // Keep the analytics detector as an enrichment input for real imported/manual workouts, but do
+            // not publish its generic bouts. The opt-in Today card is the single confirmation boundary for
+            // creating a visible workout; this pass neither creates nor reconciles `sport="detected"` rows.
             // #1545: where the detector lost every candidate workout on this day, emitted BEFORE the
             // per-bout loop so it is present even when that loop runs zero times — which is exactly the
             // report it exists for. The `effort bout` line below explains a bout that exists; a strap log
@@ -2205,15 +2228,9 @@ final class IntelligenceEngine: ObservableObject {
                     }
                     continue
                 }
-                workoutRows.append(WorkoutRow(startTs: s.start, endTs: s.end,
-                                              sport: "detected", source: computedId,
-                                              durationS: s.durationS, energyKcal: s.caloriesKcal,
-                                              avgHr: avgBpm, maxHr: s.peakHR,
-                                              strain: s.strain, distanceM: nil,
-                                              zonesJSON: nil, notes: nil, steps: nil))
                 if workoutsTraceActive {
                     diagnosticSink?(WorkoutsTrace.detectedBoutLine(
-                        verdict: "persisted", durMin: durMin, avgBpm: avgBpm), .workouts)
+                        verdict: "analyticsOnly", durMin: durMin, avgBpm: avgBpm), .workouts)
                 }
             }
         }
@@ -2263,10 +2280,6 @@ final class IntelligenceEngine: ObservableObject {
         // only , imported "my-whoop" rows are never touched (a BLE-only WHOOP 4.0 user has no import
         // fallback). Rows older than the window keep their old keys (cosmetic off-by-one, acceptable).
         // yyyy-MM-dd sorts chronologically, so the string range IS a date range.
-        let oldestDay = AnalyticsEngine.dayString(nowLocalMidnight - (maxDays - 1) * 86_400,
-                                                  offsetSec: tzOffset)
-        let newestDay = AnalyticsEngine.dayString(nowLocalMidnight, offsetSec: tzOffset)
-
         // ── Source-only Charge/Rest fold for wearable imports (Oura / Fitbit / Garmin / Health Connect) ──
         // Same honesty gap the watch fold above closes (#823), extended to the other import-only sources: a
         // user who ONLY imports an Oura/Fitbit/Garmin export (or Health Connect) has DAILY aggregates (HRV +
@@ -2302,6 +2315,24 @@ final class IntelligenceEngine: ObservableObject {
             }
         }
 
+        // Apply the exact snapshot only after current-score traces and derived series were produced from the
+        // current inputs. A legacy snapshot must not masquerade as a value recalculated against today's
+        // baselines; it only protects persisted R-R-derived cells from a destructive nil overwrite.
+        var persistedDailies = dailies
+        for index in persistedDailies.indices {
+            let fresh = persistedDailies[index]
+            guard let snapshot = legacySnapshots[fresh.day], fresh.avgHrv == nil,
+                  (fresh.totalSleepMin ?? 0) > 0 else { continue }
+            persistedDailies[index] = fresh.with(avgHrv: snapshot.avgHrv, recovery: snapshot.recovery,
+                                                 respRateBpm: snapshot.respRateBpm,
+                                                 avgSdnn: snapshot.avgSdnn)
+            appliedLegacySnapshots[fresh.day] = snapshot
+        }
+        for index in out.indices {
+            guard let snapshot = appliedLegacySnapshots[out[index].day] else { continue }
+            out[index] = out[index].withLegacyScore(hrv: snapshot.avgHrv, recovery: snapshot.recovery)
+        }
+
         // Persist the computed scores under a dedicated "-noop" source so the WHOLE dashboard
         // (Today / Recovery / Strain / Sleep / Trends), not just this screen, reads them. The
         // Repository merges these UNDER any imported "my-whoop" rows, so a real WHOOP import
@@ -2316,11 +2347,18 @@ final class IntelligenceEngine: ObservableObject {
         // resolver override). Persist scores + provenance atomically so a failed write can never label an
         // older score with a newer provider. The last row for a duplicate day wins, matching the upsert.
         var provenanceByCell: [String: ScoreInputProvenanceRow] = [:]
-        for daily in dailies {
+        for daily in persistedDailies {
             guard let source = resolvedScoreOwnerByDay[daily.day] else { continue }
             if daily.recovery != nil {
-                provenanceByCell["\(daily.day)\u{1F}recovery"] =
-                    ScoreInputProvenanceRow(day: daily.day, key: "recovery", sourceId: source)
+                if let snapshot = appliedLegacySnapshots[daily.day] {
+                    if let oldSource = snapshot.recoverySource {
+                        provenanceByCell["\(daily.day)\u{1F}recovery"] =
+                            ScoreInputProvenanceRow(day: daily.day, key: "recovery", sourceId: oldSource)
+                    }
+                } else {
+                    provenanceByCell["\(daily.day)\u{1F}recovery"] =
+                        ScoreInputProvenanceRow(day: daily.day, key: "recovery", sourceId: source)
+                }
             }
             if daily.strain != nil {
                 provenanceByCell["\(daily.day)\u{1F}strain"] =
@@ -2346,7 +2384,7 @@ final class IntelligenceEngine: ObservableObject {
             markerSources = sourceIds
         }
         try? await store.persistComputedScores(
-            dailyMetrics: dailies,
+            dailyMetrics: persistedDailies,
             metricPoints: restPoints,
             provenance: Array(provenanceByCell.values),
             deviceId: computedId,
@@ -2368,8 +2406,8 @@ final class IntelligenceEngine: ObservableObject {
         // covers the window, so eviction runs exactly as before; `persistComputedScores` is guarded the
         // same way, so an empty pass leaves the persisted window untouched. Twin of the Android
         // WhoopDao.replaceComputedScoreWindow empty guard.
-        if !dailies.isEmpty {
-            let freshKeys = Set(dailies.map { $0.day })
+        if !persistedDailies.isEmpty {
+            let freshKeys = Set(persistedDailies.map { $0.day })
             let existingWindow = (try? await store.dailyMetrics(deviceId: computedId, from: oldestDay, to: newestDay)) ?? []
             for stale in existingWindow where !freshKeys.contains(stale.day) {
                 _ = try? await store.deleteDailyMetrics(deviceId: computedId, from: stale.day, to: stale.day)
@@ -2748,15 +2786,10 @@ final class IntelligenceEngine: ObservableObject {
         } else {
             healRearmedThisCycle = false
         }
-        // Make re-detection idempotent across runs: clear the prior computed detected workouts in the
-        // scored window (a bout's startTs can drift as more HR arrives, which would otherwise orphan
-        // stale rows under the (deviceId,startTs,sport) key), then re-insert.
-        _ = try? await store.deleteWorkouts(deviceId: computedId, sport: "detected",
-                                            from: windowStart, to: now)
-        if !workoutRows.isEmpty { _ = try? await store.upsertWorkouts(workoutRows, deviceId: computedId) }
-        // #510: write back any real (manual/imported) rows a dropped detected bout backfilled, one
-        // upsert per owning deviceId (see the collision branch above for why these can't share the
-        // `computedId` batch above).
+        // #1735/#2187: never delete/reinsert legacy detected history during scoring. A disabled toggle,
+        // rescoring pass, missing stream or failed insert must not erase a workout the user already saw.
+        // #510: still write back any real (manual/imported) rows an analytics bout backfilled, one upsert
+        // per owning deviceId.
         for (devId, rows) in backfilledByDevice {
             _ = try? await store.upsertWorkouts(rows, deviceId: devId)
         }
@@ -2993,6 +3026,45 @@ final class IntelligenceEngine: ObservableObject {
         let input = daily.with(recovery: daily.recovery, skinTempDevC: skinDev, skinTempC: nightlySkinTempC)
         return input.with(recovery: recomputeRecovery(input, baselines), skinTempDevC: skinDev,
                           skinTempC: nightlySkinTempC)
+    }
+
+    /// Resolve conservative legacy snapshots before the computed-window upsert can replace them. The date
+    /// loop reuses the scorer's own day/window arithmetic instead of parsing calendar dates, keeping both
+    /// DST behaviour and today's shortened forward window identical to the scoring read.
+    private static func legacyScoreSnapshots(
+        store: WhoopStore, computedId: String, from: String, to: String,
+        fresh: [DailyMetric], ownerByDay: [String: String],
+        nowLocalMidnight: Int, now: Int, offsetSec: Int, maxDays: Int,
+        strictCanonicalAlias: Bool
+    ) async -> [String: LegacyScoreSnapshot] {
+        let existing = (try? await store.dailyMetrics(deviceId: computedId, from: from, to: to)) ?? []
+        let existingByDay = Dictionary(existing.map { ($0.day, $0) }, uniquingKeysWith: { a, _ in a })
+        var snapshots: [String: LegacyScoreSnapshot] = [:]
+        for day in fresh {
+            guard day.avgHrv == nil, let old = existingByDay[day.day], let oldHrv = old.avgHrv,
+                  let owner = ownerByDay[day.day] else { continue }
+            var dayStart: Int?
+            for offset in 0..<maxDays {
+                let candidate = nowLocalMidnight - offset * 86_400
+                if AnalyticsEngine.dayString(candidate, offsetSec: offsetSec) == day.day {
+                    dayStart = candidate
+                    break
+                }
+            }
+            guard let dayStart else { continue }
+            let readFrom = dayStart - StreamReadCap.lookbackSeconds
+            let readTo = sleepReadWindowEnd(dayStart: dayStart, nowLocalMidnight: nowLocalMidnight, now: now)
+            let alias = strictCanonicalAlias && owner == Repository.whoopSource
+            guard (try? await store.legacyWhoop5RRWithheld(
+                deviceId: owner, from: readFrom, to: readTo,
+                unlabelledAliasOfWhoop5: alias)) == true else { continue }
+            snapshots[day.day] = LegacyScoreSnapshot(
+                avgHrv: oldHrv, recovery: old.recovery,
+                respRateBpm: old.respRateBpm, avgSdnn: old.avgSdnn,
+                recoverySource: try? await store.scoreInputSource(
+                    deviceId: computedId, day: day.day, key: "recovery"))
+        }
+        return snapshots
     }
 
     /// Re-score ONLY the recovery composite for a day against a (re-seeded) baseline. Every other field
@@ -3275,6 +3347,18 @@ final class IntelligenceEngine: ObservableObject {
 // is most easily dropped at (they respell every field by name), so StrandTests asserts them directly
 // rather than through a copy that could drift. Nothing outside this module can see them either way.
 extension DailyMetric {
+    /// Rebuild with the exact legacy R-R-derived snapshot while keeping every other freshly-scored cell.
+    func with(avgHrv hrv: Double, recovery r: Double?, respRateBpm resp: Double?,
+              avgSdnn sdnn: Double?) -> DailyMetric {
+        DailyMetric(day: day, totalSleepMin: totalSleepMin, efficiency: efficiency, deepMin: deepMin,
+                    remMin: remMin, lightMin: lightMin, disturbances: disturbances, restingHr: restingHr,
+                    avgHrv: hrv, recovery: r, strain: strain, exerciseCount: exerciseCount,
+                    spo2Pct: spo2Pct, skinTempDevC: skinTempDevC, respRateBpm: resp,
+                    steps: steps, activeKcalEst: activeKcalEst,
+                    spo2Red: spo2Red, spo2Ir: spo2Ir, avgSdnn: sdnn, skinTempC: skinTempC,
+                    sleepHrOnly: sleepHrOnly)
+    }
+
     /// Rebuild the immutable DailyMetric with a substituted recovery + skin-temp deviation
     /// (the struct has no `copy()`). (#78)
     func with(recovery r: Double?, skinTempDevC sd: Double?, skinTempC sa: Double?) -> DailyMetric {

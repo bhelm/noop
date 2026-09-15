@@ -153,7 +153,7 @@ an explicit expected revision, mutant metadata on exactly the named side, a norm
 side matching the literal oracle, and every supplied mutant case differing from
 that normal result. Controls exist for both sides.
 
-The existing parity-governance CI discovers these tool self-tests and triggers
-on case-spec changes. It adds no native build dependency or product-source parity
+The existing parity-governance CI runs these tool self-tests as an explicitly
+listed module and triggers on case-spec changes. It adds no native build dependency or product-source parity
 enforcement. Additional modules, native runners, bulk corpora and enforcement
 remain the later series layers described above.

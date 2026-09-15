@@ -465,7 +465,7 @@ public final class FrameRouter {
                 // Physical inputs the strap exposes — live only (this path never sees historical
                 // replay, which goes through the Backfiller). Event strings are "NAME(rawValue)".
                 if ev.hasPrefix("DOUBLE_TAP") {
-                    state.onDoubleTap?()
+                    dispatchDoubleTapOnce(eventTimestamp: parsed.parsed["event_timestamp"]?.intValue)
                 } else if ev.hasPrefix("WRIST_ON") {
                     if !state.worn { state.worn = true; state.onWristChange?(true) }
                 } else if ev.hasPrefix("WRIST_OFF") {
@@ -653,6 +653,10 @@ public final class FrameRouter {
     /// backfill offload (old ts) is ignored, but a real-time one fires even mid-sync.
     static let liveGestureWindowSeconds = 45
 
+    /// How far back a DOUBLE_TAP arriving through a sync still earns a log line. Ten minutes covers a
+    /// gym session's syncs; anything older is ordinary history being offloaded, and stays silent.
+    static let lateGestureLogSeconds = 600
+
     /// Parse an EVENT frame and fire ONLY the live physical-gesture handlers (double-tap / wrist) iff the
     /// event is recent. Called for offload frames during backfill — where `handle(frame:)` is skipped —
     /// so a real-time gesture still works mid-offload (#69: the 5/MG offload runs for minutes). `now`
@@ -698,13 +702,85 @@ public final class FrameRouter {
         guard parsed.ok, parsed.crcOK != false else { return }
         guard parsed.typeName == "EVENT", let ev = parsed.parsed["event"]?.stringValue else { return }
         guard let ts = parsed.parsed["event_timestamp"]?.intValue, ts > 0 else { return }   // fail closed
-        guard abs(now - ts) <= FrameRouter.liveGestureWindowSeconds else { return }
+        let age = now - ts
+        guard abs(age) <= FrameRouter.liveGestureWindowSeconds else {
+            // A recent double-tap reaching us through a sync gets a line, so a tap reported as "did not
+            // register" can be checked: a live dispatch leaves "Double-tap → …" at that moment, and a
+            // tap that only ever came through a sync leaves just this. It asserts only the delivery seen.
+            if ev.hasPrefix("DOUBLE_TAP"), age > 0, age <= FrameRouter.lateGestureLogSeconds {
+                state.append(log: "Double-tap (strap time \(ts)) arrived \(age) s late during a sync; "
+                             + "not acted on (live window \(FrameRouter.liveGestureWindowSeconds) s)")
+            }
+            return
+        }
         if ev.hasPrefix("DOUBLE_TAP") {
-            state.onDoubleTap?()
+            dispatchDoubleTapOnce(eventTimestamp: ts)
         } else if ev.hasPrefix("WRIST_ON") {
             if !state.worn { state.worn = true; state.onWristChange?(true) }
         } else if ev.hasPrefix("WRIST_OFF") {
             if state.worn { state.worn = false; state.onWristChange?(false) }
         }
+    }
+
+    // MARK: - Double-tap de-duplication
+
+    /// `event_timestamp`s of the DOUBLE_TAPs recently handed to the app.
+    ///
+    /// ONE physical gesture can reach us TWICE. It arrives live through `handle(frame:)`, and then
+    /// again when the strap offloads its banked event log — `dispatchLiveGestureIfFresh` runs over
+    /// every offload frame and accepts any event whose timestamp is within
+    /// `liveGestureWindowSeconds` (45 s) of now, which a gesture from moments ago obviously is.
+    ///
+    /// `AppModel.handleDoubleTap`'s 1.2 s debounce cannot catch that: the replay can land many
+    /// seconds after the tap, by which time the debounce has long expired. The result is a phantom
+    /// second gesture — and with the Lift Log claiming the double-tap, a phantom gesture silently
+    /// advances the session and costs a logged set.
+    ///
+    /// The event's OWN timestamp is what distinguishes the two cases: one gesture replayed carries
+    /// one timestamp, while two genuine taps carry two. Nil fails OPEN (dispatch), because a real
+    /// gesture must never be swallowed by a missing field.
+    ///
+    /// A SET, not a single slot. Remembering only the last dispatched timestamp suppresses a replay
+    /// solely when the replayed event is the most recent one dispatched, and a real offload does not
+    /// oblige. Interleave two taps and each replay looks new again:
+    ///
+    ///     tap A live -> last = A
+    ///     tap B live -> last = B
+    ///     replay A   -> A != B, dispatches
+    ///     replay B   -> B != A, dispatches
+    ///
+    /// Two phantom advances, and a multi-minute offload that re-walks its banked log repeats the
+    /// whole pattern — three taps measured as twelve in `FrameRouterDoubleTapDedupTests`. That is the
+    /// failure this de-duplication exists to prevent, surviving inside it.
+    ///
+    /// BOUNDED two ways, because this lives on the BLE path for the lifetime of a connection: entries
+    /// outside `liveGestureWindowSeconds` of the incoming event are dropped (past that, the freshness
+    /// guard in `dispatchLiveGestureIfFresh` refuses the replay anyway, so remembering it buys
+    /// nothing), and a hard cap covers a strap whose clock jumps rather than advances.
+    private var dispatchedDoubleTapEventTs: [Int] = []
+
+    /// Far above any plausible number of double-taps inside a 45-second window; a backstop against a
+    /// clock that jumps, not a working limit.
+    private static let dispatchedDoubleTapMemory = 32
+
+    private func dispatchDoubleTapOnce(eventTimestamp ts: Int?) {
+        if let ts {
+            guard !dispatchedDoubleTapEventTs.contains(ts) else {
+                // Only a gesture actually held back leaves a line, so a tap reported as missing can be
+                // told apart from a replay being suppressed.
+                state.append(log: "Double-tap (strap time \(ts)) not dispatched: that event was already handled")
+                return
+            }
+            // Prune BEFORE appending, so the event just accepted is always the one kept.
+            dispatchedDoubleTapEventTs.removeAll {
+                abs(ts - $0) > FrameRouter.liveGestureWindowSeconds
+            }
+            dispatchedDoubleTapEventTs.append(ts)
+            if dispatchedDoubleTapEventTs.count > FrameRouter.dispatchedDoubleTapMemory {
+                dispatchedDoubleTapEventTs.removeFirst(
+                    dispatchedDoubleTapEventTs.count - FrameRouter.dispatchedDoubleTapMemory)
+            }
+        }
+        state.onDoubleTap?()
     }
 }

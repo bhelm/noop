@@ -1051,10 +1051,15 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                     // widget reads the anchor here (the notification's honest-null contract lives in the
                     // service), keeping the two symmetric.
                     val anchorRow = widgetAnchorRow(days, logicalKey, localKey)
-                    // #2040: today's stress curve for the stress widget. Self-gating on a cheap HR
-                    // fingerprint, so an idle tick costs one indexed COUNT and no rows; null when
-                    // there is no device to read, which leaves whatever curve is stored alone.
-                    val stressCurve = com.noop.widget.StressWidgetProducer.todayCurve(repo, activeStrapId)
+                    // #2040: today's stress curve for the stress widget. Do not even fingerprint the
+                    // day's HR when nobody has placed one; scoring is the only expensive widget field.
+                    // Null also leaves whatever curve is already stored alone, so a newly placed widget
+                    // fills on the next pass without disturbing the other widget snapshots.
+                    val stressCurve = if (WidgetSnapshotStore.hasStressWidget(appContext)) {
+                        com.noop.widget.StressWidgetProducer.todayCurve(repo, activeStrapId)
+                    } else {
+                        null
+                    }
                     WidgetSnapshotStore.push(
                         appContext,
                         WidgetSnapshot(
@@ -1255,11 +1260,10 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                                     .active(com.noop.testcentre.TestDomain.UNIVERSAL))
                                 { line -> ble.externalLog(line, com.noop.testcentre.TestDomain.UNIVERSAL) }
                             else null,
-                        // Workouts & GPS test mode (#975): when the WORKOUTS domain is on, route each detected-
-                        // bout persist/drop decision into the .workouts-tagged strap log so an "auto workout
-                        // appeared then vanished" is explainable from an export (previously the auto path
-                        // produced NO trace). Zero-cost when off: one SharedPreferences bool read and the sink
-                        // stays null, so the detected-bout persist path is byte-identical. Mirrors macOS.
+                        // Workouts & GPS test mode (#975/#2187): when the WORKOUTS domain is on, route each
+                        // analytics-only/backfill decision into the .workouts-tagged strap log. Zero-cost when
+                        // off: one SharedPreferences bool read and the sink stays null, so normal analytics are
+                        // byte-identical. Mirrors macOS.
                         workoutsTraceSink =
                             if (com.noop.testcentre.TestCentre.from(appContext)
                                     .active(com.noop.testcentre.TestDomain.WORKOUTS))
@@ -1775,8 +1779,8 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     //
     // The screen observes [workouts]; every mutation re-loads it so the list reflects the new state
     // immediately. Loads ALL sources — strap (imported + manual), Apple Health / Health Connect, and
-    // the on-device DETECTED bouts under "<deviceId>-noop" — then filters out dismissed detected bouts
-    // so a duplicate the auto-detector created is visible but removable. Mirrors macOS
+    // grandfathered DETECTED bouts under "<deviceId>-noop" — then filters out dismissed detected bouts
+    // so legacy history remains visible and removable. Mirrors macOS
     // Repository.workoutRows.
 
     private val _workouts = MutableStateFlow<List<WorkoutRow>>(emptyList())
@@ -1967,7 +1971,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             // HR-fill below like the imported Apple sessions — a GPX with no HR borrows the strap's, while a
             // FIT that already carries HR is untouched (fill only fills nulls).
             val activityFiles = repository.workouts(ActivityFileImporter.SOURCE_ID, 0L, now)
-            val markers = repository.dismissedDetected(deviceId)
+            val markers = repository.dismissedDetectedUnion(deviceId)
             // Fill imported sessions' missing HR from strap samples (#77), same as before; detected /
             // manual rows already carry their own HR so they pass through unchanged. #961: also backfill a
             // strap-native row's Effort (strain) from the strap trace when it's null, so a live/manual
@@ -2166,7 +2170,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     /** Re-label a detected bout to [sport] (becomes a durable manual session), then reload. */
     fun relabelDetected(row: WorkoutRow, sport: String) {
         viewModelScope.launch {
-            runCatching { repository.relabelDetected(row, sport) }
+            runCatching { repository.relabelDetected(row, sport, deviceId) }
             loadWorkouts()
         }
     }

@@ -90,8 +90,8 @@ class DeviceRegistry(
                 dao.upsertPairedDevice(active.copy(id = serialId))
             }
             // BOTH id shapes. Every strap also owns a COMPUTED sibling keyed `<deviceId>-noop` (see
-            // WhoopRepository.computedDeviceId) holding the scored days, detected workouts and metric
-            // series the engine derives. That id never equals activeId, so re-keying only the pairing's
+            // WhoopRepository.computedDeviceId) holding scored days, legacy detected workouts and metric
+            // series. That id never equals activeId, so re-keying only the pairing's
             // own id left the computed history stranded under an id nothing reads again while the next
             // scoring pass wrote under `<serialId>-noop` — the orphaned history this adoption exists to
             // prevent, displaced onto the computed half. A ring has no computed sibling, which is why the
@@ -142,6 +142,11 @@ class DeviceRegistry(
         dao.reKeyLiveSessions(from, to); dao.deleteLiveSessionsFor(from)
         dao.reKeyDismissedWorkouts(from, to); dao.deleteDismissedWorkoutsFor(from)
         dao.reKeyDismissedSleeps(from, to); dao.deleteDismissedSleepsFor(from)
+        dao.reKeyLiftExercises(from, to); dao.deleteLiftExercisesFor(from)
+        dao.reKeyLiftPrograms(from, to); dao.deleteLiftProgramsFor(from)
+        dao.reKeyLiftProgramItems(from, to); dao.deleteLiftProgramItemsFor(from)
+        dao.reKeyLiftSessions(from, to); dao.deleteLiftSessionsFor(from)
+        dao.reKeyLiftSets(from, to); dao.deleteLiftSetsFor(from)
     }
 
     /** Archive a device — keeps its row and samples (invariant I4). */
@@ -223,6 +228,11 @@ class DeviceRegistry(
             dao.deleteLiveSessionsFor(id)
             dao.deleteDismissedWorkoutsFor(id)
             dao.deleteDismissedSleepsFor(id)
+            dao.deleteLiftExercisesFor(id)
+            dao.deleteLiftProgramsFor(id)
+            dao.deleteLiftProgramItemsFor(id)
+            dao.deleteLiftSessionsFor(id)
+            dao.deleteLiftSetsFor(id)
         }
     }
 

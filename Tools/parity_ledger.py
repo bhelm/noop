@@ -1573,7 +1573,9 @@ def _base_semantic_state(
             stderr=subprocess.DEVNULL,
         )
         with tempfile.TemporaryDirectory() as directory:
-            base_root = Path(directory)
+            # Resolve before anything is derived from it: build_twin_map resolves its root, and an
+            # inventory taken from the unresolved spelling then fails relative_to (#2143, macOS).
+            base_root = Path(directory).resolve()
             with tarfile.open(fileobj=io.BytesIO(archive), mode="r:") as bundle:
                 bundle.extractall(base_root, filter="data")
             inventory = _inventory(base_root)
@@ -1645,6 +1647,9 @@ def build_compact_twin_map(root: Path) -> dict:
 
 def expand_twin_map(root: Path, twin_map: dict) -> tuple[dict, list[str]]:
     """Expand v3 from source and report every frozen-authority mismatch."""
+    # Resolve before taking the inventory, as build_twin_map and semantic_authority do: both
+    # receive this inventory and resolve their own root, so the spellings must already agree.
+    root = root.resolve()
     if twin_map.get("schema_version") != 3:
         return twin_map, []
     inventory = _inventory(root)
@@ -2576,7 +2581,8 @@ def finding_identities_at_git_ref(root: Path, ref: str) -> set[str]:
     except (FileNotFoundError, subprocess.CalledProcessError) as exc:
         raise ValueError(f"cannot scan exact base {ref!r}") from exc
     with tempfile.TemporaryDirectory() as directory:
-        base_root = Path(directory)
+        # Same resolution as _base_semantic_state, so both temp checkouts spell their root one way (#2143).
+        base_root = Path(directory).resolve()
         try:
             with tarfile.open(fileobj=io.BytesIO(archive), mode="r:") as bundle:
                 bundle.extractall(base_root, filter="data")
@@ -2614,6 +2620,11 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--bootstrap-map", action="store_true", help="write a fresh inventory map before scanning")
     parser.add_argument("--write-baseline", action="store_true", help="rewrite the baseline with current findings")
     parser.add_argument("--refresh-derived", action="store_true", help="refresh existing derived snapshots only if the ratchet accepts the result")
+    parser.add_argument(
+        "--repair-stale-base",
+        action="store_true",
+        help="with --refresh-derived, repair metadata drift already present in the exact base",
+    )
     parser.add_argument("--base", default="origin/main", help="exact git ref used to prove debt reductions")
     args = parser.parse_args(argv)
 
@@ -2622,6 +2633,9 @@ def main(argv: list[str] | None = None) -> int:
     baseline_path = args.baseline_path or root / "Tools/parity_ledger_baseline.json"
     if args.bootstrap_map != args.write_baseline:
         print("FAIL --bootstrap-map and --write-baseline must be used together")
+        return 2
+    if args.repair_stale_base and not args.refresh_derived:
+        print("FAIL --repair-stale-base requires --refresh-derived")
         return 2
     if args.refresh_derived:
         if args.bootstrap_map or args.write_baseline or args.no_baseline:
@@ -2648,6 +2662,8 @@ def main(argv: list[str] | None = None) -> int:
                 sys.executable, str(Path(__file__).with_name("parity_ratchet.py")),
                 "--root", str(root), "--base", args.base, "--offline",
             ]
+            if args.repair_stale_base:
+                command.append("--repair-stale-base")
             completed = subprocess.run(command, cwd=root, text=True, capture_output=True)
             if completed.returncode:
                 print("FAIL derived refresh rejected; snapshots restored")
