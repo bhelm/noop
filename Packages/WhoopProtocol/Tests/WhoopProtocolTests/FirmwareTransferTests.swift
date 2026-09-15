@@ -264,14 +264,12 @@ final class FirmwareTransferTests: XCTestCase {
         XCTAssertTrue(FirmwareUpdateAdmission.busyReason(backfilling: false, writeInFlight: false, retryPending: false, queuedWrites: 0, negotiatedMtu: 247, queuedCccds: 1)!.contains("notification"))
     }
 
-    func testFirmwareQueueDropsStaleSessionWritesAndNeverRetriesAmbiguousRejection() {
+    func testFirmwareQueueDropsStaleSessionWrites() {
         XCTAssertTrue(FirmwareWriteQueuePolicy.belongsToCurrentSession(firmwareSessionId: nil, currentSessionId: nil))
         XCTAssertTrue(FirmwareWriteQueuePolicy.belongsToCurrentSession(firmwareSessionId: nil, currentSessionId: 12))
         XCTAssertTrue(FirmwareWriteQueuePolicy.belongsToCurrentSession(firmwareSessionId: 12, currentSessionId: 12))
         XCTAssertFalse(FirmwareWriteQueuePolicy.belongsToCurrentSession(firmwareSessionId: 11, currentSessionId: 12))
         XCTAssertFalse(FirmwareWriteQueuePolicy.belongsToCurrentSession(firmwareSessionId: 12, currentSessionId: nil))
-        XCTAssertTrue(FirmwareWriteQueuePolicy.mayRetryAfterAmbiguousRejection(firmwareSessionId: nil))
-        XCTAssertFalse(FirmwareWriteQueuePolicy.mayRetryAfterAmbiguousRejection(firmwareSessionId: 12))
     }
 
     func testActivationObservationIsBoundedAndStaleTimerCannotTerminateNewSession() {

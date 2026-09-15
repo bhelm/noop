@@ -27,13 +27,13 @@ internal object FirmwareWhoop5ResponseDecoder {
         if (responseType != COMMAND_RESPONSE && responseType != PUFFIN_COMMAND_RESPONSE) return null
         val command = frame[10].toInt() and 0xff
         val bodyLength = when (command) {
-            FirmwareTransferEngine.VERIFY_COMMAND -> 1
-            FirmwareTransferEngine.STOP_REALTIME_HR_COMMAND,
-            FirmwareTransferEngine.ABORT_HISTORY_COMMAND -> 0
-            FirmwareTransferEngine.STOP_IMU_COMMAND,
-            FirmwareTransferEngine.PREPARE_COMMAND,
-            FirmwareTransferEngine.WRITE_COMMAND,
-            FirmwareTransferEngine.ACTIVATE_COMMAND -> 2
+            FirmwareTransferEngine.VERIFY -> 1
+            FirmwareTransferEngine.STOP_REALTIME_HR,
+            FirmwareTransferEngine.ABORT_HISTORY -> 0
+            FirmwareTransferEngine.STOP_IMU,
+            FirmwareTransferEngine.PREPARE,
+            FirmwareTransferEngine.WRITE,
+            FirmwareTransferEngine.ACTIVATE -> 2
             else -> return null
         }
         val unpaddedInnerLength = 5 + bodyLength
@@ -65,7 +65,7 @@ internal object FirmwareResponseMatcher {
 
     /** VERIFY is asynchronous; body[0] == 1 is the recovered final-result discriminator. */
     fun isFinal(command: Int, response: FirmwareWireResponse): Boolean =
-        command != FirmwareTransferEngine.VERIFY_COMMAND ||
+        command != FirmwareTransferEngine.VERIFY ||
             (response.result != 2 && response.body.firstOrNull()?.toInt() == 1)
 }
 
@@ -162,13 +162,13 @@ internal fun interface FirmwareTransferTransport {
  */
 internal class FirmwareTransferEngine(private val transport: FirmwareTransferTransport) {
     companion object {
-        const val PREPARE_COMMAND = 142
-        const val WRITE_COMMAND = 143
-        const val ACTIVATE_COMMAND = 144
-        const val VERIFY_COMMAND = 83
-        const val STOP_REALTIME_HR_COMMAND = 3
-        const val STOP_IMU_COMMAND = 106
-        const val ABORT_HISTORY_COMMAND = 20
+        const val PREPARE = 142
+        const val WRITE = 143
+        const val ACTIVATE = 144
+        const val VERIFY = 83
+        const val STOP_REALTIME_HR = 3
+        const val STOP_IMU = 106
+        const val ABORT_HISTORY = 20
         const val MAX_CHUNK_ATTEMPTS = 7
         const val PRE_TRANSFER_DELAY_MS = 500L
         const val COMMAND_TIMEOUT_MS = 8_000L
@@ -191,7 +191,7 @@ internal class FirmwareTransferEngine(private val transport: FirmwareTransferTra
         quiesceStrap()
         if (prepareSlot) {
             requireAccepted(
-                exchange(PREPARE_COMMAND, byteArrayOf(1), COMMAND_TIMEOUT_MS),
+                exchange(PREPARE, byteArrayOf(1), COMMAND_TIMEOUT_MS),
                 expectedTail = 0,
                 step = "prepare",
             )
@@ -213,7 +213,7 @@ internal class FirmwareTransferEngine(private val transport: FirmwareTransferTra
                 attempts += 1
                 try {
                     requireAccepted(
-                        exchange(WRITE_COMMAND, payload, COMMAND_TIMEOUT_MS),
+                        exchange(WRITE, payload, COMMAND_TIMEOUT_MS),
                         expectedTail = 0,
                         step = "write at offset $offset",
                     )
@@ -242,7 +242,7 @@ internal class FirmwareTransferEngine(private val transport: FirmwareTransferTra
         }
         state = FirmwareUpdateTransitions.remoteValidating(state)
         publish(state)
-        val verified = exchange(VERIFY_COMMAND, byteArrayOf(1), VERIFY_TIMEOUT_MS)
+        val verified = exchange(VERIFY, byteArrayOf(1), VERIFY_TIMEOUT_MS)
         if (verified.result != 1 || verified.body.firstOrNull()?.toInt() != 1) {
             throw FirmwareTransferException(rejectionMessage("firmware remote image validation failed", verified))
         }
@@ -250,7 +250,7 @@ internal class FirmwareTransferEngine(private val transport: FirmwareTransferTra
     }
 
     suspend fun activate(): FirmwareWireResponse {
-        val response = exchange(ACTIVATE_COMMAND, byteArrayOf(1), COMMAND_TIMEOUT_MS)
+        val response = exchange(ACTIVATE, byteArrayOf(1), COMMAND_TIMEOUT_MS)
         if (response.result != 1 || response.body.size < 2 ||
             response.body[0].toInt() != 1 || response.body[1].toInt() != 1
         ) throw FirmwareTransferException(rejectionMessage("firmware activation/reset", response))
@@ -262,9 +262,9 @@ internal class FirmwareTransferEngine(private val transport: FirmwareTransferTra
 
     private suspend fun quiesceStrap() {
         listOf(
-            Triple(STOP_REALTIME_HR_COMMAND, byteArrayOf(0), "stop realtime HR"),
-            Triple(STOP_IMU_COMMAND, byteArrayOf(1, 0), "stop IMU streaming"),
-            Triple(ABORT_HISTORY_COMMAND, byteArrayOf(), "abort history transfer"),
+            Triple(STOP_REALTIME_HR, byteArrayOf(0), "stop realtime HR"),
+            Triple(STOP_IMU, byteArrayOf(1, 0), "stop IMU streaming"),
+            Triple(ABORT_HISTORY, byteArrayOf(), "abort history transfer"),
         ).forEach { (command, payload, step) ->
             val response = exchange(command, payload, COMMAND_TIMEOUT_MS)
             if (response.result != 1) {
@@ -282,10 +282,10 @@ internal class FirmwareTransferEngine(private val transport: FirmwareTransferTra
     private fun rejectionMessage(step: String, response: FirmwareWireResponse): String {
         val detail = response.body.getOrNull(1)?.toInt()?.and(0xff)
         val detailText = when {
-            response.command == PREPARE_COMMAND && detail == 10 -> "prepare state (10)"
-            response.command == WRITE_COMMAND && detail == 3 -> "invalid slot (3)"
-            response.command == WRITE_COMMAND && detail == 4 -> "range/overflow (4)"
-            response.command == WRITE_COMMAND && detail == 11 -> "flash/write state (11)"
+            response.command == PREPARE && detail == 10 -> "prepare state (10)"
+            response.command == WRITE && detail == 3 -> "invalid slot (3)"
+            response.command == WRITE && detail == 4 -> "range/overflow (4)"
+            response.command == WRITE && detail == 11 -> "flash/write state (11)"
             detail != null -> "detail=$detail"
             else -> "detail unavailable"
         }

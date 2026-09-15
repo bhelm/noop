@@ -2,7 +2,7 @@ import Foundation
 
 // Transport-independent OTA transaction and its pure decision helpers. Twin of the Kotlin
 // `FirmwareTransferEngine` / `FirmwareWhoop5ResponseDecoder` / matcher / policy objects
-// (android/.../ble/FirmwareUpdate.kt). The BLE client supplies correlation and timeouts through
+// (android/.../protocol/FirmwareTransfer.kt). The BLE client supplies correlation and timeouts through
 // `FirmwareTransferTransport`; the tests supply a deterministic fake. No CoreBluetooth here.
 //
 // Command numbers and payload shapes live here, not as hex frames in the app: the app frames each
@@ -154,10 +154,10 @@ public enum FirmwareWriteQueuePolicy {
         firmwareSessionId == nil || firmwareSessionId == currentSessionId
     }
 
-    /// Kotlin twin: `FirmwareWriteQueuePolicy.mayRetryAfterAmbiguousRejection`.
-    public static func mayRetryAfterAmbiguousRejection(firmwareSessionId: Int?) -> Bool {
-        firmwareSessionId == nil
-    }
+    // Android's policy also carries `mayRetryAfterAmbiguousRejection`: its GATT write queue re-sends a frame
+    // the stack refused as busy, which is ambiguous for a firmware frame. iOS has no such re-send path (a
+    // write without response reports no per-write refusal, and the transport checks
+    // `canSendWriteWithoutResponse` before handing a frame over), so there is nothing to gate here.
 }
 
 public enum FirmwareActivationObservation {
@@ -233,51 +233,51 @@ public enum FirmwareResumePolicy {
 
 // MARK: - Errors
 
-public struct FirmwareTransferException: Error {
+// The Kotlin exceptions carry their text as `Throwable.message`, which the Android UI shows verbatim.
+// `LocalizedError` is the Swift equivalent: without it `localizedDescription` falls back to Foundation's
+// generic "The operation couldn't be completed" text, which names neither the command nor the timeout.
+// Like the Kotlin exception, each error stores that text at construction (`errorDescription`).
+
+public struct FirmwareTransferException: LocalizedError {
     public let message: String
-    public init(_ message: String) { self.message = message }
+    public let errorDescription: String?
+    public init(_ message: String) {
+        self.message = message
+        errorDescription = message
+    }
 }
 
 /// An ambiguous transport failure for one data chunk — the only failure the engine retries.
-public struct FirmwareRetryableTransportException: Error {
+public struct FirmwareRetryableTransportException: LocalizedError {
     public let message: String
-    public init(_ message: String) { self.message = message }
+    public let errorDescription: String?
+    public init(_ message: String) {
+        self.message = message
+        errorDescription = message
+    }
 }
 
-public struct FirmwareTransferPausedException: Error {
+public struct FirmwareTransferPausedException: LocalizedError {
     public let acknowledgedOffset: Int
     public let attempts: Int
     public let message: String
+    public let errorDescription: String?
     public init(acknowledgedOffset: Int, attempts: Int, message: String) {
         self.acknowledgedOffset = acknowledgedOffset
         self.attempts = attempts
         self.message = message
+        errorDescription = message
     }
 }
 
 /// Cancellation raised by the transport when the session is torn down (disconnect / cancel).
-public struct FirmwareCancellationException: Error {
+public struct FirmwareCancellationException: LocalizedError {
     public let message: String
-    public init(_ message: String) { self.message = message }
-}
-
-// The Kotlin exceptions carry their text as `Throwable.message`, which the Android UI shows verbatim.
-// `LocalizedError` is the Swift equivalent: without it `localizedDescription` falls back to Foundation's
-// generic "The operation couldn't be completed" text, which names neither the command nor the timeout.
-extension FirmwareTransferException: LocalizedError {
-    public var errorDescription: String? { message }
-}
-
-extension FirmwareRetryableTransportException: LocalizedError {
-    public var errorDescription: String? { message }
-}
-
-extension FirmwareTransferPausedException: LocalizedError {
-    public var errorDescription: String? { message }
-}
-
-extension FirmwareCancellationException: LocalizedError {
-    public var errorDescription: String? { message }
+    public let errorDescription: String?
+    public init(_ message: String) {
+        self.message = message
+        errorDescription = message
+    }
 }
 
 // MARK: - Transport + engine

@@ -1,7 +1,7 @@
 import Foundation
 
 // Local validation of a WHOOP 5/MG update container selected in Test Centre. Twin of the Kotlin
-// `FirmwareImageParser` (android/.../ble/FirmwareUpdate.kt): the same checks run in the same order and
+// `FirmwareImageParser` (android/.../protocol/FirmwareImage.kt): the same checks run in the same order and
 // fail with the same messages, so a rejected image reads identically on both platforms.
 //
 // The CRC32 here is CRC-32/ISO-HDLC, the zlib `crc32` this package already uses for frames. A CRC match
@@ -245,7 +245,7 @@ public enum FirmwareImageParser {
         }
         let inflated = inflater.output
 
-        let trailerStart = inflater.consumedEnd
+        let trailerStart = inflater.consumedEnd()
         if trailerStart > end - gzipTrailerSize {
             return fail("Compressed payload has a truncated gzip trailer")
         }
@@ -365,7 +365,7 @@ struct RawInflater {
     private(set) var output: [UInt8] = []
 
     /// One past the last input byte the deflate stream used (a partially used final byte counts as used).
-    var consumedEnd: Int { position }
+    func consumedEnd() -> Int { position }
 
     init(input: [UInt8], start: Int, end: Int, limit: Int) {
         self.input = input

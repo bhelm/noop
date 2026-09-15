@@ -147,7 +147,7 @@ internal object FirmwareUpdateTransitions {
 }
 
 private const val FIRMWARE_READ_BUFFER_BYTES = 64 * 1024
-private const val MAX_VERSION_COMPONENT = 0xffff_ffffL
+private const val FIRMWARE_MAX_VERSION_COMPONENT = 4_294_967_295L // UInt.MAX_VALUE
 
 internal enum class FirmwareVersionRelation {
     DOWNGRADE,
@@ -174,7 +174,7 @@ private fun parseFirmwareVersion(version: String): List<Long>? {
     if (components.size != 4) return null
     return components.map { component ->
         if (component.isEmpty() || component.any { it !in '0'..'9' }) return null
-        component.toLongOrNull()?.takeIf { it in 0..MAX_VERSION_COMPONENT } ?: return null
+        component.toLongOrNull()?.takeIf { it in 0..FIRMWARE_MAX_VERSION_COMPONENT } ?: return null
     }
 }
 

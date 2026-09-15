@@ -8,9 +8,22 @@ import java.util.zip.DataFormatException
 import java.util.zip.Inflater
 
 /** The two container types whose layout and CRC predicates are retained from the strap firmware. */
-enum class FirmwareImageFormat(val containerType: Long, val displayName: String) {
-    BIN_RAW(1, "Raw BIN (experimental)"),
-    ZBIN_COMPRESSED(5, "Compressed ZBIN (OTA format)"),
+enum class FirmwareImageFormat {
+    BIN_RAW,
+    ZBIN_COMPRESSED;
+
+    /** The type word at header offset 12. */
+    val containerType: Long
+        get() = when (this) {
+            BIN_RAW -> 1L
+            ZBIN_COMPRESSED -> 5L
+        }
+
+    val displayName: String
+        get() = when (this) {
+            BIN_RAW -> "Raw BIN (experimental)"
+            ZBIN_COMPRESSED -> "Compressed ZBIN (OTA format)"
+        }
 }
 
 data class FirmwareImageInfo(
