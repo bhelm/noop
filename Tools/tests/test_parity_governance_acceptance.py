@@ -579,6 +579,144 @@ class GovernanceRatchetTests(unittest.TestCase):
             for error in errors
         ), errors)
 
+    def test_authority_migration_accepts_a_stale_base_when_new_debt_is_disposed(self) -> None:
+        """The remedy #2229 asked for: a base whose stored authority cannot be reproduced.
+
+        `--repair-stale-base` cannot help here, because repair is for a base whose GOVERNED STATE
+        matches and this one carries genuinely new drift. Migration re-bases onto a freshly derived
+        base authority; the new declaration still has to be declared to pass.
+        """
+        swift, base = self.stale_base_repair_fixture()
+        swift.write_text(
+            "enum Engine { static func alreadyOnMain() {}; static func addedOnBranch() {} }\n",
+            encoding="utf-8",
+        )
+        refreshed = parity_ledger.build_compact_twin_map(self.root)
+        self.write("Tools/parity_twin_map.json", refreshed)
+        self.write(
+            "Tools/parity_ledger_baseline.json",
+            parity_ledger.build_compact_baseline(parity_ledger.scan(self.root, refreshed)),
+        )
+        identity = next(
+            item for item in parity_ledger.semantic_authority(self.root)["unpaired_functions"]
+            if "addedOnBranch" in item
+        )
+        self.write("Tools/parity_dispositions.json", {
+            "schema_version": 1,
+            "dispositions": [{
+                "type": "platform_specific",
+                "kind": "add-unpaired-function",
+                "identity": identity,
+                "identity_sha256": parity_ledger._canonical_sha256(identity),
+                "platform": "swift",
+                "rationale": "Swift-only by design for this fixture.",
+            }],
+        })
+
+        warnings: list[str] = []
+        errors = parity_ratchet.compare_metadata(
+            self.root, base, offline=True, migrate_authority=True, warnings=warnings,
+        )
+
+        self.assertEqual([], errors)
+        self.assertTrue(any("migrated onto a freshly derived base" in w for w in warnings), warnings)
+
+    def test_authority_migration_still_rejects_undeclared_new_debt(self) -> None:
+        """Migration waives the base manifest's reproducibility and nothing else.
+
+        This is the guard worth pinning: if migration ever started waiving semantic debt too, the
+        flag would become a way to launder undeclared one-sided declarations onto main.
+        """
+        swift, base = self.stale_base_repair_fixture()
+        swift.write_text(
+            "enum Engine { static func alreadyOnMain() {}; static func addedOnBranch() {} }\n",
+            encoding="utf-8",
+        )
+        refreshed = parity_ledger.build_compact_twin_map(self.root)
+        self.write("Tools/parity_twin_map.json", refreshed)
+        self.write(
+            "Tools/parity_ledger_baseline.json",
+            parity_ledger.build_compact_baseline(parity_ledger.scan(self.root, refreshed)),
+        )
+
+        errors = parity_ratchet.compare_metadata(
+            self.root, base, offline=True, migrate_authority=True,
+        )
+
+        self.assertTrue(any("addedOnBranch" in error for error in errors), errors)
+        self.assertTrue(
+            any("issue-bound authority change" in error for error in errors), errors
+        )
+
+    def test_authority_migration_rejects_a_hand_edited_current_authority(self) -> None:
+        _swift, base = self.stale_base_repair_fixture()
+        tampered = parity_ledger._load_json(self.root / "Tools/parity_twin_map.json", {})
+        tampered["authority"]["unpaired_functions"]["count"] += 1
+        self.write("Tools/parity_twin_map.json", tampered)
+
+        errors = parity_ratchet.compare_metadata(
+            self.root, base, offline=True, migrate_authority=True,
+        )
+
+        self.assertTrue(
+            any("requires an exactly derived current authority" in error for error in errors),
+            errors,
+        )
+
+    def test_authority_migration_rejects_a_current_authority_equal_to_the_stale_base(self) -> None:
+        """The sharp case, found by mutating the guard rather than by reading it.
+
+        The general protection against a non-exact current authority only ERRORS when it matches
+        neither the tree nor the base; when it matches the stale base exactly it merely warns
+        "debt decreased". Under migration that shape would otherwise sail through and adopt an
+        unrefreshed authority, which is the one thing migration must not do.
+        """
+        _swift, base = self.stale_base_repair_fixture()
+        stale = parity_ratchet._read_base(self.root, base, "Tools/parity_twin_map.json")
+        self.write("Tools/parity_twin_map.json", stale)
+
+        warnings: list[str] = []
+        errors = parity_ratchet.compare_metadata(
+            self.root, base, offline=True, migrate_authority=True, warnings=warnings,
+        )
+
+        self.assertTrue(
+            any("requires an exactly derived current authority" in error for error in errors),
+            errors,
+        )
+        self.assertFalse(
+            any("migrated onto a freshly derived base" in w for w in warnings),
+            "a stale current authority must not be reported as a completed migration",
+        )
+
+    def test_migrate_authority_flag_requires_guarded_refresh(self) -> None:
+        output = io.StringIO()
+        with mock.patch("sys.stdout", output):
+            code = parity_ledger.main([
+                "--root", str(self.root), "--migrate-authority",
+            ])
+        self.assertEqual(2, code)
+        self.assertIn("requires --refresh-derived", output.getvalue())
+
+    def test_migrate_authority_and_repair_are_mutually_exclusive(self) -> None:
+        output = io.StringIO()
+        with mock.patch("sys.stdout", output):
+            code = parity_ledger.main([
+                "--root", str(self.root), "--refresh-derived",
+                "--repair-stale-base", "--migrate-authority",
+            ])
+        self.assertEqual(2, code)
+        self.assertIn("different remedies", output.getvalue())
+
+    def test_ordinary_refusal_names_the_migration_flag(self) -> None:
+        """A dead end that does not name its exit is what made #2229 take a day."""
+        _swift, base = self.stale_base_repair_fixture()
+
+        errors = parity_ratchet.compare_metadata(self.root, base, offline=True)
+
+        self.assertTrue(any("migration required" in error for error in errors), errors)
+        self.assertTrue(any("--migrate-authority" in error for error in errors), errors)
+
     def test_repair_stale_base_flag_requires_guarded_refresh(self) -> None:
         output = io.StringIO()
         with mock.patch("sys.stdout", output):

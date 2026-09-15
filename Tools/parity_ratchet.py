@@ -409,6 +409,7 @@ def compare_metadata(
     *,
     offline: bool,
     repair_stale_base: bool = False,
+    migrate_authority: bool = False,
     warnings: list[str] | None = None,
 ) -> list[str]:
     """Compare current governance metadata with the exact requested base."""
@@ -465,9 +466,31 @@ def compare_metadata(
                 repair_mismatches.append("current authority is not exactly derived")
             if current_baseline != parity_ledger.build_compact_baseline(current_scan):
                 repair_mismatches.append("current baseline is not exactly derived")
-            if not repair_stale_base:
+            if migrate_authority:
+                # The base's checked-in authority cannot be reproduced by the current derivation,
+                # so there is no exact basis to compare against and `--repair-stale-base` cannot
+                # help: repair exists for a base whose GOVERNED STATE matches, and here it does not.
+                #
+                # Migration re-bases the comparison onto a freshly derived base authority. It
+                # deliberately waives only the reproducibility of the base's stored manifest. It
+                # waives NO semantic debt: `required` below is computed from the freshly derived
+                # base and current sets, so every new one-sided declaration still needs its own
+                # issue-bound disposition, and an undeclared one still fails.
+                if current_map["authority"] != current_manifest:
+                    errors.append(
+                        f"{TWIN_MAP_PATH}: authority migration requires an exactly derived current "
+                        "authority; refresh the snapshots rather than hand-editing them"
+                    )
+                else:
+                    warnings.append(
+                        f"{TWIN_MAP_PATH}: base authority at {base} is not reproducible with the "
+                        "current derivation; migrated onto a freshly derived base. New debt still "
+                        "requires issue-bound dispositions."
+                    )
+            elif not repair_stale_base:
                 errors.append(
-                    f"{TWIN_MAP_PATH}: base authority cannot be reproduced with the current derivation; migration required"
+                    f"{TWIN_MAP_PATH}: base authority cannot be reproduced with the current derivation; "
+                    "migration required (see --migrate-authority)"
                 )
             elif repair_mismatches:
                 errors.append(
@@ -654,7 +677,15 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="adopt exactly derived metadata only when governed state is unchanged from an already-stale base",
     )
+    parser.add_argument(
+        "--migrate-authority",
+        action="store_true",
+        help="re-base onto a freshly derived base authority when the base's stored one cannot be "
+             "reproduced; new debt still requires issue-bound dispositions",
+    )
     args = parser.parse_args(argv)
+    if args.repair_stale_base and args.migrate_authority:
+        parser.error("--repair-stale-base and --migrate-authority are different remedies; use one")
     root = args.root.resolve()
     try:
         base = resolve_base(root, args.base)
@@ -665,6 +696,7 @@ def main(argv: list[str] | None = None) -> int:
             base,
             offline=args.offline,
             repair_stale_base=args.repair_stale_base,
+            migrate_authority=args.migrate_authority,
             warnings=warnings,
         ))
         for warning in warnings:
