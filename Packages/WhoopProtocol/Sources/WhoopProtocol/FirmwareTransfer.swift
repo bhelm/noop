@@ -155,9 +155,10 @@ public enum FirmwareWriteQueuePolicy {
     }
 
     // Android's policy also carries `mayRetryAfterAmbiguousRejection`: its GATT write queue re-sends a frame
-    // the stack refused as busy, which is ambiguous for a firmware frame. iOS has no such re-send path (a
-    // write without response reports no per-write refusal, and the transport checks
-    // `canSendWriteWithoutResponse` before handing a frame over), so there is nothing to gate here.
+    // the stack refused as busy, which is ambiguous for a firmware frame. iOS has no such re-send path:
+    // CoreBluetooth's `writeValue` returns no synchronous refusal to re-send after, and a failed
+    // acknowledged write reports in `didWriteValueFor`, which the firmware transport only logs (as Android's
+    // `onCharacteristicWrite` does), leaving the retry to the command timeout. There is nothing to gate here.
 }
 
 public enum FirmwareActivationObservation {
@@ -316,10 +317,17 @@ public final class FirmwareTransferEngine {
         prepareSlot: Bool = true,
         publish: (FirmwareUpdateState) -> Void
     ) async throws -> FirmwareUpdateState {
-        precondition(startOffset >= 0 && startOffset <= image.bytes.count, "Invalid firmware start offset \(startOffset)")
-        precondition(!prepareSlot || startOffset == 0, "A newly prepared slot must start at offset 0")
-        precondition(startOffset == image.bytes.count || startOffset % FirmwareImageParser.chunkSize == 0,
-                     "Firmware resume offset \(startOffset) is not an acknowledged chunk boundary")
+        // Thrown, not trapped: like the Kotlin `require`, an invalid entry fails the session with this text
+        // instead of terminating the app, and nothing has been sent yet.
+        if startOffset < 0 || startOffset > image.bytes.count {
+            throw FirmwareTransferException("Invalid firmware start offset \(startOffset)")
+        }
+        if prepareSlot && startOffset != 0 {
+            throw FirmwareTransferException("A newly prepared slot must start at offset 0")
+        }
+        if startOffset != image.bytes.count && startOffset % FirmwareImageParser.chunkSize != 0 {
+            throw FirmwareTransferException("Firmware resume offset \(startOffset) is not an acknowledged chunk boundary")
+        }
         try await sleep(FirmwareCommand.preTransferDelayMs)
         try await quiesceStrap()
         if prepareSlot {

@@ -231,7 +231,7 @@
       "identity": "kotlin\u0000android/app/src/main/java/com/noop/protocol/FirmwareTransfer.kt::mayRetryAfterAmbiguousRejection/1#1",
       "identity_sha256": "3554e4462bc0c6f9130d5804a609d82031e1a6267ea8345106ac18f5015adec3",
       "platform": "kotlin",
-      "rationale": "Android-only gate for WhoopBleClient's GATT write queue, which re-sends a frame the stack refused as busy; for a firmware-session frame delivery is then ambiguous, so the session fails instead. iOS has no such re-send path: a CoreBluetooth write without response reports no per-write refusal, and the firmware transport checks canSendWriteWithoutResponse before handing a frame over."
+      "rationale": "Android-only gate for WhoopBleClient's GATT write queue, which re-sends a frame the stack refused as busy; for a firmware-session frame delivery is then ambiguous, so the session fails instead. iOS has no such re-send path: CoreBluetooth's writeValue returns no synchronous refusal to re-send after, and a failed acknowledged firmware write reports in didWriteValueFor, which the transport only logs (as Android's onCharacteristicWrite does), leaving the retry to the command timeout."
     },
     {
       "type": "platform_specific",
