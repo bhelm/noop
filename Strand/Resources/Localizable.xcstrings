@@ -37,6 +37,14 @@
       "de" : { "stringUnit" : { "state" : "translated", "value" : "Das ausgewählte Image ist leer." } },
       "en" : { "stringUnit" : { "state" : "translated", "value" : "The selected image is empty." } }
     } },
+    "The selected document has no usable file name." : { "localizations" : {
+      "de" : { "stringUnit" : { "state" : "translated", "value" : "Das ausgewählte Dokument hat keinen verwendbaren Dateinamen." } },
+      "en" : { "stringUnit" : { "state" : "translated", "value" : "The selected document has no usable file name." } }
+    } },
+    "The selected document could not be opened." : { "localizations" : {
+      "de" : { "stringUnit" : { "state" : "translated", "value" : "Das ausgewählte Dokument konnte nicht geöffnet werden." } },
+      "en" : { "stringUnit" : { "state" : "translated", "value" : "The selected document could not be opened." } }
+    } },
     "Reading and validating the selected image…" : { "localizations" : {
       "de" : { "stringUnit" : { "state" : "translated", "value" : "Ausgewähltes Image wird gelesen und geprüft…" } },
       "en" : { "stringUnit" : { "state" : "translated", "value" : "Reading and validating the selected image…" } }
