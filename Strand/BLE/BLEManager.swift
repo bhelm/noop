@@ -4723,6 +4723,14 @@ public final class BLEManager: NSObject, ObservableObject {
     func requestSync(_ trigger: BackfillTrigger) {
         guard BLEManager.shouldRunPeriodicBackfill(
             connected: state.connected, bonded: state.bonded, backfilling: backfilling) else { return }
+        // An exclusive firmware session holds the command channel: send() would drop SEND_HISTORICAL_DATA,
+        // and the offload armed behind it would then run into its idle timeout and read as a stalled sync.
+        // Not starting it at all keeps the policy clock untouched; the next trigger after the session runs.
+        // Twin of the Android guard in `requestSync`.
+        if firmwareUpdateExclusive {
+            log("Backfill: \(trigger) skipped - an exclusive firmware update session holds the command channel")
+            return
+        }
         let now = Date().timeIntervalSince1970
         let last = UserDefaults.standard.object(forKey: BLEManager.backfillLastAtKey) as? Double
         // #160: a future-dated-clock strap's recurring automatic offloads (#928/#1012) are near-useless
