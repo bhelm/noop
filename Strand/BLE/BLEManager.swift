@@ -893,6 +893,9 @@ public final class BLEManager: NSObject, ObservableObject {
     /// Re-entrancy guard for captureRawAccel: true while a bounded on-demand window is running.
     /// A second tap is a no-op until the active capture's asyncAfter block fires and clears this.
     private var rawCaptureInFlight = false
+    /// An explicit ground-truth raw-data session was started and not yet stopped. Unlike
+    /// `rawCaptureInFlight` it survives a disconnect, as the Android `GroundTruthImuStatus.requested` does.
+    private var groundTruthRawCaptureRequested = false
     private var rawCaptureStoppedAt = Date.distantPast
     private var unexpectedImuStopAt = Date.distantPast
     /// Ordered queue of frames awaiting drain through the serial Backfiller task.
@@ -1061,6 +1064,20 @@ public final class BLEManager: NSObject, ObservableObject {
     /// Bumped by every image selection and clear, so a parse still running off the main actor when the
     /// user clears or picks again is discarded instead of arming a superseded image.
     var firmwareSelectionGeneration = 0
+    /// A firmware frame was handed to CoreBluetooth WITH response and its `didWriteValueFor` has not arrived.
+    /// It holds the next firmware frame back, as Android's `writeInFlight` does, and routes that one
+    /// completion to the firmware transport instead of the bond/handshake path. Cleared by the completion
+    /// or by the disconnect, never by the session ending: the completion is still owed after a cancel.
+    var firmwareWriteInFlight = false
+    /// `.withResponse` writes this manager handed to CoreBluetooth on the strap link (firmware frames
+    /// excluded, see `firmwareWriteInFlight`) whose `didWriteValueFor` has not arrived. The firmware
+    /// admission's stand-in for Android's `writeInFlight`/`writeQueue`: CoreBluetooth queues internally,
+    /// so outstanding completions are the only observable trace of an unfinished write.
+    private var withResponseWritesOutstanding = 0
+    /// Characteristics whose `requestNotify` state change has not been confirmed by
+    /// `didUpdateNotificationStateFor` yet. The firmware admission's stand-in for Android's
+    /// `cccdInFlight`/`cccdQueue`.
+    private var pendingNotifyStateChanges = Set<CBUUID>()
 
     /// Publish a new firmware-update state on the main actor.
     func setFirmwareUpdateState(_ next: FirmwareUpdateState) { firmwareUpdateState = next }
@@ -1073,22 +1090,30 @@ public final class BLEManager: NSObject, ObservableObject {
     var firmwareSelectedFamily: DeviceFamily { selectedModel.deviceFamily }
     func firmwareLog(_ message: String) { log(message) }
     func firmwareNextSequence() -> UInt8 { seq = seq &+ 1; return seq }
-    /// A raw/ground-truth IMU capture holds the command channel; a firmware transfer must not start or
-    /// resume under it. Twin of the Android `_groundTruthImuStatus.value.requested` check.
-    var firmwareRawCaptureActive: Bool { rawCaptureInFlight }
+    var firmwareOtherWritesOutstanding: Int { withResponseWritesOutstanding }
+    var firmwarePendingNotifyChanges: Int { pendingNotifyStateChanges.count }
+    /// A ground-truth IMU capture holds the command channel; a firmware transfer must not start or resume
+    /// under it. Twin of the Android `_groundTruthImuStatus.value.requested` check: only the explicit
+    /// ground-truth session counts, not the bounded Raw Data Collector window (`captureRawAccel`).
+    var firmwareRawCaptureActive: Bool { groundTruthRawCaptureRequested }
 
     /// Hand the link back to the live stream once an exclusive firmware session ends. While it held the
     /// channel, `reconcileRealtime` and the keep-alive stood down without touching `realtimeArmed`, but the
     /// engine's quiesce step sends TOGGLE_REALTIME_HR 0, so the strap may be disarmed whatever the latch
-    /// says. Clearing both arm latches makes the reconciler see the edge and re-arm if a screen or
+    /// says. Clearing `realtimeArmed` makes the reconciler see the edge and re-arm if a screen or
     /// continuous capture still wants the stream; restarting the keep-alive gives it a full interval before
     /// its next tick. Twin of the Android `restoreAfterFirmwareExclusive`.
+    ///
+    /// The reconciler is the ONE re-arm, as on Android. `whoop5RealtimeArmed` is latched rather than cleared:
+    /// cleared, the next `.withResponse` completion after the session (a history ack) would find it false
+    /// in the 5/MG post-bond branch and send TOGGLE_REALTIME_HR 1 a second time. The link is bonded here,
+    /// so that branch's once-per-connection arm has already had its turn.
     func restoreAfterFirmwareExclusive() {
         keepAliveTimer?.cancel()
         keepAliveTimer = nil
         guard state.connected && state.bonded else { return }
         realtimeArmed = false
-        whoop5RealtimeArmed = false
+        whoop5RealtimeArmed = true
         reconcileRealtime()
         startKeepAlive()
     }
@@ -2187,6 +2212,7 @@ public final class BLEManager: NSObject, ObservableObject {
     public func startGroundTruthRawCapture(sessionId: String) -> Bool {
         guard !rawCaptureInFlight else { return false }
         rawCaptureInFlight = true
+        groundTruthRawCaptureRequested = true
         send(.startRawData, payload: [0x01], writeType: .withResponse)
         send(.toggleIMUMode,
              payload: selectedModel.deviceFamily == .whoop5 ? [0x01, 0x01] : [0x01],
@@ -2204,6 +2230,7 @@ public final class BLEManager: NSObject, ObservableObject {
             }
         }
         rawCaptureInFlight = false
+        groundTruthRawCaptureRequested = false
         rawCaptureStoppedAt = Date()
         log("Raw-data session: stopped + flushed")
     }
@@ -2391,6 +2418,7 @@ public final class BLEManager: NSObject, ObservableObject {
             seq = seq &+ 1
             let frame = puffinCommandFrame(cmd: puffinCmd, seq: seq, payload: puffinPayload)
             p.writeValue(Data(frame), for: ch, type: writeType)
+            if writeType == .withResponse { withResponseWritesOutstanding += 1 }
             let cmdNote = isHaptics ? " cmd=0x13" : ""
             if command == .historicalDataResult {
                 historicalAckLogCounter += 1
@@ -2405,6 +2433,7 @@ public final class BLEManager: NSObject, ObservableObject {
         seq = seq &+ 1
         let frame = command.frame(seq: seq, payload: payload)
         p.writeValue(Data(frame), for: ch, type: writeType)
+        if writeType == .withResponse { withResponseWritesOutstanding += 1 }
         log("→ \(command.label) payload=\(hex(payload))")
     }
 
@@ -5134,12 +5163,14 @@ public final class BLEManager: NSObject, ObservableObject {
                 log("Notify re-arming after restore \(c.uuid) (\(reason))")
                 p.setNotifyValue(false, for: c)
                 p.setNotifyValue(true, for: c)
+                pendingNotifyStateChanges.insert(c.uuid)
                 return
             }
             log("Notify already active \(c.uuid) (\(reason))")
             return
         }
         p.setNotifyValue(true, for: c)
+        pendingNotifyStateChanges.insert(c.uuid)
         log("Notify requested \(c.uuid) (\(reason))")
     }
 
@@ -5963,6 +5994,10 @@ extension BLEManager: @preconcurrency CBCentralManagerDelegate {
         // A user capture remains represented by RawDataSessionStore, but its transport must be re-armed
         // on the next connection. Keeping this true would make that reconnect attempt a silent no-op.
         rawCaptureInFlight = false
+        // No write or notify completion is owed by a link that is gone.
+        firmwareWriteInFlight = false
+        withResponseWritesOutstanding = 0
+        pendingNotifyStateChanges.removeAll()
         // The strap forgets the realtime-HR toggle across a disconnect; the post-bond branch re-arms it
         // from `wantsRealtime`. Clear only the "what we last sent" flag — `screenWantsRealtime` /
         // `keepRealtimeForData` (and thus `wantsRealtime`) are intent and must survive a reconnect so the
@@ -6312,6 +6347,7 @@ extension BLEManager: @preconcurrency CBPeripheralDelegate {
                 let bondFrame = WhoopCommand.getBatteryLevel.frame(seq: seq, payload: [0x00])
                 log("Bonding: confirmed write GET_BATTERY_LEVEL to 61080002")
                 peripheral.writeValue(Data(bondFrame), for: c, type: .withResponse)
+                withResponseWritesOutstanding += 1
             case BLEManager.whoop5CmdWriteChar:
                 // EXPERIMENTAL WHOOP 5.0/MG: a 5/MG strap starts a session with the static CLIENT_HELLO
                 // frame, not the WHOOP4 confirmed-write bond. We write it UNacknowledged (it is a
@@ -6349,6 +6385,7 @@ extension BLEManager: @preconcurrency CBPeripheralDelegate {
                     state.pairingHint = nil   // fresh attempt; clear any stale pairing-mode guidance
                     clientHelloWriteAt = Date()   // #1635: a hello is now outstanding
                     peripheral.writeValue(Data(hello), for: c, type: .withResponse)
+                    withResponseWritesOutstanding += 1
                 }
                 // The realtime-HR stream is armed POST-bond (in didWriteValueFor / startRealtime) with
                 // puffin framing — not here. Writing it pre-bond on an unauthenticated link did nothing.
@@ -6405,6 +6442,17 @@ extension BLEManager: @preconcurrency CBPeripheralDelegate {
     public func peripheral(_ peripheral: CBPeripheral,
                            didWriteValueFor characteristic: CBCharacteristic,
                            error: Error?) {
+        // A firmware frame's own completion goes to the firmware transport and nowhere else — in particular
+        // not into the bond/handshake branches below. Attribution is by order: CoreBluetooth completes
+        // acknowledged writes in the order they were issued, a firmware frame is only issued while no other
+        // acknowledged write is outstanding (admission + the exclusive send() guard) and only after the
+        // previous frame's completion, so while one is in flight the next completion on this characteristic
+        // is that frame's.
+        if firmwareWriteInFlight, characteristic.uuid == cmdCharacteristic?.uuid {
+            noteFirmwareWriteCompleted(error: error)
+            return
+        }
+        if withResponseWritesOutstanding > 0 { withResponseWritesOutstanding -= 1 }
         if let error = error {
             log("Confirmed write failed: \(error.localizedDescription)\(BLEManager.bleErrorSuffix(error))")
             // #1635: a failed write owes no ack. Leaving the window open would let the NEXT completion on
@@ -6482,6 +6530,11 @@ extension BLEManager: @preconcurrency CBPeripheralDelegate {
         // which the strap refused before the link was encrypted. Do NOT run the WHOOP4 command handshake
         // below — a 5/MG strap rejects WHOOP4-framed commands (the send() guard drops them anyway).
         if selectedModel.deviceFamily == .whoop5 {
+            // An exclusive firmware session owns the link. The re-entry work below (notify re-subscribe,
+            // live-notification enable, realtime arm, keep-alive, offload kick) is exactly what it must
+            // not start; the session was only admitted on a bonded link, so no bond is waiting here either.
+            // Android needs no such guard: its bond branch is gated on !didBond.
+            if firmwareUpdateExclusive { return }
             // #1635: only the CLIENT_HELLO's OWN completion is evidence of a bond. Declining withholds
             // the bond declaration ONLY — the puffin re-subscribe below is unchanged, so a link that is
             // genuinely up keeps its notifications either way.
@@ -6609,7 +6662,6 @@ extension BLEManager: @preconcurrency CBPeripheralDelegate {
             bondedAt = Date()            // #617: start the bond→drop stopwatch for the bond-loop detector
             noteGenuineBond(of: peripheral)   // #52: this strap bonds fine; clears any pin-refusal streak
             emitConnectionBondState("encryptedBond family=whoop4 (confirmed write acked)")
-            refreshFirmwareUpdateEligibility()   // keeps the firmware card's eligibility line honest (4.0 stays ineligible)
             log("BONDED (confirmed write acknowledged) — custom channels should now flow")
         }
         // Run the connect handshake EXACTLY ONCE per connection. didWriteValueFor re-fires on EVERY
@@ -7153,6 +7205,7 @@ extension BLEManager: @preconcurrency CBPeripheralDelegate {
     public func peripheral(_ peripheral: CBPeripheral,
                            didUpdateNotificationStateFor characteristic: CBCharacteristic,
                            error: Error?) {
+        pendingNotifyStateChanges.remove(characteristic.uuid)   // a completion either way (firmware admission)
         if let error = error {
             log("Notify enable failed for \(characteristic.uuid): \(error.localizedDescription)")
         } else {
