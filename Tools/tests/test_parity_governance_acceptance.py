@@ -8,6 +8,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from fnmatch import fnmatchcase
 from pathlib import Path
 from unittest import mock
 
@@ -129,7 +130,8 @@ class RepositoryBaselineTests(unittest.TestCase):
                 "Tools/issue_ref.py",
                 "Tools/parity_*.py",
                 "Tools/parity_*.json",
-                "Tools/tests/**",
+                "Tools/tests/test_parity_*.py",
+                "Tools/tests/test_rr_legacy_preservation_contract.py",
                 ".github/workflows/parity-governance.yml",
             ] * 2,
             governance_paths,
@@ -144,7 +146,24 @@ class RepositoryBaselineTests(unittest.TestCase):
         )
         self.assertNotIn("'Packages/**/*.swift'", governance)
         self.assertNotIn("'android/**/*.kt'", governance)
-        self.assertIn("unittest discover -s tests", governance)
+        self.assertNotIn("Tools/tests/**", governance)
+        self.assertNotIn("test_german_today_localization", governance)
+        self.assertIn("tests.test_parity_ledger", governance)
+        self.assertIn("tests.test_parity_governance_acceptance", governance)
+        self.assertIn("tests.test_rr_legacy_preservation_contract", governance)
+        pull_request_paths = governance_paths[:6]
+        self.assertFalse(any(
+            fnmatchcase("Tools/tests/test_german_today_localization.py", pattern)
+            for pattern in pull_request_paths
+        ))
+        self.assertTrue(any(
+            fnmatchcase("Tools/tests/test_parity_ledger.py", pattern)
+            for pattern in pull_request_paths
+        ))
+        self.assertTrue(any(
+            fnmatchcase("Tools/tests/test_rr_legacy_preservation_contract.py", pattern)
+            for pattern in pull_request_paths
+        ))
 
     def test_checked_in_inventory_and_baseline_match_current_sources(self) -> None:
         self.assertEqual([], self.result.errors)
@@ -306,6 +325,35 @@ class GovernanceRatchetTests(unittest.TestCase):
             "expires_on": "2026-12-31",
         }]}
 
+    def stale_base_repair_fixture(self) -> tuple[Path, str]:
+        swift = self.root / "Packages/StrandAnalytics/Sources/StrandAnalytics/Engine.swift"
+        kotlin = self.root / "android/app/src/main/java/com/noop/analytics/Engine.kt"
+        test = self.root / "Packages/StrandAnalytics/Tests/StrandAnalyticsTests/EngineTests.swift"
+        swift.parent.mkdir(parents=True, exist_ok=True)
+        kotlin.parent.mkdir(parents=True, exist_ok=True)
+        test.parent.mkdir(parents=True, exist_ok=True)
+        swift.write_text("enum Engine {}\n", encoding="utf-8")
+        kotlin.write_text("object Engine {}\n", encoding="utf-8")
+        compact = parity_ledger.build_compact_twin_map(self.root)
+        self.write("Tools/parity_twin_map.json", compact)
+        self.write(
+            "Tools/parity_ledger_baseline.json",
+            parity_ledger.build_compact_baseline(parity_ledger.scan(self.root, compact)),
+        )
+        self.write("Tools/parity_dispositions.json", {"schema_version": 1, "dispositions": []})
+        self.commit()
+
+        swift.write_text("enum Engine { static func alreadyOnMain() {} }\n", encoding="utf-8")
+        test.write_text("func testOnly() { Engine.alreadyOnMain() }\n", encoding="utf-8")
+        base = self.commit()
+        refreshed = parity_ledger.build_compact_twin_map(self.root)
+        self.write("Tools/parity_twin_map.json", refreshed)
+        self.write(
+            "Tools/parity_ledger_baseline.json",
+            parity_ledger.build_compact_baseline(parity_ledger.scan(self.root, refreshed)),
+        )
+        return swift, base
+
     def test_typed_dispositions_require_explicit_platform_and_lifecycle_fields(self) -> None:
         experimental = {
             "schema_version": 1,
@@ -432,6 +480,112 @@ class GovernanceRatchetTests(unittest.TestCase):
         self.assertEqual(before_map, (self.root / "Tools/parity_twin_map.json").read_bytes())
         self.assertEqual(before_baseline, (self.root / "Tools/parity_ledger_baseline.json").read_bytes())
         self.assertEqual(before_dispositions, (self.root / "Tools/parity_dispositions.json").read_bytes())
+
+    def test_stale_base_repair_accepts_only_governance_state_already_on_base(self) -> None:
+        _swift, base = self.stale_base_repair_fixture()
+
+        ordinary = parity_ratchet.compare_metadata(self.root, base, offline=True)
+        repaired = parity_ratchet.compare_metadata(
+            self.root, base, offline=True, repair_stale_base=True
+        )
+
+        self.assertTrue(any("migration required" in error for error in ordinary), ordinary)
+        self.assertEqual([], repaired)
+        self.assertEqual(
+            {"schema_version": 1, "dispositions": []},
+            parity_ledger._load_json(self.root / "Tools/parity_dispositions.json", {}),
+        )
+
+    def test_stale_base_repair_rejects_branch_added_governance_debt(self) -> None:
+        swift, base = self.stale_base_repair_fixture()
+        swift.write_text(
+            "enum Engine { static func alreadyOnMain() {}; static func addedOnBranch() {} }\n",
+            encoding="utf-8",
+        )
+        refreshed = parity_ledger.build_compact_twin_map(self.root)
+        self.write("Tools/parity_twin_map.json", refreshed)
+        self.write(
+            "Tools/parity_ledger_baseline.json",
+            parity_ledger.build_compact_baseline(parity_ledger.scan(self.root, refreshed)),
+        )
+
+        errors = parity_ratchet.compare_metadata(
+            self.root, base, offline=True, repair_stale_base=True
+        )
+
+        self.assertTrue(any("stale-base repair rejected" in error for error in errors), errors)
+        self.assertTrue(any("addedOnBranch" in error for error in errors), errors)
+
+    def test_stale_base_repair_rejects_disposition_changes(self) -> None:
+        _swift, base = self.stale_base_repair_fixture()
+        identity = next(
+            item for item in parity_ledger.semantic_authority(self.root)["unpaired_functions"]
+            if "alreadyOnMain" in item
+        )
+        self.write("Tools/parity_dispositions.json", {
+            "schema_version": 1,
+            "dispositions": [{
+                "type": "platform_specific",
+                "kind": "add-unpaired-function",
+                "identity": identity,
+                "platform": "swift",
+                "identity_sha256": parity_ledger._canonical_sha256(identity),
+                "rationale": "Synthetic platform-only decision must not ride a stale-base repair.",
+            }],
+        })
+
+        errors = parity_ratchet.compare_metadata(
+            self.root, base, offline=True, repair_stale_base=True
+        )
+
+        self.assertTrue(any(
+            "stale-base repair rejected" in error
+            and "typed dispositions differ from the exact base" in error
+            for error in errors
+        ), errors)
+
+    def test_stale_base_repair_rejects_nonexact_map(self) -> None:
+        _swift, base = self.stale_base_repair_fixture()
+        compact = parity_ledger._load_json(self.root / "Tools/parity_twin_map.json", {})
+        compact["authority"]["functions"]["count"] += 1
+        self.write("Tools/parity_twin_map.json", compact)
+
+        errors = parity_ratchet.compare_metadata(
+            self.root, base, offline=True, repair_stale_base=True
+        )
+
+        self.assertTrue(any(
+            "stale-base repair rejected" in error
+            and "current authority is not exactly derived" in error
+            for error in errors
+        ), errors)
+
+    def test_stale_base_repair_rejects_nonexact_baseline(self) -> None:
+        _swift, base = self.stale_base_repair_fixture()
+        baseline = parity_ledger._load_json(
+            self.root / "Tools/parity_ledger_baseline.json", {}
+        )
+        baseline["accepted_findings"][0]["count"] += 1
+        self.write("Tools/parity_ledger_baseline.json", baseline)
+
+        errors = parity_ratchet.compare_metadata(
+            self.root, base, offline=True, repair_stale_base=True
+        )
+
+        self.assertTrue(any(
+            "stale-base repair rejected" in error
+            and "current baseline is not exactly derived" in error
+            for error in errors
+        ), errors)
+
+    def test_repair_stale_base_flag_requires_guarded_refresh(self) -> None:
+        output = io.StringIO()
+        with mock.patch("sys.stdout", output):
+            code = parity_ledger.main([
+                "--root", str(self.root), "--repair-stale-base",
+            ])
+        self.assertEqual(2, code)
+        self.assertIn("requires --refresh-derived", output.getvalue())
 
     def test_expired_experimental_disposition_blocks(self) -> None:
         marker = self.root / "README"

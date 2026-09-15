@@ -333,6 +333,10 @@ fun TodayScreen(
     val days by viewModel.recentDays.collectAsStateWithLifecycle()
     val activeDayCycle by viewModel.activeDayCycle.collectAsStateWithLifecycle()
     val spo2CandidateByDay by viewModel.spo2CandidateByDay.collectAsStateWithLifecycle()
+    // #2208: `connected` alone never said WHOSE charge liveSnap.batteryPct is. It goes true the moment any
+    // source streams, and the strap's percentage is never cleared, so under an active ring both halves of
+    // the old gate passed and Today drew the strap's charge. Same seam the Devices list already uses.
+    val activeIsWhoop by viewModel.activeIsWhoop.collectAsStateWithLifecycle()
     val v5Signals by viewModel.v5Signals.collectAsStateWithLifecycle()
     val cycleEnabled by viewModel.cycleTrackingEnabled.collectAsStateWithLifecycle()
     val cycleHidden by viewModel.cycleAwarenessHidden.collectAsStateWithLifecycle()
@@ -1399,6 +1403,7 @@ fun TodayScreen(
                 humanDate = humanDate,
                 selectedDay = selectedDay,
                 batteryPct = if (liveSnap.connected) liveSnap.batteryPct else null,
+                strapIsActiveDevice = activeIsWhoop,
                 backfilling = liveSnap.backfilling,
                 syncChunksThisSession = liveSnap.syncChunksThisSession,
                 lastSyncAt = liveSnap.lastSyncAt,
@@ -1909,8 +1914,16 @@ fun TodayScreen(
         item {
             TodaySourcesSection(
                 footer,
-                strapBatteryPct = if (liveSnap.connected) liveSnap.batteryPct?.roundToInt() else null,
-                strapBatteryEstimate = if (liveSnap.connected) batteryEstimateText else null,
+                // NOT routed through LiveConsoleReadout.batteryPercent, which substitutes the RING's charge
+                // for a non-WHOOP active device. That is right for a readout that names the active device,
+                // and wrong here: this value lands in the SourceRow badged `today_source_whoop`, and it
+                // also feeds that row's `present` flag. Substituting would put the ring's number under a
+                // WHOOP label and assert a WHOOP source that is not there, which is worse than the stale
+                // reading being fixed. Nothing is the honest answer for a strap that is not active.
+                strapBatteryPct = if (liveSnap.connected && activeIsWhoop)
+                    liveSnap.batteryPct?.roundToInt() else null,
+                // The runtime estimate is banked from strap SoC samples, so it is the strap's alone.
+                strapBatteryEstimate = if (liveSnap.connected && activeIsWhoop) batteryEstimateText else null,
                 expanded = sourcesExpanded,
                 onToggle = { sourcesExpanded = !sourcesExpanded },
             )
@@ -2507,6 +2520,11 @@ private fun LiquidTodayHeader(
     humanDate: String,
     selectedDay: LocalDate,
     batteryPct: Double?,
+    /** Whether the STRAP is the active device. Separate from [batteryPct] on purpose: that says what
+     *  the control reads, this says whether the control should exist. A null percentage while the strap
+     *  IS active means "connected, no reading yet" and is worth drawing; a strap that is not the active
+     *  device has nothing to say and is not drawn at all. (#2208) */
+    strapIsActiveDevice: Boolean,
     // #245: sync state for the compact header chip (twin of iOS SyncStatusChip).
     backfilling: Boolean = false,
     syncChunksThisSession: Int = 0,
@@ -2636,7 +2654,11 @@ private fun LiquidTodayHeader(
             // disc → the quick-actions menu). Sized to match the rest of the liquid cluster (shared HeaderClusterControl).
             QuickActionDisc(onClick = onQuickActions)
             // (c) Strap battery ring showing the % (iOS LiquidBatteryButton). Tap → Devices.
-            LiquidBatteryRing(batteryPct = batteryPct, onClick = onOpenDevices)
+            // Not drawn when the strap is not the active device: an empty "Strap battery" ring under a
+            // streaming ring is a control asserting something about a strap nobody is wearing.
+            if (strapIsActiveDevice) {
+                LiquidBatteryRing(batteryPct = batteryPct, onClick = onOpenDevices)
+            }
         }
     }
 }
