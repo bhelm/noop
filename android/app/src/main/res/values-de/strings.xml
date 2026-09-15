@@ -1379,7 +1379,7 @@
     <string name="l10n_app_root_updates_c76d1807">Updates</string>
     <string name="l10n_coach_screen_coach_b32c9ad3">Coach</string>
     <string name="l10n_compare_screen_remove_title_ddb5361c">%1$s entfernen</string>
-    <string name="l10n_components_chunks_chunks_pulled_cec186cf">%1$s Brocken gezogen</string>
+    <string name="l10n_components_chunks_chunks_pulled_cec186cf">%1$s Datenblöcke übertragen</string>
     <string name="l10n_components_decrease_accessibility_df5f1511">Verringere %1$s</string>
     <string name="l10n_components_glowring_fraction_5bcc7cd7">Glühringfraktion</string>
     <string name="l10n_components_glowring_value_ac0e87de">Glühwert</string>

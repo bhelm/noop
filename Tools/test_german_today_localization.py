@@ -149,6 +149,8 @@ class GermanTodayLocalizationTest(unittest.TestCase):
             {"one": "%1$d Datenblock", "other": "%1$d Datenblöcke"},
             {item.get("quantity"): item.text for item in chunks.findall("item")},
         )
+        pulled = android_de.find("string[@name='l10n_components_chunks_chunks_pulled_cec186cf']")
+        self.assertEqual("%1$s Datenblöcke übertragen", pulled.text)
 
     def test_legacy_translation_helper_preserves_reviewed_catalog_units(self) -> None:
         spec = importlib.util.spec_from_file_location("translate_de", ROOT / "Tools/translate-de.py")
