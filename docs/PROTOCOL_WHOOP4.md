@@ -37,40 +37,19 @@ total frame size = length + 4
   (command number), then the payload.
 - **`crc32`** — standard zlib CRC-32 (reflected, poly `0xEDB88320`), `u32` little-endian,
   computed over the **inner bytes** `frame[4 .. length)`.
-- **structural size** — the frame must be at least **11 bytes** long
-  (`FrameLimits.whoop4MinimumFrameBytes`) and must carry **exactly** `length + 4` bytes. Fewer (a
-  truncated frame) and more (trailing bytes) are both rejected. The 11-byte minimum is structural for
-  this record format: it contains `type`, `seq`, `cmd`, and the CRC32 trailer, and real zero-data
-  metadata frames sit exactly there.
 
 Reference: `verifyFrame(_:)` and `crc8(_:)` / `crc32(_:)` in `Framing.swift`, and the
 outbound builder `WhoopCommand.frame(seq:payload:)` in `Strand/BLE/Commands.swift`.
 
 ```swift
 // Framing.swift — WHOOP 4.0 validation (abridged)
-guard frame.first == 0xAA else { return FrameCheck(ok: false, reason: .noStartOfFrame) }
-guard frame.count >= FrameLimits.whoop4MinimumFrameBytes else {
-    return FrameCheck(ok: false, reason: .belowMinimumLength)
-}
 let length = u16le(frame, 1)
-let total = length + 4
-let crc8OK = crc8(frame, 1, 3) == frame[3]          // ranged: no per-frame sub-array copy
-if total < FrameLimits.whoop4MinimumFrameBytes {
-    return FrameCheck(ok: false, length: length, crc8OK: crc8OK, reason: .belowMinimumLength)
+let crc8OK = crc8([frame[1], frame[2]]) == frame[3]
+if 7 <= length && length + 4 <= frame.count {
+    let inner = Array(frame[4..<length])
+    crc32OK = crc32(inner) == u32le(frame, length)
 }
-if total != frame.count { /* retain any safely-computable CRC diagnostic; reject length */ }
-let crc32OK = crc32(frame, 4, length) == u32le(frame, length)
-let reason = integrityRejectReason(headerCRCOK: crc8OK, payloadCRCOK: crc32OK)
-return FrameCheck(ok: reason == .none, length: length, crc8OK: crc8OK, crc32OK: crc32OK,
-                  reason: reason)
 ```
-
-The payload CRC32 is still computed when the byte count and the declared total disagree, so the
-combination "payload CRC right, envelope wrong" stays observable in `FrameCheck.crc32OK` — but it
-does not make the frame intact. If the declared payload cannot be checked safely, an earlier size
-reason wins; every frame reaching the payload-integrity decision has a computable CRC32. How NOOP
-consumes the combined verdict is described in the
-[implementation notes](PROTOCOL_IMPLEMENTATION.md#frame-integrity-verdict).
 
 <a id="5-bond-handshake--connect-lifecycle-whoop-40"></a>
 
