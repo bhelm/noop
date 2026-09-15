@@ -1,4 +1,4 @@
-package com.noop.ble
+package com.noop.protocol
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse

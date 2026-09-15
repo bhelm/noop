@@ -1,4 +1,4 @@
-package com.noop.ble
+package com.noop.protocol
 
 import org.junit.Assert.assertTrue
 import org.junit.Assume.assumeTrue
