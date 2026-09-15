@@ -7467,7 +7467,7 @@ class WhoopBleClient(
                 // reassembler and reaches no parser and no archive, so its monotonic drop count is folded
                 // into the connection's reject tally right after the feed that may have grown it —
                 // otherwise it would disappear without trace. Idempotent, so once per notification is
-                // both correct and cheap. Twin of the Swift `router.noteReassemblerDrops`.
+                // both correct and cheap. Twin of the Swift `FrameRouter.noteReassemblerDrops`.
                 val completedFrames = reassembler.feed(bytes)
                 rejectTally.absorbReassemblerDrops(reassembler.belowMinimumLengthDrops)
                 for (frame in completedFrames) {
