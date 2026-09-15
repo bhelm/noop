@@ -1718,8 +1718,8 @@
     <string name="l10n_today_screen_sync_chip_syncing_desc_92daf60c">Verlaufssynchronisierung des Straps läuft, %1$s</string>
     <string name="l10n_today_screen_sync_chip_syncing_pages_desc_ad763b39">Verlaufssynchronisierung des Straps läuft, %1$s, %2$s</string>
     <plurals name="sync_chip_chunks_count">
-        <item quantity="one">%1$d Chunk</item>
-        <item quantity="other">%1$d Chunks</item>
+        <item quantity="one">%1$d Datenblock</item>
+        <item quantity="other">%1$d Datenblöcke</item>
     </plurals>
     <plurals name="sync_chip_pages_behind_count">
         <item quantity="one">%1$d Seite Rückstand bei Verbindungsaufbau</item>

@@ -15,6 +15,7 @@ import io
 import json
 import tempfile
 import unittest
+import xml.etree.ElementTree as ET
 from pathlib import Path
 
 
@@ -132,8 +133,22 @@ class GermanTodayLocalizationTest(unittest.TestCase):
         self.assertEqual(
             "Verlaufssynchronisierung des Straps läuft, %lld Datenblöcke", plural["other"]["stringUnit"]["value"]
         )
+        plural = strings["Syncing strap history, %lld chunks, %@"]["localizations"]["de"]["variations"]["plural"]
+        self.assertEqual(
+            "Verlaufssynchronisierung des Straps läuft, %lld Datenblock, %@", plural["one"]["stringUnit"]["value"]
+        )
+        self.assertEqual(
+            "Verlaufssynchronisierung des Straps läuft, %lld Datenblöcke, %@", plural["other"]["stringUnit"]["value"]
+        )
         self.assertEqual("%lld Datenblöcke", german_value("%lld chunks"))
         self.assertEqual("%lld Datenblöcke übertragen", german_value("%lld chunks pulled"))
+
+        android_de = ET.parse(ROOT / "android/app/src/main/res/values-de/strings.xml").getroot()
+        chunks = android_de.find("plurals[@name='sync_chip_chunks_count']")
+        self.assertEqual(
+            {"one": "%1$d Datenblock", "other": "%1$d Datenblöcke"},
+            {item.get("quantity"): item.text for item in chunks.findall("item")},
+        )
 
     def test_legacy_translation_helper_preserves_reviewed_catalog_units(self) -> None:
         spec = importlib.util.spec_from_file_location("translate_de", ROOT / "Tools/translate-de.py")
