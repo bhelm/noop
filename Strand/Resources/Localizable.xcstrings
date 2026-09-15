@@ -157596,13 +157596,13 @@
               "one": {
                 "stringUnit": {
                   "state": "translated",
-                  "value": "Verlaufssynchronisierung des Straps läuft, %lld Chunk, %@"
+                  "value": "Verlaufssynchronisierung des Straps läuft, %lld Datenblock, %@"
                 }
               },
               "other": {
                 "stringUnit": {
                   "state": "translated",
-                  "value": "Verlaufssynchronisierung des Straps läuft, %lld Chunks, %@"
+                  "value": "Verlaufssynchronisierung des Straps läuft, %lld Datenblöcke, %@"
                 }
               }
             }
