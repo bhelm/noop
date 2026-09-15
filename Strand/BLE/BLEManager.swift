@@ -4021,10 +4021,17 @@ public final class BLEManager: NSObject, ObservableObject {
             log("Device-config read probe (#103) ignored — a probe is already walking its plan")
             return
         }
+        // Platform exception: this hardware investigation is explicitly scoped to macOS.
+        // Keep iOS and Android's established plans until the additional reads are verified there.
+        #if os(macOS)
+        let flagKeys = DeviceConfigReadProbe.knownFlagKeys(for: selectedModel.deviceFamily)
+        #else
+        let flagKeys = Whoop5Config.enableR22Sequence.map(\.name)
+        #endif
         deviceConfigReport = DeviceConfigReadProbeReport(
             family: selectedModel.deviceFamily,
-            // The flag names come from NOOP's own R22 sequence — never restated here.
-            knownFlagKeys: Whoop5Config.enableR22Sequence.map(\.name),
+            // Include names observed on the strap without changing the R22 write sequence.
+            knownFlagKeys: flagKeys,
             candidateKeys: DeviceConfigReadProbe.oxygenCandidateKeys)
         state.deviceConfigProbe = BLEManager.deviceConfigProbeWaiting
         log("Device-config read probe (#103): asking for config VALUES via GET_DEVICE_CONFIG_VALUE(121) + GET_FF_VALUE(128) on family=\(selectedModel.deviceFamily); read-only (SET_FF_VALUE/120 and SET_DEVICE_CONFIG_VALUE/119 are never sent from this path)")
@@ -5327,14 +5334,17 @@ public final class BLEManager: NSObject, ObservableObject {
         // R-R: the standard profile is the RELIABLE source (the custom REALTIME_DATA stream
         // usually reports rr_count=0), so always surface intervals when present. setRRIntervals also
         // feeds the Live console's rolling rrRecent buffer.
-        if !m.rr.isEmpty { state.setRRIntervals(m.rr) }
+        // WHOOP 5 sends milliseconds directly (non-compliant with the BLE spec's 1/1024-s unit),
+        // so use the raw ticks — which ARE ms — instead of the spec-converted values.
+        let rr = router.family == .whoop5 ? m.rrRawTicks : m.rr
+        if !rr.isEmpty { state.setRRIntervals(rr) }
         // HR: the standard 0x2A37 profile is the RELIABLE source (BLE-standard, ~1Hz). Let it
         // drive the value whenever it's physiologically plausible; reject 0/garbage (off-wrist).
         // AppModel medians these into a stable display value. live perf: only publish on a real
         // change so a steady resting HR doesn't re-render the whole Live console every second.
         if m.hr >= 30 && m.hr <= 220, state.heartRate != m.hr { state.heartRate = m.hr }
         // Record it continuously — independent of the realtime stream or the open screen.
-        collector?.ingestStandardHR(hr: m.hr, rr: m.rr, contact: m.contact,
+        collector?.ingestStandardHR(hr: m.hr, rr: rr, contact: m.contact,
                                     family: router.family,
                                     at: Int(Date().timeIntervalSince1970))
     }

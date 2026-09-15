@@ -131,7 +131,13 @@ struct StressView: View {
             : .dayRelative
         if case .baselineRelative = mode { daytimeUsesPersonalBaseline = true }
         else { daytimeUsesPersonalBaseline = false }
-        daytime = DaytimeStress.analyze(hr: hr, rr: rr, gravity: gravity, tzOffsetSeconds: tz, mode: mode)
+        // includeTimeline: the SLIDING read, so the screen's line moves in half-hours instead of
+        // stepping through whole clock hours (#2144). The scored unit is still a full hour; this only
+        // decides how often that hour is re-read, so a thin ten minutes costs the windows that overlap
+        // it rather than a whole hour of chart. The Today card and the widget have always asked for
+        // this; the screen people actually study was the one still stepping. Twin of the Kotlin change.
+        daytime = DaytimeStress.analyze(hr: hr, rr: rr, gravity: gravity, tzOffsetSeconds: tz, mode: mode,
+                                        includeTimeline: true)
 
         // ADDITIVE advanced readouts, computed on-demand from the SAME `rr` (no extra fetch, no
         // DB / schema change, and no effect on the 0..3 score above). Each engine returns nil when
@@ -265,7 +271,13 @@ struct StressView: View {
                     HStack {
                         Text("Autonomic load through the day").strandOverline()
                         Spacer()
-                        if let peak = day.peak, let lvl = peak.level {
+                        // The peak of what is DRAWN, not of the whole hours (#2144). A sliding window
+                        // can exceed both hourly neighbours when the busy stretch straddles a boundary,
+                        // so `day.peak` would caption the line with a number below its visible maximum.
+                        // Everything that COUNTS hours still reads `hours`; a maximum is not a count.
+                        let drawnPeak = day.timeline.filter { $0.level != nil }
+                            .max { ($0.level ?? 0) < ($1.level ?? 0) }
+                        if let peak = drawnPeak, let lvl = peak.level {
                             Text("peak \(String(format: "%.1f", lvl)) · \(hourLabel(peak.hour))")
                                 .font(StrandFont.captionNumber)
                                 .foregroundStyle(StressRamp.color(lvl))
@@ -274,10 +286,13 @@ struct StressView: View {
 
                     // README screen-9: the day autonomic-load LINE, drawn with the same
                     // 3-stop blue→green→amber WHOOP gradient as the gauge.
-                    DaytimeLoadLine(hours: day.hours)
+                    // The SLIDING series, not the bare hours (#2144). Everything that COUNTS hours
+                    // keeps reading `hours`: the totals bar's shares still have to sum to the day.
+                    // Only the line and its ruler follow the finer read.
+                    DaytimeLoadLine(hours: day.timeline)
 
                     // Hour ruler under the line (first / midday / last covered hour).
-                    if let lo = day.hours.first?.hour, let hi = day.hours.last?.hour {
+                    if let lo = day.timeline.first?.hour, let hi = day.timeline.last?.hour {
                         HStack {
                             Text(hourLabel(lo)).font(StrandFont.footnote)
                                 .foregroundStyle(StrandPalette.textTertiary)
