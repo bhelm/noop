@@ -401,7 +401,8 @@ any code.
 ### 2. Gate on the full integrity verdict
 
 Frames are only acted on after the **whole** envelope checks out — header checksum, payload CRC32
-and the structural size rules ([`docs/PROTOCOL.md`](PROTOCOL.md) §2) together. Outbound frames are
+and the structural size rules ([frame integrity verdict](PROTOCOL_IMPLEMENTATION.md#frame-integrity-verdict))
+together. Outbound frames are
 built with the correct CRCs; inbound frames are rejected if any part of that verdict fails.
 
 - **Outbound:** `WhoopCommand.frame(seq:payload:)` builds
